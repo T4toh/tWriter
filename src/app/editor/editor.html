@@ -1,17 +1,202 @@
-@if (!active()) {
-  <div class="empty">
-    <p>Seleccioná un capítulo del árbol para empezar.</p>
-  </div>
-} @else if (!canEdit()) {
-  <div class="empty">
-    <p>
-      <strong>{{ active()!.name }}</strong> no es editable todavía.
-      Importá el archivo (.{{ active()!.ext }}) a HTML primero.
-    </p>
+@if (canEdit()) {
+  <div class="toolbar">
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().bold"
+      (click)="toggleBold()"
+      title="Negrita (Ctrl+B)"
+    >
+      <span class="ico bold">B</span>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().italic"
+      (click)="toggleItalic()"
+      title="Itálica (Ctrl+I)"
+    >
+      <span class="ico italic">I</span>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().underline"
+      (click)="toggleUnderline()"
+      title="Subrayado (Ctrl+U)"
+    >
+      <span class="ico underline">U</span>
+    </button>
+
+    <span class="sep"></span>
+
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().alignLeft"
+      (click)="setAlign('left')"
+      title="Alinear izquierda (Ctrl+Shift+L)"
+    >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <line x1="2" y1="3" x2="12" y2="3"/>
+        <line x1="2" y1="6" x2="8" y2="6"/>
+        <line x1="2" y1="9" x2="11" y2="9"/>
+        <line x1="2" y1="12" x2="7" y2="12"/>
+      </svg>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().alignCenter"
+      (click)="setAlign('center')"
+      title="Centrar (Ctrl+Shift+E)"
+    >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <line x1="2" y1="3" x2="12" y2="3"/>
+        <line x1="4" y1="6" x2="10" y2="6"/>
+        <line x1="3" y1="9" x2="11" y2="9"/>
+        <line x1="5" y1="12" x2="9" y2="12"/>
+      </svg>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().alignRight"
+      (click)="setAlign('right')"
+      title="Alinear derecha (Ctrl+Shift+R)"
+    >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <line x1="2" y1="3" x2="12" y2="3"/>
+        <line x1="6" y1="6" x2="12" y2="6"/>
+        <line x1="3" y1="9" x2="12" y2="9"/>
+        <line x1="7" y1="12" x2="12" y2="12"/>
+      </svg>
+    </button>
+
+    <span class="sep"></span>
+
+    <button
+      type="button"
+      class="tb-btn"
+      (click)="insertSceneBreak()"
+      title="Salto de escena"
+    >
+      <span class="ico">* * *</span>
+    </button>
+
+    <span class="spacer"></span>
+
+    <button
+      type="button"
+      class="tb-btn width-toggle"
+      (click)="cycleWidth()"
+      [title]="'Ancho: ' + widthLabel()"
+    >
+      <span class="ico">{{ widthIcon() }}</span>
+    </button>
   </div>
 }
 
-<div class="editor-host" #host [class.hidden]="!active() || !canEdit()"></div>
+<div class="editor-stack" [attr.data-width]="width()">
+  <div
+    class="editor-host"
+    #host
+    (contextmenu)="onContextMenu($event)"
+  ></div>
+
+  @if (!active() || !canEdit()) {
+    <div class="overlay">
+      @if (!active()) {
+        <p>Seleccioná un capítulo del árbol para empezar.</p>
+      } @else {
+        <p>
+          <strong>{{ active()!.name }}</strong> no es editable todavía.<br />
+          Importá el archivo (.{{ active()!.ext }}) a HTML primero.
+        </p>
+      }
+    </div>
+  }
+</div>
+
+@if (menu(); as m) {
+  <div class="ctx-backdrop" (click)="closeMenu()" (contextmenu)="$event.preventDefault(); closeMenu()"></div>
+  <div
+    class="ctx-menu"
+    [style.left.px]="m.x"
+    [style.top.px]="m.y"
+    (click)="$event.stopPropagation()"
+  >
+    <button type="button" class="ctx-item" [disabled]="!state().canUndo" (click)="undo()">
+      <span class="ctx-label">Deshacer</span>
+      <span class="ctx-kbd">Ctrl+Z</span>
+    </button>
+    <button type="button" class="ctx-item" [disabled]="!state().canRedo" (click)="redo()">
+      <span class="ctx-label">Rehacer</span>
+      <span class="ctx-kbd">Ctrl+Shift+Z</span>
+    </button>
+
+    <div class="ctx-sep"></div>
+
+    <button type="button" class="ctx-item" [disabled]="!state().hasSelection" (click)="cut()">
+      <span class="ctx-label">Cortar</span>
+      <span class="ctx-kbd">Ctrl+X</span>
+    </button>
+    <button type="button" class="ctx-item" [disabled]="!state().hasSelection" (click)="copy()">
+      <span class="ctx-label">Copiar</span>
+      <span class="ctx-kbd">Ctrl+C</span>
+    </button>
+    <button type="button" class="ctx-item" (click)="paste()">
+      <span class="ctx-label">Pegar</span>
+      <span class="ctx-kbd">Ctrl+V</span>
+    </button>
+    <button type="button" class="ctx-item" (click)="pastePlain()">
+      <span class="ctx-label">Pegar como texto plano</span>
+      <span class="ctx-kbd">Ctrl+Shift+V</span>
+    </button>
+    <button type="button" class="ctx-item" (click)="selectAll()">
+      <span class="ctx-label">Seleccionar todo</span>
+      <span class="ctx-kbd">Ctrl+A</span>
+    </button>
+
+    @if (state().hasSelection) {
+      <div class="ctx-sep"></div>
+      <button
+        type="button"
+        class="ctx-item"
+        [class.active]="state().bold"
+        (click)="toggleBold()"
+      >
+        <span class="ctx-label"><b>Negrita</b></span>
+        <span class="ctx-kbd">Ctrl+B</span>
+      </button>
+      <button
+        type="button"
+        class="ctx-item"
+        [class.active]="state().italic"
+        (click)="toggleItalic()"
+      >
+        <span class="ctx-label"><i>Itálica</i></span>
+        <span class="ctx-kbd">Ctrl+I</span>
+      </button>
+      <button
+        type="button"
+        class="ctx-item"
+        [class.active]="state().underline"
+        (click)="toggleUnderline()"
+      >
+        <span class="ctx-label"><u>Subrayado</u></span>
+        <span class="ctx-kbd">Ctrl+U</span>
+      </button>
+    }
+
+    <div class="ctx-sep"></div>
+
+    <button type="button" class="ctx-item" (click)="insertSceneBreak()">
+      <span class="ctx-label">Salto de escena</span>
+      <span class="ctx-kbd">— —</span>
+    </button>
+  </div>
+}
 
 <footer class="status-bar">
   @if (active()) {

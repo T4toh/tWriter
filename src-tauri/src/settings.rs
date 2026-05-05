@@ -1,0 +1,38 @@
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
+use tauri::{AppHandle, Manager};
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct Settings {
+    #[serde(default)]
+    pub root: Option<String>,
+    #[serde(default, rename = "editorWidth", skip_serializing_if = "Option::is_none")]
+    pub editor_width: Option<String>,
+}
+
+fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("app_config_dir: {e}"))?;
+    fs::create_dir_all(&dir).map_err(|e| format!("mkdir {}: {}", dir.display(), e))?;
+    Ok(dir.join("settings.json"))
+}
+
+#[tauri::command]
+pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
+    let path = settings_path(&app)?;
+    if !path.exists() {
+        return Ok(Settings::default());
+    }
+    let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&raw).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
+    let path = settings_path(&app)?;
+    let raw = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
+    fs::write(&path, raw).map_err(|e| e.to_string())
+}

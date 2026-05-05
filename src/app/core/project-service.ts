@@ -1,21 +1,28 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
+import { SettingsService } from './settings-service';
 import { TreeNode } from './types';
-
-const DEFAULT_ROOT = '/home/tatoh/Repos/Personal/Novelas';
 
 @Injectable({ providedIn: 'root' })
 export class ProjectService {
-  readonly root = signal<string>(DEFAULT_ROOT);
+  private settings = inject(SettingsService);
+
+  readonly root = computed(() => this.settings.root());
   readonly tree = signal<TreeNode | null>(null);
   readonly loading = signal<boolean>(false);
   readonly error = signal<string | null>(null);
 
   async loadTree(): Promise<void> {
+    const root = this.root();
+    if (!root) {
+      this.tree.set(null);
+      this.error.set(null);
+      return;
+    }
     this.loading.set(true);
     this.error.set(null);
     try {
-      const node = await invoke<TreeNode>('get_tree', { root: this.root() });
+      const node = await invoke<TreeNode>('get_tree', { root });
       this.tree.set(node);
     } catch (err) {
       this.error.set(String(err));
@@ -25,8 +32,10 @@ export class ProjectService {
     }
   }
 
-  setRoot(path: string): void {
-    this.root.set(path);
-    void this.loadTree();
+  async chooseRoot(): Promise<void> {
+    const picked = await this.settings.pickRoot();
+    if (picked) {
+      await this.loadTree();
+    }
   }
 }

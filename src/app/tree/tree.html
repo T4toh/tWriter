@@ -3,48 +3,55 @@
 }
 @if (error(); as err) {
   <p class="status error">{{ err }}</p>
-  <button type="button" (click)="refresh()">Reintentar</button>
-}
-@if (root(); as r) {
-  <ng-container
-    *ngTemplateOutlet="nodeTpl; context: { $implicit: r, depth: 0 }"
-  />
 }
 @if (!root() && !loading() && !error()) {
-  <button type="button" (click)="refresh()">Cargar Novelas</button>
+  <p class="status">Elegí una carpeta arriba.</p>
+}
+@if (root(); as r) {
+  @for (child of r.children; track child.path) {
+    <ng-container
+      *ngTemplateOutlet="nodeTpl; context: { $implicit: child, depth: 0 }"
+    />
+  }
 }
 
 <ng-template #nodeTpl let-node let-depth="depth">
-  <div class="node" [attr.data-kind]="node.kind">
-    @if (node.kind === 'chapter') {
-      <button
-        type="button"
-        class="row chapter"
-        [class.active]="node.path === activePath()"
-        [class.disabled]="!node.editable"
-        [title]="node.editable ? '' : 'Importar antes de editar (.' + node.ext + ')'"
-        [style.padding-left.px]="8 + depth * 12"
-        (click)="select(node)"
-      >
-        <span class="icon">{{ node.editable ? '◆' : '◇' }}</span>
-        <span class="name">{{ node.name }}</span>
-        @if (node.ext && node.ext !== 'html') {
-          <span class="ext">.{{ node.ext }}</span>
-        }
-      </button>
-    } @else {
-      <div
-        class="row group"
-        [attr.data-kind]="node.kind"
-        [style.padding-left.px]="8 + depth * 12"
-      >
-        <span class="name">{{ node.name }}</span>
-      </div>
+  @if (node.kind === 'chapter') {
+    <button
+      type="button"
+      class="row chapter"
+      [class.active]="node.path === activePath()"
+      [class.disabled]="!node.editable"
+      [title]="node.editable ? '' : 'Importar antes de editar (.' + node.ext + ')'"
+      [style.padding-left.px]="8 + depth * 14"
+      (click)="select(node)"
+    >
+      <span class="icon">{{ node.editable ? '◆' : '◇' }}</span>
+      <span class="name">{{ node.name }}</span>
+      @if (node.ext && node.ext !== 'html') {
+        <span class="ext">.{{ node.ext }}</span>
+      }
+    </button>
+  } @else {
+    <button
+      type="button"
+      class="row group"
+      [attr.data-kind]="node.kind"
+      [style.padding-left.px]="8 + depth * 14"
+      (click)="toggle(node)"
+    >
+      <span class="chevron">{{ isExpanded(node) ? '▾' : '▸' }}</span>
+      <span class="name">{{ node.name }}</span>
+    </button>
+    @if (isExpanded(node)) {
+      @for (child of node.children; track child.path) {
+        <ng-container
+          *ngTemplateOutlet="
+            nodeTpl;
+            context: { $implicit: child, depth: depth + 1 }
+          "
+        />
+      }
     }
-    @for (child of node.children; track child.path) {
-      <ng-container
-        *ngTemplateOutlet="nodeTpl; context: { $implicit: child, depth: depth + 1 }"
-      />
-    }
-  </div>
+  }
 </ng-template>

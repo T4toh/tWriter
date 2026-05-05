@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-**tWriter** es una app desktop (Tauri 2 + Angular 20) para escribir novelas en español e inglés con un solo flujo: editor → conversor de diálogos a estilo RAE → chequeo de gramática → exportación EPUB. Reemplaza el flujo actual del autor (LibreOffice → dialogos_a_esp → Quillbot → Reedsy).
+**tWriter** es una app desktop (Tauri 2 + Angular 21, TypeScript 5.9) para escribir novelas en español e inglés con un solo flujo: editor → conversor de diálogos a estilo RAE → chequeo de gramática → exportación EPUB. Reemplaza el flujo actual del autor (LibreOffice → dialogos_a_esp → Quillbot → Reedsy).
 
 **Repo separado de contenido**: `~/Repos/Personal/Novelas/` (privado) guarda las novelas como HTML + JSON metadata. Este repo (`tWriter`) es solo la app — cero contenido.
 
@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Stack y arquitectura
 
 ```
-Frontend (Angular 20)        Backend (Rust / Tauri 2)
+Frontend (Angular 21)        Backend (Rust / Tauri 2)
 ─────────────────────        ────────────────────────
 src/app/                     src-tauri/src/
   editor/  TipTap wrapper      main.rs   entry
@@ -84,7 +84,7 @@ El repo `Novelas/` se sincroniza desde dentro de la app vía `git2` crate (libgi
 
 ## Roadmap
 
-- **Sprint 1** ⏳ tree explorer leyendo `~/Repos/Personal/Novelas/`, editor TipTap, autosave a disco
+- **Sprint 1** ✓ tree explorer + editor TipTap + autosave + folder picker + menú contextual
 - **Sprint 2**: integración git (auto-commit + push) con `git2`
 - **Sprint 3**: importer Pandoc, port TS de D1–D5, UI de conversión con diff
 - **Sprint 4**: EPUB builder en Rust, fonts embebidas, validar contra Reedsy

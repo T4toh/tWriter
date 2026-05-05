@@ -13,6 +13,8 @@ export class ChapterService {
   readonly saving = signal<boolean>(false);
   readonly lastSavedAt = signal<number | null>(null);
   readonly error = signal<string | null>(null);
+  /** Bumpea cada vez que se abre o cierra un capítulo. El editor lo observa para resincronizar. */
+  readonly loadedAt = signal<number>(0);
 
   readonly wordCount = computed(() => countWords(this.content()));
   readonly canEdit = computed(() => !!this.active()?.editable);
@@ -24,13 +26,14 @@ export class ChapterService {
       return;
     }
     await this.flushPending();
-    this.active.set(node);
     this.error.set(null);
 
     if (!node.editable) {
       this.content.set('');
       this.meta.set(EMPTY_META);
       this.dirty.set(false);
+      this.active.set(node);
+      this.loadedAt.set(Date.now());
       return;
     }
 
@@ -42,9 +45,23 @@ export class ChapterService {
       this.content.set(html);
       this.meta.set(meta ?? EMPTY_META);
       this.dirty.set(false);
+      this.active.set(node);
+      this.loadedAt.set(Date.now());
     } catch (err) {
       this.error.set(String(err));
+      this.active.set(node);
+      this.loadedAt.set(Date.now());
     }
+  }
+
+  close(): void {
+    this.cancelAutosave();
+    this.active.set(null);
+    this.content.set('');
+    this.meta.set(EMPTY_META);
+    this.dirty.set(false);
+    this.error.set(null);
+    this.loadedAt.set(Date.now());
   }
 
   updateContent(html: string): void {

@@ -5,35 +5,112 @@
   overflow: hidden;
 }
 
-.empty {
-  flex: 1;
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-soft);
+  flex-shrink: 0;
+}
+
+.tb-btn {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: none;
+  background: transparent;
   color: var(--fg-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 0;
+}
+
+.tb-btn:hover {
+  background: var(--border);
+  color: var(--fg);
+}
+
+.tb-btn.active {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.tb-btn.active:hover {
+  background: var(--accent);
+  filter: brightness(1.1);
+}
+
+.tb-btn .ico {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.tb-btn .ico.bold {
+  font-weight: 700;
+}
+
+.tb-btn .ico.italic {
   font-style: italic;
-  padding: 2rem;
-  text-align: center;
+  font-family: var(--font-body);
+}
+
+.tb-btn .ico.underline {
+  text-decoration: underline;
+}
+
+.tb-btn.width-toggle .ico {
+  font-size: 16px;
+  letter-spacing: -0.05em;
+}
+
+.sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.editor-stack {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
 }
 
 .editor-host {
-  flex: 1;
+  position: absolute;
+  inset: 0;
   overflow-y: auto;
-  padding: 4rem 6rem;
-  font-family: var(--font-body);
-  font-size: 17px;
-  line-height: 1.7;
-  color: var(--fg);
-
-  &.hidden {
-    display: none;
-  }
+  background: var(--bg-soft);
+  padding: 2.5rem 1.5rem;
 
   ::ng-deep .ProseMirror {
     outline: none;
-    max-width: 38em;
+    width: 100%;
     margin: 0 auto;
-    min-height: 100%;
+    padding: 3.5rem 4rem;
+    min-height: calc(100% - 5rem);
+    box-sizing: border-box;
+    background: var(--bg);
+    color: var(--fg);
+    border-radius: 3px;
+    box-shadow:
+      0 0 0 1px var(--border),
+      0 4px 24px rgba(0, 0, 0, 0.08);
+    caret-color: var(--accent);
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.7;
 
     p {
       margin: 0 0 0.6em 0;
@@ -46,6 +123,12 @@
     h1 + p,
     h2 + p,
     hr + p {
+      text-indent: 0;
+    }
+
+    p[style*='text-align: center'],
+    p[style*='text-align: right'],
+    p[style*='text-align: left'] {
       text-indent: 0;
     }
 
@@ -68,6 +151,10 @@
       font-weight: 600;
     }
 
+    u {
+      text-decoration: underline;
+    }
+
     hr {
       border: none;
       text-align: center;
@@ -84,6 +171,8 @@
       margin: 1em 1.5em;
       font-style: italic;
       color: var(--fg-muted);
+      border-left: 2px solid var(--border);
+      padding-left: 1em;
     }
 
     span.dropcap {
@@ -95,6 +184,111 @@
       font-family: var(--font-ui);
     }
   }
+}
+
+/* Anchos: aplicados al contenedor para que la "hoja" interna respete el max-width. */
+.editor-stack[data-width='narrow'] ::ng-deep .ProseMirror {
+  max-width: 38em;
+}
+
+.editor-stack[data-width='wide'] ::ng-deep .ProseMirror {
+  max-width: 60em;
+}
+
+.editor-stack[data-width='full'] ::ng-deep .ProseMirror {
+  max-width: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-soft);
+  color: var(--fg-muted);
+  font-style: italic;
+  text-align: center;
+  padding: 2rem;
+  z-index: 1;
+}
+
+.ctx-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+.ctx-menu {
+  position: fixed;
+  z-index: 101;
+  min-width: 220px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+  padding: 4px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  border-radius: 3px;
+  cursor: pointer;
+  gap: 1.5em;
+}
+
+.ctx-item:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.ctx-item.active {
+  background: var(--border);
+}
+
+.ctx-item.active:hover {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.ctx-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ctx-label {
+  flex: 1;
+}
+
+.ctx-kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.6;
+  letter-spacing: 0.02em;
+}
+
+.ctx-item:hover:not(:disabled) .ctx-kbd {
+  opacity: 0.8;
+}
+
+.ctx-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
 }
 
 .status-bar {

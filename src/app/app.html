@@ -1,8 +1,33 @@
 <div class="shell">
   <aside class="panel panel-left">
     <header>
-      <span class="title">tWriter</span>
-      <span class="path" [title]="root()">{{ root() }}</span>
+      <div class="title-row">
+        <span class="title">tWriter</span>
+        <div class="actions">
+          <button
+            type="button"
+            class="icon-btn"
+            (click)="refresh()"
+            [disabled]="!root()"
+            title="Recargar árbol"
+          >
+            ↻
+          </button>
+          <button
+            type="button"
+            class="icon-btn"
+            (click)="pickFolder()"
+            title="Cambiar carpeta"
+          >
+            📁
+          </button>
+        </div>
+      </div>
+      @if (root(); as r) {
+        <span class="path" [title]="r">{{ r }}</span>
+      } @else {
+        <span class="path muted">sin carpeta</span>
+      }
     </header>
     <app-tree />
   </aside>
