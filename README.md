@@ -19,13 +19,74 @@ Editor mínimo de escritura funcionando:
 - Word count en footer
 - Tema claro y oscuro, tipografía serif para edición (matchea output EPUB)
 
-## Próximo
+## Roadmap
 
-1. Auto-commit + push del repo de novelas (reemplaza Dropbox)
-2. Importer `.docx`/`.odt` → HTML (Pandoc sidecar) + port TS de las reglas RAE de [`dialogos_a_esp`](https://github.com/T4toh/dialogos_a_esp)
-3. Export EPUB (replica el subset CSS/fonts de Reedsy)
-4. Cliente LanguageTool para gramática (self-host en Docker)
-5. Templates de página (6×9", 5×8", A5)
+### Sprint 1 — Primera vista ✓
+
+- Refactor scaffold (signals, standalone, sin `*.component.*`)
+- `fs.rs` Rust: `get_tree`, `read_chapter`, `write_chapter`, `read_meta`, `write_meta`
+- Editor TipTap (StarterKit + Typography + TextAlign), HTML subset
+- Layout 2 paneles + tema claro/oscuro
+- Autosave debounced 1.5s
+- Tree colapsable, refresh, folder picker, persistencia en `settings.json`
+- Toolbar (B/I/U, alineación, salto de escena, ancho)
+- Menú contextual propio
+- Word count en footer
+
+### Sprint 2 — Sync con git
+
+> Cada save = commit. Cada N min = push. Sin Dropbox.
+
+- Crate `git2` en Rust
+- Comandos: `git_status`, `git_commit_all`, `git_push`, `git_pull`
+- Auto-commit cada 5 min (configurable) cuando hay cambios
+- Botón "Sync ahora" en toolbar
+- Auth: SSH key del sistema o token GitHub en `keyring` crate
+- Indicador de sync status en footer
+
+### Sprint 3 — Importer + conversor RAE
+
+> Pasar las novelas viejas (.docx/.odt) al formato HTML. Aplicar reglas RAE in-app.
+
+- Sidecar `pandoc` en `src-tauri/binaries/`
+- Comando `import_chapter(path)` → genera `.html` + `.meta.json`
+- UI de importación (botón en chapter `.odt`/`.docx`)
+- Port TS de reglas D1–D5 desde [`dialogos_a_esp`](https://github.com/T4toh/dialogos_a_esp)
+- Tests unitarios con fixtures reusados
+- UI de conversión: botón "Aplicar RAE" → diff visual antes de aceptar
+- Detectar idioma (`meta.idioma`) y solo ofrecer RAE en `es`
+
+### Sprint 4 — Export EPUB
+
+> Reemplazar Reedsy. Mismo look, sin subir a la web.
+
+- Rust `epub.rs` builder (zip XHTML + CSS + fonts + cover + TOC)
+- CSS subset extraído de un EPUB de Reedsy → `src/styles/reedsy-subset.scss`
+- Fonts embebidas (Merriweather, Lato, Roboto Mono) → `src/assets/fonts/`
+- Cover desde `book.json.tapa`
+- TOC navegable (`toc.ncx` + `nav.xhtml`)
+- UI: botón "Exportar EPUB" → diálogo de progreso
+- Validación: comparar contra EPUB existente
+
+### Sprint 5 — Gramática + templates + polish
+
+> Reemplazar Quillbot. Templates de página. UX final.
+
+- Cliente LanguageTool (detecta `localhost:8081`, opcional)
+- Underline rojo in-line con sugerencias al click
+- Templates de formato (6×9", 5×8", A5) en `book.json`
+- Modo focus (atajo `F11`)
+- Indicador de idioma en footer
+
+### Diferido (Fase 3+)
+
+- MOBI export
+- Notas/research sidebar derecho
+- Drag & drop reorder de capítulos
+- Diff/historial visual via git log
+- Stats: gráfico palabras/día
+- Editor split (dos capítulos lado a lado)
+- Mobile (Capacitor)
 
 ## Desarrollo
 
