@@ -1,0 +1,84 @@
+:host {
+  display: block;
+  flex: 1;
+  overflow-y: auto;
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.status {
+  color: var(--fg-muted);
+  padding: 1rem;
+  margin: 0;
+}
+
+.status.error {
+  color: #b04040;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  width: 100%;
+  padding: 4px 8px;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: default;
+  font: inherit;
+  line-height: 1.3;
+}
+
+button.row {
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 1px 4px;
+  width: calc(100% - 8px);
+}
+
+button.row:hover {
+  background: var(--border);
+}
+
+.row.chapter.active {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.row.chapter.disabled {
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+.row.group[data-kind='saga'] {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-top: 0.5rem;
+}
+
+.row.group[data-kind='book'] {
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+
+.row.group[data-kind='section'] {
+  font-style: italic;
+  color: var(--fg-muted);
+}
+
+.icon {
+  font-size: 0.75em;
+  opacity: 0.6;
+}
+
+.ext {
+  margin-left: auto;
+  font-size: 0.75em;
+  font-family: var(--font-mono);
+  opacity: 0.6;
+}

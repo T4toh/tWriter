@@ -1,0 +1,31 @@
+@if (!active()) {
+  <div class="empty">
+    <p>Seleccioná un capítulo del árbol para empezar.</p>
+  </div>
+} @else if (!canEdit()) {
+  <div class="empty">
+    <p>
+      <strong>{{ active()!.name }}</strong> no es editable todavía.
+      Importá el archivo (.{{ active()!.ext }}) a HTML primero.
+    </p>
+  </div>
+}
+
+<div class="editor-host" #host [class.hidden]="!active() || !canEdit()"></div>
+
+<footer class="status-bar">
+  @if (active()) {
+    <span class="title">{{ active()!.name }}</span>
+    <span class="counter">{{ wordCount() }} palabras</span>
+    @if (saving()) {
+      <span class="indicator saving">guardando…</span>
+    } @else if (dirty()) {
+      <span class="indicator dirty">sin guardar</span>
+    } @else if (canEdit()) {
+      <span class="indicator saved">guardado</span>
+    }
+    @if (chapterError(); as err) {
+      <span class="indicator error">{{ err }}</span>
+    }
+  }
+</footer>
