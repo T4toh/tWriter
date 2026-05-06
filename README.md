@@ -44,17 +44,17 @@ Editor mínimo de escritura funcionando:
 - Botón "sync ahora" (⇅) en header
 - Indicador (punto de color) + summary del estado en panel izquierdo
 
-### Sprint 3 — Importer + conversor RAE
+### Sprint 3 — Importer + conversor RAE ✓
 
 > Pasar las novelas viejas (.docx/.odt) al formato HTML. Aplicar reglas RAE in-app.
 
-- Sidecar `pandoc` en `src-tauri/binaries/`
+- Pandoc CLI shell-out (no sidecar, requiere `pandoc` instalado)
 - Comando `import_chapter(path)` → genera `.html` + `.meta.json`
-- UI de importación (botón en chapter `.odt`/`.docx`)
-- Port TS de reglas D1–D5 desde [`dialogos_a_esp`](https://github.com/T4toh/dialogos_a_esp)
-- Tests unitarios con fixtures reusados
-- UI de conversión: botón "Aplicar RAE" → diff visual antes de aceptar
-- Detectar idioma (`meta.idioma`) y solo ofrecer RAE en `es`
+- UI: botón "Importar a HTML" en overlay del editor para `.odt`/`.docx`
+- Port TS de reglas D1–D5 desde [`dialogos_a_esp`](https://github.com/T4toh/dialogos_a_esp) en `src/app/dialogos/`
+- Botón "RAE" en toolbar del editor (sólo cuando `idioma === 'es'`)
+- Modal con diff side-by-side antes de aceptar
+- Limpieza de HTML pandoc → subset permitido (p, em, strong, i, b, u, blockquote, hr, h1-h3, br)
 
 ### Sprint 4 — Export EPUB
 

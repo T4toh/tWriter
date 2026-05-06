@@ -1,9 +1,11 @@
 mod fs;
 mod git;
+mod import;
 mod settings;
 
 use fs::{get_tree, read_chapter, read_meta, write_chapter, write_meta};
 use git::{git_commit_all, git_pull, git_push, git_status};
+use import::import_chapter;
 use settings::{get_settings, set_settings};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -23,6 +25,7 @@ pub fn run() {
             git_commit_all,
             git_push,
             git_pull,
+            import_chapter,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

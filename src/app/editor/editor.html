@@ -84,6 +84,18 @@
       <span class="ico">* * *</span>
     </button>
 
+    @if (canApplyRae()) {
+      <span class="sep"></span>
+      <button
+        type="button"
+        class="tb-btn tb-text"
+        (click)="openRae()"
+        title="Aplicar reglas RAE de diálogos (preview con diff)"
+      >
+        RAE
+      </button>
+    }
+
     <span class="spacer"></span>
 
     <button
@@ -109,14 +121,51 @@
       @if (!active()) {
         <p>Seleccioná un capítulo del árbol para empezar.</p>
       } @else {
-        <p>
-          <strong>{{ active()!.name }}</strong> no es editable todavía.<br />
-          Importá el archivo (.{{ active()!.ext }}) a HTML primero.
-        </p>
+        <div class="overlay-import">
+          <p>
+            <strong>{{ active()!.name }}</strong>.{{ active()!.ext }}
+          </p>
+          <p class="muted">No editable como HTML. Convertilo con pandoc.</p>
+          <button
+            type="button"
+            class="btn btn-primary"
+            [disabled]="importing()"
+            (click)="importNow()"
+          >
+            {{ importing() ? 'Importando…' : 'Importar a HTML' }}
+          </button>
+          @if (chapterError(); as err) {
+            <p class="muted error">{{ err }}</p>
+          }
+        </div>
       }
     </div>
   }
 </div>
+
+@if (rae(); as r) {
+  <div class="rae-backdrop" (click)="cancelRae()"></div>
+  <div class="rae-modal" (click)="$event.stopPropagation()">
+    <header class="rae-header">
+      <h2>Aplicar reglas RAE</h2>
+      <p>Revisá los cambios antes de aceptar. Si el resultado no convence, cancelá.</p>
+    </header>
+    <div class="rae-diff">
+      <div class="rae-pane">
+        <h3>Original</h3>
+        <div class="rae-content" [innerHTML]="r.original"></div>
+      </div>
+      <div class="rae-pane">
+        <h3>Convertido</h3>
+        <div class="rae-content" [innerHTML]="r.converted"></div>
+      </div>
+    </div>
+    <footer class="rae-actions">
+      <button type="button" class="btn btn-secondary" (click)="cancelRae()">Cancelar</button>
+      <button type="button" class="btn btn-primary" (click)="acceptRae()">Aplicar al editor</button>
+    </footer>
+  </div>
+}
 
 @if (menu(); as m) {
   <div class="ctx-backdrop" (click)="closeMenu()" (contextmenu)="$event.preventDefault(); closeMenu()"></div>

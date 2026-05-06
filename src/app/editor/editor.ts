@@ -16,6 +16,7 @@ import Typography from '@tiptap/extension-typography';
 import TextAlign from '@tiptap/extension-text-align';
 import { ChapterService } from '../core/chapter-service';
 import { SettingsService } from '../core/settings-service';
+import { convert as convertRae } from '../dialogos/converter';
 
 interface ToolbarState {
   bold: boolean;
@@ -62,6 +63,13 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly chapterError = this.chapter.error;
   protected readonly state = signal<ToolbarState>(EMPTY_STATE);
   protected readonly menu = signal<{ x: number; y: number } | null>(null);
+  protected readonly rae = signal<{ original: string; converted: string } | null>(null);
+  protected readonly importing = this.chapter.importing;
+  protected readonly canApplyRae = computed(() => {
+    if (!this.canEdit()) return false;
+    const lang = this.chapter.meta().idioma;
+    return lang === null || lang === 'es' || lang === undefined;
+  });
   protected readonly width = this.settings.editorWidth;
   protected readonly widthLabel = computed(() => {
     switch (this.width()) {
@@ -219,6 +227,30 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   protected cycleWidth(): void {
     this.settings.cycleEditorWidth();
+  }
+
+  protected openRae(): void {
+    if (!this.tiptap || !this.canApplyRae()) return;
+    const original = this.tiptap.getHTML();
+    const result = convertRae(original);
+    this.rae.set({ original, converted: result.text });
+  }
+
+  protected acceptRae(): void {
+    const m = this.rae();
+    if (!m || !this.tiptap) return;
+    this.tiptap.commands.setContent(m.converted, { emitUpdate: true });
+    this.rae.set(null);
+  }
+
+  protected cancelRae(): void {
+    this.rae.set(null);
+  }
+
+  protected importNow(): void {
+    const node = this.active();
+    if (!node) return;
+    void this.chapter.importChapter(node);
   }
 
   private createEditor(content: string, editable: boolean): void {

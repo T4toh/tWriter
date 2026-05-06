@@ -1,12 +1,16 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
+import { ProjectService } from './project-service';
 import { ChapterMeta, EMPTY_META, TreeNode } from './types';
 
 const AUTOSAVE_MS = 1500;
 
 @Injectable({ providedIn: 'root' })
 export class ChapterService {
+  private project = inject(ProjectService);
+
   readonly active = signal<TreeNode | null>(null);
+  readonly importing = signal<boolean>(false);
   readonly content = signal<string>('');
   readonly meta = signal<ChapterMeta>(EMPTY_META);
   readonly dirty = signal<boolean>(false);
@@ -99,6 +103,39 @@ export class ChapterService {
     } finally {
       this.saving.set(false);
     }
+  }
+
+  /** Importa un .docx/.odt a HTML usando pandoc. Recarga árbol al terminar. */
+  async importChapter(node: TreeNode): Promise<void> {
+    if (node.kind !== 'chapter' || node.editable) return;
+    if (node.ext !== 'docx' && node.ext !== 'odt') return;
+    this.importing.set(true);
+    this.error.set(null);
+    try {
+      const result = await invoke<{ html_path: string }>('import_chapter', {
+        path: node.path,
+      });
+      await this.project.loadTree();
+      // Reabrir como el nuevo .html
+      const newNode = this.findNode(this.project.tree(), result.html_path);
+      if (newNode) {
+        await this.open(newNode);
+      }
+    } catch (err) {
+      this.error.set(String(err));
+    } finally {
+      this.importing.set(false);
+    }
+  }
+
+  private findNode(node: TreeNode | null, path: string): TreeNode | null {
+    if (!node) return null;
+    if (node.path === path) return node;
+    for (const child of node.children) {
+      const found = this.findNode(child, path);
+      if (found) return found;
+    }
+    return null;
   }
 
   private scheduleAutosave(): void {
