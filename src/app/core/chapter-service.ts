@@ -226,6 +226,27 @@ export class ChapterService {
     }
   }
 
+  /** Exporta una novela a EPUB. Path debe ser un dir tipo book. */
+  async exportEpub(node: TreeNode): Promise<string | null> {
+    if (node.kind !== 'book') return null;
+    try {
+      const result = await invoke<{ epub_path: string; chapters: number }>(
+        'export_book',
+        { bookPath: node.path },
+      );
+      this.debug.info(
+        'epub',
+        `${node.name} → ${result.epub_path} (${result.chapters} parte${result.chapters === 1 ? '' : 's'})`,
+      );
+      await this.project.loadTree();
+      return result.epub_path;
+    } catch (err) {
+      this.debug.error('epub', `${node.name}: ${err}`);
+      this.error.set(String(err));
+      return null;
+    }
+  }
+
   /** Sube o baja un nodo (capítulo o directorio numerado) entre sus siblings. */
   async moveNode(node: TreeNode, direction: 'up' | 'down'): Promise<boolean> {
     try {

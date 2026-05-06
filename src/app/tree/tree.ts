@@ -73,6 +73,7 @@ export class Tree {
         createBook: false,
         createSaga: !!this.settings.root(),
         moveable: false,
+        exportEpub: false,
       };
     }
     if (node.kind === 'chapter') {
@@ -90,6 +91,7 @@ export class Tree {
         createBook: false,
         createSaga: false,
         moveable: this.isMoveable(node),
+        exportEpub: false,
       };
     }
     const importable = this.collectImportable(node);
@@ -106,6 +108,7 @@ export class Tree {
       createBook: node.kind === 'saga',
       createSaga: false,
       moveable: node.kind !== 'saga' && this.isMoveable(node),
+      exportEpub: node.kind === 'book',
     };
   });
 
@@ -300,6 +303,13 @@ export class Tree {
     if (!m || !m.node) return;
     this.closeMenu();
     await this.chapter.moveNode(m.node, 'down');
+  }
+
+  protected async exportEpub(): Promise<void> {
+    const m = this.menu();
+    if (!m || !m.node) return;
+    this.closeMenu();
+    await this.chapter.exportEpub(m.node);
   }
 
   /** Devuelve todos los .odt/.docx descendientes que NO tienen .html sibling. */

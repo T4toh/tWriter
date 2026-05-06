@@ -56,17 +56,18 @@ Editor mínimo de escritura funcionando:
 - Modal con diff side-by-side antes de aceptar
 - Limpieza de HTML pandoc → subset permitido (p, em, strong, i, b, u, blockquote, hr, h1-h3, br)
 
-### Sprint 4 — Export EPUB
+### Sprint 4 — Export EPUB ✓
 
 > Reemplazar Reedsy. Mismo look, sin subir a la web.
 
-- Rust `epub.rs` builder (zip XHTML + CSS + fonts + cover + TOC)
-- CSS subset extraído de un EPUB de Reedsy → `src/styles/reedsy-subset.scss`
-- Fonts embebidas (Merriweather, Lato, Roboto Mono) → `src/assets/fonts/`
-- Cover desde `book.json.tapa`
-- TOC navegable (`toc.ncx` + `nav.xhtml`)
-- UI: botón "Exportar EPUB" → diálogo de progreso
-- Validación: comparar contra EPUB existente
+- Rust `epub.rs` builder con `zip` + `uuid` crates
+- CSS subset estilo Reedsy embebido (`epub_style.css`)
+- Estructura EPUB 3: mimetype + container.xml + content.opf + nav.xhtml + chapters
+- Lee `book.json` (titulo/autor/idioma) o infiere desde nombre del dir
+- TOC navegable usando títulos de capítulo (sección)
+- UI: "Exportar a EPUB" en menú contextual del libro → guarda en `<book>/exports/<titulo>.epub`
+
+Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automático, ISBN.
 
 ### Sprint 5 — Gramática + templates + polish
 

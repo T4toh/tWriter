@@ -1,0 +1,95 @@
+/* tWriter EPUB style. Subset minimal del look Reedsy. */
+body {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 100%;
+  line-height: 1.6;
+  margin: 0;
+  padding: 1em 1.5em;
+  hyphens: auto;
+  -epub-hyphens: auto;
+}
+
+p {
+  margin: 0 0 0.4em 0;
+  text-indent: 1.5em;
+  text-align: justify;
+}
+
+p:first-child,
+p.no-indent,
+h1 + p,
+h2 + p,
+h3 + p,
+hr + p {
+  text-indent: 0;
+}
+
+p[style*="text-align: center"],
+p[style*="text-align: right"],
+p[style*="text-align: left"] {
+  text-indent: 0;
+}
+
+h1, h2, h3 {
+  font-family: Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  text-align: center;
+  page-break-after: avoid;
+}
+
+h1.chapter-title {
+  font-size: 1.6em;
+  margin: 2em 0 1.5em;
+  letter-spacing: 0.02em;
+}
+
+.chapter-content {
+  page-break-after: auto;
+}
+
+em, i {
+  font-style: italic;
+}
+
+strong, b {
+  font-weight: bold;
+}
+
+u {
+  text-decoration: underline;
+}
+
+hr {
+  border: none;
+  text-align: center;
+  margin: 1.5em 0;
+}
+
+hr::before {
+  content: "* * *";
+  color: #888;
+  letter-spacing: 0.5em;
+}
+
+blockquote {
+  margin: 1em 1.5em;
+  font-style: italic;
+}
+
+span.dropcap {
+  float: left;
+  font-size: 3em;
+  line-height: 0.9em;
+  margin-right: 0.05em;
+  margin-bottom: -0.1em;
+  font-family: Helvetica, Arial, sans-serif;
+}
+
+nav ol {
+  list-style-type: none;
+  padding-left: 0;
+}
+
+nav ol li {
+  margin: 0.4em 0;
+}
