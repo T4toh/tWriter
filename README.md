@@ -92,6 +92,7 @@ Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automáti
 - Dropcaps automáticos en primera letra de cada capítulo
 - Página "About the author" en EPUB
 - Flag `epilogo` en `meta.json` para separar epílogos del TOC principal
+- Preview EPUB tipo Kindle (B/N, distintos tamaños de pantalla — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
 - Mobile (Capacitor)
 
 ## Desarrollo
