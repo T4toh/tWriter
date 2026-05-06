@@ -21,6 +21,8 @@ export interface BookConfig {
 export class BookConfigService {
   /** Nodo del libro cuyo modal está abierto. null = cerrado. */
   readonly editing = signal<TreeNode | null>(null);
+  /** Bumpea con cada save para que los cards re-loaden. */
+  readonly savedAt = signal<number>(0);
 
   async load(bookPath: string): Promise<BookConfig> {
     return await invoke<BookConfig>('get_book_config', { bookPath });
@@ -28,6 +30,7 @@ export class BookConfigService {
 
   async save(bookPath: string, config: BookConfig): Promise<void> {
     await invoke('set_book_config', { bookPath, config });
+    this.savedAt.set(Date.now());
   }
 
   openFor(node: TreeNode): void {
