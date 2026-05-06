@@ -1,20 +1,29 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, effect, inject } from '@angular/core';
+import { ChapterService } from './core/chapter-service';
+import { DebugService } from './core/debug-service';
 import { GitService } from './core/git-service';
 import { ProjectService } from './core/project-service';
 import { SettingsService } from './core/settings-service';
 import { Tree } from './tree/tree';
 import { Editor } from './editor/editor';
+import { DebugPanel } from './debug/debug-panel';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor],
+  imports: [Tree, Editor, DebugPanel],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
 export class App {
   private project = inject(ProjectService);
   private settings = inject(SettingsService);
+  private chapter = inject(ChapterService);
   protected git = inject(GitService);
+  protected debug = inject(DebugService);
+
+  private lastChapterErr: string | null = null;
+  private lastProjectErr: string | null = null;
+  private lastGitErr: string | null = null;
 
   protected readonly root = this.project.root;
   protected readonly syncTitle = computed(() => {
@@ -33,6 +42,21 @@ export class App {
 
   constructor() {
     void this.bootstrap();
+    effect(() => {
+      const e = this.chapter.error();
+      if (e && e !== this.lastChapterErr) this.debug.error('chapter', e);
+      this.lastChapterErr = e;
+    });
+    effect(() => {
+      const e = this.project.error();
+      if (e && e !== this.lastProjectErr) this.debug.error('project', e);
+      this.lastProjectErr = e;
+    });
+    effect(() => {
+      const e = this.git.error();
+      if (e && e !== this.lastGitErr) this.debug.error('git', e);
+      this.lastGitErr = e;
+    });
   }
 
   private async bootstrap(): Promise<void> {
@@ -56,5 +80,17 @@ export class App {
 
   protected pull(): void {
     void this.git.pull();
+  }
+
+  protected toggleDebug(): void {
+    this.debug.toggle();
+  }
+
+  protected async createSaga(): Promise<void> {
+    const root = this.settings.root();
+    if (!root) return;
+    const name = prompt('Nombre de la saga / novela:');
+    if (!name?.trim()) return;
+    await this.chapter.createDirectory(root, name.trim(), false);
   }
 }

@@ -17,6 +17,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import { ChapterService } from '../core/chapter-service';
 import { SettingsService } from '../core/settings-service';
 import { convert as convertRae } from '../dialogos/converter';
+import { Landing } from '../landing/landing';
 
 interface ToolbarState {
   bold: boolean;
@@ -44,12 +45,12 @@ const EMPTY_STATE: ToolbarState = {
 
 @Component({
   selector: 'app-editor',
-  imports: [],
+  imports: [Landing],
   templateUrl: './editor.html',
   styleUrl: './editor.scss',
 })
 export class Editor implements AfterViewInit, OnDestroy {
-  private chapter = inject(ChapterService);
+  protected chapter = inject(ChapterService);
   private settings = inject(SettingsService);
 
   @ViewChild('host', { static: true })
@@ -71,6 +72,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     return lang === null || lang === 'es' || lang === undefined;
   });
   protected readonly width = this.settings.editorWidth;
+  protected readonly fontSize = this.settings.editorFontSize;
   protected readonly widthLabel = computed(() => {
     switch (this.width()) {
       case 'narrow': return 'página';
@@ -229,6 +231,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.settings.cycleEditorWidth();
   }
 
+  protected fontBump(delta: number): void {
+    this.settings.bumpFontSize(delta);
+  }
+
   protected openRae(): void {
     if (!this.tiptap || !this.canApplyRae()) return;
     const original = this.tiptap.getHTML();
@@ -251,6 +257,11 @@ export class Editor implements AfterViewInit, OnDestroy {
     const node = this.active();
     if (!node) return;
     void this.chapter.importChapter(node);
+  }
+
+  protected toggleLang(): void {
+    const current = this.chapter.meta().idioma;
+    void this.chapter.setLanguage(current === 'en' ? 'es' : 'en');
   }
 
   private createEditor(content: string, editable: boolean): void {

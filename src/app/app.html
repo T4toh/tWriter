@@ -2,7 +2,7 @@
   <aside class="panel panel-left">
     <header>
       <div class="title-row">
-        <span class="title">tWriter</span>
+        <img src="assets/icon.png" alt="tWriter" class="app-icon" />
         <div class="actions">
           <button
             type="button"
@@ -35,10 +35,28 @@
           <button
             type="button"
             class="icon-btn"
+            (click)="createSaga()"
+            [disabled]="!root()"
+            title="Crear saga / novela"
+          >
+            ＋
+          </button>
+          <button
+            type="button"
+            class="icon-btn"
             (click)="pickFolder()"
             title="Cambiar carpeta"
           >
             📁
+          </button>
+          <button
+            type="button"
+            class="icon-btn"
+            [class.active]="debug.visible()"
+            (click)="toggleDebug()"
+            title="Panel de debug"
+          >
+            🐛
           </button>
         </div>
       </div>
@@ -61,3 +79,6 @@
     <app-editor />
   </main>
 </div>
+
+<app-debug-panel />
+

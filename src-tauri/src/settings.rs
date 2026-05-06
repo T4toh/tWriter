@@ -9,6 +9,12 @@ pub struct Settings {
     pub root: Option<String>,
     #[serde(default, rename = "editorWidth", skip_serializing_if = "Option::is_none")]
     pub editor_width: Option<String>,
+    #[serde(
+        default,
+        rename = "editorFontSize",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub editor_font_size: Option<u32>,
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {

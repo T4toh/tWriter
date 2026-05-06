@@ -1,0 +1,127 @@
+.debug-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 35vh;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.2);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-soft);
+  flex-shrink: 0;
+
+  .title {
+    font-family: var(--font-ui);
+    font-weight: 600;
+    color: var(--fg);
+  }
+
+  .count {
+    color: var(--fg-muted);
+    font-family: var(--font-ui);
+  }
+
+  .link {
+    background: transparent;
+    border: none;
+    color: var(--fg-muted);
+    cursor: pointer;
+    font: inherit;
+    font-family: var(--font-ui);
+    padding: 2px 6px;
+    border-radius: 3px;
+
+    &:hover {
+      color: var(--fg);
+      background: var(--border);
+    }
+
+    &:last-child {
+      margin-left: auto;
+      font-size: 18px;
+      line-height: 1;
+    }
+  }
+}
+
+.log {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  align-items: baseline;
+
+  &:hover {
+    background: var(--bg-soft);
+  }
+
+  .ts {
+    color: var(--fg-muted);
+    flex-shrink: 0;
+  }
+
+  .src {
+    color: var(--accent);
+    flex-shrink: 0;
+    font-weight: 600;
+  }
+
+  .msg {
+    color: var(--fg);
+    word-break: break-word;
+  }
+
+  .details {
+    flex-basis: 100%;
+    margin: 4px 0 0 0;
+    padding: 6px 8px;
+    background: var(--bg-soft);
+    border-radius: 3px;
+    font-size: 11px;
+    color: var(--fg-muted);
+    overflow-x: auto;
+    white-space: pre-wrap;
+  }
+
+  &[data-level='error'] .msg {
+    color: #c87070;
+  }
+
+  &[data-level='warn'] .msg {
+    color: #c8a878;
+  }
+
+  &[data-level='info'] .msg {
+    color: var(--fg-muted);
+  }
+}
+
+.empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--fg-muted);
+  font-style: italic;
+  font-family: var(--font-ui);
+}

@@ -6,6 +6,7 @@ export interface TreeNode {
   kind: NodeKind;
   ext?: string;
   editable?: boolean;
+  modifiedMs?: number;
   children: TreeNode[];
 }
 

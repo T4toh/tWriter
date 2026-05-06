@@ -4,15 +4,21 @@ import { open } from '@tauri-apps/plugin-dialog';
 
 export type EditorWidth = 'narrow' | 'wide' | 'full';
 
+const FONT_MIN = 12;
+const FONT_MAX = 28;
+const FONT_DEFAULT = 17;
+
 interface Settings {
   root: string | null;
   editorWidth?: EditorWidth;
+  editorFontSize?: number;
 }
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
   readonly root = signal<string | null>(null);
   readonly editorWidth = signal<EditorWidth>('narrow');
+  readonly editorFontSize = signal<number>(FONT_DEFAULT);
   readonly loaded = signal<boolean>(false);
 
   async load(): Promise<void> {
@@ -20,6 +26,7 @@ export class SettingsService {
       const s = await invoke<Settings>('get_settings');
       this.root.set(s.root ?? null);
       this.editorWidth.set(s.editorWidth ?? 'narrow');
+      this.editorFontSize.set(clampFont(s.editorFontSize ?? FONT_DEFAULT));
     } catch {
       this.root.set(null);
     } finally {
@@ -43,10 +50,18 @@ export class SettingsService {
     void this.setEditorWidth(next);
   }
 
+  bumpFontSize(delta: number): void {
+    const next = clampFont(this.editorFontSize() + delta);
+    if (next === this.editorFontSize()) return;
+    this.editorFontSize.set(next);
+    void this.persist();
+  }
+
   private async persist(): Promise<void> {
     const settings: Settings = {
       root: this.root(),
       editorWidth: this.editorWidth(),
+      editorFontSize: this.editorFontSize(),
     };
     await invoke('set_settings', { settings });
   }
@@ -64,4 +79,8 @@ export class SettingsService {
     await this.setRoot(result);
     return result;
   }
+}
+
+function clampFont(n: number): number {
+  return Math.max(FONT_MIN, Math.min(FONT_MAX, Math.round(n)));
 }

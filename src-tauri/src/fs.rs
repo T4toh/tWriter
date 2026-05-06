@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const SKIP_DIRS: &[&str] = &["convertidos", "Revisiones", "exports", ".git", "zTapas"];
 const CHAPTER_EXTS: &[&str] = &["html", "odt", "docx"];
@@ -20,12 +21,13 @@ pub struct TreeNode {
     pub name: String,
     pub path: String,
     pub kind: NodeKind,
-    /// Para chapters: extension del archivo (html, odt, docx). None para dirs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ext: Option<String>,
-    /// Solo capítulos .html son editables en MVP. ODT/DOCX requieren importar primero.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub editable: Option<bool>,
+    /// mtime del archivo en milis epoch. Para dirs, max de descendientes.
+    #[serde(rename = "modifiedMs", skip_serializing_if = "Option::is_none")]
+    pub modified_ms: Option<u64>,
     pub children: Vec<TreeNode>,
 }
 
@@ -58,13 +60,16 @@ pub fn get_tree(root: String) -> Result<TreeNode, String> {
         .unwrap_or("Novelas")
         .to_string();
 
+    let children = list_sagas_or_books(&root_path)?;
+    let modified_ms = max_child_mtime(&children);
     Ok(TreeNode {
         name,
         path: root_path.to_string_lossy().into_owned(),
         kind: NodeKind::Saga,
         ext: None,
         editable: None,
-        children: list_sagas_or_books(&root_path)?,
+        modified_ms,
+        children,
     })
 }
 
@@ -83,6 +88,7 @@ pub fn read_chapter(path: String) -> Result<String, String> {
 }
 
 /// Escribe el HTML del capítulo. Crea el archivo si no existe.
+/// Asegura newline final (POSIX).
 #[tauri::command]
 pub fn write_chapter(path: String, html: String) -> Result<(), String> {
     let p = PathBuf::from(&path);
@@ -91,7 +97,11 @@ pub fn write_chapter(path: String, html: String) -> Result<(), String> {
             return Err(format!("Carpeta padre no existe: {}", parent.display()));
         }
     }
-    fs::write(&p, html).map_err(|e| e.to_string())
+    let mut content = html;
+    if !content.ends_with('\n') {
+        content.push('\n');
+    }
+    fs::write(&p, content).map_err(|e| e.to_string())
 }
 
 /// Lee `<chapter>.meta.json`. Devuelve default si no existe.
@@ -131,26 +141,34 @@ fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
         if should_skip_dir(&name) {
             continue;
         }
-        // Si tiene saga.json o subdirs que parecen libros → saga.
-        // Si tiene book.json o capítulos directos → book suelto.
         let kind = classify_top_level(&path);
         match kind {
-            NodeKind::Saga => out.push(TreeNode {
-                name,
-                path: path.to_string_lossy().into_owned(),
-                kind: NodeKind::Saga,
-                ext: None,
-                editable: None,
-                children: list_books(&path)?,
-            }),
-            NodeKind::Book => out.push(TreeNode {
-                name,
-                path: path.to_string_lossy().into_owned(),
-                kind: NodeKind::Book,
-                ext: None,
-                editable: None,
-                children: list_sections_or_chapters(&path)?,
-            }),
+            NodeKind::Saga => {
+                let children = list_books(&path)?;
+                let modified_ms = max_child_mtime(&children);
+                out.push(TreeNode {
+                    name,
+                    path: path.to_string_lossy().into_owned(),
+                    kind: NodeKind::Saga,
+                    ext: None,
+                    editable: None,
+                    modified_ms,
+                    children,
+                });
+            }
+            NodeKind::Book => {
+                let children = list_sections_or_chapters(&path)?;
+                let modified_ms = max_child_mtime(&children);
+                out.push(TreeNode {
+                    name,
+                    path: path.to_string_lossy().into_owned(),
+                    kind: NodeKind::Book,
+                    ext: None,
+                    editable: None,
+                    modified_ms,
+                    children,
+                });
+            }
             _ => {}
         }
     }
@@ -165,13 +183,16 @@ fn list_books(saga_dir: &Path) -> Result<Vec<TreeNode>, String> {
             continue;
         }
         let path = entry.path();
+        let children = list_sections_or_chapters(&path)?;
+        let modified_ms = max_child_mtime(&children);
         out.push(TreeNode {
             name,
             path: path.to_string_lossy().into_owned(),
             kind: NodeKind::Book,
             ext: None,
             editable: None,
-            children: list_sections_or_chapters(&path)?,
+            modified_ms,
+            children,
         });
     }
     Ok(out)
@@ -188,13 +209,16 @@ fn list_sections_or_chapters(book_dir: &Path) -> Result<Vec<TreeNode>, String> {
             if should_skip_dir(&name) {
                 continue;
             }
+            let children = list_chapters(&path)?;
+            let modified_ms = max_child_mtime(&children);
             sections.push(TreeNode {
                 name,
                 path: path.to_string_lossy().into_owned(),
                 kind: NodeKind::Section,
                 ext: None,
                 editable: None,
-                children: list_chapters(&path)?,
+                modified_ms,
+                children,
             });
         } else if ft.is_file() {
             if let Some(node) = chapter_node(&path) {
@@ -241,14 +265,27 @@ fn chapter_node(path: &Path) -> Option<TreeNode> {
         .and_then(|s| s.to_str())
         .unwrap_or("?")
         .to_string();
+    let modified_ms = mtime_ms(path);
     Some(TreeNode {
         name,
         path: path.to_string_lossy().into_owned(),
         kind: NodeKind::Chapter,
         editable: Some(ext == "html"),
         ext: Some(ext),
+        modified_ms,
         children: Vec::new(),
     })
+}
+
+fn mtime_ms(p: &Path) -> Option<u64> {
+    let meta = fs::metadata(p).ok()?;
+    let modified: SystemTime = meta.modified().ok()?;
+    let dur = modified.duration_since(UNIX_EPOCH).ok()?;
+    Some(dur.as_millis() as u64)
+}
+
+fn max_child_mtime(children: &[TreeNode]) -> Option<u64> {
+    children.iter().filter_map(|c| c.modified_ms).max()
 }
 
 fn classify_top_level(dir: &Path) -> NodeKind {

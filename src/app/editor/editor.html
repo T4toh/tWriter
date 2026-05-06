@@ -100,6 +100,26 @@
 
     <button
       type="button"
+      class="tb-btn"
+      (click)="fontBump(-1)"
+      title="Achicar fuente"
+    >
+      <span class="ico">A−</span>
+    </button>
+    <span class="font-size-label">{{ fontSize() }}</span>
+    <button
+      type="button"
+      class="tb-btn"
+      (click)="fontBump(1)"
+      title="Agrandar fuente"
+    >
+      <span class="ico">A+</span>
+    </button>
+
+    <span class="sep"></span>
+
+    <button
+      type="button"
       class="tb-btn width-toggle"
       (click)="cycleWidth()"
       [title]="'Ancho: ' + widthLabel()"
@@ -109,36 +129,40 @@
   </div>
 }
 
-<div class="editor-stack" [attr.data-width]="width()">
+<div
+  class="editor-stack"
+  [attr.data-width]="width()"
+  [style.--editor-font-size.px]="fontSize()"
+>
   <div
     class="editor-host"
     #host
     (contextmenu)="onContextMenu($event)"
   ></div>
 
-  @if (!active() || !canEdit()) {
+  @if (!active()) {
+    <div class="overlay overlay-landing">
+      <app-landing />
+    </div>
+  } @else if (!canEdit()) {
     <div class="overlay">
-      @if (!active()) {
-        <p>Seleccioná un capítulo del árbol para empezar.</p>
-      } @else {
-        <div class="overlay-import">
-          <p>
-            <strong>{{ active()!.name }}</strong>.{{ active()!.ext }}
-          </p>
-          <p class="muted">No editable como HTML. Convertilo con pandoc.</p>
-          <button
-            type="button"
-            class="btn btn-primary"
-            [disabled]="importing()"
-            (click)="importNow()"
-          >
-            {{ importing() ? 'Importando…' : 'Importar a HTML' }}
-          </button>
-          @if (chapterError(); as err) {
-            <p class="muted error">{{ err }}</p>
-          }
-        </div>
-      }
+      <div class="overlay-import">
+        <p>
+          <strong>{{ active()!.name }}</strong>.{{ active()!.ext }}
+        </p>
+        <p class="muted">No editable como HTML. Convertilo con pandoc.</p>
+        <button
+          type="button"
+          class="btn btn-primary"
+          [disabled]="importing()"
+          (click)="importNow()"
+        >
+          {{ importing() ? 'Importando…' : 'Importar a HTML' }}
+        </button>
+        @if (chapterError(); as err) {
+          <p class="muted error">{{ err }}</p>
+        }
+      </div>
     </div>
   }
 </div>
@@ -250,6 +274,16 @@
 <footer class="status-bar">
   @if (active()) {
     <span class="title">{{ active()!.name }}</span>
+    @if (canEdit()) {
+      <button
+        type="button"
+        class="lang-toggle"
+        (click)="toggleLang()"
+        [title]="'Idioma del capítulo (click para alternar). Afecta visibilidad del botón RAE.'"
+      >
+        {{ (chapter.meta().idioma ?? 'es').toUpperCase() }}
+      </button>
+    }
     <span class="counter">{{ wordCount() }} palabras</span>
     @if (saving()) {
       <span class="indicator saving">guardando…</span>

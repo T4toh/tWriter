@@ -1,0 +1,46 @@
+<nav class="breadcrumb">
+  @for (c of crumbs(); track $index; let last = $last) {
+    <button
+      type="button"
+      class="crumb"
+      [class.current]="last"
+      (click)="goCrumb(c)"
+    >
+      {{ c.label }}
+    </button>
+    @if (!last) {
+      <span class="sep">›</span>
+    }
+  }
+</nav>
+
+@if (items().length === 0) {
+  <p class="empty">
+    Sin items todavía. Click derecho en el árbol para crear.
+  </p>
+} @else {
+  <div class="grid">
+    @for (item of items(); track item.path) {
+      <button
+        type="button"
+        class="card"
+        [attr.data-kind]="item.kind"
+        (click)="onItemClick(item)"
+      >
+        <div class="card-head">
+          <span class="kind">{{ kindLabel(item.kind) }}</span>
+          @if (item.ext && item.ext !== 'html') {
+            <span class="ext">.{{ item.ext }}</span>
+          }
+        </div>
+        <h3 class="card-name">{{ item.name }}</h3>
+        <div class="card-foot">
+          <span class="date">{{ formatDate(item.modifiedMs) }}</span>
+          @if (item.kind !== 'chapter') {
+            <span class="count">{{ item.children.length }} item{{ item.children.length === 1 ? '' : 's' }}</span>
+          }
+        </div>
+      </button>
+    }
+  </div>
+}

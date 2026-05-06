@@ -1,18 +1,46 @@
-@if (loading()) {
-  <p class="status">Cargando…</p>
+@if (root()) {
+  <div class="tree-toolbar">
+    <button type="button" class="tt-btn" (click)="collapseAll()" title="Colapsar todo">
+      <span class="ico">⇧</span>
+    </button>
+    <button type="button" class="tt-btn" (click)="expandAll()" title="Expandir todo">
+      <span class="ico">⇩</span>
+    </button>
+  </div>
 }
-@if (error(); as err) {
-  <p class="status error">{{ err }}</p>
-}
-@if (!root() && !loading() && !error()) {
-  <p class="status">Elegí una carpeta arriba.</p>
-}
-@if (root(); as r) {
-  @for (child of r.children; track child.path) {
-    <ng-container
-      *ngTemplateOutlet="nodeTpl; context: { $implicit: child, depth: 0 }"
-    />
+<div class="tree-area" (contextmenu)="onEmptyContext($event)">
+  @if (loading()) {
+    <p class="status">Cargando…</p>
   }
+  @if (error(); as err) {
+    <p class="status error">{{ err }}</p>
+  }
+  @if (!root() && !loading() && !error()) {
+    <p class="status">Elegí una carpeta arriba.</p>
+  }
+  @if (root(); as r) {
+    @for (child of r.children; track child.path) {
+      <ng-container
+        *ngTemplateOutlet="nodeTpl; context: { $implicit: child, depth: 0 }"
+      />
+    }
+    @if (r.children.length === 0) {
+      <p class="status">
+        Sin sagas todavía. Click derecho aquí para crear una.
+      </p>
+    }
+  }
+</div>
+
+@if (bulkProgress(); as bp) {
+  <div class="bulk-progress">
+    <div class="bp-text">
+      {{ bp.done }} / {{ bp.total }} — {{ bp.current }}
+    </div>
+    <div class="bp-bar">
+      <div class="bp-fill" [style.width.%]="(bp.done / bp.total) * 100"></div>
+    </div>
+  </div>
 }
 
 <ng-template #nodeTpl let-node let-depth="depth">
@@ -25,6 +53,7 @@
       [title]="node.editable ? '' : 'Importar antes de editar (.' + node.ext + ')'"
       [style.padding-left.px]="8 + depth * 14"
       (click)="select(node)"
+      (contextmenu)="onContextMenu($event, node)"
     >
       <span class="icon">{{ node.editable ? '◆' : '◇' }}</span>
       <span class="name">{{ node.name }}</span>
@@ -36,9 +65,12 @@
     <button
       type="button"
       class="row group"
+      [class.current]="node.path === currentPath()"
+      [class.ancestor]="ancestorPaths().has(node.path)"
       [attr.data-kind]="node.kind"
       [style.padding-left.px]="8 + depth * 14"
       (click)="toggle(node)"
+      (contextmenu)="onContextMenu($event, node)"
     >
       <span class="chevron">{{ isExpanded(node) ? '▾' : '▸' }}</span>
       <span class="name">{{ node.name }}</span>
@@ -55,3 +87,93 @@
     }
   }
 </ng-template>
+
+@if (menu(); as m) {
+  <div class="ctx-backdrop" (click)="closeMenu()" (contextmenu)="$event.preventDefault(); closeMenu()"></div>
+  <div
+    class="ctx-menu"
+    [style.left.px]="m.x"
+    [style.top.px]="m.y"
+    (click)="$event.stopPropagation()"
+  >
+    @if (menuActions(); as a) {
+      @if (a.createSaga) {
+        <button type="button" class="ctx-item" (click)="createSaga()">
+          <span class="ctx-label">Crear saga / novela</span>
+        </button>
+      }
+      @if (a.createChapter) {
+        <button type="button" class="ctx-item" (click)="createChapter()">
+          <span class="ctx-label">Crear parte</span>
+          <span class="ctx-kbd">N.html</span>
+        </button>
+      }
+      @if (a.createSection) {
+        <button type="button" class="ctx-item" (click)="createSection()">
+          <span class="ctx-label">Crear capítulo</span>
+        </button>
+      }
+      @if (a.createBook) {
+        <button type="button" class="ctx-item" (click)="createBook()">
+          <span class="ctx-label">Crear libro</span>
+        </button>
+      }
+      @if ((a.createChapter || a.createSection || a.createBook) && (a.importThis || a.deleteOriginal || a.importBulk > 0 || a.cleanupBulk > 0 || a.deleteFile || a.deleteDir)) {
+        <div class="ctx-sep"></div>
+      }
+      @if (a.importThis) {
+        <button type="button" class="ctx-item" (click)="importThis()">
+          <span class="ctx-label">Importar a HTML</span>
+          <span class="ctx-kbd">.{{ m.node?.ext }}</span>
+        </button>
+      }
+      @if (a.deleteOriginal) {
+        <button type="button" class="ctx-item danger" (click)="deleteOriginal()">
+          <span class="ctx-label">Borrar original (ya migrado)</span>
+        </button>
+      }
+      @if (a.importBulk > 0) {
+        <button type="button" class="ctx-item" (click)="importBulk()">
+          <span class="ctx-label">Importar todos a HTML</span>
+          <span class="ctx-kbd">{{ a.importBulk }}</span>
+        </button>
+      }
+      @if (a.cleanupBulk > 0) {
+        <button type="button" class="ctx-item danger" (click)="cleanupBulk()">
+          <span class="ctx-label">Borrar originales migrados</span>
+          <span class="ctx-kbd">{{ a.cleanupBulk }}</span>
+        </button>
+      }
+      @if (a.moveable) {
+        <div class="ctx-sep"></div>
+        <button type="button" class="ctx-item" (click)="moveUp()">
+          <span class="ctx-label">Subir</span>
+          <span class="ctx-kbd">▲</span>
+        </button>
+        <button type="button" class="ctx-item" (click)="moveDown()">
+          <span class="ctx-label">Bajar</span>
+          <span class="ctx-kbd">▼</span>
+        </button>
+      }
+      @if (a.deleteFile || a.deleteDir) {
+        @if (a.importThis || a.deleteOriginal || a.importBulk > 0 || a.cleanupBulk > 0 || a.moveable) {
+          <div class="ctx-sep"></div>
+        }
+        @if (a.deleteFile) {
+          <button type="button" class="ctx-item danger" (click)="deleteFile()">
+            <span class="ctx-label">Borrar archivo</span>
+            <span class="ctx-kbd">.{{ m.node?.ext }}</span>
+          </button>
+        }
+        @if (a.deleteDir) {
+          <button type="button" class="ctx-item danger" (click)="deleteDir()">
+            <span class="ctx-label">Borrar carpeta</span>
+          </button>
+        }
+      }
+      @if (!a.importThis && !a.deleteOriginal && a.importBulk === 0 && a.cleanupBulk === 0 && !a.deleteFile && !a.deleteDir && !a.createChapter && !a.createSection && !a.createBook && !a.createSaga) {
+        <span class="ctx-empty">Sin acciones disponibles.</span>
+      }
+    }
+  </div>
+}

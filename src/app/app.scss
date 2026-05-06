@@ -46,6 +46,14 @@
   flex: 1;
 }
 
+.app-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  object-fit: contain;
+  margin-right: auto;
+}
+
 .actions {
   display: flex;
   gap: 2px;
@@ -74,6 +82,11 @@
 .icon-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+}
+
+.icon-btn.active {
+  background: var(--accent);
+  color: var(--bg);
 }
 
 .icon-btn.sync-btn.spinning {

@@ -9,6 +9,11 @@ pub struct ImportResult {
     pub created: bool,
 }
 
+#[derive(Serialize, Debug)]
+pub struct DeleteResult {
+    pub deleted: Vec<String>,
+}
+
 /// Importa un capítulo .docx/.odt a HTML usando pandoc CLI.
 /// Genera `<stem>.html` en la misma carpeta y `<stem>.meta.json` mínimo.
 /// Si ya existe `<stem>.html`, falla (no sobrescribe).
@@ -46,14 +51,10 @@ fn import_impl(input_path: &str) -> Result<ImportResult, String> {
     }
 
     // Pandoc → HTML5 fragment, sin highlight, sin wrap
+    // Pandoc auto-detecta el formato desde la extensión del input.
     let output = Command::new("pandoc")
         .arg(&input)
-        .args([
-            "--from=auto",
-            "--to=html5",
-            "--no-highlight",
-            "--wrap=none",
-        ])
+        .args(["--to=html5", "--no-highlight", "--wrap=none"])
         .output()
         .map_err(|e| format!("pandoc no encontrado: {} — instalá pandoc primero", e))?;
 
@@ -67,7 +68,10 @@ fn import_impl(input_path: &str) -> Result<ImportResult, String> {
     }
 
     let raw_html = String::from_utf8_lossy(&output.stdout).into_owned();
-    let cleaned = clean_html(&raw_html);
+    let mut cleaned = clean_html(&raw_html);
+    if !cleaned.ends_with('\n') {
+        cleaned.push('\n');
+    }
     fs::write(&html_out, cleaned).map_err(|e| e.to_string())?;
 
     // .meta.json mínimo
@@ -164,6 +168,87 @@ fn count_words(html: &str) -> u32 {
         }
     }
     text.split_whitespace().count() as u32
+}
+
+/// Borra un capítulo (.html/.odt/.docx) y su .meta.json sibling.
+/// Sólo permite borrar archivos con extensiones de capítulo conocidas.
+#[tauri::command]
+pub async fn delete_chapter_file(path: String) -> Result<DeleteResult, String> {
+    tauri::async_runtime::spawn_blocking(move || delete_impl(&path))
+        .await
+        .map_err(|e| format!("task: {}", e))?
+}
+
+fn delete_impl(path: &str) -> Result<DeleteResult, String> {
+    let p = PathBuf::from(path);
+    if !p.is_file() {
+        return Err(format!("no es archivo: {}", path));
+    }
+    let ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+    if ext != "odt" && ext != "docx" && ext != "html" {
+        return Err(format!(
+            "no permitido borrar .{} (sólo .odt/.docx/.html)",
+            ext
+        ));
+    }
+
+    let mut deleted = Vec::new();
+    fs::remove_file(&p).map_err(|e| e.to_string())?;
+    deleted.push(p.to_string_lossy().into_owned());
+
+    // Borrar .meta.json huérfano si:
+    //  - estamos borrando un .html → siempre
+    //  - estamos borrando .odt/.docx → sólo si no queda un .html sibling
+    let parent = p.parent().ok_or_else(|| "sin padre".to_string())?;
+    let stem = p
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
+    let meta = parent.join(format!("{}.meta.json", stem));
+    let should_delete_meta = if ext == "html" {
+        true
+    } else {
+        !parent.join(format!("{}.html", stem)).exists()
+    };
+    if should_delete_meta && meta.exists() {
+        fs::remove_file(&meta).map_err(|e| e.to_string())?;
+        deleted.push(meta.to_string_lossy().into_owned());
+    }
+
+    Ok(DeleteResult { deleted })
+}
+
+/// Borra un directorio recursivo. Por seguridad, target debe estar dentro de root y no ser igual.
+#[tauri::command]
+pub async fn delete_directory(root: String, target: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || delete_dir_impl(&root, &target))
+        .await
+        .map_err(|e| format!("task: {}", e))?
+}
+
+fn delete_dir_impl(root: &str, target: &str) -> Result<(), String> {
+    let root_p = PathBuf::from(root)
+        .canonicalize()
+        .map_err(|e| format!("root inválido: {}", e))?;
+    let target_p = PathBuf::from(target)
+        .canonicalize()
+        .map_err(|e| format!("target inválido: {}", e))?;
+
+    if !target_p.is_dir() {
+        return Err(format!("no es directorio: {}", target));
+    }
+    if target_p == root_p {
+        return Err("no se puede borrar la raíz".to_string());
+    }
+    if !target_p.starts_with(&root_p) {
+        return Err(format!("target está fuera de root ({})", root));
+    }
+
+    fs::remove_dir_all(&target_p).map_err(|e| e.to_string())
 }
 
 #[allow(dead_code)]

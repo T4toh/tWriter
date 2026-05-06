@@ -70,6 +70,14 @@
   letter-spacing: -0.05em;
 }
 
+.font-size-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-muted);
+  min-width: 18px;
+  text-align: center;
+}
+
 .sep {
   width: 1px;
   height: 18px;
@@ -107,10 +115,10 @@
     box-shadow:
       0 0 0 1px var(--border),
       0 4px 24px rgba(0, 0, 0, 0.08);
-    caret-color: var(--accent);
+    caret-color: var(--fg);
     font-family: var(--font-body);
-    font-size: 17px;
-    line-height: 1.7;
+    font-size: var(--editor-font-size, 17px);
+    line-height: 1.5;
 
     p {
       margin: 0 0 0.6em 0;
@@ -217,6 +225,12 @@
   > p {
     font-style: italic;
   }
+}
+
+.overlay.overlay-landing {
+  padding: 0;
+  display: block;
+  text-align: left;
 }
 
 .overlay-import {
@@ -489,6 +503,24 @@
 .title {
   font-weight: 500;
   color: var(--fg);
+}
+
+.lang-toggle {
+  background: var(--border);
+  color: var(--fg);
+  border: none;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+
+  &:hover {
+    background: var(--accent);
+    color: var(--bg);
+  }
 }
 
 .counter {
