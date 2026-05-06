@@ -31,6 +31,8 @@
     @for (item of items(); track item.path) {
       @if (item.kind === 'book') {
         <app-book-card [node]="item" (select)="onBookSelect($event)" />
+      } @else if (item.kind === 'saga') {
+        <app-saga-card [node]="item" (select)="onBookSelect($event)" />
       } @else {
         <button
           type="button"

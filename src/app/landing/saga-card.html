@@ -1,0 +1,29 @@
+<button type="button" class="saga-card" (click)="onClick()">
+  <div class="head">
+    <span class="kind">colección</span>
+    <h3 class="name">{{ node().name }}</h3>
+  </div>
+  <div class="thumbs">
+    @for (t of thumbs(); track t.node.path) {
+      <div class="thumb">
+        @if (t.cover; as src) {
+          <img [src]="src" [alt]="t.title" />
+        } @else {
+          <span class="thumb-placeholder">{{ t.title }}</span>
+        }
+      </div>
+    }
+    @if (extra() > 0) {
+      <div class="thumb more">+{{ extra() }}</div>
+    }
+  </div>
+  <div class="foot">
+    <span class="date">{{ formatDate(node().modifiedMs) }}</span>
+    <span class="count">
+      {{ bookCount() }} novela{{ bookCount() === 1 ? '' : 's' }}
+      @if (node().wordCount; as w) {
+        · {{ formatWords(w) }}
+      }
+    </span>
+  </div>
+</button>
