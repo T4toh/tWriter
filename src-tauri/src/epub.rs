@@ -372,7 +372,7 @@ fn embed_cover(
 
 // ───────── XHTML builders ─────────
 
-fn xhtml_shell(title: &str, body: &str, lang: &str) -> String {
+fn xhtml_shell(title: &str, body: &str, lang: &str, body_class: &str) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
@@ -382,120 +382,109 @@ fn xhtml_shell(title: &str, body: &str, lang: &str) -> String {
 <title>{}</title>
 <link rel="stylesheet" type="text/css" href="style.css"/>
 </head>
-<body>
+<body class="{}">
 {}
 </body>
 </html>
 "#,
         xml_escape(lang),
         xml_escape(title),
+        body_class,
         body
     )
 }
 
 fn build_cover_xhtml(cover_filename: &str) -> String {
     let body = format!(
-        r#"<div class="cover">
-<img src="{}" alt="Cover"/>
-</div>"#,
+        r#"<img src="{}" alt="Cover"/>"#,
         xml_escape(cover_filename)
     );
-    xhtml_shell("Cover", &body, "es")
+    xhtml_shell("Cover", &body, "es", "cover-body")
 }
 
 fn build_title_xhtml(cfg: &BookConfig) -> String {
-    let mut inner = String::new();
+    let mut body = String::new();
     if let Some(autor) = cfg.autor.as_deref().filter(|s| !s.is_empty()) {
-        inner.push_str(&format!(
+        body.push_str(&format!(
             r#"<p class="title-page-author">{}</p>
 "#,
             xml_escape(autor)
         ));
     }
-    inner.push_str(&format!(
+    body.push_str(&format!(
         r#"<p class="title-page-title">{}</p>
 "#,
         xml_escape(&cfg.titulo)
     ));
     if let Some(sub) = cfg.subtitulo.as_deref().filter(|s| !s.is_empty()) {
-        inner.push_str(&format!(
+        body.push_str(&format!(
             r#"<p class="title-page-subtitle">{}</p>
 "#,
             xml_escape(sub)
         ));
     } else if let (Some(serie), Some(num)) = (cfg.serie.as_deref(), cfg.numero_en_serie) {
-        inner.push_str(&format!(
+        body.push_str(&format!(
             r#"<p class="title-page-subtitle">{} #{}</p>
 "#,
             xml_escape(serie),
             num
         ));
     }
-    let body = format!(
-        r#"<div class="title-page">
-{}
-</div>"#,
-        inner.trim_end()
-    );
-    xhtml_shell(&cfg.titulo, &body, cfg.idioma.as_deref().unwrap_or("es"))
+    xhtml_shell(
+        &cfg.titulo,
+        body.trim_end(),
+        cfg.idioma.as_deref().unwrap_or("es"),
+        "title-body",
+    )
 }
 
 fn build_copyright_xhtml(cfg: &BookConfig) -> String {
     let autor = cfg.autor.as_deref().unwrap_or("");
     let anio = cfg.copyright_anio.unwrap_or_else(current_year);
     let imprenta = cfg.imprenta.as_deref().unwrap_or("Independiente");
-    let mut paragraphs = String::new();
-    paragraphs.push_str(&format!(
+    let mut body = String::new();
+    body.push_str(&format!(
         "<p>Copyright \u{00A9} {} by {}</p>\n",
         anio,
         xml_escape(autor)
     ));
     if cfg.derechos_reservados.unwrap_or(true) {
-        paragraphs.push_str(
+        body.push_str(
             "<p>Todos los derechos reservados. Ninguna parte de esta publicación puede ser reproducida, almacenada ni transmitida en forma alguna por medio electrónico, mecánico, fotocopia, grabación u otros sin autorización escrita del autor.</p>\n",
         );
-        paragraphs.push_str(
+        body.push_str(
             "<p>Esta novela es enteramente una obra de ficción. Los nombres, personajes y eventos retratados son producto de la imaginación del autor. Cualquier parecido con personas reales, vivas o fallecidas, eventos o lugares es enteramente coincidencia.</p>\n",
         );
     }
     if let Some(isbn) = cfg.isbn.as_deref().filter(|s| !s.is_empty()) {
-        paragraphs.push_str(&format!("<p>ISBN: {}</p>\n", xml_escape(isbn)));
+        body.push_str(&format!("<p>ISBN: {}</p>\n", xml_escape(isbn)));
     }
-    paragraphs.push_str(&format!(
+    body.push_str(&format!(
         "<p>{}</p>\n",
         xml_escape(&format!("Publicado por {}", imprenta))
     ));
-    paragraphs.push_str("<p>Editado con tWriter</p>");
+    body.push_str("<p>Editado con tWriter</p>");
 
-    let body = format!(r#"<div class="publishing-info">
-{}
-</div>"#, paragraphs);
-    xhtml_shell(&cfg.titulo, &body, cfg.idioma.as_deref().unwrap_or("es"))
+    xhtml_shell(
+        &cfg.titulo,
+        &body,
+        cfg.idioma.as_deref().unwrap_or("es"),
+        "copyright-body",
+    )
 }
 
 fn build_dedication_xhtml(text: &str) -> String {
-    let html_paragraphs = text
+    let body = text
         .lines()
         .map(|l| format!("<p>{}</p>", xml_escape(l.trim())))
         .collect::<Vec<_>>()
         .join("\n");
-    let body = format!(
-        r#"<div class="dedication">
-{}
-</div>"#,
-        html_paragraphs
-    );
-    xhtml_shell("Dedicatoria", &body, "es")
+    xhtml_shell("Dedicatoria", &body, "es", "dedication-body")
 }
 
 fn build_chapter_title_xhtml(title: &str) -> String {
-    let body = format!(
-        r#"<div class="chapter-heading">
-<h1 class="chapter-title">{}</h1>
-</div>"#,
-        xml_escape(title)
-    );
-    xhtml_shell(title, &body, "es")
+    let body = format!(r#"<h1 class="chapter-title">{}</h1>"#, xml_escape(title));
+    xhtml_shell(title, &body, "es", "chapter-title-body")
 }
 
 fn build_part_xhtml(title: &str, content_html: &str) -> String {
@@ -505,7 +494,7 @@ fn build_part_xhtml(title: &str, content_html: &str) -> String {
 </div>"#,
         content_html.trim()
     );
-    xhtml_shell(title, &body, "es")
+    xhtml_shell(title, &body, "es", "chapter-content-body")
 }
 
 fn build_nav_xhtml(cfg: &BookConfig, items: &[Item]) -> String {
@@ -528,7 +517,12 @@ fn build_nav_xhtml(cfg: &BookConfig, items: &[Item]) -> String {
 </nav>"#,
         entries
     );
-    xhtml_shell(&cfg.titulo, &body, cfg.idioma.as_deref().unwrap_or("es"))
+    xhtml_shell(
+        &cfg.titulo,
+        &body,
+        cfg.idioma.as_deref().unwrap_or("es"),
+        "nav-body",
+    )
 }
 
 // ───────── NCX (legacy) ─────────
