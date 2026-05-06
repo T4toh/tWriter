@@ -55,6 +55,8 @@ export class BookConfigModal {
         mostrar_titulo_capitulo: cfg.mostrar_titulo_capitulo ?? true,
         prefijo_capitulo: cfg.prefijo_capitulo ?? 'none',
         dropcap: cfg.dropcap ?? false,
+        mostrar_numero_parte: cfg.mostrar_numero_parte ?? false,
+        formato_parte: cfg.formato_parte ?? 'raw',
       });
     } catch (err) {
       this.error.set(String(err));
@@ -103,6 +105,8 @@ export class BookConfigModal {
         mostrar_titulo_capitulo: cfg.mostrar_titulo_capitulo ?? null,
         prefijo_capitulo: cfg.prefijo_capitulo ?? null,
         dropcap: cfg.dropcap ?? null,
+        mostrar_numero_parte: cfg.mostrar_numero_parte ?? null,
+        formato_parte: cfg.formato_parte ?? null,
       };
       await this.svc.save(path, cleaned);
       this.svc.close();

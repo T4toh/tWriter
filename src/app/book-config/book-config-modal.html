@@ -169,6 +169,28 @@
             <span>Letrina (dropcap) en primer párrafo de cada capítulo</span>
           </label>
         </div>
+        <div class="row split">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="c.mostrar_numero_parte"
+              (ngModelChange)="update('mostrar_numero_parte', $event)"
+            />
+            <span>Mostrar header de parte (número o título)</span>
+          </label>
+          <label>
+            <span>Formato de parte</span>
+            <select
+              [ngModel]="c.formato_parte"
+              (ngModelChange)="update('formato_parte', $event)"
+              [disabled]="!c.mostrar_numero_parte"
+            >
+              <option value="raw">1</option>
+              <option value="parte">Parte 1</option>
+              <option value="punto">1.</option>
+            </select>
+          </label>
+        </div>
         @if (error(); as err) {
           <p class="error">{{ err }}</p>
         }

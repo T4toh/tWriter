@@ -38,6 +38,12 @@ pub struct BookConfig {
     /// Letrina (drop cap) en primera letra del primer párrafo de cada capítulo. Default: false.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dropcap: Option<bool>,
+    /// Mostrar número/título de la parte arriba de su contenido. Default: false.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mostrar_numero_parte: Option<bool>,
+    /// Formato de etiqueta de parte: "raw" (1) | "parte" (Parte 1) | "punto" (1.). Default: "raw".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formato_parte: Option<String>,
 }
 
 #[tauri::command]

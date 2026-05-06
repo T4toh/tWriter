@@ -20,6 +20,8 @@ export interface BookConfig {
   mostrar_titulo_capitulo?: boolean | null;
   prefijo_capitulo?: ChapterPrefix | null;
   dropcap?: boolean | null;
+  mostrar_numero_parte?: boolean | null;
+  formato_parte?: 'raw' | 'parte' | 'punto' | null;
 }
 
 @Injectable({ providedIn: 'root' })

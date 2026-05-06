@@ -165,6 +165,8 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     let show_chapter_title = cfg.mostrar_titulo_capitulo.unwrap_or(true);
     let prefix_style = cfg.prefijo_capitulo.as_deref().unwrap_or("none");
     let use_dropcap = cfg.dropcap.unwrap_or(false);
+    let show_part_num = cfg.mostrar_numero_parte.unwrap_or(false);
+    let part_format = cfg.formato_parte.as_deref().unwrap_or("raw");
 
     let mut toc_entries: Vec<TocEntry> = Vec::new();
     let mut file_seq = 10u32;
@@ -207,8 +209,22 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             total_chapter_files += 1;
             let part_href = format!("{}_ch{}_p{}.xhtml", file_seq, ch_idx + 1, p_idx + 1);
             let is_first = p_idx == 0;
+            let part_label = part_label(part, part_format);
+            let toc_label = part
+                .meta_title
+                .clone()
+                .unwrap_or_else(|| part_label.clone());
+            let header_html = if show_part_num {
+                Some(format!(
+                    r#"<h2 class="part-label">{}</h2>"#,
+                    xml_escape(&part_label)
+                ))
+            } else {
+                None
+            };
             let part_xhtml = build_part_xhtml(
-                &part.title,
+                &toc_label,
+                header_html.as_deref(),
                 &part.content_html,
                 use_dropcap && is_first,
             );
@@ -223,7 +239,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             });
             entry.children.push(TocEntry {
                 href: part_href,
-                label: part.title.clone(),
+                label: toc_label,
                 children: Vec::new(),
             });
         }
@@ -309,7 +325,10 @@ struct Chapter {
 }
 
 struct ChapterPart {
-    title: String,
+    /// Stem del archivo (ej: "1") — siempre presente.
+    stem: String,
+    /// Título de meta.json si existe, para mostrar como header.
+    meta_title: Option<String>,
     content_html: String,
 }
 
@@ -350,12 +369,7 @@ fn collect_chapters(book_dir: &Path) -> Result<Vec<Chapter>, String> {
         }
         let mut chapter_parts = Vec::new();
         for p in &parts {
-            let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
-            let content = fs::read_to_string(p).map_err(|e| e.to_string())?;
-            chapter_parts.push(ChapterPart {
-                title: stem,
-                content_html: content,
-            });
+            chapter_parts.push(load_part(p)?);
         }
         chapters.push(Chapter { title: ch_title, parts: chapter_parts });
     }
@@ -370,17 +384,43 @@ fn collect_chapters(book_dir: &Path) -> Result<Vec<Chapter>, String> {
             );
             let mut chapter_parts = Vec::new();
             for p in &direct {
-                let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
-                let content = fs::read_to_string(p).map_err(|e| e.to_string())?;
-                chapter_parts.push(ChapterPart {
-                    title: stem,
-                    content_html: content,
-                });
+                chapter_parts.push(load_part(p)?);
             }
             chapters.push(Chapter { title, parts: chapter_parts });
         }
     }
     Ok(chapters)
+}
+
+fn load_part(html_path: &Path) -> Result<ChapterPart, String> {
+    let stem = html_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    let content = fs::read_to_string(html_path).map_err(|e| e.to_string())?;
+    let meta_title = read_part_meta_title(html_path);
+    Ok(ChapterPart {
+        stem,
+        meta_title,
+        content_html: content,
+    })
+}
+
+fn read_part_meta_title(html_path: &Path) -> Option<String> {
+    let parent = html_path.parent()?;
+    let stem = html_path.file_stem().and_then(|s| s.to_str())?;
+    let meta = parent.join(format!("{}.meta.json", stem));
+    if !meta.exists() {
+        return None;
+    }
+    let raw = fs::read_to_string(&meta).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let t = v.get("titulo")?.as_str()?.trim().to_string();
+    if t.is_empty() || t == stem {
+        return None;
+    }
+    Some(t)
 }
 
 fn collect_html_parts(dir: &Path) -> Result<Vec<PathBuf>, String> {
@@ -548,36 +588,49 @@ fn build_dedication_xhtml(text: &str) -> String {
 }
 
 fn build_chapter_title_xhtml(title: &str, show_title: bool, prefix: Option<&str>) -> String {
-    let mut body = String::new();
-    if let Some(p) = prefix {
-        body.push_str(&format!(r#"<p class="chapter-prefix">{}</p>"#, xml_escape(p)));
-    }
-    if show_title {
-        body.push_str(&format!(
-            r#"<h1 class="chapter-title">{}</h1>"#,
-            xml_escape(title)
-        ));
-    }
-    if body.is_empty() {
-        // Aún si todo apagado, mantenemos un h1 mudo para que el TOC tenga ancla
-        body.push_str(r#"<h1 class="chapter-title">&nbsp;</h1>"#);
-    }
+    let combined = match (prefix, show_title) {
+        (Some(p), true) => format!("{} \u{2014} {}", xml_escape(p), xml_escape(title)),
+        (Some(p), false) => xml_escape(p),
+        (None, true) => xml_escape(title),
+        (None, false) => "&nbsp;".to_string(),
+    };
+    let body = format!(r#"<h1 class="chapter-title">{}</h1>"#, combined);
     xhtml_shell(title, &body, "es", "chapter-title-body")
 }
 
-fn build_part_xhtml(title: &str, content_html: &str, dropcap: bool) -> String {
+fn build_part_xhtml(
+    title: &str,
+    header_html: Option<&str>,
+    content_html: &str,
+    dropcap: bool,
+) -> String {
     let content = if dropcap {
         apply_dropcap(content_html.trim())
     } else {
         content_html.trim().to_string()
     };
+    let header_part = header_html.unwrap_or("");
     let body = format!(
-        r#"<div class="chapter-content">
+        r#"{}<div class="chapter-content">
 {}
 </div>"#,
-        content
+        header_part, content
     );
     xhtml_shell(title, &body, "es", "chapter-content-body")
+}
+
+fn part_label(part: &ChapterPart, format: &str) -> String {
+    if let Some(t) = &part.meta_title {
+        return t.clone();
+    }
+    // Fallback: usar stem con formato
+    let stem = &part.stem;
+    let is_numeric = stem.chars().all(|c| c.is_ascii_digit());
+    match format {
+        "parte" if is_numeric => format!("Parte {}", stem),
+        "punto" if is_numeric => format!("{}.", stem),
+        _ => stem.clone(),
+    }
 }
 
 /// Envuelve la primera letra del primer <p> en <span class="dropcap">.
