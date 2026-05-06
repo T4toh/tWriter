@@ -29,10 +29,8 @@ struct Item {
     id: String,
     href: String,
     media_type: String,
-    /// Si es xhtml, va al spine en este orden. None = no spine (imágenes, css, nav).
+    /// Si es xhtml, va al spine en este orden. None = no spine (imágenes, css, ncx).
     spine_order: Option<u32>,
-    /// Nav entry top-level (chapter title), si aplica.
-    nav_label: Option<String>,
     /// Properties OPF (ej: "cover-image", "nav").
     properties: Option<String>,
 }
@@ -86,7 +84,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         href: "style.css".into(),
         media_type: "text/css".into(),
         spine_order: None,
-        nav_label: None,
+
         properties: None,
     });
 
@@ -101,7 +99,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
                 href: cover_filename.clone(),
                 media_type: cover_mime,
                 spine_order: None,
-                nav_label: None,
+
                 properties: Some("cover-image".into()),
             });
             spine_idx += 1;
@@ -113,7 +111,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
                 href: "0_cover.xhtml".into(),
                 media_type: "application/xhtml+xml".into(),
                 spine_order: Some(spine_idx),
-                nav_label: None,
+
                 properties: None,
             });
         }
@@ -129,7 +127,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         href: "1_title.xhtml".into(),
         media_type: "application/xhtml+xml".into(),
         spine_order: Some(spine_idx),
-        nav_label: None,
+
         properties: None,
     });
 
@@ -143,7 +141,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         href: "2_copyright.xhtml".into(),
         media_type: "application/xhtml+xml".into(),
         spine_order: Some(spine_idx),
-        nav_label: None,
+
         properties: None,
     });
 
@@ -158,13 +156,14 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             href: "3_dedication.xhtml".into(),
             media_type: "application/xhtml+xml".into(),
             spine_order: Some(spine_idx),
-            nav_label: None,
+
             properties: None,
         });
     }
 
-    // 5) Chapters: title page + parts
-    let mut file_seq = 10u32; // arranca en 10 para dejar lugar a frontmatter
+    // 5) Chapters: title page + parts (collect TOC entries en paralelo)
+    let mut toc_entries: Vec<TocEntry> = Vec::new();
+    let mut file_seq = 10u32;
     for (ch_idx, chapter) in chapters.iter().enumerate() {
         // Chapter title page
         spine_idx += 1;
@@ -178,9 +177,14 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             href: title_href.clone(),
             media_type: "application/xhtml+xml".into(),
             spine_order: Some(spine_idx),
-            nav_label: Some(chapter.title.clone()),
+
             properties: None,
         });
+        let mut entry = TocEntry {
+            href: title_href,
+            label: chapter.title.clone(),
+            children: Vec::new(),
+        };
 
         // Parts
         for (p_idx, part) in chapter.parts.iter().enumerate() {
@@ -193,31 +197,68 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             zip.write_all(part_xhtml.as_bytes()).map_err(|e| e.to_string())?;
             items.push(Item {
                 id: format!("ch{}_p{}", ch_idx + 1, p_idx + 1),
-                href: part_href,
+                href: part_href.clone(),
                 media_type: "application/xhtml+xml".into(),
                 spine_order: Some(spine_idx),
-                nav_label: None,
+
                 properties: None,
             });
+            entry.children.push(TocEntry {
+                href: part_href,
+                label: part.title.clone(),
+                children: Vec::new(),
+            });
         }
+        toc_entries.push(entry);
     }
 
-    // 6) nav.xhtml
-    let nav_xhtml = build_nav_xhtml(&cfg, &items);
-    zip.start_file("OEBPS/nav.xhtml", opts).map_err(|e| e.to_string())?;
-    zip.write_all(nav_xhtml.as_bytes()).map_err(|e| e.to_string())?;
+    // 6) toc.xhtml (visible nav + EPUB 3 properties="nav"). Lo metemos al spine
+    //    después del frontmatter para que el lector pueda navegar a él.
+    //    Lo agregamos al final del array para que aparezca al final, pero su
+    //    spine_order lo lleva entre frontmatter y capítulos.
+    let toc_xhtml = build_toc_xhtml(&cfg, &toc_entries);
+    zip.start_file("OEBPS/toc.xhtml", opts).map_err(|e| e.to_string())?;
+    zip.write_all(toc_xhtml.as_bytes()).map_err(|e| e.to_string())?;
+    // El TOC visible va justo después del frontmatter; reasignamos spine_order
+    // para insertarlo. Hack: lo ponemos al inicio del rango de chapters.
+    // Más simple: lo dejamos al final del frontmatter usando un nuevo spine slot.
+    // Para esta versión, lo metemos ANTES de los chapters: re-bumpeamos los
+    // chapters spine_order. Solución pragmática: lo agregamos al inicio del
+    // bloque de chapters via un offset.
+    // Implementación sencilla: lo ponemos en spine_order = (último_frontmatter + 0.5)
+    // pero usamos enteros, así que añadimos +1000 a chapters spine y dejamos
+    // espacio. Ya hicimos chapters con spine_idx incremental — refactorizar
+    // sería invasivo. Más fácil: poner el TOC justo antes de los chapters
+    // moviendo todos los chapter spine_orders +1.
+    let toc_spine_pos = items
+        .iter()
+        .filter(|i| i.spine_order.is_some())
+        .filter(|i| {
+            // primer chapter spine
+            i.id.starts_with("ch") && i.id.ends_with("_title")
+        })
+        .map(|i| i.spine_order.unwrap())
+        .min()
+        .unwrap_or(spine_idx + 1);
+    // Bump todos los items con spine_order >= toc_spine_pos en +1
+    for it in items.iter_mut() {
+        if let Some(o) = it.spine_order {
+            if o >= toc_spine_pos {
+                it.spine_order = Some(o + 1);
+            }
+        }
+    }
     items.push(Item {
-        id: "nav".into(),
-        href: "nav.xhtml".into(),
+        id: "toc".into(),
+        href: "toc.xhtml".into(),
         media_type: "application/xhtml+xml".into(),
-        spine_order: None,
-        nav_label: None,
+        spine_order: Some(toc_spine_pos),
         properties: Some("nav".into()),
     });
 
     // 7) toc.ncx (legacy)
     let book_uuid = Uuid::new_v4().to_string();
-    let ncx = build_ncx(&cfg, &items, &book_uuid);
+    let ncx = build_ncx_with_entries(&cfg, &toc_entries, &book_uuid);
     zip.start_file("OEBPS/toc.ncx", opts).map_err(|e| e.to_string())?;
     zip.write_all(ncx.as_bytes()).map_err(|e| e.to_string())?;
     items.push(Item {
@@ -225,7 +266,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         href: "toc.ncx".into(),
         media_type: "application/x-dtbncx+xml".into(),
         spine_order: None,
-        nav_label: None,
+
         properties: None,
     });
 
@@ -252,6 +293,12 @@ struct Chapter {
 struct ChapterPart {
     title: String,
     content_html: String,
+}
+
+struct TocEntry {
+    href: String,
+    label: String,
+    children: Vec<TocEntry>,
 }
 
 fn collect_chapters(book_dir: &Path) -> Result<Vec<Chapter>, String> {
@@ -497,25 +544,35 @@ fn build_part_xhtml(title: &str, content_html: &str) -> String {
     xhtml_shell(title, &body, "es", "chapter-content-body")
 }
 
-fn build_nav_xhtml(cfg: &BookConfig, items: &[Item]) -> String {
-    let mut entries = String::new();
-    for it in items {
-        if let Some(label) = &it.nav_label {
-            entries.push_str(&format!(
-                "<li><a href=\"{}\">{}</a></li>\n",
-                xml_escape(&it.href),
-                xml_escape(label)
-            ));
+fn build_toc_xhtml(cfg: &BookConfig, entries: &[TocEntry]) -> String {
+    let mut lis = String::new();
+    for e in entries {
+        lis.push_str(&format!(
+            "<li class=\"toc-part toc-body\"><a href=\"{}\">{}</a>",
+            xml_escape(&e.href),
+            xml_escape(&e.label)
+        ));
+        if !e.children.is_empty() {
+            lis.push_str("<ol class=\"toc-sub\">\n");
+            for child in &e.children {
+                lis.push_str(&format!(
+                    "<li class=\"toc-chapter toc-body\"><a href=\"{}\">{}</a></li>\n",
+                    xml_escape(&child.href),
+                    xml_escape(&child.label)
+                ));
+            }
+            lis.push_str("</ol>");
         }
+        lis.push_str("</li>\n");
     }
     let body = format!(
-        r#"<nav epub:type="toc" id="toc">
-<h1>Índice</h1>
-<ol>
+        r#"<nav id="toc" epub:type="toc" role="doc-toc">
+<h1 class="chapter-title">Índice</h1>
+<ol class="toc">
 {}
 </ol>
 </nav>"#,
-        entries
+        lis
     );
     xhtml_shell(
         &cfg.titulo,
@@ -527,31 +584,44 @@ fn build_nav_xhtml(cfg: &BookConfig, items: &[Item]) -> String {
 
 // ───────── NCX (legacy) ─────────
 
-fn build_ncx(cfg: &BookConfig, items: &[Item], book_uuid: &str) -> String {
+fn build_ncx_with_entries(cfg: &BookConfig, entries: &[TocEntry], book_uuid: &str) -> String {
     let mut nav_points = String::new();
     let mut order = 1u32;
-    for it in items {
-        if let Some(label) = &it.nav_label {
+    for entry in entries {
+        let chapter_order = order;
+        nav_points.push_str(&format!(
+            r#"<navPoint id="np-{}" playOrder="{}">
+<navLabel><text>{}</text></navLabel>
+<content src="{}"/>
+"#,
+            chapter_order,
+            chapter_order,
+            xml_escape(&entry.label),
+            xml_escape(&entry.href)
+        ));
+        order += 1;
+        for child in &entry.children {
             nav_points.push_str(&format!(
-                r#"<navPoint id="navPoint-{}" playOrder="{}">
+                r#"<navPoint id="np-{}" playOrder="{}">
 <navLabel><text>{}</text></navLabel>
 <content src="{}"/>
 </navPoint>
 "#,
                 order,
                 order,
-                xml_escape(label),
-                xml_escape(&it.href)
+                xml_escape(&child.label),
+                xml_escape(&child.href)
             ));
             order += 1;
         }
+        nav_points.push_str("</navPoint>\n");
     }
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
 <head>
 <meta name="dtb:uid" content="urn:uuid:{}"/>
-<meta name="dtb:depth" content="1"/>
+<meta name="dtb:depth" content="2"/>
 <meta name="dtb:totalPageCount" content="0"/>
 <meta name="dtb:maxPageNumber" content="0"/>
 </head>

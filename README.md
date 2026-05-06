@@ -69,7 +69,17 @@ Editor mínimo de escritura funcionando:
 
 Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automático, ISBN.
 
-### Sprint 5 — Gramática + templates + polish
+### Sprint 5 — Estilos EPUB
+
+> Replicar look Reedsy lo más fiel posible.
+
+- Centrado vertical+horizontal robusto en title/copyright/dedication/chapter-title (varios readers tienen issues con flex / vh)
+- Posicionamiento del copyright al final de página
+- Page-break-before/after consistentes
+- Validación contra Reedsy en distintos readers (calibre, foliate, Thorium)
+- Comparar visualmente con `Buenos Aires 2077/.../La Ciudad de las Luces Rev.2.epub`
+
+### Sprint 6 — Gramática + templates + polish
 
 > Reemplazar Quillbot. Templates de página. UX final.
 
