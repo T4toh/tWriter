@@ -6,25 +6,12 @@ use uuid::Uuid;
 use zip::write::{SimpleFileOptions, ZipWriter};
 use zip::CompressionMethod;
 
+use crate::book_config::BookConfig;
+
 #[derive(Serialize, Debug)]
 pub struct ExportResult {
     pub epub_path: String,
     pub chapters: u32,
-}
-
-#[derive(Debug, Default)]
-struct BookMeta {
-    titulo: String,
-    autor: String,
-    idioma: String,
-}
-
-struct ChapterPart {
-    id: String,
-    href: String,
-    section_title: Option<String>,
-    title: String,
-    content_html: String,
 }
 
 const CSS: &str = include_str!("epub_style.css");
@@ -36,6 +23,19 @@ const CONTAINER_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
   </rootfiles>
 </container>
 "#;
+
+/// Una entrada del spine/manifest. id único, href dentro de OEBPS/.
+struct Item {
+    id: String,
+    href: String,
+    media_type: String,
+    /// Si es xhtml, va al spine en este orden. None = no spine (imágenes, css, nav).
+    spine_order: Option<u32>,
+    /// Nav entry top-level (chapter title), si aplica.
+    nav_label: Option<String>,
+    /// Properties OPF (ej: "cover-image", "nav").
+    properties: Option<String>,
+}
 
 /// Exporta un libro a EPUB en `<book>/exports/<title>.epub`.
 #[tauri::command]
@@ -50,118 +50,211 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     if !book_dir.is_dir() {
         return Err(format!("no es directorio: {}", book_path));
     }
+    let cfg = read_or_default_config(&book_dir);
 
-    let meta = read_book_meta(&book_dir);
-    let parts = collect_parts(&book_dir)?;
-    if parts.is_empty() {
+    let chapters = collect_chapters(&book_dir)?;
+    if chapters.is_empty() {
         return Err("libro sin capítulos .html".to_string());
     }
 
     let exports_dir = book_dir.join("exports");
     fs::create_dir_all(&exports_dir).map_err(|e| e.to_string())?;
-    let safe_title = sanitize_filename(&meta.titulo);
+    let safe_title = sanitize_filename(&cfg.titulo);
     let epub_path = exports_dir.join(format!("{}.epub", safe_title));
 
     let file = File::create(&epub_path).map_err(|e| e.to_string())?;
     let mut zip = ZipWriter::new(file);
 
-    // mimetype: STORED (no compression), primero
-    let mimetype_opts = SimpleFileOptions::default()
-        .compression_method(CompressionMethod::Stored);
-    zip.start_file("mimetype", mimetype_opts)
-        .map_err(|e| e.to_string())?;
-    zip.write_all(b"application/epub+zip")
-        .map_err(|e| e.to_string())?;
+    // mimetype STORED primero
+    let mimetype_opts = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    zip.start_file("mimetype", mimetype_opts).map_err(|e| e.to_string())?;
+    zip.write_all(b"application/epub+zip").map_err(|e| e.to_string())?;
 
     let opts = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
 
     // META-INF/container.xml
-    zip.start_file("META-INF/container.xml", opts)
-        .map_err(|e| e.to_string())?;
-    zip.write_all(CONTAINER_XML.as_bytes())
-        .map_err(|e| e.to_string())?;
+    zip.start_file("META-INF/container.xml", opts).map_err(|e| e.to_string())?;
+    zip.write_all(CONTAINER_XML.as_bytes()).map_err(|e| e.to_string())?;
 
     // OEBPS/style.css
-    zip.start_file("OEBPS/style.css", opts)
-        .map_err(|e| e.to_string())?;
+    zip.start_file("OEBPS/style.css", opts).map_err(|e| e.to_string())?;
     zip.write_all(CSS.as_bytes()).map_err(|e| e.to_string())?;
 
-    // OEBPS/<part>.xhtml
-    for p in &parts {
-        zip.start_file(format!("OEBPS/{}", p.href), opts)
-            .map_err(|e| e.to_string())?;
-        let xhtml = build_chapter_xhtml(p);
-        zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
+    let mut items: Vec<Item> = Vec::new();
+    items.push(Item {
+        id: "css".into(),
+        href: "style.css".into(),
+        media_type: "text/css".into(),
+        spine_order: None,
+        nav_label: None,
+        properties: None,
+    });
+
+    let mut spine_idx = 0u32;
+    let mut total_chapter_files = 0u32;
+
+    // 1) Cover (si hay imagen)
+    if let Some(cover_rel) = &cfg.tapa {
+        if let Some((cover_filename, cover_mime)) = embed_cover(&book_dir, cover_rel, &mut zip, opts)? {
+            items.push(Item {
+                id: "cover-image".into(),
+                href: cover_filename.clone(),
+                media_type: cover_mime,
+                spine_order: None,
+                nav_label: None,
+                properties: Some("cover-image".into()),
+            });
+            spine_idx += 1;
+            let xhtml = build_cover_xhtml(&cover_filename);
+            zip.start_file("OEBPS/0_cover.xhtml", opts).map_err(|e| e.to_string())?;
+            zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
+            items.push(Item {
+                id: "cover".into(),
+                href: "0_cover.xhtml".into(),
+                media_type: "application/xhtml+xml".into(),
+                spine_order: Some(spine_idx),
+                nav_label: None,
+                properties: None,
+            });
+        }
     }
 
-    // OEBPS/nav.xhtml
-    zip.start_file("OEBPS/nav.xhtml", opts)
-        .map_err(|e| e.to_string())?;
-    let nav_xhtml = build_nav_xhtml(&meta, &parts);
-    zip.write_all(nav_xhtml.as_bytes())
-        .map_err(|e| e.to_string())?;
+    // 2) Title page
+    spine_idx += 1;
+    let xhtml = build_title_xhtml(&cfg);
+    zip.start_file("OEBPS/1_title.xhtml", opts).map_err(|e| e.to_string())?;
+    zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
+    items.push(Item {
+        id: "title".into(),
+        href: "1_title.xhtml".into(),
+        media_type: "application/xhtml+xml".into(),
+        spine_order: Some(spine_idx),
+        nav_label: None,
+        properties: None,
+    });
 
-    // OEBPS/content.opf
-    zip.start_file("OEBPS/content.opf", opts)
-        .map_err(|e| e.to_string())?;
-    let opf = build_opf(&meta, &parts);
+    // 3) Copyright
+    spine_idx += 1;
+    let xhtml = build_copyright_xhtml(&cfg);
+    zip.start_file("OEBPS/2_copyright.xhtml", opts).map_err(|e| e.to_string())?;
+    zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
+    items.push(Item {
+        id: "copyright".into(),
+        href: "2_copyright.xhtml".into(),
+        media_type: "application/xhtml+xml".into(),
+        spine_order: Some(spine_idx),
+        nav_label: None,
+        properties: None,
+    });
+
+    // 4) Dedicatoria (opcional)
+    if let Some(ded) = cfg.dedicatoria.as_deref().filter(|s| !s.trim().is_empty()) {
+        spine_idx += 1;
+        let xhtml = build_dedication_xhtml(ded);
+        zip.start_file("OEBPS/3_dedication.xhtml", opts).map_err(|e| e.to_string())?;
+        zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
+        items.push(Item {
+            id: "dedication".into(),
+            href: "3_dedication.xhtml".into(),
+            media_type: "application/xhtml+xml".into(),
+            spine_order: Some(spine_idx),
+            nav_label: None,
+            properties: None,
+        });
+    }
+
+    // 5) Chapters: title page + parts
+    let mut file_seq = 10u32; // arranca en 10 para dejar lugar a frontmatter
+    for (ch_idx, chapter) in chapters.iter().enumerate() {
+        // Chapter title page
+        spine_idx += 1;
+        file_seq += 1;
+        let title_href = format!("{}_ch{}_title.xhtml", file_seq, ch_idx + 1);
+        let title_xhtml = build_chapter_title_xhtml(&chapter.title);
+        zip.start_file(format!("OEBPS/{}", title_href), opts).map_err(|e| e.to_string())?;
+        zip.write_all(title_xhtml.as_bytes()).map_err(|e| e.to_string())?;
+        items.push(Item {
+            id: format!("ch{}_title", ch_idx + 1),
+            href: title_href.clone(),
+            media_type: "application/xhtml+xml".into(),
+            spine_order: Some(spine_idx),
+            nav_label: Some(chapter.title.clone()),
+            properties: None,
+        });
+
+        // Parts
+        for (p_idx, part) in chapter.parts.iter().enumerate() {
+            spine_idx += 1;
+            file_seq += 1;
+            total_chapter_files += 1;
+            let part_href = format!("{}_ch{}_p{}.xhtml", file_seq, ch_idx + 1, p_idx + 1);
+            let part_xhtml = build_part_xhtml(&part.title, &part.content_html);
+            zip.start_file(format!("OEBPS/{}", part_href), opts).map_err(|e| e.to_string())?;
+            zip.write_all(part_xhtml.as_bytes()).map_err(|e| e.to_string())?;
+            items.push(Item {
+                id: format!("ch{}_p{}", ch_idx + 1, p_idx + 1),
+                href: part_href,
+                media_type: "application/xhtml+xml".into(),
+                spine_order: Some(spine_idx),
+                nav_label: None,
+                properties: None,
+            });
+        }
+    }
+
+    // 6) nav.xhtml
+    let nav_xhtml = build_nav_xhtml(&cfg, &items);
+    zip.start_file("OEBPS/nav.xhtml", opts).map_err(|e| e.to_string())?;
+    zip.write_all(nav_xhtml.as_bytes()).map_err(|e| e.to_string())?;
+    items.push(Item {
+        id: "nav".into(),
+        href: "nav.xhtml".into(),
+        media_type: "application/xhtml+xml".into(),
+        spine_order: None,
+        nav_label: None,
+        properties: Some("nav".into()),
+    });
+
+    // 7) toc.ncx (legacy)
+    let book_uuid = Uuid::new_v4().to_string();
+    let ncx = build_ncx(&cfg, &items, &book_uuid);
+    zip.start_file("OEBPS/toc.ncx", opts).map_err(|e| e.to_string())?;
+    zip.write_all(ncx.as_bytes()).map_err(|e| e.to_string())?;
+    items.push(Item {
+        id: "ncx".into(),
+        href: "toc.ncx".into(),
+        media_type: "application/x-dtbncx+xml".into(),
+        spine_order: None,
+        nav_label: None,
+        properties: None,
+    });
+
+    // 8) content.opf
+    let opf = build_opf(&cfg, &items, &book_uuid);
+    zip.start_file("OEBPS/content.opf", opts).map_err(|e| e.to_string())?;
     zip.write_all(opf.as_bytes()).map_err(|e| e.to_string())?;
 
     zip.finish().map_err(|e| e.to_string())?;
 
     Ok(ExportResult {
         epub_path: epub_path.to_string_lossy().into_owned(),
-        chapters: parts.len() as u32,
+        chapters: total_chapter_files,
     })
 }
 
-fn read_book_meta(book_dir: &Path) -> BookMeta {
-    let mut meta = BookMeta {
-        titulo: strip_numeric_prefix(
-            book_dir
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("Sin título"),
-        ),
-        autor: "".to_string(),
-        idioma: "es".to_string(),
-    };
-    let book_json = book_dir.join("book.json");
-    if let Ok(raw) = fs::read_to_string(&book_json) {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
-            if let Some(t) = v.get("titulo").and_then(|s| s.as_str()) {
-                meta.titulo = t.to_string();
-            }
-            if let Some(a) = v.get("autor").and_then(|s| s.as_str()) {
-                meta.autor = a.to_string();
-            }
-            if let Some(l) = v.get("idioma").and_then(|s| s.as_str()) {
-                meta.idioma = l.to_string();
-            }
-        }
-    }
-    // Fallback: leer saga.json del padre
-    if meta.autor.is_empty() {
-        if let Some(parent) = book_dir.parent() {
-            let saga_json = parent.join("saga.json");
-            if let Ok(raw) = fs::read_to_string(&saga_json) {
-                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
-                    if let Some(a) = v.get("autor").and_then(|s| s.as_str()) {
-                        meta.autor = a.to_string();
-                    }
-                }
-            }
-        }
-    }
-    meta
+// ───────── Recolección ─────────
+
+struct Chapter {
+    title: String,
+    parts: Vec<ChapterPart>,
 }
 
-fn collect_parts(book_dir: &Path) -> Result<Vec<ChapterPart>, String> {
-    // Estructura: book contiene sections (dirs "N - X") con parts (.html numerados)
-    // OR contiene .html numerados directos.
-    let mut sections: Vec<(String, Vec<PathBuf>)> = Vec::new();
+struct ChapterPart {
+    title: String,
+    content_html: String,
+}
 
-    // Sections (subdirs ordenados)
+fn collect_chapters(book_dir: &Path) -> Result<Vec<Chapter>, String> {
     let mut subdirs: Vec<PathBuf> = fs::read_dir(book_dir)
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
@@ -180,56 +273,52 @@ fn collect_parts(book_dir: &Path) -> Result<Vec<ChapterPart>, String> {
         na.cmp(&nb)
     });
 
+    let mut chapters = Vec::new();
     for d in &subdirs {
-        let title = strip_numeric_prefix(
+        let ch_title = strip_numeric_prefix(
             d.file_name().and_then(|s| s.to_str()).unwrap_or(""),
         );
-        let mut parts = collect_html_parts_in(d)?;
+        let mut parts = collect_html_parts(d)?;
         parts.sort();
-        if !parts.is_empty() {
-            sections.push((title, parts));
+        if parts.is_empty() {
+            continue;
         }
-    }
-
-    // Si no hay secciones, intentar .html directos en el book
-    if sections.is_empty() {
-        let mut direct = collect_html_parts_in(book_dir)?;
-        direct.sort();
-        if !direct.is_empty() {
-            sections.push((String::new(), direct));
-        }
-    }
-
-    let mut out: Vec<ChapterPart> = Vec::new();
-    let mut idx = 0u32;
-    for (sec_title, paths) in sections {
-        for (i, p) in paths.iter().enumerate() {
-            idx += 1;
-            let id = format!("c{}", idx);
-            let href = format!("{}.xhtml", id);
-            let part_num = p.file_stem().and_then(|s| s.to_str()).unwrap_or(&id).to_string();
+        let mut chapter_parts = Vec::new();
+        for p in &parts {
+            let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
             let content = fs::read_to_string(p).map_err(|e| e.to_string())?;
-            out.push(ChapterPart {
-                id,
-                href,
-                section_title: if i == 0 && !sec_title.is_empty() {
-                    Some(sec_title.clone())
-                } else {
-                    None
-                },
-                title: if i == 0 && !sec_title.is_empty() {
-                    sec_title.clone()
-                } else {
-                    format!("{} · {}", sec_title, part_num).trim_start_matches(" · ").to_string()
-                },
+            chapter_parts.push(ChapterPart {
+                title: stem,
                 content_html: content,
             });
         }
+        chapters.push(Chapter { title: ch_title, parts: chapter_parts });
     }
-    Ok(out)
+
+    // Si no había secciones, tratamos el libro entero como un solo capítulo
+    if chapters.is_empty() {
+        let mut direct = collect_html_parts(book_dir)?;
+        direct.sort();
+        if !direct.is_empty() {
+            let title = strip_numeric_prefix(
+                book_dir.file_name().and_then(|s| s.to_str()).unwrap_or(""),
+            );
+            let mut chapter_parts = Vec::new();
+            for p in &direct {
+                let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+                let content = fs::read_to_string(p).map_err(|e| e.to_string())?;
+                chapter_parts.push(ChapterPart {
+                    title: stem,
+                    content_html: content,
+                });
+            }
+            chapters.push(Chapter { title, parts: chapter_parts });
+        }
+    }
+    Ok(chapters)
 }
 
-fn collect_html_parts_in(dir: &Path) -> Result<Vec<PathBuf>, String> {
+fn collect_html_parts(dir: &Path) -> Result<Vec<PathBuf>, String> {
     let mut out = Vec::new();
     for e in fs::read_dir(dir).map_err(|e| e.to_string())? {
         let entry = e.map_err(|e| e.to_string())?;
@@ -245,19 +334,49 @@ fn collect_html_parts_in(dir: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(out)
 }
 
-fn build_chapter_xhtml(p: &ChapterPart) -> String {
-    let head = if let Some(sec) = &p.section_title {
-        format!(
-            "<div class=\"chapter-heading\"><h1 class=\"chapter-title\">{}</h1></div>",
-            xml_escape(sec)
-        )
+// ───────── Cover image ─────────
+
+fn embed_cover(
+    book_dir: &Path,
+    cover_rel: &str,
+    zip: &mut ZipWriter<File>,
+    opts: SimpleFileOptions,
+) -> Result<Option<(String, String)>, String> {
+    let candidate = if Path::new(cover_rel).is_absolute() {
+        PathBuf::from(cover_rel)
     } else {
-        String::new()
+        book_dir.join(cover_rel)
     };
+    if !candidate.is_file() {
+        return Ok(None);
+    }
+    let ext = candidate
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+    let (mime, dest_ext) = match ext.as_str() {
+        "png" => ("image/png", "png"),
+        "jpg" | "jpeg" => ("image/jpeg", "jpg"),
+        "webp" => ("image/webp", "webp"),
+        "gif" => ("image/gif", "gif"),
+        _ => return Ok(None),
+    };
+    let bytes = fs::read(&candidate).map_err(|e| e.to_string())?;
+    let dest = format!("cover.{}", dest_ext);
+    zip.start_file(format!("OEBPS/{}", dest), opts)
+        .map_err(|e| e.to_string())?;
+    zip.write_all(&bytes).map_err(|e| e.to_string())?;
+    Ok(Some((dest, mime.to_string())))
+}
+
+// ───────── XHTML builders ─────────
+
+fn xhtml_shell(title: &str, body: &str, lang: &str) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="{}">
 <head>
 <meta charset="UTF-8" />
 <title>{}</title>
@@ -265,106 +384,314 @@ fn build_chapter_xhtml(p: &ChapterPart) -> String {
 </head>
 <body>
 {}
-<div class="chapter-content">
-{}
-</div>
 </body>
 </html>
 "#,
-        xml_escape(&p.title),
-        head,
-        p.content_html.trim()
+        xml_escape(lang),
+        xml_escape(title),
+        body
     )
 }
 
-fn build_nav_xhtml(meta: &BookMeta, parts: &[ChapterPart]) -> String {
+fn build_cover_xhtml(cover_filename: &str) -> String {
+    let body = format!(
+        r#"<div class="cover">
+<img src="{}" alt="Cover"/>
+</div>"#,
+        xml_escape(cover_filename)
+    );
+    xhtml_shell("Cover", &body, "es")
+}
+
+fn build_title_xhtml(cfg: &BookConfig) -> String {
+    let mut body = String::new();
+    if let Some(autor) = cfg.autor.as_deref().filter(|s| !s.is_empty()) {
+        body.push_str(&format!(
+            r#"<p class="title-page-author">{}</p>"#,
+            xml_escape(autor)
+        ));
+    }
+    body.push_str(&format!(
+        r#"
+<p class="title-page-title">{}</p>
+"#,
+        xml_escape(&cfg.titulo)
+    ));
+    if let Some(sub) = cfg.subtitulo.as_deref().filter(|s| !s.is_empty()) {
+        body.push_str(&format!(
+            r#"<p class="title-page-subtitle">{}</p>"#,
+            xml_escape(sub)
+        ));
+    } else if let (Some(serie), Some(num)) = (cfg.serie.as_deref(), cfg.numero_en_serie) {
+        body.push_str(&format!(
+            r#"<p class="title-page-subtitle">{} #{}</p>"#,
+            xml_escape(serie),
+            num
+        ));
+    }
+    xhtml_shell(&cfg.titulo, &body, cfg.idioma.as_deref().unwrap_or("es"))
+}
+
+fn build_copyright_xhtml(cfg: &BookConfig) -> String {
+    let autor = cfg.autor.as_deref().unwrap_or("");
+    let anio = cfg.copyright_anio.unwrap_or_else(current_year);
+    let imprenta = cfg.imprenta.as_deref().unwrap_or("Independiente");
+    let mut paragraphs = String::new();
+    paragraphs.push_str(&format!(
+        "<p>Copyright \u{00A9} {} by {}</p>\n",
+        anio,
+        xml_escape(autor)
+    ));
+    if cfg.derechos_reservados.unwrap_or(true) {
+        paragraphs.push_str(
+            "<p>Todos los derechos reservados. Ninguna parte de esta publicación puede ser reproducida, almacenada ni transmitida en forma alguna por medio electrónico, mecánico, fotocopia, grabación u otros sin autorización escrita del autor.</p>\n",
+        );
+        paragraphs.push_str(
+            "<p>Esta novela es enteramente una obra de ficción. Los nombres, personajes y eventos retratados son producto de la imaginación del autor. Cualquier parecido con personas reales, vivas o fallecidas, eventos o lugares es enteramente coincidencia.</p>\n",
+        );
+    }
+    if let Some(isbn) = cfg.isbn.as_deref().filter(|s| !s.is_empty()) {
+        paragraphs.push_str(&format!("<p>ISBN: {}</p>\n", xml_escape(isbn)));
+    }
+    paragraphs.push_str(&format!(
+        "<p>{}</p>\n",
+        xml_escape(&format!("Publicado por {}", imprenta))
+    ));
+    paragraphs.push_str("<p>Editado con tWriter</p>");
+
+    let body = format!(r#"<div class="publishing-info">
+{}
+</div>"#, paragraphs);
+    xhtml_shell(&cfg.titulo, &body, cfg.idioma.as_deref().unwrap_or("es"))
+}
+
+fn build_dedication_xhtml(text: &str) -> String {
+    let html_paragraphs = text
+        .lines()
+        .map(|l| format!("<p>{}</p>", xml_escape(l.trim())))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let body = format!(
+        r#"<div class="dedication">
+{}
+</div>"#,
+        html_paragraphs
+    );
+    xhtml_shell("Dedicatoria", &body, "es")
+}
+
+fn build_chapter_title_xhtml(title: &str) -> String {
+    let body = format!(
+        r#"<div class="chapter-heading">
+<h1 class="chapter-title">{}</h1>
+</div>"#,
+        xml_escape(title)
+    );
+    xhtml_shell(title, &body, "es")
+}
+
+fn build_part_xhtml(title: &str, content_html: &str) -> String {
+    let body = format!(
+        r#"<div class="chapter-content">
+{}
+</div>"#,
+        content_html.trim()
+    );
+    xhtml_shell(title, &body, "es")
+}
+
+fn build_nav_xhtml(cfg: &BookConfig, items: &[Item]) -> String {
     let mut entries = String::new();
-    for p in parts {
-        if let Some(sec) = &p.section_title {
+    for it in items {
+        if let Some(label) = &it.nav_label {
             entries.push_str(&format!(
                 "<li><a href=\"{}\">{}</a></li>\n",
-                p.href,
-                xml_escape(sec)
+                xml_escape(&it.href),
+                xml_escape(label)
             ));
         }
     }
-    if entries.is_empty() {
-        // Sin sección — listamos cada parte
-        for p in parts {
-            entries.push_str(&format!(
-                "<li><a href=\"{}\">{}</a></li>\n",
-                p.href,
-                xml_escape(&p.title)
-            ));
-        }
-    }
-    format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
-<head><title>{}</title></head>
-<body>
-<nav epub:type="toc">
+    let body = format!(
+        r#"<nav epub:type="toc" id="toc">
 <h1>Índice</h1>
 <ol>
 {}
 </ol>
-</nav>
-</body>
-</html>
-"#,
-        xml_escape(&meta.titulo),
+</nav>"#,
         entries
+    );
+    xhtml_shell(&cfg.titulo, &body, cfg.idioma.as_deref().unwrap_or("es"))
+}
+
+// ───────── NCX (legacy) ─────────
+
+fn build_ncx(cfg: &BookConfig, items: &[Item], book_uuid: &str) -> String {
+    let mut nav_points = String::new();
+    let mut order = 1u32;
+    for it in items {
+        if let Some(label) = &it.nav_label {
+            nav_points.push_str(&format!(
+                r#"<navPoint id="navPoint-{}" playOrder="{}">
+<navLabel><text>{}</text></navLabel>
+<content src="{}"/>
+</navPoint>
+"#,
+                order,
+                order,
+                xml_escape(label),
+                xml_escape(&it.href)
+            ));
+            order += 1;
+        }
+    }
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+<head>
+<meta name="dtb:uid" content="urn:uuid:{}"/>
+<meta name="dtb:depth" content="1"/>
+<meta name="dtb:totalPageCount" content="0"/>
+<meta name="dtb:maxPageNumber" content="0"/>
+</head>
+<docTitle><text>{}</text></docTitle>
+<navMap>
+{}
+</navMap>
+</ncx>
+"#,
+        book_uuid,
+        xml_escape(&cfg.titulo),
+        nav_points
     )
 }
 
-fn build_opf(meta: &BookMeta, parts: &[ChapterPart]) -> String {
-    let book_id = format!("urn:uuid:{}", Uuid::new_v4());
-    let modified = chrono_iso();
-    let mut manifest = String::from(
-        r#"<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
-<item id="css" href="style.css" media-type="text/css"/>"#,
-    );
-    let mut spine = String::new();
-    for p in parts {
+// ───────── OPF ─────────
+
+fn build_opf(cfg: &BookConfig, items: &[Item], book_uuid: &str) -> String {
+    let lang = cfg.idioma.as_deref().unwrap_or("es");
+    let modified = current_iso();
+
+    let mut manifest = String::new();
+    for it in items {
+        let props = it
+            .properties
+            .as_deref()
+            .map(|p| format!(" properties=\"{}\"", p))
+            .unwrap_or_default();
         manifest.push_str(&format!(
-            "\n<item id=\"{}\" href=\"{}\" media-type=\"application/xhtml+xml\"/>",
-            p.id, p.href
+            "<item id=\"{}\" href=\"{}\" media-type=\"{}\"{}/>\n",
+            xml_escape(&it.id),
+            xml_escape(&it.href),
+            xml_escape(&it.media_type),
+            props
         ));
-        spine.push_str(&format!("\n<itemref idref=\"{}\"/>", p.id));
     }
-    let creator = if meta.autor.is_empty() {
-        "".to_string()
+
+    let mut spine_entries: Vec<&Item> = items.iter().filter(|i| i.spine_order.is_some()).collect();
+    spine_entries.sort_by_key(|i| i.spine_order.unwrap());
+    let mut spine = String::new();
+    for it in spine_entries {
+        spine.push_str(&format!("<itemref idref=\"{}\"/>\n", xml_escape(&it.id)));
+    }
+
+    let creator = cfg
+        .autor
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .map(|a| format!("<dc:creator id=\"creator\">{}</dc:creator>", xml_escape(a)))
+        .unwrap_or_default();
+
+    let cover_meta = if items.iter().any(|i| i.id == "cover-image") {
+        "<meta name=\"cover\" content=\"cover-image\"/>"
     } else {
-        format!("<dc:creator>{}</dc:creator>", xml_escape(&meta.autor))
+        ""
     };
+
+    let isbn_id = cfg
+        .isbn
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .map(|i| format!("<dc:identifier>{}</dc:identifier>", xml_escape(i)))
+        .unwrap_or_default();
+
+    let serie_meta = match (cfg.serie.as_deref(), cfg.numero_en_serie) {
+        (Some(s), Some(n)) if !s.is_empty() => format!(
+            "<meta name=\"calibre:series\" content=\"{}\"/>\n<meta name=\"calibre:series_index\" content=\"{}\"/>",
+            xml_escape(s),
+            n
+        ),
+        _ => String::new(),
+    };
+
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="BookId" xml:lang="{}">
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-<dc:identifier id="BookId">{}</dc:identifier>
+<dc:identifier id="BookId">urn:uuid:{}</dc:identifier>
+{}
 <dc:title>{}</dc:title>
 {}
 <dc:language>{}</dc:language>
 <meta property="dcterms:modified">{}</meta>
+{}
+{}
 </metadata>
 <manifest>
 {}
 </manifest>
-<spine>
+<spine toc="ncx">
 {}
 </spine>
 </package>
 "#,
-        meta.idioma,
-        book_id,
-        xml_escape(&meta.titulo),
+        lang,
+        book_uuid,
+        isbn_id,
+        xml_escape(&cfg.titulo),
         creator,
-        meta.idioma,
+        lang,
         modified,
+        cover_meta,
+        serie_meta,
         manifest,
-        spine.trim_start()
+        spine
     )
+}
+
+// ───────── Helpers ─────────
+
+fn read_or_default_config(book_dir: &Path) -> BookConfig {
+    let book_json = book_dir.join("book.json");
+    if let Ok(raw) = fs::read_to_string(&book_json) {
+        if let Ok(mut cfg) = serde_json::from_str::<BookConfig>(&raw) {
+            if cfg.titulo.trim().is_empty() {
+                cfg.titulo = strip_numeric_prefix(
+                    book_dir.file_name().and_then(|s| s.to_str()).unwrap_or("Sin título"),
+                );
+            }
+            // Fallback autor desde saga.json
+            if cfg.autor.as_deref().unwrap_or("").is_empty() {
+                if let Some(parent) = book_dir.parent() {
+                    let saga_json = parent.join("saga.json");
+                    if let Ok(raw) = fs::read_to_string(&saga_json) {
+                        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+                            if let Some(a) = v.get("autor").and_then(|s| s.as_str()) {
+                                cfg.autor = Some(a.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            return cfg;
+        }
+    }
+    BookConfig {
+        titulo: strip_numeric_prefix(
+            book_dir.file_name().and_then(|s| s.to_str()).unwrap_or("Sin título"),
+        ),
+        idioma: Some("es".to_string()),
+        ..Default::default()
+    }
 }
 
 fn xml_escape(s: &str) -> String {
@@ -384,7 +711,6 @@ fn sanitize_filename(s: &str) -> String {
 }
 
 fn strip_numeric_prefix(s: &str) -> String {
-    // "1 - Foo" → "Foo"
     let trimmed = s.trim_start();
     let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
     if digits.is_empty() {
@@ -401,31 +727,31 @@ fn leading_num(s: &str) -> u32 {
     digits.parse().unwrap_or(u32::MAX)
 }
 
-fn chrono_iso() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
+fn current_year() -> u32 {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    iso8601_from_secs(secs)
+    let days = (secs / 86_400) as i64;
+    let (y, _, _) = ymd_from_days(days);
+    y as u32
 }
 
-fn iso8601_from_secs(secs: u64) -> String {
-    // Implementación mínima sin chrono crate. UTC.
-    let days_since_epoch = (secs / 86_400) as i64;
+fn current_iso() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let days = (secs / 86_400) as i64;
     let secs_today = secs % 86_400;
     let h = (secs_today / 3600) as u32;
     let m = ((secs_today / 60) % 60) as u32;
     let s = (secs_today % 60) as u32;
-    let (year, month, day) = ymd_from_days(days_since_epoch);
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-        year, month, day, h, m, s
-    )
+    let (y, mo, d) = ymd_from_days(days);
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, mo, d, h, m, s)
 }
 
 fn ymd_from_days(days: i64) -> (i32, u32, u32) {
-    // Algoritmo civil_from_days de Howard Hinnant (Public Domain)
     let z = days + 719468;
     let era = if z >= 0 { z } else { z - 146096 } / 146097;
     let doe = (z - era * 146097) as u64;

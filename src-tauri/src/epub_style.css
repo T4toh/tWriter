@@ -1,26 +1,98 @@
-/* tWriter EPUB style. Subset minimal del look Reedsy. */
-body {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 100%;
-  line-height: 1.6;
+/* tWriter EPUB style. Subset extendido del look Reedsy. */
+body, div, dl, dt, dd, h1, h2, h3, h4, h5, h6, p, pre, code, blockquote {
   margin: 0;
-  padding: 1em 1.5em;
+  padding: 0;
+  border-width: 0;
+}
+
+body {
+  font-family: serif;
+  line-height: 1.6;
   hyphens: auto;
   -epub-hyphens: auto;
+  -webkit-hyphens: auto;
 }
 
+/* Cover */
+.cover {
+  text-align: center;
+  width: 100%;
+  height: 100%;
+  page-break-after: always;
+}
+
+.cover img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Title page */
+.title-page-author {
+  font-size: 1.3em;
+  line-height: 1.5;
+  margin-top: 100px;
+  margin-bottom: 1em;
+  text-align: center;
+  text-indent: 0;
+  page-break-after: avoid;
+}
+
+.title-page-title {
+  font-size: 1.5em;
+  line-height: 1.5;
+  text-align: center;
+  text-indent: 0;
+  page-break-after: avoid;
+}
+
+.title-page-subtitle {
+  font-size: 1.1em;
+  font-style: italic;
+  margin-top: 20px;
+  text-align: center;
+  text-indent: 0;
+  page-break-after: avoid;
+}
+
+/* Copyright / Publishing info */
+.publishing-info {
+  font-style: italic;
+  text-align: center;
+  text-indent: 0;
+  margin-bottom: 1em;
+  page-break-before: avoid;
+}
+
+.publishing-info p {
+  margin-bottom: 1em;
+}
+
+/* Dedication */
+.dedication {
+  width: 25em;
+  max-width: 95vw;
+  font-style: italic;
+  text-align: center;
+  margin: 3em auto;
+  page-break-after: always;
+}
+
+/* Body text */
 p {
-  margin: 0 0 0.4em 0;
+  margin: 0;
   text-indent: 1.5em;
   text-align: justify;
+  widows: 2;
+  orphans: 2;
 }
 
-p:first-child,
 p.no-indent,
+.chapter-content > p:first-child,
 h1 + p,
 h2 + p,
 h3 + p,
-hr + p {
+hr + p,
+.scene-break + p {
   text-indent: 0;
 }
 
@@ -30,66 +102,147 @@ p[style*="text-align: left"] {
   text-indent: 0;
 }
 
+/* Headings */
 h1, h2, h3 {
-  font-family: Helvetica, Arial, sans-serif;
-  font-weight: 400;
-  text-align: center;
+  font-family: sans-serif;
+  font-weight: normal;
+  text-align: left;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
   page-break-after: avoid;
 }
 
+h1 {
+  font-size: 1.4em;
+  line-height: 1.2;
+  margin-top: 1.4em;
+}
+
+h2 {
+  font-size: 1.2em;
+  line-height: 1.2;
+  margin-top: 1.2em;
+}
+
+h3 {
+  font-size: 1.1em;
+  font-style: italic;
+  line-height: 1.2;
+}
+
 h1.chapter-title {
-  font-size: 1.6em;
-  margin: 2em 0 1.5em;
+  font-size: 1.8em;
+  font-weight: normal;
+  text-align: center;
+  margin-top: 2em;
+  margin-bottom: 2em;
   letter-spacing: 0.02em;
 }
 
-.chapter-content {
-  page-break-after: auto;
+h1.part-number {
+  font-size: 2em;
+  font-weight: 300;
+  text-align: center;
+  margin-top: 3em;
+  margin-bottom: 0;
+  page-break-before: always;
+  page-break-after: avoid;
 }
 
-em, i {
+h1.part-title {
+  font-size: 1.6em;
+  font-weight: normal;
+  text-align: center;
+  margin-top: 1em;
+  margin-bottom: 1em;
+  page-break-after: avoid;
+}
+
+.part-summary {
   font-style: italic;
+  text-align: center;
+  margin-right: 10%;
+  margin-left: 10%;
 }
 
-strong, b {
-  font-weight: bold;
+.chapter-heading {
+  page-break-before: always;
 }
 
-u {
+.chapter-content {
+  text-align: justify;
+  text-indent: 1.5em;
+}
+
+/* Inline */
+b, strong { font-weight: bold; }
+i, em { font-style: italic; }
+u { text-decoration: underline; }
+.underline { text-decoration: underline; }
+
+a {
+  color: #0057ad;
   text-decoration: underline;
 }
 
-hr {
+/* Scene break */
+hr,
+.scene-break {
   border: none;
   text-align: center;
+  text-indent: 0;
   margin: 1.5em 0;
+  padding: 0.3em 0;
+  font-size: 1.2em;
 }
 
-hr::before {
+hr::before,
+.scene-break::before {
   content: "* * *";
   color: #888;
   letter-spacing: 0.5em;
 }
 
+/* Blockquote */
 blockquote {
   margin: 1em 1.5em;
   font-style: italic;
 }
 
-span.dropcap {
-  float: left;
-  font-size: 3em;
-  line-height: 0.9em;
-  margin-right: 0.05em;
-  margin-bottom: -0.1em;
-  font-family: Helvetica, Arial, sans-serif;
+blockquote i,
+blockquote em {
+  font-style: normal;
 }
 
-nav ol {
+/* Dropcap */
+span.dropcap {
+  font-size: 3.4em;
+  height: 1.5em;
+  line-height: 1.1em;
+  overflow: hidden;
+  float: left;
+  margin-right: 0.05em;
+  margin-bottom: -0.6em;
+  font-family: sans-serif;
+}
+
+/* TOC */
+nav ol,
+nav ol ol {
   list-style-type: none;
   padding-left: 0;
+  margin: 0;
 }
 
 nav ol li {
   margin: 0.4em 0;
+  text-indent: 0;
 }
+
+nav ol li.toc-part > a {
+  font-weight: bold;
+}
+
+/* Misc */
+.center-align { text-align: center; text-indent: 0; }
+.right-align { text-align: right; text-indent: 0; }

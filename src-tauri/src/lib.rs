@@ -1,3 +1,4 @@
+mod book_config;
 mod create;
 mod epub;
 mod fs;
@@ -6,6 +7,7 @@ mod import;
 mod reorder;
 mod settings;
 
+use book_config::{get_book_config, set_book_config};
 use create::{create_chapter, create_directory};
 use epub::export_book;
 use fs::{get_tree, read_chapter, read_meta, write_chapter, write_meta};
@@ -38,6 +40,8 @@ pub fn run() {
             create_directory,
             move_node,
             export_book,
+            get_book_config,
+            set_book_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

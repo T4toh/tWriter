@@ -155,8 +155,17 @@
           <span class="ctx-kbd">▼</span>
         </button>
       }
-      @if (a.exportEpub) {
+      @if (a.configBook) {
         <div class="ctx-sep"></div>
+        <button type="button" class="ctx-item" (click)="configBook()">
+          <span class="ctx-label">Configurar novela…</span>
+          <span class="ctx-kbd">book.json</span>
+        </button>
+      }
+      @if (a.exportEpub) {
+        @if (!a.configBook) {
+          <div class="ctx-sep"></div>
+        }
         <button type="button" class="ctx-item" (click)="exportEpub()">
           <span class="ctx-label">Exportar a EPUB</span>
           <span class="ctx-kbd">.epub</span>
@@ -178,7 +187,7 @@
           </button>
         }
       }
-      @if (!a.importThis && !a.deleteOriginal && a.importBulk === 0 && a.cleanupBulk === 0 && !a.deleteFile && !a.deleteDir && !a.createChapter && !a.createSection && !a.createBook && !a.createSaga && !a.exportEpub) {
+      @if (!a.importThis && !a.deleteOriginal && a.importBulk === 0 && a.cleanupBulk === 0 && !a.deleteFile && !a.deleteDir && !a.createChapter && !a.createSection && !a.createBook && !a.createSaga && !a.exportEpub && !a.configBook) {
         <span class="ctx-empty">Sin acciones disponibles.</span>
       }
     }
