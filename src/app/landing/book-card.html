@@ -34,12 +34,24 @@
       <p class="hint">Sin configurar</p>
     }
   </div>
-  <button
-    type="button"
-    class="cfg-btn"
-    (click)="openConfig($event)"
-    title="Configurar novela"
-  >
-    ⚙
-  </button>
+  <div class="card-actions">
+    <button
+      type="button"
+      class="card-btn"
+      (click)="openConfig($event)"
+      title="Configurar novela"
+    >
+      ⚙
+    </button>
+    <button
+      type="button"
+      class="card-btn"
+      [class.spinning]="exporting()"
+      [disabled]="exporting()"
+      (click)="exportEpub($event)"
+      title="Exportar a EPUB"
+    >
+      {{ exporting() ? '⋯' : '⤓' }}
+    </button>
+  </div>
 </button>

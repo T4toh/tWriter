@@ -4,6 +4,7 @@ import { detectLang } from '../dialogos/detect';
 import { DebugService } from './debug-service';
 import { GitService } from './git-service';
 import { ProjectService } from './project-service';
+import { ToastService } from './toast-service';
 import { ChapterMeta, EMPTY_META, TreeNode } from './types';
 
 const AUTOSAVE_MS = 1500;
@@ -13,6 +14,7 @@ export class ChapterService {
   private project = inject(ProjectService);
   private debug = inject(DebugService);
   private git = inject(GitService);
+  private toast = inject(ToastService);
 
   readonly active = signal<TreeNode | null>(null);
   readonly importing = signal<boolean>(false);
@@ -234,14 +236,19 @@ export class ChapterService {
         'export_book',
         { bookPath: node.path },
       );
+      const filename = result.epub_path.split('/').pop() ?? 'epub';
       this.debug.info(
         'epub',
         `${node.name} → ${result.epub_path} (${result.chapters} parte${result.chapters === 1 ? '' : 's'})`,
+      );
+      this.toast.success(
+        `EPUB generado: ${filename} (${result.chapters} parte${result.chapters === 1 ? '' : 's'})`,
       );
       await this.project.loadTree();
       return result.epub_path;
     } catch (err) {
       this.debug.error('epub', `${node.name}: ${err}`);
+      this.toast.error(`Export falló: ${err}`);
       this.error.set(String(err));
       return null;
     }

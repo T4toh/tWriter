@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { BookConfig, BookConfigService } from '../core/book-config-service';
+import { ChapterService } from '../core/chapter-service';
 import { TreeNode } from '../core/types';
 
 interface ImageData {
@@ -24,9 +25,11 @@ interface ImageData {
 })
 export class BookCard {
   private cfgService = inject(BookConfigService);
+  private chapter = inject(ChapterService);
 
   readonly node = input.required<TreeNode>();
   readonly select = output<TreeNode>();
+  protected readonly exporting = signal<boolean>(false);
 
   protected readonly config = signal<BookConfig | null>(null);
   protected readonly coverDataUrl = signal<string | null>(null);
@@ -100,6 +103,17 @@ export class BookCard {
   protected openConfig(event: MouseEvent): void {
     event.stopPropagation();
     this.cfgService.openFor(this.node());
+  }
+
+  protected async exportEpub(event: MouseEvent): Promise<void> {
+    event.stopPropagation();
+    if (this.exporting()) return;
+    this.exporting.set(true);
+    try {
+      await this.chapter.exportEpub(this.node());
+    } finally {
+      this.exporting.set(false);
+    }
   }
 
   private async load(path: string): Promise<void> {

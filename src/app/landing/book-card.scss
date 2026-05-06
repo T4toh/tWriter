@@ -115,10 +115,17 @@
   font-weight: 600;
 }
 
-.cfg-btn {
+.card-actions {
   position: absolute;
   top: 8px;
   right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.card-btn {
   width: 24px;
   height: 24px;
   border: none;
@@ -130,22 +137,34 @@
   align-items: center;
   justify-content: center;
   font-size: 14px;
-  opacity: 0;
-  transition: opacity 0.15s, background 0.15s;
+  transition: background 0.15s, color 0.15s;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: var(--accent);
     color: var(--bg);
   }
+
+  &:disabled {
+    cursor: wait;
+  }
+
+  &.spinning {
+    animation: card-spin 1s linear infinite;
+  }
 }
 
-.book-card:hover .cfg-btn,
-.book-card.unconfigured .cfg-btn {
+.book-card:hover .card-actions,
+.book-card.unconfigured .card-actions {
   opacity: 1;
 }
 
+@keyframes card-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 @media (prefers-color-scheme: dark) {
-  .cfg-btn {
+  .card-btn {
     background: rgba(255, 255, 255, 0.08);
   }
 }
