@@ -33,16 +33,16 @@ Editor mínimo de escritura funcionando:
 - Menú contextual propio
 - Word count en footer
 
-### Sprint 2 — Sync con git
+### Sprint 2 — Sync con git ✓
 
 > Cada save = commit. Cada N min = push. Sin Dropbox.
 
-- Crate `git2` en Rust
+- Crate `git2` en Rust con SSH agent + fallback a `~/.ssh/id_ed25519/id_rsa/id_ecdsa`
 - Comandos: `git_status`, `git_commit_all`, `git_push`, `git_pull`
-- Auto-commit cada 5 min (configurable) cuando hay cambios
-- Botón "Sync ahora" en toolbar
-- Auth: SSH key del sistema o token GitHub en `keyring` crate
-- Indicador de sync status en footer
+- Auto-commit cada 5 min cuando hay cambios
+- Status polling cada 30s
+- Botón "sync ahora" (⇅) en header
+- Indicador (punto de color) + summary del estado en panel izquierdo
 
 ### Sprint 3 — Importer + conversor RAE
 
@@ -86,6 +86,7 @@ Editor mínimo de escritura funcionando:
 - Diff/historial visual via git log
 - Stats: gráfico palabras/día
 - Editor split (dos capítulos lado a lado)
+- Pantalla de debug (logs Rust + estado de signals + stderr de git)
 - Mobile (Capacitor)
 
 ## Desarrollo

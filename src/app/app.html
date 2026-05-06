@@ -6,6 +6,25 @@
         <div class="actions">
           <button
             type="button"
+            class="icon-btn sync-btn"
+            [class.spinning]="git.syncing()"
+            (click)="syncNow()"
+            [disabled]="!root() || git.syncing() || git.state() === 'clean'"
+            [title]="syncTitle()"
+          >
+            ⇅
+          </button>
+          <button
+            type="button"
+            class="icon-btn"
+            (click)="pull()"
+            [disabled]="!root() || git.syncing()"
+            title="Pull desde remoto (fast-forward, sin merge)"
+          >
+            ⤓
+          </button>
+          <button
+            type="button"
             class="icon-btn"
             (click)="refresh()"
             [disabled]="!root()"
@@ -24,7 +43,13 @@
         </div>
       </div>
       @if (root(); as r) {
-        <span class="path" [title]="r">{{ r }}</span>
+        <div class="path-row" [title]="syncTitle()">
+          <span class="dot" [attr.data-state]="git.state()"></span>
+          <span class="path" [title]="r">{{ r }}</span>
+        </div>
+        <div class="sync-summary" [class.error]="git.state() === 'error'">
+          {{ git.error() ?? git.summary() }}
+        </div>
       } @else {
         <span class="path muted">sin carpeta</span>
       }

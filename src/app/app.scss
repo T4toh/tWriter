@@ -76,6 +76,24 @@
   cursor: not-allowed;
 }
 
+.icon-btn.sync-btn.spinning {
+  color: var(--accent);
+  animation: spin 1.2s linear infinite;
+  opacity: 1 !important;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.path-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .path {
   font-size: 11px;
   color: var(--fg-muted);
@@ -83,11 +101,56 @@
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--font-mono);
+  flex: 1;
+  min-width: 0;
 }
 
 .path.muted {
   font-style: italic;
   font-family: var(--font-ui);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--fg-muted);
+
+  &[data-state='clean'] {
+    background: #4caf50;
+  }
+  &[data-state='pending'] {
+    background: #e0a020;
+  }
+  &[data-state='syncing'] {
+    background: var(--accent);
+    animation: pulse 1s infinite;
+  }
+  &[data-state='error'] {
+    background: #b04040;
+  }
+  &[data-state='offline'] {
+    background: var(--fg-muted);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.sync-summary {
+  font-size: 10px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-ui);
+
+  &.error {
+    color: #c87070;
+  }
 }
 
 .panel-center {
