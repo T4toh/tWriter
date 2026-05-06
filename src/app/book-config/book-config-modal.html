@@ -134,6 +134,41 @@
             ></textarea>
           </label>
         </div>
+
+        <div class="row section-divider">
+          <span class="section-label">Estilo de capítulos en el EPUB</span>
+        </div>
+        <div class="row split">
+          <label>
+            <span>Prefijo del capítulo</span>
+            <select
+              [ngModel]="c.prefijo_capitulo"
+              (ngModelChange)="update('prefijo_capitulo', $event)"
+            >
+              <option value="none">Sin prefijo</option>
+              <option value="decimal">Número (1, 2, 3…)</option>
+              <option value="roman">Romano (I, II, III…)</option>
+            </select>
+          </label>
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="c.mostrar_titulo_capitulo"
+              (ngModelChange)="update('mostrar_titulo_capitulo', $event)"
+            />
+            <span>Mostrar título del capítulo</span>
+          </label>
+        </div>
+        <div class="row">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="c.dropcap"
+              (ngModelChange)="update('dropcap', $event)"
+            />
+            <span>Letrina (dropcap) en primer párrafo de cada capítulo</span>
+          </label>
+        </div>
         @if (error(); as err) {
           <p class="error">{{ err }}</p>
         }

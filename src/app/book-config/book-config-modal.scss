@@ -54,6 +54,20 @@
   font-size: 13px;
 }
 
+.section-divider {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .row {
   display: flex;
   flex-direction: column;

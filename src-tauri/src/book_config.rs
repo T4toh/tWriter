@@ -29,6 +29,15 @@ pub struct BookConfig {
     pub serie: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub numero_en_serie: Option<u32>,
+    /// Mostrar el título del capítulo en la chapter title page. Default: true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mostrar_titulo_capitulo: Option<bool>,
+    /// Prefijo del capítulo: "none" | "decimal" | "roman". Default: "none".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prefijo_capitulo: Option<String>,
+    /// Letrina (drop cap) en primera letra del primer párrafo de cada capítulo. Default: false.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropcap: Option<bool>,
 }
 
 #[tauri::command]

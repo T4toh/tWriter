@@ -52,6 +52,9 @@ export class BookConfigModal {
         imprenta: cfg.imprenta ?? 'Independiente',
         serie: cfg.serie ?? '',
         numero_en_serie: cfg.numero_en_serie ?? null,
+        mostrar_titulo_capitulo: cfg.mostrar_titulo_capitulo ?? true,
+        prefijo_capitulo: cfg.prefijo_capitulo ?? 'none',
+        dropcap: cfg.dropcap ?? false,
       });
     } catch (err) {
       this.error.set(String(err));
@@ -97,6 +100,9 @@ export class BookConfigModal {
         imprenta: blank(cfg.imprenta),
         serie: blank(cfg.serie),
         numero_en_serie: cfg.numero_en_serie || null,
+        mostrar_titulo_capitulo: cfg.mostrar_titulo_capitulo ?? null,
+        prefijo_capitulo: cfg.prefijo_capitulo ?? null,
+        dropcap: cfg.dropcap ?? null,
       };
       await this.svc.save(path, cleaned);
       this.svc.close();

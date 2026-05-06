@@ -2,6 +2,8 @@ import { Injectable, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { TreeNode } from './types';
 
+export type ChapterPrefix = 'none' | 'decimal' | 'roman';
+
 export interface BookConfig {
   titulo: string;
   subtitulo?: string | null;
@@ -15,6 +17,9 @@ export interface BookConfig {
   imprenta?: string | null;
   serie?: string | null;
   numero_en_serie?: number | null;
+  mostrar_titulo_capitulo?: boolean | null;
+  prefijo_capitulo?: ChapterPrefix | null;
+  dropcap?: boolean | null;
 }
 
 @Injectable({ providedIn: 'root' })

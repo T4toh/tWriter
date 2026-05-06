@@ -162,6 +162,10 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     }
 
     // 5) Chapters: title page + parts (collect TOC entries en paralelo)
+    let show_chapter_title = cfg.mostrar_titulo_capitulo.unwrap_or(true);
+    let prefix_style = cfg.prefijo_capitulo.as_deref().unwrap_or("none");
+    let use_dropcap = cfg.dropcap.unwrap_or(false);
+
     let mut toc_entries: Vec<TocEntry> = Vec::new();
     let mut file_seq = 10u32;
     for (ch_idx, chapter) in chapters.iter().enumerate() {
@@ -169,7 +173,12 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         spine_idx += 1;
         file_seq += 1;
         let title_href = format!("{}_ch{}_title.xhtml", file_seq, ch_idx + 1);
-        let title_xhtml = build_chapter_title_xhtml(&chapter.title);
+        let prefix = chapter_prefix(prefix_style, (ch_idx + 1) as u32);
+        let title_xhtml = build_chapter_title_xhtml(
+            &chapter.title,
+            show_chapter_title,
+            prefix.as_deref(),
+        );
         zip.start_file(format!("OEBPS/{}", title_href), opts).map_err(|e| e.to_string())?;
         zip.write_all(title_xhtml.as_bytes()).map_err(|e| e.to_string())?;
         items.push(Item {
@@ -177,12 +186,17 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             href: title_href.clone(),
             media_type: "application/xhtml+xml".into(),
             spine_order: Some(spine_idx),
-
             properties: None,
         });
+        let toc_label = match (&prefix, show_chapter_title) {
+            (Some(p), true) => format!("{} {}", p, chapter.title),
+            (Some(p), false) => p.clone(),
+            (None, true) => chapter.title.clone(),
+            (None, false) => format!("Capítulo {}", ch_idx + 1),
+        };
         let mut entry = TocEntry {
             href: title_href,
-            label: chapter.title.clone(),
+            label: toc_label,
             children: Vec::new(),
         };
 
@@ -192,7 +206,12 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             file_seq += 1;
             total_chapter_files += 1;
             let part_href = format!("{}_ch{}_p{}.xhtml", file_seq, ch_idx + 1, p_idx + 1);
-            let part_xhtml = build_part_xhtml(&part.title, &part.content_html);
+            let is_first = p_idx == 0;
+            let part_xhtml = build_part_xhtml(
+                &part.title,
+                &part.content_html,
+                use_dropcap && is_first,
+            );
             zip.start_file(format!("OEBPS/{}", part_href), opts).map_err(|e| e.to_string())?;
             zip.write_all(part_xhtml.as_bytes()).map_err(|e| e.to_string())?;
             items.push(Item {
@@ -200,7 +219,6 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
                 href: part_href.clone(),
                 media_type: "application/xhtml+xml".into(),
                 spine_order: Some(spine_idx),
-
                 properties: None,
             });
             entry.children.push(TocEntry {
@@ -529,19 +547,131 @@ fn build_dedication_xhtml(text: &str) -> String {
     xhtml_shell("Dedicatoria", &body, "es", "dedication-body")
 }
 
-fn build_chapter_title_xhtml(title: &str) -> String {
-    let body = format!(r#"<h1 class="chapter-title">{}</h1>"#, xml_escape(title));
+fn build_chapter_title_xhtml(title: &str, show_title: bool, prefix: Option<&str>) -> String {
+    let mut body = String::new();
+    if let Some(p) = prefix {
+        body.push_str(&format!(r#"<p class="chapter-prefix">{}</p>"#, xml_escape(p)));
+    }
+    if show_title {
+        body.push_str(&format!(
+            r#"<h1 class="chapter-title">{}</h1>"#,
+            xml_escape(title)
+        ));
+    }
+    if body.is_empty() {
+        // Aún si todo apagado, mantenemos un h1 mudo para que el TOC tenga ancla
+        body.push_str(r#"<h1 class="chapter-title">&nbsp;</h1>"#);
+    }
     xhtml_shell(title, &body, "es", "chapter-title-body")
 }
 
-fn build_part_xhtml(title: &str, content_html: &str) -> String {
+fn build_part_xhtml(title: &str, content_html: &str, dropcap: bool) -> String {
+    let content = if dropcap {
+        apply_dropcap(content_html.trim())
+    } else {
+        content_html.trim().to_string()
+    };
     let body = format!(
         r#"<div class="chapter-content">
 {}
 </div>"#,
-        content_html.trim()
+        content
     );
     xhtml_shell(title, &body, "es", "chapter-content-body")
+}
+
+/// Envuelve la primera letra del primer <p> en <span class="dropcap">.
+/// Marca ese <p> con class="no-indent".
+fn apply_dropcap(html: &str) -> String {
+    // Buscar el primer <p ... > y la primera letra alfabética después
+    let lower = html.to_ascii_lowercase();
+    let Some(p_open_start) = lower.find("<p") else {
+        return html.to_string();
+    };
+    let Some(p_open_end_rel) = lower[p_open_start..].find('>') else {
+        return html.to_string();
+    };
+    let p_open_end = p_open_start + p_open_end_rel;
+    let opening_tag = &html[p_open_start..=p_open_end];
+    let after_open = &html[p_open_end + 1..];
+
+    // Encontrar primera letra alfabética en after_open (saltando tags inline y puntuación)
+    let mut in_tag = false;
+    let mut first_letter_byte: Option<usize> = None;
+    for (i, ch) in after_open.char_indices() {
+        if ch == '<' {
+            in_tag = true;
+            continue;
+        }
+        if ch == '>' {
+            in_tag = false;
+            continue;
+        }
+        if in_tag {
+            continue;
+        }
+        if ch.is_alphabetic() {
+            first_letter_byte = Some(i);
+            break;
+        }
+    }
+    let Some(letter_idx) = first_letter_byte else {
+        return html.to_string();
+    };
+    let letter_end = after_open[letter_idx..]
+        .char_indices()
+        .nth(1)
+        .map(|(i, _)| letter_idx + i)
+        .unwrap_or(after_open.len());
+
+    let letter = &after_open[letter_idx..letter_end];
+    let before = &after_open[..letter_idx];
+    let after = &after_open[letter_end..];
+
+    // Reemplazar opening_tag con uno que tenga class="no-indent"
+    let new_opening = if opening_tag.contains("class=") {
+        // Append "no-indent" en la class existente
+        opening_tag.replacen("class=\"", "class=\"no-indent ", 1)
+    } else {
+        opening_tag.replacen(
+            "<p",
+            "<p class=\"no-indent\"",
+            1,
+        )
+    };
+
+    let prefix = &html[..p_open_start];
+    format!(
+        "{}{}{}<span class=\"dropcap\">{}</span>{}",
+        prefix, new_opening, before, letter, after
+    )
+}
+
+fn chapter_prefix(style: &str, idx: u32) -> Option<String> {
+    match style {
+        "decimal" => Some(format!("{}", idx)),
+        "roman" => Some(to_roman(idx)),
+        _ => None,
+    }
+}
+
+fn to_roman(mut n: u32) -> String {
+    if n == 0 {
+        return "0".into();
+    }
+    const PAIRS: &[(u32, &str)] = &[
+        (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+        (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+        (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
+    ];
+    let mut out = String::new();
+    for (v, s) in PAIRS {
+        while n >= *v {
+            out.push_str(s);
+            n -= v;
+        }
+    }
+    out
 }
 
 fn build_toc_xhtml(cfg: &BookConfig, entries: &[TocEntry]) -> String {
