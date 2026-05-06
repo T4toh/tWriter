@@ -7,9 +7,14 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 import { BookConfig, BookConfigService } from '../core/book-config-service';
 import { TreeNode } from '../core/types';
+
+interface ImageData {
+  mime: string;
+  base64: string;
+}
 
 @Component({
   selector: 'app-book-card',
@@ -24,19 +29,8 @@ export class BookCard {
   readonly select = output<TreeNode>();
 
   protected readonly config = signal<BookConfig | null>(null);
+  protected readonly coverDataUrl = signal<string | null>(null);
   protected readonly loading = signal<boolean>(false);
-
-  protected readonly coverUrl = computed(() => {
-    const cfg = this.config();
-    const tapa = cfg?.tapa;
-    if (!tapa || !tapa.trim()) return null;
-    const path = tapa.startsWith('/') ? tapa : `${this.node().path}/${tapa}`;
-    try {
-      return convertFileSrc(path);
-    } catch {
-      return null;
-    }
-  });
 
   protected readonly displayTitle = computed(() => {
     const cfg = this.config();
@@ -65,6 +59,12 @@ export class BookCard {
       this.cfgService.savedAt();
       void this.load(n.path);
     });
+  }
+
+  protected formatWords(n: number | undefined): string {
+    if (!n) return '';
+    if (n < 1000) return `${n} palabras`;
+    return `${Math.round(n / 100) / 10}k palabras`;
   }
 
   protected formatDate(ms: number | undefined): string {
@@ -107,10 +107,26 @@ export class BookCard {
     try {
       const cfg = await this.cfgService.load(path);
       this.config.set(cfg);
+      await this.loadCover(path, cfg.tapa ?? null);
     } catch {
       this.config.set(null);
+      this.coverDataUrl.set(null);
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  private async loadCover(bookPath: string, tapa: string | null): Promise<void> {
+    if (!tapa || !tapa.trim()) {
+      this.coverDataUrl.set(null);
+      return;
+    }
+    const fullPath = tapa.startsWith('/') ? tapa : `${bookPath}/${tapa}`;
+    try {
+      const img = await invoke<ImageData>('read_image', { path: fullPath });
+      this.coverDataUrl.set(`data:${img.mime};base64,${img.base64}`);
+    } catch {
+      this.coverDataUrl.set(null);
     }
   }
 }

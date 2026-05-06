@@ -7,6 +7,7 @@ export interface TreeNode {
   ext?: string;
   editable?: boolean;
   modifiedMs?: number;
+  wordCount?: number;
   children: TreeNode[];
 }
 

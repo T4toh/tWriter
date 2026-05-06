@@ -1,4 +1,10 @@
 /* tWriter EPUB style. Subset extendido del look Reedsy. */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
 body, div, dl, dt, dd, h1, h2, h3, h4, h5, h6, p, pre, code, blockquote {
   margin: 0;
   padding: 0;
@@ -13,72 +19,131 @@ body {
   -webkit-hyphens: auto;
 }
 
-/* Cover */
-.cover {
-  text-align: center;
+/* ─── Páginas centradas (cover, título, copyright, dedicatoria, chapter title) ─── */
+.cover,
+.title-page,
+.publishing-info,
+.dedication,
+.chapter-heading {
   width: 100%;
+  min-height: 100vh;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  box-sizing: border-box;
+  padding: 2em 1.5em;
   page-break-after: always;
 }
 
-.cover img {
-  max-width: 100%;
-  max-height: 100%;
+/* ─── Cover ─── */
+.cover {
+  padding: 0;
 }
 
-/* Title page */
+.cover img {
+  display: block;
+  width: 100%;
+  height: 100vh;
+  max-width: 100%;
+  max-height: 100vh;
+  object-fit: contain;
+}
+
+/* ─── Title page ─── */
 .title-page-author {
   font-size: 1.3em;
   line-height: 1.5;
-  margin-top: 100px;
-  margin-bottom: 1em;
+  margin-bottom: 2em;
   text-align: center;
   text-indent: 0;
-  page-break-after: avoid;
 }
 
 .title-page-title {
-  font-size: 1.5em;
-  line-height: 1.5;
+  font-size: 1.8em;
+  line-height: 1.4;
   text-align: center;
   text-indent: 0;
-  page-break-after: avoid;
+  font-weight: normal;
 }
 
 .title-page-subtitle {
   font-size: 1.1em;
   font-style: italic;
-  margin-top: 20px;
+  margin-top: 1em;
   text-align: center;
   text-indent: 0;
-  page-break-after: avoid;
 }
 
-/* Copyright / Publishing info */
+/* ─── Copyright / Publishing info ─── */
 .publishing-info {
   font-style: italic;
   text-align: center;
   text-indent: 0;
-  margin-bottom: 1em;
-  page-break-before: avoid;
 }
 
 .publishing-info p {
   margin-bottom: 1em;
+  max-width: 30em;
+  text-indent: 0;
 }
 
-/* Dedication */
+/* ─── Dedication ─── */
 .dedication {
-  width: 25em;
-  max-width: 95vw;
   font-style: italic;
   text-align: center;
-  margin: 3em auto;
-  page-break-after: always;
 }
 
-/* Body text */
-p {
+.dedication p {
+  max-width: 25em;
+  text-indent: 0;
+  margin-bottom: 0.5em;
+}
+
+/* ─── Chapter title page ─── */
+.chapter-heading {
+  /* hereda flex centrado de arriba */
+}
+
+h1.chapter-title {
+  font-family: sans-serif;
+  font-size: 2em;
+  font-weight: normal;
+  letter-spacing: 0.02em;
+  margin: 0;
+  max-width: 18em;
+  text-align: center;
+}
+
+h1.part-number {
+  font-size: 2em;
+  font-weight: 300;
+  text-align: center;
+  margin: 0 0 0.5em;
+}
+
+h1.part-title {
+  font-size: 1.6em;
+  font-weight: normal;
+  text-align: center;
+  margin: 0 0 1em;
+}
+
+.part-summary {
+  font-style: italic;
+  text-align: center;
+  margin: 0 10%;
+}
+
+/* ─── Chapter content (texto del capítulo) ─── */
+.chapter-content {
+  padding: 1em 1.5em;
+  text-align: justify;
+}
+
+.chapter-content p {
   margin: 0;
   text-indent: 1.5em;
   text-align: justify;
@@ -86,95 +151,23 @@ p {
   orphans: 2;
 }
 
-p.no-indent,
 .chapter-content > p:first-child,
-h1 + p,
-h2 + p,
-h3 + p,
-hr + p,
-.scene-break + p {
+.chapter-content p.no-indent,
+.chapter-content h1 + p,
+.chapter-content h2 + p,
+.chapter-content h3 + p,
+.chapter-content hr + p,
+.chapter-content .scene-break + p {
   text-indent: 0;
 }
 
-p[style*="text-align: center"],
-p[style*="text-align: right"],
-p[style*="text-align: left"] {
+.chapter-content p[style*="text-align: center"],
+.chapter-content p[style*="text-align: right"],
+.chapter-content p[style*="text-align: left"] {
   text-indent: 0;
 }
 
-/* Headings */
-h1, h2, h3 {
-  font-family: sans-serif;
-  font-weight: normal;
-  text-align: left;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-  page-break-after: avoid;
-}
-
-h1 {
-  font-size: 1.4em;
-  line-height: 1.2;
-  margin-top: 1.4em;
-}
-
-h2 {
-  font-size: 1.2em;
-  line-height: 1.2;
-  margin-top: 1.2em;
-}
-
-h3 {
-  font-size: 1.1em;
-  font-style: italic;
-  line-height: 1.2;
-}
-
-h1.chapter-title {
-  font-size: 1.8em;
-  font-weight: normal;
-  text-align: center;
-  margin-top: 2em;
-  margin-bottom: 2em;
-  letter-spacing: 0.02em;
-}
-
-h1.part-number {
-  font-size: 2em;
-  font-weight: 300;
-  text-align: center;
-  margin-top: 3em;
-  margin-bottom: 0;
-  page-break-before: always;
-  page-break-after: avoid;
-}
-
-h1.part-title {
-  font-size: 1.6em;
-  font-weight: normal;
-  text-align: center;
-  margin-top: 1em;
-  margin-bottom: 1em;
-  page-break-after: avoid;
-}
-
-.part-summary {
-  font-style: italic;
-  text-align: center;
-  margin-right: 10%;
-  margin-left: 10%;
-}
-
-.chapter-heading {
-  page-break-before: always;
-}
-
-.chapter-content {
-  text-align: justify;
-  text-indent: 1.5em;
-}
-
-/* Inline */
+/* ─── Inline ─── */
 b, strong { font-weight: bold; }
 i, em { font-style: italic; }
 u { text-decoration: underline; }
@@ -185,7 +178,7 @@ a {
   text-decoration: underline;
 }
 
-/* Scene break */
+/* ─── Scene break ─── */
 hr,
 .scene-break {
   border: none;
@@ -203,7 +196,7 @@ hr::before,
   letter-spacing: 0.5em;
 }
 
-/* Blockquote */
+/* ─── Blockquote ─── */
 blockquote {
   margin: 1em 1.5em;
   font-style: italic;
@@ -214,7 +207,7 @@ blockquote em {
   font-style: normal;
 }
 
-/* Dropcap */
+/* ─── Dropcap ─── */
 span.dropcap {
   font-size: 3.4em;
   height: 1.5em;
@@ -226,7 +219,18 @@ span.dropcap {
   font-family: sans-serif;
 }
 
-/* TOC */
+/* ─── TOC nav ─── */
+nav {
+  padding: 1em 1.5em;
+}
+
+nav h1 {
+  font-family: sans-serif;
+  font-weight: normal;
+  margin-bottom: 1em;
+  text-align: center;
+}
+
 nav ol,
 nav ol ol {
   list-style-type: none;

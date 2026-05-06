@@ -404,31 +404,39 @@ fn build_cover_xhtml(cover_filename: &str) -> String {
 }
 
 fn build_title_xhtml(cfg: &BookConfig) -> String {
-    let mut body = String::new();
+    let mut inner = String::new();
     if let Some(autor) = cfg.autor.as_deref().filter(|s| !s.is_empty()) {
-        body.push_str(&format!(
-            r#"<p class="title-page-author">{}</p>"#,
+        inner.push_str(&format!(
+            r#"<p class="title-page-author">{}</p>
+"#,
             xml_escape(autor)
         ));
     }
-    body.push_str(&format!(
-        r#"
-<p class="title-page-title">{}</p>
+    inner.push_str(&format!(
+        r#"<p class="title-page-title">{}</p>
 "#,
         xml_escape(&cfg.titulo)
     ));
     if let Some(sub) = cfg.subtitulo.as_deref().filter(|s| !s.is_empty()) {
-        body.push_str(&format!(
-            r#"<p class="title-page-subtitle">{}</p>"#,
+        inner.push_str(&format!(
+            r#"<p class="title-page-subtitle">{}</p>
+"#,
             xml_escape(sub)
         ));
     } else if let (Some(serie), Some(num)) = (cfg.serie.as_deref(), cfg.numero_en_serie) {
-        body.push_str(&format!(
-            r#"<p class="title-page-subtitle">{} #{}</p>"#,
+        inner.push_str(&format!(
+            r#"<p class="title-page-subtitle">{} #{}</p>
+"#,
             xml_escape(serie),
             num
         ));
     }
+    let body = format!(
+        r#"<div class="title-page">
+{}
+</div>"#,
+        inner.trim_end()
+    );
     xhtml_shell(&cfg.titulo, &body, cfg.idioma.as_deref().unwrap_or("es"))
 }
 

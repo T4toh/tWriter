@@ -5,7 +5,7 @@
   (click)="onClick()"
 >
   <div class="cover-slot">
-    @if (coverUrl(); as url) {
+    @if (coverDataUrl(); as url) {
       <img [src]="url" [alt]="displayTitle()" />
     } @else {
       <div class="cover-placeholder">
@@ -23,7 +23,12 @@
     }
     <div class="foot">
       <span class="date">{{ formatDate(node().modifiedMs) }}</span>
-      <span class="count">{{ node().children.length }} cap.</span>
+      <span class="count">
+        {{ node().children.length }} cap.
+        @if (node().wordCount; as w) {
+          · {{ formatWords(w) }}
+        }
+      </span>
     </div>
     @if (!isConfigured()) {
       <p class="hint">Sin configurar</p>

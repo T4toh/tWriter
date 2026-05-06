@@ -14,6 +14,14 @@
   }
 </nav>
 
+@if (currentNode(); as node) {
+  @if (node.kind === 'book') {
+    <div class="book-header">
+      <app-book-card [node]="node" (select)="onItemClick(node)" />
+    </div>
+  }
+}
+
 @if (items().length === 0) {
   <p class="empty">
     Sin items todavía. Click derecho en el árbol para crear.
