@@ -78,13 +78,14 @@ fn import_impl(input_path: &str) -> Result<ImportResult, String> {
     let meta_out = parent.join(format!("{}.meta.json", stem));
     if !meta_out.exists() {
         let order = stem.parse::<u32>().unwrap_or(0);
+        let inherited_idioma = inherit_idioma(parent);
         let meta = serde_json::json!({
             "orden": order,
             "titulo": stem,
             "palabras": count_words(&raw_html),
             "ultima_edicion": null,
             "status": "imported",
-            "idioma": "es",
+            "idioma": inherited_idioma,
         });
         fs::write(&meta_out, serde_json::to_string_pretty(&meta).unwrap_or_default())
             .map_err(|e| e.to_string())?;
@@ -97,7 +98,7 @@ fn import_impl(input_path: &str) -> Result<ImportResult, String> {
 }
 
 /// Limpia el HTML crudo de pandoc para dejar solo el subset que usa el editor.
-fn clean_html(raw: &str) -> String {
+pub(crate) fn clean_html(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     let mut chars = raw.chars().peekable();
 
@@ -130,7 +131,8 @@ fn clean_html(raw: &str) -> String {
 
             if allowed_tags.contains(&tag_name.as_str()) {
                 // Reemitimos el tag pero sin atributos (excepto hr y br)
-                let is_close = tag.starts_with("</");
+                // tag aquí ya viene sin '<' inicial (consumido por outer loop)
+                let is_close = tag.starts_with('/');
                 if is_close {
                     out.push_str(&format!("</{}>", tag_name));
                 } else if tag_name == "hr" {
@@ -155,7 +157,51 @@ fn clean_html(raw: &str) -> String {
         .join("\n")
 }
 
-fn count_words(html: &str) -> u32 {
+/// Camina hacia arriba buscando book.json (preferido) o saga.json para heredar idioma.
+/// Devuelve None si no encuentra nada — el meta.idioma quedará null y el grammar check
+/// usará language=auto.
+pub(crate) fn inherit_idioma(start: &Path) -> Option<String> {
+    let mut p = start.to_path_buf();
+    let mut book_idioma: Option<String> = None;
+    let mut saga_idioma: Option<String> = None;
+    loop {
+        if book_idioma.is_none() {
+            if let Some(v) = read_json_field(&p.join("book.json"), "idioma") {
+                book_idioma = Some(v);
+            }
+        }
+        if saga_idioma.is_none() {
+            if let Some(v) = read_json_field(&p.join("saga.json"), "idioma") {
+                saga_idioma = Some(v);
+            }
+        }
+        if book_idioma.is_some() && saga_idioma.is_some() {
+            break;
+        }
+        let parent = match p.parent() {
+            Some(parent) if parent != p => parent.to_path_buf(),
+            _ => break,
+        };
+        p = parent;
+    }
+    book_idioma.or(saga_idioma)
+}
+
+fn read_json_field(path: &Path, field: &str) -> Option<String> {
+    if !path.is_file() {
+        return None;
+    }
+    let raw = fs::read_to_string(path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let s = v.get(field)?.as_str()?.trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+pub(crate) fn count_words(html: &str) -> u32 {
     let mut text = String::new();
     let mut in_tag = false;
     for c in html.chars() {

@@ -96,6 +96,31 @@
       </button>
     }
 
+    @if (canCheckGrammar()) {
+      <span class="sep"></span>
+      <button
+        type="button"
+        class="tb-btn lt-btn"
+        [class.checking]="grammarChecking()"
+        (click)="checkGrammar()"
+        [disabled]="grammarChecking()"
+        title="Revisar gramática y ortografía (LanguageTool)"
+      >
+        <img src="assets/LT.svg" alt="LT" />
+      </button>
+      @if (canAutoGrammar()) {
+        <button
+          type="button"
+          class="tb-btn tb-text"
+          [class.active]="autoGrammar()"
+          (click)="toggleAutoGrammar()"
+          title="Revisión automática mientras escribís (solo modo local)"
+        >
+          AUTO
+        </button>
+      }
+    }
+
     <span class="spacer"></span>
 
     <button
@@ -278,8 +303,9 @@
       <button
         type="button"
         class="lang-toggle"
+        [attr.data-lang]="chapter.meta().idioma ?? 'es'"
         (click)="toggleLang()"
-        [title]="'Idioma del capítulo (click para alternar). Afecta visibilidad del botón RAE.'"
+        [title]="'Idioma del capítulo (click para alternar entre ES y EN). Afecta RAE y revisión gramatical.'"
       >
         {{ (chapter.meta().idioma ?? 'es').toUpperCase() }}
       </button>
@@ -295,5 +321,34 @@
     @if (chapterError(); as err) {
       <span class="indicator error">{{ err }}</span>
     }
+    @if (grammarError(); as err) {
+      <span class="indicator error">{{ err }}</span>
+    }
+    @if (settings.focusMode()) {
+      <span class="indicator focus-hint">modo focus — F11 para salir</span>
+    }
   }
 </footer>
+
+@if (showPrivacyBanner()) {
+  <div class="privacy-banner">
+    <span>
+      Modo público activo: el texto del capítulo se envía a
+      <a href="https://api.languagetool.org" target="_blank">api.languagetool.org</a>.
+      Para texto privado, configurá modo local.
+    </span>
+    <button type="button" class="banner-dismiss" (click)="dismissPrivacyBanner()">×</button>
+  </div>
+}
+
+@if (grammarPopover(); as gp) {
+  <div class="grammar-pop-backdrop" (click)="closeGrammarPopover()"></div>
+  <app-grammar-popover
+    [match]="gp.match"
+    [x]="gp.x"
+    [y]="gp.y"
+    (apply)="applyGrammarReplacement($event)"
+    (dismiss)="dismissGrammarMatch()"
+    (addToDict)="addCurrentToDictionary()"
+  />
+}

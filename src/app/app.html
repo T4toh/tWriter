@@ -1,4 +1,4 @@
-<div class="shell">
+<div class="shell" [class.focus]="settings.focusMode()">
   <aside class="panel panel-left">
     <header>
       <div class="title-row">
@@ -52,6 +52,23 @@
           <button
             type="button"
             class="icon-btn"
+            [disabled]="!root()"
+            (click)="openImportWizard()"
+            title="Importar saga / novela desde otra carpeta"
+          >
+            📥
+          </button>
+          <button
+            type="button"
+            class="icon-btn"
+            (click)="openGrammarSettings()"
+            title="Configurar gramática (LanguageTool)"
+          >
+            ⚙
+          </button>
+          <button
+            type="button"
+            class="icon-btn"
             [class.active]="debug.visible()"
             (click)="toggleDebug()"
             title="Panel de debug"
@@ -82,5 +99,7 @@
 
 <app-debug-panel />
 <app-book-config-modal />
+<app-grammar-settings />
+<app-import-wizard />
 <app-toast-container />
 

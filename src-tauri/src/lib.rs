@@ -3,18 +3,30 @@ mod create;
 mod epub;
 mod fs;
 mod git;
+mod grammar;
 mod image;
 mod import;
+mod import_wizard;
 mod reorder;
+mod saga_config;
 mod settings;
 
 use book_config::{get_book_config, set_book_config};
+use saga_config::{find_saga_dir, get_saga_config, set_saga_config};
 use create::{create_chapter, create_directory};
 use epub::export_book;
-use fs::{get_tree, read_chapter, read_meta, write_chapter, write_meta};
+use fs::{
+    get_tree, is_directory_excluded, read_chapter, read_meta, set_directory_excluded,
+    write_chapter, write_meta,
+};
 use git::{git_commit_all, git_pull, git_push, git_status};
+use grammar::{
+    check_grammar, check_grammar_available, languagetool_docker_start, languagetool_docker_status,
+    languagetool_docker_stop,
+};
 use image::read_image;
 use import::{delete_chapter_file, delete_directory, import_chapter};
+use import_wizard::{import_wizard_apply, scan_import_source};
 use reorder::move_node;
 use settings::{get_settings, set_settings};
 
@@ -44,7 +56,19 @@ pub fn run() {
             export_book,
             get_book_config,
             set_book_config,
+            get_saga_config,
+            set_saga_config,
+            find_saga_dir,
             read_image,
+            check_grammar,
+            check_grammar_available,
+            languagetool_docker_status,
+            languagetool_docker_start,
+            languagetool_docker_stop,
+            is_directory_excluded,
+            set_directory_excluded,
+            scan_import_source,
+            import_wizard_apply,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

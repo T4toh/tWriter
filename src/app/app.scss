@@ -10,6 +10,14 @@
   height: 100%;
   background: var(--bg);
   color: var(--fg);
+
+  &.focus {
+    grid-template-columns: 1fr;
+  }
+
+  &.focus .panel-left {
+    display: none;
+  }
 }
 
 .panel {

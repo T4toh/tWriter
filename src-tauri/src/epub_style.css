@@ -1,4 +1,6 @@
 /* tWriter EPUB style. Subset extendido del look Reedsy. */
+/* @PAGE_SIZE */
+
 html, body {
   margin: 0;
   padding: 0;

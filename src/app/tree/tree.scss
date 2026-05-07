@@ -253,3 +253,31 @@
   background: var(--border);
   margin: 4px 0;
 }
+
+.row.group.excluded {
+  opacity: 0.55;
+  font-style: italic;
+
+  .name {
+    text-decoration: line-through;
+    text-decoration-color: var(--fg-muted);
+    text-decoration-thickness: 1px;
+  }
+
+  .chevron {
+    color: var(--fg-muted);
+  }
+}
+
+.excluded-badge {
+  margin-left: auto;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-style: normal;
+  background: var(--border);
+  color: var(--fg-muted);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+}

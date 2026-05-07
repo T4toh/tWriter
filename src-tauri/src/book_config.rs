@@ -44,6 +44,9 @@ pub struct BookConfig {
     /// Formato de etiqueta de parte: "raw" (1) | "parte" (Parte 1) | "punto" (1.). Default: "raw".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub formato_parte: Option<String>,
+    /// Template de tamaño de página para export EPUB: "6x9" | "5x8" | "a5". Default: "6x9".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
 }
 
 #[tauri::command]

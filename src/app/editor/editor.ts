@@ -15,9 +15,20 @@ import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
 import TextAlign from '@tiptap/extension-text-align';
 import { ChapterService } from '../core/chapter-service';
+import { SagaContextService } from '../core/saga-context-service';
+import { GrammarService } from '../core/grammar-service';
 import { SettingsService } from '../core/settings-service';
+import { GrammarMatch } from '../core/types';
 import { convert as convertRae } from '../dialogos/converter';
 import { Landing } from '../landing/landing';
+import {
+  Grammar,
+  GrammarMatchPos,
+  extractPlainText,
+  mapMatchesToPm,
+  setGrammarMatches,
+} from './grammar-extension';
+import { GrammarPopover } from './grammar-popover';
 
 interface ToolbarState {
   bold: boolean;
@@ -45,13 +56,15 @@ const EMPTY_STATE: ToolbarState = {
 
 @Component({
   selector: 'app-editor',
-  imports: [Landing],
+  imports: [Landing, GrammarPopover],
   templateUrl: './editor.html',
   styleUrl: './editor.scss',
 })
 export class Editor implements AfterViewInit, OnDestroy {
   protected chapter = inject(ChapterService);
-  private settings = inject(SettingsService);
+  protected settings = inject(SettingsService);
+  protected grammar = inject(GrammarService);
+  protected sagaCtx = inject(SagaContextService);
 
   @ViewChild('host', { static: true })
   hostRef!: ElementRef<HTMLDivElement>;
@@ -71,6 +84,25 @@ export class Editor implements AfterViewInit, OnDestroy {
     const lang = this.chapter.meta().idioma;
     return lang === null || lang === 'es' || lang === undefined;
   });
+  protected readonly canCheckGrammar = computed(() => {
+    if (!this.canEdit()) return false;
+    if (!this.grammar.available()) return false;
+    const lang = this.chapter.meta().idioma;
+    return lang === 'es' || lang === 'en' || lang === null || lang === undefined;
+  });
+  protected readonly grammarChecking = this.grammar.checking;
+  protected readonly grammarError = this.grammar.lastError;
+  protected readonly grammarMatches = signal<GrammarMatchPos[]>([]);
+  protected readonly grammarPopover = signal<{ match: GrammarMatch; x: number; y: number; from: number; to: number } | null>(null);
+  protected readonly grammarBannerDismissed = signal<boolean>(false);
+  private grammarUsed = signal<boolean>(false);
+  protected readonly showPrivacyBanner = computed(() =>
+    this.grammar.mode() === 'public' &&
+    this.grammarUsed() &&
+    !this.grammarBannerDismissed(),
+  );
+  protected readonly autoGrammar = this.grammar.autoEnabled;
+  protected readonly canAutoGrammar = this.grammar.canAutoCheck;
   protected readonly width = this.settings.editorWidth;
   protected readonly fontSize = this.settings.editorFontSize;
   protected readonly widthLabel = computed(() => {
@@ -91,6 +123,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   private viewReady = signal(false);
   private tiptap: TipTapEditor | null = null;
   private lastLoadedAt = 0;
+  private grammarHostListener: ((e: MouseEvent) => void) | null = null;
+  private grammarDebounceHandle: ReturnType<typeof setTimeout> | null = null;
+  private skipNextGrammarRemap = false;
 
   constructor() {
     effect(() => {
@@ -116,9 +151,18 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.viewReady.set(true);
+    void this.grammar.ping();
   }
 
   ngOnDestroy(): void {
+    if (this.grammarHostListener) {
+      this.hostRef.nativeElement.removeEventListener('click', this.grammarHostListener);
+      this.grammarHostListener = null;
+    }
+    if (this.grammarDebounceHandle !== null) {
+      clearTimeout(this.grammarDebounceHandle);
+      this.grammarDebounceHandle = null;
+    }
     this.tiptap?.destroy();
     this.tiptap = null;
   }
@@ -264,6 +308,132 @@ export class Editor implements AfterViewInit, OnDestroy {
     void this.chapter.setLanguage(current === 'en' ? 'es' : 'en');
   }
 
+  protected async checkGrammar(): Promise<void> {
+    if (!this.tiptap || !this.canCheckGrammar()) return;
+    const meta = this.chapter.meta().idioma;
+    const lang: 'es' | 'en' | 'auto' = meta === 'es' || meta === 'en' ? meta : 'auto';
+    const { plain, ranges } = extractPlainText(this.tiptap.state.doc);
+    if (!plain.trim()) {
+      this.grammarMatches.set([]);
+      this.applyDecorations([]);
+      return;
+    }
+    this.grammarUsed.set(true);
+    try {
+      const matches = await this.grammar.check(plain, lang);
+      const positioned = mapMatchesToPm(matches, ranges, this.tiptap.state.doc, plain);
+      const filtered = positioned.filter((m) => {
+        if (m.category !== 'TYPOS') return true;
+        const word = plain.slice(m.offset, m.offset + m.length);
+        return !this.sagaCtx.isInDictionary(word);
+      });
+      this.grammarMatches.set(filtered);
+      this.applyDecorations(filtered);
+    } catch {
+      // grammar.lastError ya tiene el mensaje
+    }
+  }
+
+  protected toggleAutoGrammar(): void {
+    this.grammar.toggleAuto();
+    if (!this.grammar.autoEnabled()) {
+      this.grammarMatches.set([]);
+      this.applyDecorations([]);
+    } else {
+      void this.checkGrammar();
+    }
+  }
+
+  protected dismissPrivacyBanner(): void {
+    this.grammarBannerDismissed.set(true);
+  }
+
+  protected applyGrammarReplacement(replacement: string): void {
+    const popover = this.grammarPopover();
+    if (!popover || !this.tiptap) return;
+    const dismissedId = (popover.match as GrammarMatchPos).id;
+    this.tiptap
+      .chain()
+      .focus()
+      .setTextSelection({ from: popover.from, to: popover.to })
+      .insertContent(replacement)
+      .run();
+    this.grammarPopover.set(null);
+    this.grammarMatches.update((list) => list.filter((m) => m.id !== dismissedId));
+    this.applyDecorations(this.grammarMatches());
+    if (this.grammar.autoEnabled() && this.canAutoGrammar()) {
+      this.scheduleGrammarRecheck();
+    }
+  }
+
+  protected dismissGrammarMatch(): void {
+    const popover = this.grammarPopover();
+    if (!popover) return;
+    const dismissedId = (popover.match as GrammarMatchPos).id;
+    this.grammarMatches.update((list) => list.filter((m) => m.id !== dismissedId));
+    this.applyDecorations(this.grammarMatches());
+    this.grammarPopover.set(null);
+  }
+
+  protected async addCurrentToDictionary(): Promise<void> {
+    const popover = this.grammarPopover();
+    if (!popover || !this.tiptap) return;
+    const word = this.tiptap.state.doc.textBetween(popover.from, popover.to, ' ').trim();
+    if (!word) return;
+    await this.sagaCtx.addToDictionary(word);
+    this.grammarMatches.update((list) =>
+      list.filter((m) => {
+        if (m.category !== 'TYPOS') return true;
+        const w = this.tiptap!.state.doc.textBetween(m.from, m.to, ' ').trim();
+        return w.toLowerCase() !== word.toLowerCase();
+      }),
+    );
+    this.applyDecorations(this.grammarMatches());
+    this.grammarPopover.set(null);
+  }
+
+  protected closeGrammarPopover(): void {
+    this.grammarPopover.set(null);
+  }
+
+  private applyDecorations(matches: GrammarMatchPos[]): void {
+    const view = (this.tiptap as unknown as { view?: { dispatch: (tr: unknown) => void; state: { tr: unknown } } } | null)?.view;
+    if (!view) return;
+    setGrammarMatches(view, matches);
+  }
+
+  private scheduleGrammarRecheck(): void {
+    if (this.grammarDebounceHandle !== null) {
+      clearTimeout(this.grammarDebounceHandle);
+    }
+    this.grammarDebounceHandle = setTimeout(() => {
+      this.grammarDebounceHandle = null;
+      void this.checkGrammar();
+    }, 2000);
+  }
+
+  private onGrammarHostClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement | null;
+    const span = target?.closest('.grammar-error') as HTMLElement | null;
+    if (!span) {
+      if (this.grammarPopover()) this.closeGrammarPopover();
+      return;
+    }
+    const idx = parseInt(span.dataset['grammarIdx'] ?? '-1', 10);
+    const m = this.grammarMatches()[idx];
+    if (!m) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = span.getBoundingClientRect();
+    this.grammarPopover.set({
+      match: m,
+      x: Math.min(rect.left, window.innerWidth - 340),
+      y: rect.bottom + 4,
+      from: m.from,
+      to: m.to,
+    });
+  }
+
   private createEditor(content: string, editable: boolean): void {
     this.tiptap = new TipTapEditor({
       element: this.hostRef.nativeElement,
@@ -273,17 +443,43 @@ export class Editor implements AfterViewInit, OnDestroy {
         }),
         Typography,
         TextAlign.configure({ types: ['paragraph', 'heading'] }),
+        Grammar,
       ],
       content,
       editable,
       autofocus: editable ? 'end' : false,
       onUpdate: ({ editor }) => {
         this.chapter.updateContent(editor.getHTML());
-        this.refreshState();
       },
       onSelectionUpdate: () => this.refreshState(),
-      onTransaction: () => this.refreshState(),
+      onTransaction: ({ transaction }) => {
+        this.refreshState();
+        if (!transaction.docChanged) return;
+        if (this.skipNextGrammarRemap) {
+          this.skipNextGrammarRemap = false;
+        } else if (this.grammarMatches().length > 0) {
+          const docSize = transaction.doc.content.size;
+          const remapped = this.grammarMatches()
+            .map((m) => ({
+              ...m,
+              from: transaction.mapping.map(m.from, -1),
+              to: transaction.mapping.map(m.to, 1),
+            }))
+            .filter((m) => m.from < m.to && m.to <= docSize);
+          this.grammarMatches.set(remapped);
+          this.applyDecorations(remapped);
+        }
+        if (this.grammarPopover()) this.grammarPopover.set(null);
+        if (this.grammar.autoEnabled() && this.canAutoGrammar() && this.canCheckGrammar()) {
+          this.scheduleGrammarRecheck();
+        }
+      },
     });
+    if (this.grammarHostListener) {
+      this.hostRef.nativeElement.removeEventListener('click', this.grammarHostListener);
+    }
+    this.grammarHostListener = (e) => this.onGrammarHostClick(e);
+    this.hostRef.nativeElement.addEventListener('click', this.grammarHostListener);
   }
 
   private refreshState(): void {

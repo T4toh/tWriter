@@ -67,13 +67,17 @@
       class="row group"
       [class.current]="node.path === currentPath()"
       [class.ancestor]="ancestorPaths().has(node.path)"
+      [class.excluded]="node.excluded"
       [attr.data-kind]="node.kind"
       [style.padding-left.px]="8 + depth * 14"
       (click)="toggle(node)"
       (contextmenu)="onContextMenu($event, node)"
     >
-      <span class="chevron">{{ isExpanded(node) ? '▾' : '▸' }}</span>
+      <span class="chevron">{{ node.excluded ? '·' : (isExpanded(node) ? '▾' : '▸') }}</span>
       <span class="name">{{ node.name }}</span>
+      @if (node.excluded) {
+        <span class="excluded-badge" title="Excluido del export EPUB">excluido</span>
+      }
     </button>
     @if (isExpanded(node)) {
       @for (child of node.children; track child.path) {
@@ -171,8 +175,22 @@
           <span class="ctx-kbd">.epub</span>
         </button>
       }
+      @if (a.excludable || a.includable) {
+        <div class="ctx-sep"></div>
+        @if (a.excludable) {
+          <button type="button" class="ctx-item" (click)="excludeFolder()">
+            <span class="ctx-label">Excluir del EPUB</span>
+            <span class="ctx-kbd">.twriter-ignore</span>
+          </button>
+        }
+        @if (a.includable) {
+          <button type="button" class="ctx-item" (click)="includeFolder()">
+            <span class="ctx-label">Incluir de nuevo</span>
+          </button>
+        }
+      }
       @if (a.deleteFile || a.deleteDir) {
-        @if (a.importThis || a.deleteOriginal || a.importBulk > 0 || a.cleanupBulk > 0 || a.moveable) {
+        @if (a.importThis || a.deleteOriginal || a.importBulk > 0 || a.cleanupBulk > 0 || a.moveable || a.excludable) {
           <div class="ctx-sep"></div>
         }
         @if (a.deleteFile) {
@@ -187,7 +205,7 @@
           </button>
         }
       }
-      @if (!a.importThis && !a.deleteOriginal && a.importBulk === 0 && a.cleanupBulk === 0 && !a.deleteFile && !a.deleteDir && !a.createChapter && !a.createSection && !a.createBook && !a.createSaga && !a.exportEpub && !a.configBook) {
+      @if (!a.importThis && !a.deleteOriginal && a.importBulk === 0 && a.cleanupBulk === 0 && !a.deleteFile && !a.deleteDir && !a.createChapter && !a.createSection && !a.createBook && !a.createSaga && !a.exportEpub && !a.configBook && !a.excludable && !a.includable) {
         <span class="ctx-empty">Sin acciones disponibles.</span>
       }
     }

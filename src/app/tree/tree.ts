@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
+import { invoke } from '@tauri-apps/api/core';
 import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { NavigationService } from '../core/navigation-service';
@@ -77,6 +78,8 @@ export class Tree {
         moveable: false,
         exportEpub: false,
         configBook: false,
+        excludable: false,
+        includable: false,
       };
     }
     if (node.kind === 'chapter') {
@@ -96,24 +99,29 @@ export class Tree {
         moveable: this.isMoveable(node),
         exportEpub: false,
         configBook: false,
+        excludable: false,
+        includable: false,
       };
     }
     const importable = this.collectImportable(node);
     const cleanable = this.collectCleanable(node);
+    const isExcluded = !!node.excluded;
     return {
       importThis: false,
       deleteOriginal: false,
       deleteFile: false,
       deleteDir: true,
-      importBulk: importable.length,
-      cleanupBulk: cleanable.length,
-      createChapter: node.kind === 'book' || node.kind === 'section',
-      createSection: node.kind === 'book',
-      createBook: node.kind === 'saga',
+      importBulk: isExcluded ? 0 : importable.length,
+      cleanupBulk: isExcluded ? 0 : cleanable.length,
+      createChapter: !isExcluded && (node.kind === 'book' || node.kind === 'section'),
+      createSection: !isExcluded && node.kind === 'book',
+      createBook: !isExcluded && node.kind === 'saga',
       createSaga: false,
-      moveable: node.kind !== 'saga' && this.isMoveable(node),
-      exportEpub: node.kind === 'book',
-      configBook: node.kind === 'book',
+      moveable: !isExcluded && node.kind !== 'saga' && this.isMoveable(node),
+      exportEpub: !isExcluded && node.kind === 'book',
+      configBook: !isExcluded && node.kind === 'book',
+      excludable: !isExcluded,
+      includable: isExcluded,
     };
   });
 
@@ -124,61 +132,42 @@ export class Tree {
     return /^\d+\s*-/.test(node.name);
   }
 
-  /** Paths cuyo estado es OPUESTO al default (default: sagas/books expanded, sections collapsed). */
-  private readonly toggled = signal<Set<string>>(new Set());
-  /** Override global. null = usa defaults + toggled. */
+  /** Estado explícito por path: true = expanded, false = collapsed. Si no está en el map, usa default. */
+  private readonly explicit = signal<Map<string, boolean>>(new Map());
+  /** Override global. null = usa defaults + explicit. */
   private readonly forceState = signal<'collapsed' | 'expanded' | null>(null);
 
   protected isExpanded(node: TreeNode): boolean {
     const force = this.forceState();
     if (force === 'collapsed') return false;
     if (force === 'expanded') return true;
-    const explicitToggle = this.toggled().has(node.path);
-    const isAncestor = this.ancestorPaths().has(node.path);
-    const defaultExpanded =
-      node.kind === 'saga' || node.kind === 'book' || isAncestor;
-    return explicitToggle ? !defaultExpanded : defaultExpanded;
+    const e = this.explicit().get(node.path);
+    if (e !== undefined) return e;
+    if (node.kind === 'saga' || node.kind === 'book') return true;
+    return this.ancestorPaths().has(node.path);
   }
 
   protected toggle(node: TreeNode): void {
-    // Click en dir → setea browse + cierra capítulo activo para revelar landing.
     this.nav.setBrowsing(node.path);
     this.chapter.close();
-    // Si había override global, volvemos a modo manual respetando lo que se ve.
+    const wasExpanded = this.isExpanded(node);
     if (this.forceState() !== null) {
-      const wasExpanded = this.forceState() === 'expanded';
       this.forceState.set(null);
-      const desired = !wasExpanded;
-      const defaultExpanded = node.kind === 'saga' || node.kind === 'book';
-      this.toggled.update((s) => {
-        const next = new Set(s);
-        if (desired === defaultExpanded) {
-          next.delete(node.path);
-        } else {
-          next.add(node.path);
-        }
-        return next;
-      });
-      return;
     }
-    this.toggled.update((s) => {
-      const next = new Set(s);
-      if (next.has(node.path)) {
-        next.delete(node.path);
-      } else {
-        next.add(node.path);
-      }
+    this.explicit.update((m) => {
+      const next = new Map(m);
+      next.set(node.path, !wasExpanded);
       return next;
     });
   }
 
   protected collapseAll(): void {
-    this.toggled.set(new Set());
+    this.explicit.set(new Map());
     this.forceState.set('collapsed');
   }
 
   protected expandAll(): void {
-    this.toggled.set(new Set());
+    this.explicit.set(new Map());
     this.forceState.set('expanded');
   }
 
@@ -322,6 +311,34 @@ export class Tree {
     if (!m || !m.node) return;
     this.closeMenu();
     this.bookCfg.openFor(m.node);
+  }
+
+  protected async excludeFolder(): Promise<void> {
+    const m = this.menu();
+    if (!m || !m.node) return;
+    const node = m.node;
+    this.closeMenu();
+    const msg = `Excluir "${node.name}" del export EPUB?\nSigue visible en el árbol pero no se incluye al armar el libro.`;
+    if (!confirm(msg)) return;
+    try {
+      await invoke('set_directory_excluded', { path: node.path, excluded: true });
+      await this.project.loadTree();
+    } catch (e) {
+      alert(`No se pudo excluir: ${e}`);
+    }
+  }
+
+  protected async includeFolder(): Promise<void> {
+    const m = this.menu();
+    if (!m || !m.node) return;
+    const node = m.node;
+    this.closeMenu();
+    try {
+      await invoke('set_directory_excluded', { path: node.path, excluded: false });
+      await this.project.loadTree();
+    } catch (e) {
+      alert(`No se pudo incluir: ${e}`);
+    }
   }
 
   /** Devuelve todos los .odt/.docx descendientes que NO tienen .html sibling. */

@@ -1,0 +1,515 @@
+@if (wizard.open()) {
+  <div class="iw-backdrop" (click)="close()"></div>
+  <div class="iw-modal" (click)="$event.stopPropagation()">
+    <header class="iw-header">
+      <h2>Importar saga / novela</h2>
+      <p class="step-pill">Paso {{ stepIndex() }} / {{ totalSteps() }}</p>
+    </header>
+
+    <div class="iw-body">
+      @switch (wizard.step()) {
+        @case ('tipo') {
+          <p class="step-desc">¿Qué vas a importar?</p>
+          <div class="tipo-grid">
+            <button
+              type="button"
+              class="tipo-card"
+              [class.selected]="wizard.tipo() === 'saga'"
+              (click)="setTipo('saga')"
+            >
+              <strong>Saga</strong>
+              <span class="muted">Varios libros relacionados (con saga.json compartido)</span>
+            </button>
+            <button
+              type="button"
+              class="tipo-card"
+              [class.selected]="wizard.tipo() === 'book'"
+              (click)="setTipo('book')"
+            >
+              <strong>Novela suelta</strong>
+              <span class="muted">Un libro único, va directo en la raíz del repo</span>
+            </button>
+          </div>
+        }
+
+        @case ('source') {
+          <p class="step-desc">Elegí la carpeta a importar.</p>
+          <div class="source-row">
+            <button type="button" class="btn btn-secondary" (click)="pickSource()">
+              {{ wizard.sourcePath() ? 'Cambiar carpeta' : 'Elegir carpeta…' }}
+            </button>
+            @if (wizard.sourcePath(); as p) {
+              <code class="source-path">{{ p }}</code>
+            }
+          </div>
+          @if (wizard.error(); as err) {
+            <div class="iw-error">{{ err }}</div>
+          }
+        }
+
+        @case ('saga-config') {
+          <p class="step-desc">Configurá la saga. Estos defaults se heredan a cada libro (los podés override después).</p>
+          <fieldset class="iw-fieldset">
+            <legend>Saga</legend>
+            <label class="iw-field">
+              <span>Nombre</span>
+              <input
+                type="text"
+                [ngModel]="wizard.sagaConfig().nombre"
+                (ngModelChange)="updateSagaName($event)"
+              />
+            </label>
+            <label class="iw-field">
+              <span>Carpeta destino (en el repo)</span>
+              <input
+                type="text"
+                [ngModel]="wizard.sagaDirName()"
+                (ngModelChange)="wizard.sagaDirName.set($event)"
+              />
+            </label>
+            <div class="iw-row">
+              <label class="iw-field">
+                <span>Autor</span>
+                <input
+                  type="text"
+                  [ngModel]="wizard.sagaConfig().autor ?? ''"
+                  (ngModelChange)="updateSagaField('autor', $event)"
+                />
+              </label>
+              <label class="iw-field">
+                <span>Idioma default</span>
+                <select
+                  [ngModel]="wizard.sagaConfig().idioma ?? ''"
+                  (ngModelChange)="updateSagaField('idioma', $event)"
+                >
+                  <option value="">(auto-detect por capítulo)</option>
+                  <option value="es">Español</option>
+                  <option value="en">Inglés</option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
+        }
+
+        @case ('estructura') {
+          <p class="step-desc">
+            Estructura detectada. Expandí cada libro/sección para ver los archivos y desmarcar lo que no querés importar.
+          </p>
+          <div class="books-list">
+            @for (book of wizard.books(); track book.source_path; let i = $index) {
+              <div class="book-card" [class.disabled]="!book.include">
+                <header class="book-card-header">
+                  <label class="iw-check">
+                    <input
+                      type="checkbox"
+                      [checked]="book.include"
+                      (change)="toggleBookInclude(book)"
+                    />
+                  </label>
+                  <input
+                    type="text"
+                    class="book-dir-input"
+                    [ngModel]="book.dir_name"
+                    (ngModelChange)="updateBookDir(book, $event)"
+                    [disabled]="!book.include"
+                  />
+                  <button
+                    type="button"
+                    class="iw-icon-btn"
+                    [disabled]="i === 0"
+                    (click)="moveBook(i, -1)"
+                    title="Subir"
+                  >▲</button>
+                  <button
+                    type="button"
+                    class="iw-icon-btn"
+                    [disabled]="i === wizard.books().length - 1"
+                    (click)="moveBook(i, 1)"
+                    title="Bajar"
+                  >▼</button>
+                  <button
+                    type="button"
+                    class="iw-icon-btn"
+                    (click)="toggleBook(i)"
+                    title="Expandir"
+                  >{{ expandedBookIdx() === i ? '▾' : '▸' }}</button>
+                </header>
+                <div class="book-card-flags">
+                  <label class="iw-check inline">
+                    <input
+                      type="checkbox"
+                      [checked]="book.convert_chapters"
+                      (change)="toggleBookConvert(book)"
+                      [disabled]="!book.include"
+                    />
+                    <span>Convertir capítulos a HTML (con pandoc)</span>
+                  </label>
+                  <span class="counts">
+                    @if (book.direct_chapters.length > 0) {
+                      <span>{{ book.direct_chapters.length }} cap directo</span>
+                    }
+                    @if (book.sections.length > 0) {
+                      <span>{{ book.sections.length }} secciones</span>
+                    }
+                    @if (book.extras.length > 0) {
+                      <span>{{ book.extras.length }} extras</span>
+                    }
+                  </span>
+                </div>
+                @if (expandedBookIdx() === i && book.include) {
+                  <div class="book-detail">
+                    @for (sec of book.sections; track sec.source_path) {
+                      <div class="section-block" [class.disabled]="!sec.include">
+                        <header class="section-header">
+                          <label class="iw-check">
+                            <input
+                              type="checkbox"
+                              [checked]="sec.include"
+                              (change)="toggleSection(book, sec)"
+                            />
+                          </label>
+                          <input
+                            type="text"
+                            class="section-dir-input"
+                            [ngModel]="sec.dir_name"
+                            (ngModelChange)="updateSectionDir(book, sec, $event)"
+                            [disabled]="!sec.include"
+                          />
+                          <span class="sec-meta">{{ sec.chapters.length }} caps · {{ sec.extras.length }} extras</span>
+                          <label class="iw-check inline tiny">
+                            <input
+                              type="checkbox"
+                              [checked]="sec.convert_chapters"
+                              (change)="toggleSectionConvert(book, sec)"
+                              [disabled]="!sec.include"
+                            />
+                            <span>Convertir</span>
+                          </label>
+                          <button
+                            type="button"
+                            class="iw-icon-btn"
+                            (click)="toggleSectionExpand(sec.source_path)"
+                            title="Expandir"
+                          >{{ isSectionExpanded(sec.source_path) ? '▾' : '▸' }}</button>
+                        </header>
+                        @if (isSectionExpanded(sec.source_path) && sec.include) {
+                          <ul class="files-list">
+                            @for (ch of sec.chapters; track ch.source_path) {
+                              <li class="file-row" [class.disabled]="!ch.include">
+                                <label class="iw-check">
+                                  <input
+                                    type="checkbox"
+                                    [checked]="ch.include"
+                                    (change)="toggleChapterInclude(book, sec, ch.source_path)"
+                                  />
+                                </label>
+                                <span class="file-source">{{ ch.source_name }}.{{ ch.source_ext }}</span>
+                                <span class="arrow">→</span>
+                                <input
+                                  type="text"
+                                  class="file-target-input"
+                                  [ngModel]="ch.target_name"
+                                  (ngModelChange)="updateChapterTarget(book, sec, ch.source_path, $event)"
+                                  [disabled]="!ch.include"
+                                />
+                                <span class="file-ext">.{{ sec.convert_chapters ? 'html' : ch.source_ext }}</span>
+                              </li>
+                            }
+                            @for (x of sec.extras; track x.source_path) {
+                              <li class="file-row extra-row" [class.disabled]="!x.include">
+                                <label class="iw-check">
+                                  <input
+                                    type="checkbox"
+                                    [checked]="x.include"
+                                    (change)="toggleExtraInclude(book, sec, x.source_path)"
+                                  />
+                                </label>
+                                <span class="file-source">{{ x.source_name }}.{{ x.source_ext }}</span>
+                                <span class="extra-tag">extra (se copia tal cual)</span>
+                              </li>
+                            }
+                          </ul>
+                        }
+                      </div>
+                    }
+                    @if (book.direct_chapters.length > 0) {
+                      <div class="direct-block">
+                        <header class="section-header">
+                          <span class="sec-name">Capítulos directos del libro</span>
+                          <span class="sec-meta">{{ book.direct_chapters.length }}</span>
+                          <button
+                            type="button"
+                            class="iw-icon-btn"
+                            (click)="toggleSectionExpand(book.source_path + '#direct')"
+                            title="Expandir"
+                          >{{ isSectionExpanded(book.source_path + '#direct') ? '▾' : '▸' }}</button>
+                        </header>
+                        @if (isSectionExpanded(book.source_path + '#direct')) {
+                          <ul class="files-list">
+                            @for (ch of book.direct_chapters; track ch.source_path) {
+                              <li class="file-row" [class.disabled]="!ch.include">
+                                <label class="iw-check">
+                                  <input
+                                    type="checkbox"
+                                    [checked]="ch.include"
+                                    (change)="toggleChapterInclude(book, null, ch.source_path)"
+                                  />
+                                </label>
+                                <span class="file-source">{{ ch.source_name }}.{{ ch.source_ext }}</span>
+                                <span class="arrow">→</span>
+                                <input
+                                  type="text"
+                                  class="file-target-input"
+                                  [ngModel]="ch.target_name"
+                                  (ngModelChange)="updateChapterTarget(book, null, ch.source_path, $event)"
+                                  [disabled]="!ch.include"
+                                />
+                                <span class="file-ext">.{{ book.convert_chapters ? 'html' : ch.source_ext }}</span>
+                              </li>
+                            }
+                          </ul>
+                        }
+                      </div>
+                    }
+                    @if (book.extras.length > 0) {
+                      <div class="extras-block">
+                        <header class="section-header">
+                          <span class="sec-name">Extras del libro</span>
+                          <span class="sec-meta">{{ book.extras.length }}</span>
+                          <button
+                            type="button"
+                            class="iw-icon-btn"
+                            (click)="toggleSectionExpand(book.source_path + '#extras')"
+                            title="Expandir"
+                          >{{ isSectionExpanded(book.source_path + '#extras') ? '▾' : '▸' }}</button>
+                        </header>
+                        @if (isSectionExpanded(book.source_path + '#extras')) {
+                          <ul class="files-list">
+                            @for (x of book.extras; track x.source_path) {
+                              <li class="file-row extra-row" [class.disabled]="!x.include">
+                                <label class="iw-check">
+                                  <input
+                                    type="checkbox"
+                                    [checked]="x.include"
+                                    (change)="toggleExtraInclude(book, null, x.source_path)"
+                                  />
+                                </label>
+                                <span class="file-source">{{ x.source_name }}.{{ x.source_ext }}</span>
+                                <span class="extra-tag">extra (se copia tal cual)</span>
+                              </li>
+                            }
+                          </ul>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+            @if (wizard.books().length === 0) {
+              <p class="muted">No se encontraron libros en la carpeta. Volvé y elegí otra.</p>
+            }
+          </div>
+        }
+
+        @case ('metadata') {
+          <p class="step-desc">Metadata por libro. Pre-cargado con defaults de la saga — podés override.</p>
+          @for (book of wizard.books(); track book.source_path; let i = $index) {
+            @if (book.include) {
+              <fieldset class="iw-fieldset">
+                <legend>{{ book.dir_name }}</legend>
+                <div class="iw-row">
+                  <label class="iw-field">
+                    <span>Título</span>
+                    <input
+                      type="text"
+                      [ngModel]="book.config.titulo"
+                      (ngModelChange)="updateBookField(book, 'titulo', $event)"
+                    />
+                  </label>
+                  <label class="iw-field narrow">
+                    <span>Orden en serie</span>
+                    <input
+                      type="number"
+                      [ngModel]="book.config.numero_en_serie ?? null"
+                      (ngModelChange)="updateBookOrder(book, $event)"
+                    />
+                  </label>
+                </div>
+                <div class="iw-row">
+                  <label class="iw-field">
+                    <span>Subtítulo</span>
+                    <input
+                      type="text"
+                      [ngModel]="book.config.subtitulo ?? ''"
+                      (ngModelChange)="updateBookField(book, 'subtitulo', $event)"
+                    />
+                  </label>
+                  <label class="iw-field narrow">
+                    <span>Idioma</span>
+                    <select
+                      [ngModel]="book.config.idioma ?? ''"
+                      (ngModelChange)="updateBookField(book, 'idioma', $event)"
+                    >
+                      <option value="">(heredar saga / autodetect)</option>
+                      <option value="es">Español</option>
+                      <option value="en">Inglés</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="iw-row">
+                  <label class="iw-field">
+                    <span>Autor</span>
+                    <input
+                      type="text"
+                      [ngModel]="book.config.autor ?? ''"
+                      (ngModelChange)="updateBookField(book, 'autor', $event)"
+                    />
+                  </label>
+                  <label class="iw-field">
+                    <span>ISBN</span>
+                    <input
+                      type="text"
+                      [ngModel]="book.config.isbn ?? ''"
+                      (ngModelChange)="updateBookField(book, 'isbn', $event)"
+                    />
+                  </label>
+                </div>
+                <div class="iw-row">
+                  <label class="iw-field cover-field">
+                    <span>Tapa</span>
+                    <div class="cover-row">
+                      <input
+                        type="text"
+                        [ngModel]="book.config.tapa ?? ''"
+                        (ngModelChange)="updateBookCoverPath(book, $event)"
+                        placeholder="ej: cover.png o ruta absoluta"
+                      />
+                      <button type="button" class="btn btn-secondary" (click)="pickBookCover(book)">
+                        Buscar…
+                      </button>
+                    </div>
+                  </label>
+                </div>
+              </fieldset>
+            }
+          }
+        }
+
+        @case ('resumen') {
+          <p class="step-desc">Revisá lo que se va a crear:</p>
+          <div class="resumen">
+            @if (wizard.tipo() === 'saga') {
+              <p>
+                <strong>Saga:</strong>
+                {{ wizard.sagaConfig().nombre }} → {{ wizard.sagaDirName() }}/
+              </p>
+            }
+            <p>
+              <strong>Libros a crear:</strong> {{ resumenBookCount() }}
+            </p>
+            <p>
+              <strong>Capítulos:</strong>
+              {{ resumenChapterCount().convertCount }} convertidos a HTML,
+              {{ resumenChapterCount().copyCount }} copiados sin convertir.
+            </p>
+            <p>
+              <strong>Archivos extras:</strong>
+              {{ resumenExtraCount() }} (mapas, notas, tapas, etc.)
+            </p>
+            @if (wizard.error(); as err) {
+              <div class="iw-error">{{ err }}</div>
+            }
+          </div>
+        }
+
+        @case ('progreso') {
+          <p class="step-desc">Importando…</p>
+          @if (wizard.progress(); as p) {
+            <div class="progress">
+              <div class="progress-bar">
+                <div
+                  class="progress-fill"
+                  [style.width.%]="p.total > 0 ? (p.done / p.total) * 100 : 0"
+                ></div>
+              </div>
+              <div class="progress-text">
+                {{ p.done }} / {{ p.total }} —
+                <code>{{ p.current }}</code>
+              </div>
+            </div>
+          }
+        }
+
+        @case ('completo') {
+          <p class="step-desc">Importación finalizada.</p>
+          @if (wizard.summary(); as s) {
+            <div class="resumen">
+              <p>✓ {{ s.created_dirs }} carpetas creadas</p>
+              <p>✓ {{ s.converted_chapters }} capítulos convertidos a HTML</p>
+              <p>✓ {{ s.copied_chapters }} capítulos copiados sin convertir</p>
+              <p>✓ {{ s.copied_extras }} archivos extras copiados</p>
+              @if (s.failed.length > 0) {
+                <details class="failed-details" open>
+                  <summary>{{ s.failed.length }} fallaron</summary>
+                  <ul>
+                    @for (f of s.failed; track f) {
+                      <li>{{ f }}</li>
+                    }
+                  </ul>
+                </details>
+              }
+            </div>
+          }
+        }
+      }
+    </div>
+
+    <footer class="iw-actions">
+      @if (wizard.step() !== 'tipo' && wizard.step() !== 'source' && wizard.step() !== 'progreso' && wizard.step() !== 'completo') {
+        <button type="button" class="btn btn-secondary" (click)="back()">Atrás</button>
+      }
+      <span class="spacer"></span>
+      @switch (wizard.step()) {
+        @case ('tipo') {
+          <button type="button" class="btn btn-secondary" (click)="close()">Cancelar</button>
+        }
+        @case ('source') {
+          <button
+            type="button"
+            class="btn btn-primary"
+            [disabled]="!wizard.sourcePath() || wizard.scanning()"
+            (click)="scan()"
+          >
+            {{ wizard.scanning() ? 'Escaneando…' : 'Escanear' }}
+          </button>
+        }
+        @case ('saga-config') {
+          <button type="button" class="btn btn-primary" (click)="next()">Siguiente</button>
+        }
+        @case ('estructura') {
+          <button
+            type="button"
+            class="btn btn-primary"
+            [disabled]="!wizard.canApply()"
+            (click)="next()"
+          >Siguiente</button>
+        }
+        @case ('metadata') {
+          <button type="button" class="btn btn-primary" (click)="next()">Siguiente</button>
+        }
+        @case ('resumen') {
+          <button
+            type="button"
+            class="btn btn-primary"
+            [disabled]="wizard.applying() || !wizard.canApply()"
+            (click)="runImport()"
+          >Importar</button>
+        }
+        @case ('completo') {
+          <button type="button" class="btn btn-primary" (click)="finish()">Cerrar</button>
+        }
+      }
+    </footer>
+  </div>
+}

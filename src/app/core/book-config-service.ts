@@ -22,6 +22,7 @@ export interface BookConfig {
   dropcap?: boolean | null;
   mostrar_numero_parte?: boolean | null;
   formato_parte?: 'raw' | 'parte' | 'punto' | null;
+  template?: '6x9' | '5x8' | 'a5' | null;
 }
 
 @Injectable({ providedIn: 'root' })

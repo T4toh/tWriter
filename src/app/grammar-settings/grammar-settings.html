@@ -1,0 +1,176 @@
+@if (open()) {
+  <div class="gs-backdrop" (click)="close()"></div>
+  <div class="gs-modal" (click)="$event.stopPropagation()">
+    <header class="gs-header">
+      <h2>Configurar gramática</h2>
+      <p>Elegí cómo se conecta tWriter a LanguageTool para revisión ortográfica y gramatical.</p>
+    </header>
+
+    <div class="gs-body">
+      <label class="gs-option">
+        <input
+          type="radio"
+          name="grammar-mode"
+          value="public"
+          [checked]="mode() === 'public'"
+          (change)="onModeChange('public')"
+        />
+        <div class="gs-option-text">
+          <strong>API público</strong>
+          <span class="muted">
+            api.languagetool.org · sin instalación · 20 req/min, 20KB/req · el texto se envía a servidores LT.
+          </span>
+        </div>
+      </label>
+
+      <label class="gs-option">
+        <input
+          type="radio"
+          name="grammar-mode"
+          value="local"
+          [checked]="mode() === 'local'"
+          (change)="onModeChange('local')"
+        />
+        <div class="gs-option-text">
+          <strong>Local (Docker)</strong>
+          <span class="muted">
+            localhost:8081 · privado, sin límites de uso. Requisitos del sistema:
+          </span>
+          <ul class="gs-reqs">
+            <li>
+              <strong>Docker Engine</strong> instalado y corriendo
+              (<a href="https://docs.docker.com/get-docker/" target="_blank">docker.com</a>).
+            </li>
+            <li>
+              <strong>Linux:</strong> usuario en el grupo <code>docker</code>
+              (<code>sudo usermod -aG docker $USER</code> + relogin), si no los comandos piden sudo y tWriter no los puede ejecutar.
+            </li>
+            <li>
+              <strong>macOS / Windows:</strong> Docker Desktop abierto.
+            </li>
+            <li>
+              ~2GB RAM disponibles. La primera vez baja la imagen (~300MB) y tarda ~30s en cargar modelos.
+            </li>
+          </ul>
+          @if (mode() === 'local' && dockerStatus(); as ds) {
+            <div class="docker-panel">
+              @if (!ds.docker_installed) {
+                <div class="docker-status err">
+                  Docker no detectado.
+                  <a href="https://docs.docker.com/get-docker/" target="_blank">Instalalo desde docker.com</a>
+                  y volvé a abrir esta ventana.
+                </div>
+              } @else if (ds.container_running && ds.api_responding) {
+                <div class="docker-status ok">
+                  ● LanguageTool corriendo en localhost:8081
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-secondary docker-btn"
+                  [disabled]="dockerBusy() !== null"
+                  (click)="stopDocker()"
+                >
+                  {{ dockerBusy() === 'stopping' ? 'Deteniendo…' : 'Detener LanguageTool' }}
+                </button>
+              } @else if (ds.container_running) {
+                <div class="docker-status warn">
+                  Container corriendo pero el API todavía no responde (cargando modelos).
+                </div>
+              } @else {
+                <div class="docker-status">
+                  Container detenido{{ ds.container_exists ? ' (existe pero apagado)' : ' (no existe todavía)' }}.
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-primary docker-btn"
+                  [disabled]="dockerBusy() !== null"
+                  (click)="startDocker()"
+                >
+                  {{ dockerBusy() === 'starting' ? 'Levantando…' : 'Levantar LanguageTool' }}
+                </button>
+              }
+              @if (dockerMessage(); as msg) {
+                <div class="docker-msg">{{ msg }}</div>
+              }
+            </div>
+          }
+        </div>
+      </label>
+
+      <label class="gs-option">
+        <input
+          type="radio"
+          name="grammar-mode"
+          value="custom"
+          [checked]="mode() === 'custom'"
+          (change)="onModeChange('custom')"
+        />
+        <div class="gs-option-text">
+          <strong>URL custom</strong>
+          <span class="muted">Endpoint propio (ej: API premium con apiKey).</span>
+          @if (mode() === 'custom') {
+            <input
+              type="text"
+              class="gs-url"
+              placeholder="https://my-lt.example.com"
+              [ngModel]="customUrl()"
+              (ngModelChange)="customUrl.set($event)"
+            />
+          }
+        </div>
+      </label>
+
+      <div class="gs-section-divider">Variantes regionales</div>
+
+      <div class="gs-row">
+        <label class="gs-field">
+          <span>Español</span>
+          <select [ngModel]="variantEs()" (ngModelChange)="variantEs.set($event)">
+            <option value="es-AR">es-AR — Argentina (voseo)</option>
+            <option value="es-MX">es-MX — México</option>
+            <option value="es-CL">es-CL — Chile</option>
+            <option value="es-CO">es-CO — Colombia</option>
+            <option value="es-PE">es-PE — Perú</option>
+            <option value="es-VE">es-VE — Venezuela</option>
+            <option value="es">es — genérico</option>
+          </select>
+        </label>
+        <label class="gs-field">
+          <span>Inglés</span>
+          <select [ngModel]="variantEn()" (ngModelChange)="variantEn.set($event)">
+            <option value="en-US">en-US — Estados Unidos</option>
+            <option value="en-GB">en-GB — Reino Unido</option>
+            <option value="en-CA">en-CA — Canadá</option>
+            <option value="en-AU">en-AU — Australia</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <footer class="gs-actions">
+      <button
+        type="button"
+        class="btn btn-secondary"
+        [disabled]="testing()"
+        (click)="test()"
+      >
+        {{ testing() ? 'Probando…' : 'Probar conexión' }}
+      </button>
+      @if (testResult() === 'ok') {
+        <span class="test-ok">✓ conectado</span>
+      } @else if (testResult() === 'fail') {
+        <span class="test-fail">✗ no responde</span>
+      }
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-secondary" (click)="close()">Cancelar</button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        [disabled]="saving()"
+        (click)="apply()"
+      >
+        {{ saving() ? 'Guardando…' : 'Aplicar' }}
+      </button>
+    </footer>
+  </div>
+}

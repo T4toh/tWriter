@@ -15,6 +15,30 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub editor_font_size: Option<u32>,
+    #[serde(
+        default,
+        rename = "grammarMode",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub grammar_mode: Option<String>,
+    #[serde(
+        default,
+        rename = "grammarCustomUrl",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub grammar_custom_url: Option<String>,
+    #[serde(
+        default,
+        rename = "grammarVariantEs",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub grammar_variant_es: Option<String>,
+    #[serde(
+        default,
+        rename = "grammarVariantEn",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub grammar_variant_en: Option<String>,
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {

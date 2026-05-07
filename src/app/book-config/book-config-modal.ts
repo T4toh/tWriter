@@ -69,6 +69,7 @@ export class BookConfigModal {
       directory: false,
       title: 'Seleccionar tapa',
       filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+      defaultPath: this.bookPath() ?? undefined,
     });
     if (typeof result !== 'string') return;
     const cur = this.config();

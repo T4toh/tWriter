@@ -7,6 +7,7 @@ use zip::write::{SimpleFileOptions, ZipWriter};
 use zip::CompressionMethod;
 
 use crate::book_config::BookConfig;
+use crate::fs::is_excluded_dir;
 
 #[derive(Serialize, Debug)]
 pub struct ExportResult {
@@ -14,7 +15,16 @@ pub struct ExportResult {
     pub chapters: u32,
 }
 
-const CSS: &str = include_str!("epub_style.css");
+const CSS_TEMPLATE: &str = include_str!("epub_style.css");
+
+fn build_css(template: &str) -> String {
+    let page_rule = match template {
+        "5x8" => "@page { size: 5in 8in; margin: 0.6in; }",
+        "a5" => "@page { size: A5; margin: 18mm; }",
+        _ => "@page { size: 6in 9in; margin: 0.75in; }",
+    };
+    CSS_TEMPLATE.replace("/* @PAGE_SIZE */", page_rule)
+}
 
 const CONTAINER_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -75,8 +85,10 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     zip.write_all(CONTAINER_XML.as_bytes()).map_err(|e| e.to_string())?;
 
     // OEBPS/style.css
+    let template = cfg.template.as_deref().unwrap_or("6x9");
+    let css = build_css(template);
     zip.start_file("OEBPS/style.css", opts).map_err(|e| e.to_string())?;
-    zip.write_all(CSS.as_bytes()).map_err(|e| e.to_string())?;
+    zip.write_all(css.as_bytes()).map_err(|e| e.to_string())?;
 
     let mut items: Vec<Item> = Vec::new();
     items.push(Item {
@@ -344,11 +356,16 @@ fn collect_chapters(book_dir: &Path) -> Result<Vec<Chapter>, String> {
         .filter_map(|r| r.ok())
         .map(|e| e.path())
         .filter(|p| {
-            p.is_dir()
-                && p.file_name()
-                    .and_then(|s| s.to_str())
-                    .map(|n| !["exports", "Revisiones", "convertidos", ".git"].contains(&n))
-                    .unwrap_or(true)
+            if !p.is_dir() {
+                return false;
+            }
+            if is_excluded_dir(p) {
+                return false;
+            }
+            p.file_name()
+                .and_then(|s| s.to_str())
+                .map(|n| !["exports", "Revisiones", "convertidos", ".git"].contains(&n))
+                .unwrap_or(true)
         })
         .collect();
     subdirs.sort_by(|a, b| {

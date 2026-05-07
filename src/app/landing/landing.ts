@@ -36,11 +36,16 @@ export class Landing {
     if (!root) return [];
     const node = this.currentNode();
     const target = node ?? root;
-    return [...target.children].sort((a, b) => {
-      const am = a.modifiedMs ?? 0;
-      const bm = b.modifiedMs ?? 0;
-      return bm - am;
-    });
+    // Inicio: ordenar por última edición (más reciente arriba).
+    // Adentro de saga/book/section: respetar orden del backend (prefijo numérico).
+    if (!node) {
+      return [...target.children].sort((a, b) => {
+        const am = a.modifiedMs ?? 0;
+        const bm = b.modifiedMs ?? 0;
+        return bm - am;
+      });
+    }
+    return target.children;
   });
 
   protected readonly crumbs = computed<Crumb[]>(() => {

@@ -8,6 +8,7 @@ export interface TreeNode {
   editable?: boolean;
   modifiedMs?: number;
   wordCount?: number;
+  excluded?: boolean;
   children: TreeNode[];
 }
 
@@ -28,3 +29,15 @@ export const EMPTY_META: ChapterMeta = {
   status: null,
   idioma: null,
 };
+
+export type GrammarMode = 'public' | 'local' | 'custom';
+
+export interface GrammarMatch {
+  offset: number;
+  length: number;
+  message: string;
+  shortMessage: string;
+  ruleId: string;
+  category: string;
+  replacements: string[];
+}

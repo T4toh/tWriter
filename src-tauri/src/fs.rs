@@ -31,6 +31,9 @@ pub struct TreeNode {
     /// Total de palabras (chapters: meta.palabras; dirs: suma recursiva).
     #[serde(rename = "wordCount", skip_serializing_if = "Option::is_none")]
     pub word_count: Option<u32>,
+    /// Excluido del export EPUB. Visible en tree pero no se incluye al exportar.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excluded: Option<bool>,
     pub children: Vec<TreeNode>,
 }
 
@@ -74,6 +77,7 @@ pub fn get_tree(root: String) -> Result<TreeNode, String> {
         editable: None,
         modified_ms,
         word_count,
+        excluded: None,
         children,
     })
 }
@@ -146,6 +150,21 @@ fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
         if should_skip_dir(&name) {
             continue;
         }
+        let excluded = is_excluded_dir(&path);
+        if excluded {
+            out.push(TreeNode {
+                name,
+                path: path.to_string_lossy().into_owned(),
+                kind: classify_top_level(&path),
+                ext: None,
+                editable: None,
+                modified_ms: None,
+                word_count: None,
+                excluded: Some(true),
+                children: Vec::new(),
+            });
+            continue;
+        }
         let kind = classify_top_level(&path);
         match kind {
             NodeKind::Saga => {
@@ -160,6 +179,7 @@ fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
                     editable: None,
                     modified_ms,
                     word_count,
+                    excluded: None,
                     children,
                 });
             }
@@ -175,6 +195,7 @@ fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
                     editable: None,
                     modified_ms,
                     word_count,
+                    excluded: None,
                     children,
                 });
             }
@@ -188,10 +209,25 @@ fn list_books(saga_dir: &Path) -> Result<Vec<TreeNode>, String> {
     let mut out = Vec::new();
     for entry in read_sorted_dirs(saga_dir)? {
         let name = entry.file_name().to_string_lossy().into_owned();
+        let path = entry.path();
         if should_skip_dir(&name) {
             continue;
         }
-        let path = entry.path();
+        let excluded = is_excluded_dir(&path);
+        if excluded {
+            out.push(TreeNode {
+                name,
+                path: path.to_string_lossy().into_owned(),
+                kind: NodeKind::Book,
+                ext: None,
+                editable: None,
+                modified_ms: None,
+                word_count: None,
+                excluded: Some(true),
+                children: Vec::new(),
+            });
+            continue;
+        }
         let children = list_sections_or_chapters(&path)?;
         let modified_ms = max_child_mtime(&children);
         let word_count = sum_child_words(&children);
@@ -203,6 +239,7 @@ fn list_books(saga_dir: &Path) -> Result<Vec<TreeNode>, String> {
             editable: None,
             modified_ms,
             word_count,
+            excluded: None,
             children,
         });
     }
@@ -220,6 +257,21 @@ fn list_sections_or_chapters(book_dir: &Path) -> Result<Vec<TreeNode>, String> {
             if should_skip_dir(&name) {
                 continue;
             }
+            let excluded = is_excluded_dir(&path);
+            if excluded {
+                sections.push(TreeNode {
+                    name,
+                    path: path.to_string_lossy().into_owned(),
+                    kind: NodeKind::Section,
+                    ext: None,
+                    editable: None,
+                    modified_ms: None,
+                    word_count: None,
+                    excluded: Some(true),
+                    children: Vec::new(),
+                });
+                continue;
+            }
             let children = list_chapters(&path)?;
             let modified_ms = max_child_mtime(&children);
             let word_count = sum_child_words(&children);
@@ -231,6 +283,7 @@ fn list_sections_or_chapters(book_dir: &Path) -> Result<Vec<TreeNode>, String> {
                 editable: None,
                 modified_ms,
                 word_count,
+                excluded: None,
                 children,
             });
         } else if ft.is_file() {
@@ -288,6 +341,7 @@ fn chapter_node(path: &Path) -> Option<TreeNode> {
         ext: Some(ext),
         modified_ms,
         word_count,
+        excluded: None,
         children: Vec::new(),
     })
 }
@@ -338,10 +392,10 @@ fn classify_top_level(dir: &Path) -> NodeKind {
     if let Ok(entries) = fs::read_dir(dir) {
         for e in entries.flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
-            if should_skip_dir(&name) {
+            let p = e.path();
+            if should_skip_dir(&name) || (p.is_dir() && is_excluded_dir(&p)) {
                 continue;
             }
-            let p = e.path();
             if p.is_dir() && looks_like_book(&p) {
                 has_book_like_subdirs = true;
             } else if p.is_file() && is_chapter_file(&p) {
@@ -368,7 +422,7 @@ fn looks_like_book(dir: &Path) -> bool {
             }
             if p.is_dir() {
                 let name = e.file_name().to_string_lossy().into_owned();
-                if should_skip_dir(&name) {
+                if should_skip_dir(&name) || is_excluded_dir(&p) {
                     continue;
                 }
                 // sección con capítulos adentro
@@ -385,7 +439,7 @@ fn looks_like_book(dir: &Path) -> bool {
     false
 }
 
-fn is_chapter_file(p: &Path) -> bool {
+pub(crate) fn is_chapter_file(p: &Path) -> bool {
     let Some(ext) = p.extension().and_then(|e| e.to_str()) else {
         return false;
     };
@@ -399,8 +453,34 @@ fn is_chapter_file(p: &Path) -> bool {
         .unwrap_or(false)
 }
 
-fn should_skip_dir(name: &str) -> bool {
+pub(crate) fn should_skip_dir(name: &str) -> bool {
     SKIP_DIRS.contains(&name) || name.starts_with('.')
+}
+
+pub fn is_excluded_dir(path: &Path) -> bool {
+    path.join(".twriter-ignore").is_file()
+}
+
+#[tauri::command]
+pub fn is_directory_excluded(path: String) -> bool {
+    is_excluded_dir(&PathBuf::from(path))
+}
+
+#[tauri::command]
+pub fn set_directory_excluded(path: String, excluded: bool) -> Result<(), String> {
+    let dir = PathBuf::from(&path);
+    if !dir.is_dir() {
+        return Err(format!("no es directorio: {}", path));
+    }
+    let marker = dir.join(".twriter-ignore");
+    if excluded {
+        if !marker.exists() {
+            fs::write(&marker, "").map_err(|e| e.to_string())?;
+        }
+    } else if marker.exists() {
+        fs::remove_file(&marker).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 fn read_sorted_dirs(p: &Path) -> Result<Vec<fs::DirEntry>, String> {

@@ -516,10 +516,20 @@
   font-weight: 700;
   cursor: pointer;
   letter-spacing: 0.05em;
+  transition: filter 0.15s ease;
+
+  &[data-lang='es'] {
+    background: #c8102e;
+    color: white;
+  }
+
+  &[data-lang='en'] {
+    background: #1e3a8a;
+    color: white;
+  }
 
   &:hover {
-    background: var(--accent);
-    color: var(--bg);
+    filter: brightness(1.15);
   }
 }
 
@@ -547,4 +557,97 @@
     background: #b04040;
     color: white;
   }
+  &.focus-hint {
+    color: var(--accent);
+    font-style: italic;
+  }
+}
+
+/* ─── Toolbar LanguageTool button ─── */
+.tb-btn.lt-btn {
+  width: auto;
+  padding: 0 6px;
+
+  img {
+    height: 16px;
+    width: auto;
+    display: block;
+  }
+
+  &.checking {
+    animation: lt-pulse 1s ease-in-out infinite;
+  }
+}
+
+@keyframes lt-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ─── Grammar inline decorations ─── */
+.editor-host ::ng-deep .grammar-error {
+  cursor: pointer;
+  text-decoration: none;
+  background: transparent;
+}
+
+.editor-host ::ng-deep .grammar-error--typo {
+  border-bottom: 2px solid #d23030;
+}
+
+.editor-host ::ng-deep .grammar-error--grammar {
+  border-bottom: 2px dashed #d23030;
+}
+
+.editor-host ::ng-deep .grammar-error--style {
+  border-bottom: 2px dotted #c89020;
+}
+
+.editor-host ::ng-deep .grammar-error--misc {
+  border-bottom: 2px dotted var(--fg-muted);
+}
+
+/* ─── Privacy banner ─── */
+.privacy-banner {
+  position: fixed;
+  bottom: 3.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 150;
+  background: #c89020;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  max-width: 80vw;
+
+  a {
+    color: white;
+    text-decoration: underline;
+  }
+
+  .banner-dismiss {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+  }
+
+  .banner-dismiss:hover {
+    opacity: 0.8;
+  }
+}
+
+.grammar-pop-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
 }

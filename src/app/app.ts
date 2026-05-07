@@ -1,7 +1,8 @@
-import { Component, computed, effect, inject } from '@angular/core';
+import { Component, ViewChild, computed, effect, HostListener, inject } from '@angular/core';
 import { ChapterService } from './core/chapter-service';
 import { DebugService } from './core/debug-service';
 import { GitService } from './core/git-service';
+import { ImportWizardService } from './core/import-wizard-service';
 import { ProjectService } from './core/project-service';
 import { SettingsService } from './core/settings-service';
 import { Tree } from './tree/tree';
@@ -9,16 +10,21 @@ import { Editor } from './editor/editor';
 import { DebugPanel } from './debug/debug-panel';
 import { BookConfigModal } from './book-config/book-config-modal';
 import { ToastContainer } from './toast/toast-container';
+import { GrammarSettings } from './grammar-settings/grammar-settings';
+import { ImportWizard } from './import-wizard/import-wizard';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, DebugPanel, BookConfigModal, ToastContainer],
+  imports: [Tree, Editor, DebugPanel, BookConfigModal, ToastContainer, GrammarSettings, ImportWizard],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
 export class App {
+  @ViewChild(GrammarSettings) private grammarSettings?: GrammarSettings;
+  protected importWizard = inject(ImportWizardService);
+
   private project = inject(ProjectService);
-  private settings = inject(SettingsService);
+  protected settings = inject(SettingsService);
   private chapter = inject(ChapterService);
   protected git = inject(GitService);
   protected debug = inject(DebugService);
@@ -86,6 +92,27 @@ export class App {
 
   protected toggleDebug(): void {
     this.debug.toggle();
+  }
+
+  protected openGrammarSettings(): void {
+    this.grammarSettings?.show();
+  }
+
+  protected openImportWizard(): void {
+    this.importWizard.show();
+  }
+
+  @HostListener('window:keydown.F11', ['$event'])
+  protected onF11(event: Event): void {
+    event.preventDefault();
+    this.settings.toggleFocusMode();
+  }
+
+  @HostListener('window:keydown.Escape')
+  protected onEsc(): void {
+    if (this.settings.focusMode()) {
+      this.settings.toggleFocusMode();
+    }
   }
 
   protected async createSaga(): Promise<void> {

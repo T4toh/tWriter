@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { GrammarMode } from './types';
 
 export type EditorWidth = 'narrow' | 'wide' | 'full';
 
@@ -12,6 +13,10 @@ interface Settings {
   root: string | null;
   editorWidth?: EditorWidth;
   editorFontSize?: number;
+  grammarMode?: GrammarMode;
+  grammarCustomUrl?: string | null;
+  grammarVariantEs?: string | null;
+  grammarVariantEn?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -19,6 +24,11 @@ export class SettingsService {
   readonly root = signal<string | null>(null);
   readonly editorWidth = signal<EditorWidth>('narrow');
   readonly editorFontSize = signal<number>(FONT_DEFAULT);
+  readonly grammarMode = signal<GrammarMode>('public');
+  readonly grammarCustomUrl = signal<string | null>(null);
+  readonly grammarVariantEs = signal<string>('es-AR');
+  readonly grammarVariantEn = signal<string>('en-US');
+  readonly focusMode = signal<boolean>(false);
   readonly loaded = signal<boolean>(false);
 
   async load(): Promise<void> {
@@ -27,6 +37,10 @@ export class SettingsService {
       this.root.set(s.root ?? null);
       this.editorWidth.set(s.editorWidth ?? 'narrow');
       this.editorFontSize.set(clampFont(s.editorFontSize ?? FONT_DEFAULT));
+      this.grammarMode.set((s.grammarMode as GrammarMode) ?? 'public');
+      this.grammarCustomUrl.set(s.grammarCustomUrl ?? null);
+      this.grammarVariantEs.set(s.grammarVariantEs ?? 'es-AR');
+      this.grammarVariantEn.set(s.grammarVariantEn ?? 'en-US');
     } catch {
       this.root.set(null);
     } finally {
@@ -57,11 +71,31 @@ export class SettingsService {
     void this.persist();
   }
 
+  async setGrammarMode(mode: GrammarMode, customUrl: string | null): Promise<void> {
+    this.grammarMode.set(mode);
+    this.grammarCustomUrl.set(customUrl);
+    await this.persist();
+  }
+
+  async setGrammarVariants(es: string, en: string): Promise<void> {
+    this.grammarVariantEs.set(es);
+    this.grammarVariantEn.set(en);
+    await this.persist();
+  }
+
+  toggleFocusMode(): void {
+    this.focusMode.update((v) => !v);
+  }
+
   private async persist(): Promise<void> {
     const settings: Settings = {
       root: this.root(),
       editorWidth: this.editorWidth(),
       editorFontSize: this.editorFontSize(),
+      grammarMode: this.grammarMode(),
+      grammarCustomUrl: this.grammarCustomUrl(),
+      grammarVariantEs: this.grammarVariantEs(),
+      grammarVariantEn: this.grammarVariantEn(),
     };
     await invoke('set_settings', { settings });
   }
