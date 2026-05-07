@@ -588,13 +588,23 @@ fn build_dedication_xhtml(text: &str) -> String {
 }
 
 fn build_chapter_title_xhtml(title: &str, show_title: bool, prefix: Option<&str>) -> String {
-    let combined = match (prefix, show_title) {
-        (Some(p), true) => format!("{} \u{2014} {}", xml_escape(p), xml_escape(title)),
-        (Some(p), false) => xml_escape(p),
-        (None, true) => xml_escape(title),
-        (None, false) => "&nbsp;".to_string(),
-    };
-    let body = format!(r#"<h1 class="chapter-title">{}</h1>"#, combined);
+    let mut inner = String::new();
+    if let Some(p) = prefix {
+        inner.push_str(&format!(
+            r#"<p class="chapter-prefix">{}</p>"#,
+            xml_escape(p)
+        ));
+    }
+    if show_title {
+        inner.push_str(&format!(
+            r#"<h1 class="chapter-title">{}</h1>"#,
+            xml_escape(title)
+        ));
+    }
+    if inner.is_empty() {
+        inner.push_str(r#"<h1 class="chapter-title">&nbsp;</h1>"#);
+    }
+    let body = format!(r#"<div class="chapter-heading-inner">{}</div>"#, inner);
     xhtml_shell(title, &body, "es", "chapter-title-body")
 }
 

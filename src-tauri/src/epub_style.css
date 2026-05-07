@@ -93,6 +93,23 @@ body.chapter-title-body {
   box-sizing: border-box;
 }
 
+.chapter-heading-inner {
+  width: 100%;
+  text-align: center;
+}
+
+.chapter-prefix {
+  font-family: sans-serif;
+  font-size: 1.1em;
+  font-weight: 400;
+  text-align: center;
+  text-indent: 0;
+  margin: 0 0 1.5em;
+  color: #666;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
 /* Chapter content: lectura normal, padding razonable */
 body.chapter-content-body {
   padding: 2em 1.5em;
@@ -147,7 +164,7 @@ h1.chapter-title {
   font-size: 2em;
   font-weight: normal;
   letter-spacing: 0.02em;
-  margin: 0;
+  margin: 0 auto;
   max-width: 22em;
   text-align: center;
   line-height: 1.3;
