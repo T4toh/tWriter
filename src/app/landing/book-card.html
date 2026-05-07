@@ -1,0 +1,57 @@
+<button
+  type="button"
+  class="book-card"
+  [class.unconfigured]="!isConfigured()"
+  (click)="onClick()"
+>
+  <div class="cover-slot">
+    @if (coverDataUrl(); as url) {
+      <img [src]="url" [alt]="displayTitle()" />
+    } @else {
+      <div class="cover-placeholder">
+        <span>{{ displayTitle() }}</span>
+      </div>
+    }
+  </div>
+  <div class="info">
+    <h3 class="title">{{ displayTitle() }}</h3>
+    @if (subtitle(); as sub) {
+      <p class="subtitle">{{ sub }}</p>
+    }
+    @if (author(); as a) {
+      <p class="author">{{ a }}</p>
+    }
+    <div class="foot">
+      <span class="date">{{ formatDate(node().modifiedMs) }}</span>
+      <span class="count">
+        {{ node().children.length }} cap.
+        @if (node().wordCount; as w) {
+          · {{ formatWords(w) }}
+        }
+      </span>
+    </div>
+    @if (!isConfigured()) {
+      <p class="hint">Sin configurar</p>
+    }
+  </div>
+  <div class="card-actions">
+    <button
+      type="button"
+      class="card-btn"
+      (click)="openConfig($event)"
+      title="Configurar novela"
+    >
+      ⚙
+    </button>
+    <button
+      type="button"
+      class="card-btn"
+      [class.spinning]="exporting()"
+      [disabled]="exporting()"
+      (click)="exportEpub($event)"
+      title="Exportar a EPUB"
+    >
+      {{ exporting() ? '⋯' : '⤓' }}
+    </button>
+  </div>
+</button>

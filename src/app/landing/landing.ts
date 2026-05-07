@@ -3,6 +3,8 @@ import { ChapterService } from '../core/chapter-service';
 import { NavigationService } from '../core/navigation-service';
 import { ProjectService } from '../core/project-service';
 import { TreeNode } from '../core/types';
+import { BookCard } from './book-card';
+import { SagaCard } from './saga-card';
 
 interface Crumb {
   label: string;
@@ -11,7 +13,7 @@ interface Crumb {
 
 @Component({
   selector: 'app-landing',
-  imports: [],
+  imports: [BookCard, SagaCard],
   templateUrl: './landing.html',
   styleUrl: './landing.scss',
 })
@@ -60,6 +62,10 @@ export class Landing {
     } else {
       this.nav.setBrowsing(node.path);
     }
+  }
+
+  protected onBookSelect(node: TreeNode): void {
+    this.onItemClick(node);
   }
 
   protected goCrumb(crumb: Crumb): void {

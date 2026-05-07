@@ -28,6 +28,9 @@ pub struct TreeNode {
     /// mtime del archivo en milis epoch. Para dirs, max de descendientes.
     #[serde(rename = "modifiedMs", skip_serializing_if = "Option::is_none")]
     pub modified_ms: Option<u64>,
+    /// Total de palabras (chapters: meta.palabras; dirs: suma recursiva).
+    #[serde(rename = "wordCount", skip_serializing_if = "Option::is_none")]
+    pub word_count: Option<u32>,
     pub children: Vec<TreeNode>,
 }
 
@@ -62,6 +65,7 @@ pub fn get_tree(root: String) -> Result<TreeNode, String> {
 
     let children = list_sagas_or_books(&root_path)?;
     let modified_ms = max_child_mtime(&children);
+    let word_count = sum_child_words(&children);
     Ok(TreeNode {
         name,
         path: root_path.to_string_lossy().into_owned(),
@@ -69,6 +73,7 @@ pub fn get_tree(root: String) -> Result<TreeNode, String> {
         ext: None,
         editable: None,
         modified_ms,
+        word_count,
         children,
     })
 }
@@ -146,6 +151,7 @@ fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
             NodeKind::Saga => {
                 let children = list_books(&path)?;
                 let modified_ms = max_child_mtime(&children);
+                let word_count = sum_child_words(&children);
                 out.push(TreeNode {
                     name,
                     path: path.to_string_lossy().into_owned(),
@@ -153,12 +159,14 @@ fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
                     ext: None,
                     editable: None,
                     modified_ms,
+                    word_count,
                     children,
                 });
             }
             NodeKind::Book => {
                 let children = list_sections_or_chapters(&path)?;
                 let modified_ms = max_child_mtime(&children);
+                let word_count = sum_child_words(&children);
                 out.push(TreeNode {
                     name,
                     path: path.to_string_lossy().into_owned(),
@@ -166,6 +174,7 @@ fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
                     ext: None,
                     editable: None,
                     modified_ms,
+                    word_count,
                     children,
                 });
             }
@@ -185,6 +194,7 @@ fn list_books(saga_dir: &Path) -> Result<Vec<TreeNode>, String> {
         let path = entry.path();
         let children = list_sections_or_chapters(&path)?;
         let modified_ms = max_child_mtime(&children);
+        let word_count = sum_child_words(&children);
         out.push(TreeNode {
             name,
             path: path.to_string_lossy().into_owned(),
@@ -192,6 +202,7 @@ fn list_books(saga_dir: &Path) -> Result<Vec<TreeNode>, String> {
             ext: None,
             editable: None,
             modified_ms,
+            word_count,
             children,
         });
     }
@@ -211,6 +222,7 @@ fn list_sections_or_chapters(book_dir: &Path) -> Result<Vec<TreeNode>, String> {
             }
             let children = list_chapters(&path)?;
             let modified_ms = max_child_mtime(&children);
+            let word_count = sum_child_words(&children);
             sections.push(TreeNode {
                 name,
                 path: path.to_string_lossy().into_owned(),
@@ -218,6 +230,7 @@ fn list_sections_or_chapters(book_dir: &Path) -> Result<Vec<TreeNode>, String> {
                 ext: None,
                 editable: None,
                 modified_ms,
+                word_count,
                 children,
             });
         } else if ft.is_file() {
@@ -266,6 +279,7 @@ fn chapter_node(path: &Path) -> Option<TreeNode> {
         .unwrap_or("?")
         .to_string();
     let modified_ms = mtime_ms(path);
+    let word_count = read_meta_word_count(path);
     Some(TreeNode {
         name,
         path: path.to_string_lossy().into_owned(),
@@ -273,8 +287,21 @@ fn chapter_node(path: &Path) -> Option<TreeNode> {
         editable: Some(ext == "html"),
         ext: Some(ext),
         modified_ms,
+        word_count,
         children: Vec::new(),
     })
+}
+
+fn read_meta_word_count(chapter_path: &Path) -> Option<u32> {
+    let stem = chapter_path.file_stem().and_then(|s| s.to_str())?;
+    let parent = chapter_path.parent()?;
+    let meta_path = parent.join(format!("{}.meta.json", stem));
+    if !meta_path.exists() {
+        return None;
+    }
+    let raw = fs::read_to_string(&meta_path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    v.get("palabras")?.as_u64().map(|n| n as u32)
 }
 
 fn mtime_ms(p: &Path) -> Option<u64> {
@@ -286,6 +313,15 @@ fn mtime_ms(p: &Path) -> Option<u64> {
 
 fn max_child_mtime(children: &[TreeNode]) -> Option<u64> {
     children.iter().filter_map(|c| c.modified_ms).max()
+}
+
+fn sum_child_words(children: &[TreeNode]) -> Option<u32> {
+    let total: u32 = children.iter().filter_map(|c| c.word_count).sum();
+    if total == 0 {
+        None
+    } else {
+        Some(total)
+    }
 }
 
 fn classify_top_level(dir: &Path) -> NodeKind {

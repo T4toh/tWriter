@@ -52,12 +52,26 @@
   font-style: italic;
 }
 
+.book-header {
+  padding: 1rem 1.5rem 0;
+}
+
+.book-header app-book-card {
+  display: block;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px;
   padding: 1.5rem;
   overflow-y: auto;
+}
+
+.grid[data-mode='books'] {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 
 .card {

@@ -1,0 +1,216 @@
+@if (editing(); as node) {
+  <div class="bc-backdrop" (click)="close()"></div>
+  <div class="bc-modal" (click)="$event.stopPropagation()">
+    <header class="bc-header">
+      <h2>Configurar novela</h2>
+      <p class="path">{{ node.name }}</p>
+    </header>
+
+    @if (config(); as c) {
+      <div class="bc-body">
+        <div class="row">
+          <label>
+            <span>Título</span>
+            <input
+              type="text"
+              [ngModel]="c.titulo"
+              (ngModelChange)="update('titulo', $event)"
+              placeholder="Título de la novela"
+            />
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            <span>Subtítulo</span>
+            <input
+              type="text"
+              [ngModel]="c.subtitulo"
+              (ngModelChange)="update('subtitulo', $event)"
+              placeholder="(opcional)"
+            />
+          </label>
+        </div>
+        <div class="row split">
+          <label>
+            <span>Autor</span>
+            <input
+              type="text"
+              [ngModel]="c.autor"
+              (ngModelChange)="update('autor', $event)"
+            />
+          </label>
+          <label>
+            <span>Idioma</span>
+            <select
+              [ngModel]="c.idioma"
+              (ngModelChange)="update('idioma', $event)"
+            >
+              <option value="es">Español</option>
+              <option value="en">Inglés</option>
+            </select>
+          </label>
+        </div>
+        <div class="row split">
+          <label>
+            <span>Serie</span>
+            <input
+              type="text"
+              [ngModel]="c.serie"
+              (ngModelChange)="update('serie', $event)"
+              placeholder="ej: BA2077"
+            />
+          </label>
+          <label>
+            <span>Número en serie</span>
+            <input
+              type="number"
+              [ngModel]="c.numero_en_serie"
+              (ngModelChange)="update('numero_en_serie', $event)"
+              placeholder="1"
+            />
+          </label>
+        </div>
+        <div class="row split">
+          <label>
+            <span>ISBN</span>
+            <input
+              type="text"
+              [ngModel]="c.isbn"
+              (ngModelChange)="update('isbn', $event)"
+              placeholder="(opcional)"
+            />
+          </label>
+          <label>
+            <span>Año copyright</span>
+            <input
+              type="number"
+              [ngModel]="c.copyright_anio"
+              (ngModelChange)="update('copyright_anio', $event)"
+            />
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            <span>Imprenta</span>
+            <input
+              type="text"
+              [ngModel]="c.imprenta"
+              (ngModelChange)="update('imprenta', $event)"
+            />
+          </label>
+        </div>
+        <div class="row">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="c.derechos_reservados"
+              (ngModelChange)="update('derechos_reservados', $event)"
+            />
+            <span>Incluir cláusula de derechos reservados</span>
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            <span>Tapa (imagen)</span>
+            <div class="cover-row">
+              <input
+                type="text"
+                [ngModel]="c.tapa"
+                (ngModelChange)="update('tapa', $event)"
+                placeholder="ej: cover.png o ruta absoluta"
+              />
+              <button type="button" (click)="pickCover()">Buscar…</button>
+            </div>
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            <span>Dedicatoria</span>
+            <textarea
+              [ngModel]="c.dedicatoria"
+              (ngModelChange)="update('dedicatoria', $event)"
+              rows="3"
+              placeholder="(opcional)"
+            ></textarea>
+          </label>
+        </div>
+
+        <div class="row section-divider">
+          <span class="section-label">Estilo de capítulos en el EPUB</span>
+        </div>
+        <div class="row split">
+          <label>
+            <span>Prefijo del capítulo</span>
+            <select
+              [ngModel]="c.prefijo_capitulo"
+              (ngModelChange)="update('prefijo_capitulo', $event)"
+            >
+              <option value="none">Sin prefijo</option>
+              <option value="decimal">Número (1, 2, 3…)</option>
+              <option value="roman">Romano (I, II, III…)</option>
+            </select>
+          </label>
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="c.mostrar_titulo_capitulo"
+              (ngModelChange)="update('mostrar_titulo_capitulo', $event)"
+            />
+            <span>Mostrar título del capítulo</span>
+          </label>
+        </div>
+        <div class="row">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="c.dropcap"
+              (ngModelChange)="update('dropcap', $event)"
+            />
+            <span>Letrina (dropcap) en primer párrafo de cada capítulo</span>
+          </label>
+        </div>
+        <div class="row split">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="c.mostrar_numero_parte"
+              (ngModelChange)="update('mostrar_numero_parte', $event)"
+            />
+            <span>Mostrar header de parte (número o título)</span>
+          </label>
+          <label>
+            <span>Formato de parte</span>
+            <select
+              [ngModel]="c.formato_parte"
+              (ngModelChange)="update('formato_parte', $event)"
+              [disabled]="!c.mostrar_numero_parte"
+            >
+              <option value="raw">1</option>
+              <option value="parte">Parte 1</option>
+              <option value="punto">1.</option>
+            </select>
+          </label>
+        </div>
+        @if (error(); as err) {
+          <p class="error">{{ err }}</p>
+        }
+      </div>
+    } @else if (error(); as err) {
+      <p class="error">{{ err }}</p>
+    } @else {
+      <p class="loading">Cargando…</p>
+    }
+
+    <footer class="bc-actions">
+      <button type="button" class="btn btn-secondary" (click)="close()">Cancelar</button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        [disabled]="saving() || !config()"
+        (click)="save()"
+      >
+        {{ saving() ? 'Guardando…' : 'Guardar' }}
+      </button>
+    </footer>
+  </div>
+}

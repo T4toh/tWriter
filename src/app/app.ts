@@ -7,10 +7,12 @@ import { SettingsService } from './core/settings-service';
 import { Tree } from './tree/tree';
 import { Editor } from './editor/editor';
 import { DebugPanel } from './debug/debug-panel';
+import { BookConfigModal } from './book-config/book-config-modal';
+import { ToastContainer } from './toast/toast-container';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, DebugPanel],
+  imports: [Tree, Editor, DebugPanel, BookConfigModal, ToastContainer],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

@@ -1,0 +1,7 @@
+<div class="toast-stack">
+  @for (t of toast.toasts(); track t.id) {
+    <div class="toast" [attr.data-level]="t.level" (click)="dismiss(t.id)">
+      <span class="msg">{{ t.message }}</span>
+    </div>
+  }
+</div>

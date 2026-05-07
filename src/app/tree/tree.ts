@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
+import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { NavigationService } from '../core/navigation-service';
 import { ProjectService } from '../core/project-service';
@@ -23,6 +24,7 @@ export class Tree {
   private chapter = inject(ChapterService);
   private settings = inject(SettingsService);
   private nav = inject(NavigationService);
+  private bookCfg = inject(BookConfigService);
 
   protected readonly root = this.project.tree;
   protected readonly loading = this.project.loading;
@@ -74,6 +76,7 @@ export class Tree {
         createSaga: !!this.settings.root(),
         moveable: false,
         exportEpub: false,
+        configBook: false,
       };
     }
     if (node.kind === 'chapter') {
@@ -92,6 +95,7 @@ export class Tree {
         createSaga: false,
         moveable: this.isMoveable(node),
         exportEpub: false,
+        configBook: false,
       };
     }
     const importable = this.collectImportable(node);
@@ -109,6 +113,7 @@ export class Tree {
       createSaga: false,
       moveable: node.kind !== 'saga' && this.isMoveable(node),
       exportEpub: node.kind === 'book',
+      configBook: node.kind === 'book',
     };
   });
 
@@ -310,6 +315,13 @@ export class Tree {
     if (!m || !m.node) return;
     this.closeMenu();
     await this.chapter.exportEpub(m.node);
+  }
+
+  protected configBook(): void {
+    const m = this.menu();
+    if (!m || !m.node) return;
+    this.closeMenu();
+    this.bookCfg.openFor(m.node);
   }
 
   /** Devuelve todos los .odt/.docx descendientes que NO tienen .html sibling. */
