@@ -118,6 +118,12 @@ Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automáti
 - Progress bar con eventos `import-progress` desde Rust (archivo actual + done/total)
 - ImportSummary final: counts de dirs creados, caps convertidos, caps copiados, extras + lista de errores
 
+### Distribución (pendiente)
+
+- **Linux**: AppImage con auto-update (mismo flujo que `dialogos_a_esp` — `tauri-plugin-updater` + bundle `.AppImage` en releases de GitHub).
+- **Windows**: build `.msi` o `.exe` en la máquina Waldorf cuando esté disponible.
+- **macOS**: diferido hasta que arregle la pantalla del MacBook Pro.
+
 ### Diferido (Fase 3+)
 
 - Más variantes de divisor de escena (más allá del `* * *`)
