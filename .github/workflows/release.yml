@@ -9,35 +9,39 @@ on:
 jobs:
   build-linux:
     runs-on: ubuntu-24.04
-    # Imagen Tauri-ready basada en Fedora 40 con Node 22 — webkit2gtk-4.1
-    # + gtk3 + gdk-pixbuf loaders + linuxdeploy deps + Rust preinstalados.
-    # Mantenida por https://github.com/ivangabriele/docker-tauri.
-    # Fedora 40 tiene webkit más nuevo que Ubuntu 24.04 → bundle compatible
-    # con Mesa moderno (Arch/CachyOS/Fedora). ivangabriele dropeó las tags
-    # Arch — Fedora es el candidato más cercano disponible.
-    container:
-      image: ivangabriele/tauri:fedora-40-22
-      options: --user root
     permissions:
       contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 9
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Cache cargo
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
 
-      - name: Pre-cache patched linuxdeploy-gtk hook
-        # Hook upstream fuerza GDK_BACKEND=x11 incondicional → crash EGL en
-        # Wayland moderno. Patch: solo forzar x11 si NO hay sesión Wayland.
+      - name: Install Linux deps
         run: |
-          mkdir -p ~/.cache/tauri
-          curl -fsSL https://raw.githubusercontent.com/tauri-apps/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh \
-            | sed 's|^export GDK_BACKEND=x11|[ -z "$WAYLAND_DISPLAY" ] \&\& export GDK_BACKEND=x11|' \
-            > ~/.cache/tauri/linuxdeploy-plugin-gtk.sh
-          chmod +x ~/.cache/tauri/linuxdeploy-plugin-gtk.sh
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev
 
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
@@ -48,18 +52,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # FUSE no funciona en GH Actions container → linuxdeploy se extrae
-          # primero en lugar de mountear.
-          APPIMAGE_EXTRACT_AND_RUN: '1'
-          NO_STRIP: 'true'
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'tWriter ${{ github.ref_name }}'
           releaseBody: |
-            Auto-update: la app instalada chequea esta release al arrancar.
+            **Linux (Arch / CachyOS)**: instalá vía AUR — `yay -S twriter-bin`. Auto-update con `yay -Syu`.
 
-            Linux: descargar `.AppImage` (recomendado) o `.deb`.
-            Windows: descargar `.msi` o `.exe` (NSIS).
+            **Linux (Debian / Ubuntu)**: descargar `.deb` y `sudo apt install ./twriter_*.deb`.
+
+            **Windows**: descargar `.msi` o `.exe` (NSIS).
           releaseDraft: true
           prerelease: false
 
