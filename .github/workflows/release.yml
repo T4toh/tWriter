@@ -57,6 +57,20 @@ jobs:
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
 
+      - name: Pre-cache patched linuxdeploy-gtk hook (Linux)
+        # AppRun hook upstream fuerza GDK_BACKEND=x11 incondicional, lo que
+        # crashea EGL en hosts Wayland modernos (Arch / Plasma 6 sobre Mesa
+        # 24+). Patch: solo forzar x11 si NO hay sesión Wayland. Tauri usa
+        # el hook desde ~/.cache/tauri/ si ya está, sin descargar.
+        if: matrix.platform == 'ubuntu-24.04'
+        run: |
+          mkdir -p ~/.cache/tauri
+          curl -fsSL https://raw.githubusercontent.com/tauri-apps/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh \
+            | sed 's|^export GDK_BACKEND=x11|[ -z "$WAYLAND_DISPLAY" ] \&\& export GDK_BACKEND=x11|' \
+            > ~/.cache/tauri/linuxdeploy-plugin-gtk.sh
+          chmod +x ~/.cache/tauri/linuxdeploy-plugin-gtk.sh
+          grep -n "GDK_BACKEND" ~/.cache/tauri/linuxdeploy-plugin-gtk.sh
+
       - name: Build + release
         uses: tauri-apps/tauri-action@v0
         env:
