@@ -28,6 +28,7 @@ jobs:
             webkit2gtk-4.1 gtk3 \
             libayatana-appindicator librsvg \
             openssl patchelf fuse2 file squashfs-tools \
+            xdg-utils desktop-file-utils \
             github-cli
 
       - name: Checkout
