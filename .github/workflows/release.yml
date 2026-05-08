@@ -9,28 +9,17 @@ on:
 jobs:
   build-linux:
     runs-on: ubuntu-24.04
+    # Imagen Tauri-ready basada en Arch rolling — webkit2gtk-4.1 + gtk3 +
+    # gdk-pixbuf loaders + linuxdeploy deps + Rust + Node + pnpm preinstalados.
+    # Mantenida por la comunidad (https://github.com/ivangabriele/docker-tauri).
+    # Bundlea las mismas libs que un usuario CachyOS/Arch, evitando mismatch
+    # webkit/Mesa que crasheaba EGL.
     container:
-      image: archlinux:latest
+      image: ivangabriele/tauri:archlinux-rolling-rust-stable
       options: --user root
     permissions:
       contents: write
     steps:
-      - name: Install Arch deps
-        # Build dentro de container Arch para que las libs bundleadas (webkit,
-        # gtk, libavif) coincidan con Mesa moderno del usuario final
-        # (CachyOS/Arch). Ubuntu 22.04/24.04 traen webkit2gtk demasiado viejo
-        # y crashean EGL en Wayland Plasma 6.
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm \
-            base-devel git curl wget tar \
-            nodejs npm pnpm rust \
-            webkit2gtk-4.1 gtk3 gdk-pixbuf2 \
-            libayatana-appindicator librsvg \
-            openssl patchelf fuse2 file squashfs-tools \
-            xdg-utils desktop-file-utils shared-mime-info \
-            github-cli
-
       - name: Checkout
         uses: actions/checkout@v5
 
@@ -48,7 +37,6 @@ jobs:
             | sed 's|^export GDK_BACKEND=x11|[ -z "$WAYLAND_DISPLAY" ] \&\& export GDK_BACKEND=x11|' \
             > ~/.cache/tauri/linuxdeploy-plugin-gtk.sh
           chmod +x ~/.cache/tauri/linuxdeploy-plugin-gtk.sh
-          grep -n "GDK_BACKEND" ~/.cache/tauri/linuxdeploy-plugin-gtk.sh
 
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
@@ -73,7 +61,6 @@ jobs:
             Windows: descargar `.msi` o `.exe` (NSIS).
           releaseDraft: true
           prerelease: false
-          args: --verbose
 
   build-windows:
     runs-on: windows-latest
