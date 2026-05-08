@@ -40,3 +40,8 @@ testem.log
 # System files
 .DS_Store
 Thumbs.db
+
+# Tauri signing keys — NUNCA commitear
+*.key
+*.key.pub
+.tauri/

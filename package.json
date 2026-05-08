@@ -19,6 +19,8 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-process": "^2",
+    "@tauri-apps/plugin-updater": "^2",
     "@tiptap/core": "^3.22.5",
     "@tiptap/extension-text-align": "^3.22.5",
     "@tiptap/extension-typography": "^3.22.5",

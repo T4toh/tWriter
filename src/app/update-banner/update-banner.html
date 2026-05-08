@@ -1,0 +1,26 @@
+@if (updater.estado() === 'available') {
+  <div class="update-banner">
+    <span class="msg">
+      Nueva versión disponible: <strong>v{{ updater.versionDisponible() }}</strong>
+    </span>
+    <div class="actions">
+      <button type="button" class="apply" (click)="aplicar()">Actualizar</button>
+      <button type="button" class="dismiss" (click)="descartar()" title="Descartar">✕</button>
+    </div>
+  </div>
+} @else if (updater.estado() === 'downloading') {
+  <div class="update-banner downloading">
+    <span class="msg">Descargando v{{ updater.versionDisponible() }}…</span>
+    <div class="bar"><div class="fill" [style.width.%]="updater.progreso()"></div></div>
+    <span class="pct">{{ updater.progreso() }}%</span>
+  </div>
+} @else if (updater.estado() === 'ready') {
+  <div class="update-banner ready">
+    <span class="msg">Reiniciando para aplicar v{{ updater.versionDisponible() }}…</span>
+  </div>
+} @else if (updater.estado() === 'error') {
+  <div class="update-banner error">
+    <span class="msg">Error al actualizar: {{ updater.error() }}</span>
+    <button type="button" class="dismiss" (click)="descartar()">✕</button>
+  </div>
+}

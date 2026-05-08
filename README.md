@@ -118,10 +118,40 @@ Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automáti
 - Progress bar con eventos `import-progress` desde Rust (archivo actual + done/total)
 - ImportSummary final: counts de dirs creados, caps convertidos, caps copiados, extras + lista de errores
 
-### Distribución (pendiente)
+### Distribución ✓
 
-- **Linux**: AppImage con auto-update (mismo flujo que `dialogos_a_esp` — `tauri-plugin-updater` + bundle `.AppImage` en releases de GitHub).
-- **Windows**: build `.msi` o `.exe` en la máquina Waldorf cuando esté disponible.
+CI: `.github/workflows/release.yml` (matrix Linux + Windows, trigger `git push --tags v*.*.*`).
+Auto-update: `tauri-plugin-updater` con firma ed25519 contra `releases/latest/download/latest.json`.
+
+#### Setup inicial (una sola vez)
+
+```bash
+pnpm tauri signer generate -w ~/.tauri/twriter.key
+```
+
+- Privada queda en `~/.tauri/twriter.key` — nunca commitear.
+- Pública (`~/.tauri/twriter.key.pub`) → reemplazar `REPLACE_WITH_PUBKEY_FROM_TAURI_SIGNER_GENERATE` en `src-tauri/tauri.conf.json::plugins.updater.pubkey`.
+- En GitHub repo settings → Secrets, crear:
+  - `TAURI_SIGNING_PRIVATE_KEY` ← contenido de `~/.tauri/twriter.key`
+  - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` ← password elegida al generar.
+
+#### Cortar release
+
+```bash
+./scripts/bump-version.sh 0.2.0
+git add -A && git commit -m "chore: bump v0.2.0"
+git tag v0.2.0
+git push && git push --tags
+```
+
+CI buildea Linux (`.AppImage`, `.deb`) y Windows (`.msi`, `.exe`) firmados, sube todo a un draft release con `latest.json`. Revisar changelog y publicar manual desde GitHub.
+
+#### Auto-update
+
+App instalada chequea updates 5s después del arranque. Si hay versión nueva: banner abajo a la derecha con botón "Actualizar" → descarga + verifica firma + relanza.
+
+- **Linux**: AppImage / .deb (firma ed25519 verificada por el plugin).
+- **Windows**: .msi / .exe (sin code-signing cert → SmartScreen warning hasta que se compre cert).
 - **macOS**: diferido hasta que arregle la pantalla del MacBook Pro.
 
 ### Diferido (Fase 3+)
@@ -131,7 +161,9 @@ Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automáti
 - Editar diccionario per-saga desde UI (hoy se agregan palabras desde el popover, borrar requiere editar `saga.json` a mano)
 - Mostrar archivos no-chapter en el tree (PNG, txt, md — quedan en disco pero invisibles)
 - Divisor automático de partes (reglas confusas, lo hago a mano)
-- File picker via xdg-desktop-portal (hoy usa GTK 3 vía `tauri-plugin-dialog`/`rfd`, se ve foreign en KDE/Wayland). Requiere reemplazar `open()` por comandos Rust con `rfd { features = ["xdg-portal", "tokio"] }`.
+- File picker via xdg-desktop-portal (hoy usa GTK 3 vía `tauri-plugin-dialog`/`rfd`, se ve foreign en KDE/Wayland). Requiere reemplazar `open()` por comandos Rust con `rfd { features = ["xdg-portal", "tokio"] }`. Fix unifica también el picker de tapas en wizard.
+- Reemplazar `window.prompt()` (crear saga, etc.) por modal propio consistente con el resto de la UI (`BookConfigModal` style).
+- Auto-abrir el modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Notas/research sidebar derecho
 - Drag & drop reorder de capítulos
 - Diff/historial visual via git log
@@ -182,6 +214,14 @@ pnpm tauri build    # paquete (.AppImage / .deb)
 Primera build de Rust ~5 min. Después es incremental.
 
 Linux (Arch / CachyOS) requiere `webkit2gtk-4.1`, `librsvg`, `libayatana-appindicator`.
+
+En **Arch / CachyOS** (system libs con secciones ELF `.relr.dyn`) el `strip` que linuxdeploy embebe falla. Workaround:
+
+```bash
+NO_STRIP=true pnpm tauri build
+```
+
+CI (Ubuntu 22.04) no necesita este flag — system libs ahí son ELF clásico.
 
 ## Licencia
 

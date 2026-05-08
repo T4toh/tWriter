@@ -5,6 +5,7 @@ import { GitService } from './core/git-service';
 import { ImportWizardService } from './core/import-wizard-service';
 import { ProjectService } from './core/project-service';
 import { SettingsService } from './core/settings-service';
+import { UpdaterService } from './core/updater-service';
 import { Tree } from './tree/tree';
 import { Editor } from './editor/editor';
 import { DebugPanel } from './debug/debug-panel';
@@ -12,10 +13,11 @@ import { BookConfigModal } from './book-config/book-config-modal';
 import { ToastContainer } from './toast/toast-container';
 import { GrammarSettings } from './grammar-settings/grammar-settings';
 import { ImportWizard } from './import-wizard/import-wizard';
+import { UpdateBanner } from './update-banner/update-banner';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, DebugPanel, BookConfigModal, ToastContainer, GrammarSettings, ImportWizard],
+  imports: [Tree, Editor, DebugPanel, BookConfigModal, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -28,6 +30,7 @@ export class App {
   private chapter = inject(ChapterService);
   protected git = inject(GitService);
   protected debug = inject(DebugService);
+  private updater = inject(UpdaterService);
 
   private lastChapterErr: string | null = null;
   private lastProjectErr: string | null = null;
@@ -72,6 +75,7 @@ export class App {
     if (this.settings.root()) {
       await this.project.loadTree();
     }
+    setTimeout(() => void this.updater.chequear(), 5000);
   }
 
   protected refresh(): void {
