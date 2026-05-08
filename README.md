@@ -166,6 +166,7 @@ App instalada chequea updates 5s después del arranque. Si hay versión nueva: b
 - Auto-abrir el modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Template de saga/libro/cap precargado en instalación nueva (sin novelas en disco) para probar features sin tener que importar nada — capítulo dummy con texto en ES y EN, diálogos sin convertir, errores ortográficos a propósito, scene break, dropcap.
 - Metadata + branding del bundle: ícono propio en `.AppImage`/`.deb`/`.msi`/`.exe` (hoy fallback genérico), description real (hoy "A Tauri App" en `Cargo.toml`), `bundle.copyright`, `bundle.publisher`, `bundle.shortDescription`/`longDescription` en `tauri.conf.json`. Linux: `.desktop` con categoría correcta.
+- Tema GTK del window decoration / dialogs nativos respetando sistema (hoy linuxdeploy AppRun fuerza `GTK_THEME=Adwaita:light/dark` leyendo gsettings de GNOME — en KDE/Plasma queda Adwaita default en vez de Breeze). Workaround: env var `APPIMAGE_GTK_THEME=Breeze:dark` o patchear el AppRun hook en CI.
 - Notas/research sidebar derecho
 - Drag & drop reorder de capítulos
 - Diff/historial visual via git log
