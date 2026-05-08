@@ -120,20 +120,30 @@ Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automáti
 
 ### Distribución ✓
 
-CI: `.github/workflows/release.yml` (matrix Linux + Windows, trigger `git push --tags v*.*.*`).
-Auto-update: `tauri-plugin-updater` con firma ed25519 contra `releases/latest/download/latest.json`.
+CI: `.github/workflows/release.yml`. Trigger: `git push --tags v*.*.*`. Linux job
+buildea `.deb`, Windows job buildea `.msi` + `.exe`. Ambos firmados ed25519.
+
+- **Linux Arch / CachyOS**: PKGBUILD `twriter-bin` local en `packaging/aur/`. Pull
+  el `.deb` del release y lo instala vía pacman. No publicado en AUR (uso
+  personal). Para update: `./packaging/aur/rebuild.sh` después de cada release.
+- **Linux Debian / Ubuntu**: descargar `.deb` del release, `sudo apt install ./twriter_*.deb`. Sin auto-update.
+- **Windows**: descargar `.msi` o `.exe` del release. Auto-update Tauri-native
+  vía banner in-app contra `releases/latest/download/latest.json`.
+- **macOS**: diferido hasta que arregle la pantalla del MacBook Pro.
 
 #### Setup inicial (una sola vez)
 
+Generar keypair de firma:
+
 ```bash
-pnpm tauri signer generate -w ~/.tauri/twriter.key
+pnpm tauri signer generate -w ~/.tauri/twriter.key --password "<password>"
 ```
 
 - Privada queda en `~/.tauri/twriter.key` — nunca commitear.
-- Pública (`~/.tauri/twriter.key.pub`) → reemplazar `REPLACE_WITH_PUBKEY_FROM_TAURI_SIGNER_GENERATE` en `src-tauri/tauri.conf.json::plugins.updater.pubkey`.
+- Pública en `~/.tauri/twriter.key.pub` → ya está embebida en `tauri.conf.json::plugins.updater.pubkey`.
 - En GitHub repo settings → Secrets, crear:
   - `TAURI_SIGNING_PRIVATE_KEY` ← contenido de `~/.tauri/twriter.key`
-  - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` ← password elegida al generar.
+  - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` ← password elegida.
 
 #### Cortar release
 
@@ -144,15 +154,14 @@ git tag v0.2.0
 git push && git push --tags
 ```
 
-CI buildea Linux (`.AppImage`, `.deb`) y Windows (`.msi`, `.exe`) firmados, sube todo a un draft release con `latest.json`. Revisar changelog y publicar manual desde GitHub.
+CI buildea + sube a draft release. Revisás changelog y publicás manual desde
+GitHub UI. Después en local:
 
-#### Auto-update
+```bash
+./packaging/aur/rebuild.sh 0.2.0   # bumpea pkgver, sha256sum, makepkg -si
+```
 
-App instalada chequea updates 5s después del arranque. Si hay versión nueva: banner abajo a la derecha con botón "Actualizar" → descarga + verifica firma + relanza.
-
-- **Linux**: AppImage / .deb (firma ed25519 verificada por el plugin).
-- **Windows**: .msi / .exe (sin code-signing cert → SmartScreen warning hasta que se compre cert).
-- **macOS**: diferido hasta que arregle la pantalla del MacBook Pro.
+App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 
 ### Diferido (Fase 3+)
 
@@ -165,7 +174,8 @@ App instalada chequea updates 5s después del arranque. Si hay versión nueva: b
 - Reemplazar `window.prompt()` (crear saga, etc.) por modal propio consistente con el resto de la UI (`BookConfigModal` style).
 - Auto-abrir el modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Template de saga/libro/cap precargado en instalación nueva (sin novelas en disco) para probar features sin tener que importar nada — capítulo dummy con texto en ES y EN, diálogos sin convertir, errores ortográficos a propósito, scene break, dropcap.
-- Metadata + branding del bundle: ícono propio en `.AppImage`/`.deb`/`.msi`/`.exe` (hoy fallback genérico), description real (hoy "A Tauri App" en `Cargo.toml`), `bundle.copyright`, `bundle.publisher`, `bundle.shortDescription`/`longDescription` en `tauri.conf.json`. Linux: `.desktop` con categoría correcta.
+- Metadata + branding del bundle: ícono propio en `.deb`/`.msi`/`.exe` (hoy fallback genérico), description real (hoy "A Tauri App" en `Cargo.toml`), `bundle.copyright`, `bundle.publisher`, `bundle.shortDescription`/`longDescription` en `tauri.conf.json`, `bundle.category` ("Productivity"). Esto fixea el `.desktop` (Comment + Categories) que hoy queda vacío.
+- Sizes de ícono adicionales en `.deb` (hoy solo 32, 128, 256@2 — algunos launchers buscan 48/64).
 - Tema GTK del window decoration / dialogs nativos respetando sistema (hoy linuxdeploy AppRun fuerza `GTK_THEME=Adwaita:light/dark` leyendo gsettings de GNOME — en KDE/Plasma queda Adwaita default en vez de Breeze). Workaround: env var `APPIMAGE_GTK_THEME=Breeze:dark` o patchear el AppRun hook en CI.
 - Notas/research sidebar derecho
 - Drag & drop reorder de capítulos

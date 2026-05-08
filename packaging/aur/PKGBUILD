@@ -1,0 +1,32 @@
+# Maintainer: tatoh <tatukis@gmail.com>
+pkgname=twriter-bin
+_pkgname=twriter
+pkgver=0.1.12
+pkgrel=1
+pkgdesc="Editor de novelas en ES/EN con conversor RAE de diálogos, gramática vía LanguageTool, export EPUB"
+arch=('x86_64')
+url="https://github.com/T4toh/tWriter"
+license=('MIT')
+depends=(
+    'webkit2gtk-4.1'
+    'gtk3'
+    'librsvg'
+    'libayatana-appindicator'
+)
+optdepends=(
+    'pandoc: importar archivos .docx/.odt'
+    'docker: correr LanguageTool local'
+)
+provides=('twriter')
+conflicts=('twriter')
+options=('!strip' '!debug')
+install="${pkgname}.install"
+source=("${pkgname}-${pkgver}.deb::https://github.com/T4toh/tWriter/releases/download/v${pkgver}/${_pkgname}_${pkgver}_amd64.deb")
+sha256sums=('SKIP')
+
+package() {
+    cd "${srcdir}"
+    bsdtar -xf "${pkgname}-${pkgver}.deb"
+    bsdtar -xf data.tar.gz -C "${pkgdir}"
+    # .deb instala a /usr/, queda como está
+}
