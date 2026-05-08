@@ -9,13 +9,14 @@ on:
 jobs:
   build-linux:
     runs-on: ubuntu-24.04
-    # Imagen Tauri-ready basada en Arch rolling — webkit2gtk-4.1 + gtk3 +
-    # gdk-pixbuf loaders + linuxdeploy deps + Rust + Node + pnpm preinstalados.
-    # Mantenida por la comunidad (https://github.com/ivangabriele/docker-tauri).
-    # Bundlea las mismas libs que un usuario CachyOS/Arch, evitando mismatch
-    # webkit/Mesa que crasheaba EGL.
+    # Imagen Tauri-ready basada en Fedora 40 con Node 22 — webkit2gtk-4.1
+    # + gtk3 + gdk-pixbuf loaders + linuxdeploy deps + Rust preinstalados.
+    # Mantenida por https://github.com/ivangabriele/docker-tauri.
+    # Fedora 40 tiene webkit más nuevo que Ubuntu 24.04 → bundle compatible
+    # con Mesa moderno (Arch/CachyOS/Fedora). ivangabriele dropeó las tags
+    # Arch — Fedora es el candidato más cercano disponible.
     container:
-      image: ivangabriele/tauri:archlinux-rolling-rust-stable
+      image: ivangabriele/tauri:fedora-40-22
       options: --user root
     permissions:
       contents: write
