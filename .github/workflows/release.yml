@@ -73,6 +73,7 @@ jobs:
             Windows: descargar `.msi` o `.exe` (NSIS).
           releaseDraft: true
           prerelease: false
+          args: --verbose
 
   build-windows:
     runs-on: windows-latest
