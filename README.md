@@ -164,6 +164,8 @@ App instalada chequea updates 5s después del arranque. Si hay versión nueva: b
 - File picker via xdg-desktop-portal (hoy usa GTK 3 vía `tauri-plugin-dialog`/`rfd`, se ve foreign en KDE/Wayland). Requiere reemplazar `open()` por comandos Rust con `rfd { features = ["xdg-portal", "tokio"] }`. Fix unifica también el picker de tapas en wizard.
 - Reemplazar `window.prompt()` (crear saga, etc.) por modal propio consistente con el resto de la UI (`BookConfigModal` style).
 - Auto-abrir el modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
+- Template de saga/libro/cap precargado en instalación nueva (sin novelas en disco) para probar features sin tener que importar nada — capítulo dummy con texto en ES y EN, diálogos sin convertir, errores ortográficos a propósito, scene break, dropcap.
+- Metadata + branding del bundle: ícono propio en `.AppImage`/`.deb`/`.msi`/`.exe` (hoy fallback genérico), description real (hoy "A Tauri App" en `Cargo.toml`), `bundle.copyright`, `bundle.publisher`, `bundle.shortDescription`/`longDescription` en `tauri.conf.json`. Linux: `.desktop` con categoría correcta.
 - Notas/research sidebar derecho
 - Drag & drop reorder de capítulos
 - Diff/historial visual via git log
