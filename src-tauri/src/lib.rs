@@ -1,6 +1,7 @@
 mod book_config;
 mod create;
 mod epub;
+mod extras;
 mod fs;
 mod git;
 mod grammar;
@@ -15,6 +16,7 @@ use book_config::{get_book_config, set_book_config};
 use saga_config::{find_saga_dir, get_saga_config, set_saga_config};
 use create::{create_chapter, create_directory};
 use epub::export_book;
+use extras::{add_extra, has_extras, list_extras, remove_extra, rename_extra};
 use fs::{
     get_tree, is_directory_excluded, read_chapter, read_meta, set_directory_excluded,
     write_chapter, write_meta,
@@ -71,6 +73,11 @@ pub fn run() {
             set_directory_excluded,
             scan_import_source,
             import_wizard_apply,
+            list_extras,
+            has_extras,
+            add_extra,
+            remove_extra,
+            rename_extra,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

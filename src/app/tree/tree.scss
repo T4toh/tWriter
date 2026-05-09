@@ -254,6 +254,42 @@
   margin: 4px 0;
 }
 
+.row.extras-header {
+  font-style: italic;
+  color: var(--fg-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.row.extra {
+  font-size: 12px;
+  color: var(--fg-muted);
+
+  .name {
+    font-style: normal;
+  }
+}
+
+.row.drag-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+  background: rgba(200, 168, 120, 0.12);
+}
+
+.extra-badge {
+  margin-left: auto;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-style: normal;
+  background: var(--border);
+  color: var(--fg-muted);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
 .row.group.excluded {
   opacity: 0.55;
   font-style: italic;

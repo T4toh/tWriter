@@ -1,17 +1,23 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { invoke } from '@tauri-apps/api/core';
+import { openPath } from '@tauri-apps/plugin-opener';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
+import { ExtraEntry, ExtrasService } from '../core/extras-service';
 import { NavigationService } from '../core/navigation-service';
 import { ProjectService } from '../core/project-service';
 import { SettingsService } from '../core/settings-service';
+import { ToastService } from '../core/toast-service';
 import { TreeNode } from '../core/types';
 
 interface ContextMenu {
   x: number;
   y: number;
   node: TreeNode | null;
+  extra: { scopePath: string; entry: ExtraEntry } | null;
 }
 
 @Component({
@@ -20,23 +26,23 @@ interface ContextMenu {
   templateUrl: './tree.html',
   styleUrl: './tree.scss',
 })
-export class Tree {
+export class Tree implements OnDestroy {
   private project = inject(ProjectService);
   private chapter = inject(ChapterService);
   private settings = inject(SettingsService);
   private nav = inject(NavigationService);
   private bookCfg = inject(BookConfigService);
+  private extras = inject(ExtrasService);
+  private toast = inject(ToastService);
 
   protected readonly root = this.project.tree;
   protected readonly loading = this.project.loading;
   protected readonly error = this.project.error;
   protected readonly activePath = computed(() => this.chapter.active()?.path ?? null);
   protected readonly browsingPath = this.nav.browsingPath;
-  /** Path activo de UI (capítulo abierto si hay, si no path de browse). */
   protected readonly currentPath = computed(
     () => this.activePath() ?? this.browsingPath(),
   );
-  /** Set de paths ancestros del current (para highlight tenue). */
   protected readonly ancestorPaths = computed(() => {
     const cur = this.currentPath();
     const root = this.root();
@@ -57,11 +63,59 @@ export class Tree {
   });
   protected readonly bulkProgress = this.chapter.bulkProgress;
   protected readonly menu = signal<ContextMenu | null>(null);
+  /** Path del scope (saga/book) que está siendo target de drag&drop OS files. */
+  protected readonly dragOverScope = signal<string | null>(null);
+
+  private dragUnlisten: (() => void) | null = null;
+
+  constructor() {
+    void this.bindDragDrop();
+    effect(() => {
+      // Limpiar cache de extras cuando cambia el root del proyecto
+      this.project.root();
+      this.extras.clear();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.dragUnlisten?.();
+  }
+
+  protected getExtras(scopePath: string): ExtraEntry[] {
+    return this.extras.get(scopePath);
+  }
+
+  protected hasLoadedExtras(scopePath: string): boolean {
+    return this.extras.hasLoaded(scopePath);
+  }
 
   /** Acciones disponibles para el nodo del menú. */
   protected readonly menuActions = computed(() => {
     const m = this.menu();
     if (!m) return null;
+    if (m.extra) {
+      return {
+        importThis: false,
+        deleteOriginal: false,
+        deleteFile: false,
+        deleteDir: false,
+        importBulk: 0,
+        cleanupBulk: 0,
+        createChapter: false,
+        createSection: false,
+        createBook: false,
+        createSaga: false,
+        moveable: false,
+        exportEpub: false,
+        configBook: false,
+        excludable: false,
+        includable: false,
+        addExtra: false,
+        openExtra: true,
+        renameExtra: true,
+        removeExtra: true,
+      };
+    }
     const node = m.node;
     if (!node) {
       return {
@@ -80,6 +134,10 @@ export class Tree {
         configBook: false,
         excludable: false,
         includable: false,
+        addExtra: false,
+        openExtra: false,
+        renameExtra: false,
+        removeExtra: false,
       };
     }
     if (node.kind === 'chapter') {
@@ -101,11 +159,16 @@ export class Tree {
         configBook: false,
         excludable: false,
         includable: false,
+        addExtra: false,
+        openExtra: false,
+        renameExtra: false,
+        removeExtra: false,
       };
     }
     const importable = this.collectImportable(node);
     const cleanable = this.collectCleanable(node);
     const isExcluded = !!node.excluded;
+    const canAddExtra = !isExcluded && (node.kind === 'saga' || node.kind === 'book');
     return {
       importThis: false,
       deleteOriginal: false,
@@ -122,6 +185,10 @@ export class Tree {
       configBook: !isExcluded && node.kind === 'book',
       excludable: !isExcluded,
       includable: isExcluded,
+      addExtra: canAddExtra,
+      openExtra: false,
+      renameExtra: false,
+      removeExtra: false,
     };
   });
 
@@ -132,10 +199,10 @@ export class Tree {
     return /^\d+\s*-/.test(node.name);
   }
 
-  /** Estado explícito por path: true = expanded, false = collapsed. Si no está en el map, usa default. */
   private readonly explicit = signal<Map<string, boolean>>(new Map());
-  /** Override global. null = usa defaults + explicit. */
   private readonly forceState = signal<'collapsed' | 'expanded' | null>(null);
+  /** Estado expand/collapse de la sección Extras por scopePath. Default: collapsed. */
+  private readonly extrasExpanded = signal<Set<string>>(new Set());
 
   protected isExpanded(node: TreeNode): boolean {
     const force = this.forceState();
@@ -145,6 +212,31 @@ export class Tree {
     if (e !== undefined) return e;
     if (node.kind === 'saga' || node.kind === 'book') return true;
     return this.ancestorPaths().has(node.path);
+  }
+
+  protected isExtrasExpanded(scopePath: string): boolean {
+    return this.extrasExpanded().has(scopePath);
+  }
+
+  protected toggleExtras(scopePath: string): void {
+    const expanded = this.extrasExpanded().has(scopePath);
+    this.extrasExpanded.update((s) => {
+      const next = new Set(s);
+      if (expanded) next.delete(scopePath);
+      else next.add(scopePath);
+      return next;
+    });
+    if (!expanded && !this.extras.hasLoaded(scopePath)) {
+      void this.refreshExtras(scopePath);
+    }
+  }
+
+  private async refreshExtras(scopePath: string): Promise<void> {
+    try {
+      await this.extras.refresh(scopePath);
+    } catch (e) {
+      this.toast.error(`No se pudieron cargar extras: ${e}`);
+    }
   }
 
   protected toggle(node: TreeNode): void {
@@ -164,6 +256,7 @@ export class Tree {
   protected collapseAll(): void {
     this.explicit.set(new Map());
     this.forceState.set('collapsed');
+    this.extrasExpanded.set(new Set());
   }
 
   protected expandAll(): void {
@@ -173,7 +266,6 @@ export class Tree {
 
   protected async select(node: TreeNode): Promise<void> {
     if (node.kind === 'chapter') {
-      // Setear browsing al dir padre para que al cerrar el cap se vea el contexto correcto
       const parentPath = node.path.replace(/\/[^/]+$/, '');
       this.nav.setBrowsing(parentPath);
       await this.chapter.open(node);
@@ -183,12 +275,18 @@ export class Tree {
   protected onContextMenu(event: MouseEvent, node: TreeNode): void {
     event.preventDefault();
     event.stopPropagation();
-    this.menu.set({ x: event.clientX, y: event.clientY, node });
+    this.menu.set({ x: event.clientX, y: event.clientY, node, extra: null });
+  }
+
+  protected onExtraContextMenu(event: MouseEvent, scopePath: string, entry: ExtraEntry): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.menu.set({ x: event.clientX, y: event.clientY, node: null, extra: { scopePath, entry } });
   }
 
   protected onEmptyContext(event: MouseEvent): void {
     event.preventDefault();
-    this.menu.set({ x: event.clientX, y: event.clientY, node: null });
+    this.menu.set({ x: event.clientX, y: event.clientY, node: null, extra: null });
   }
 
   protected closeMenu(): void {
@@ -341,7 +439,129 @@ export class Tree {
     }
   }
 
-  /** Devuelve todos los .odt/.docx descendientes que NO tienen .html sibling. */
+  protected async addExtraFromMenu(): Promise<void> {
+    const m = this.menu();
+    if (!m || !m.node) return;
+    const scopePath = m.node.path;
+    this.closeMenu();
+    await this.pickAndAddExtras(scopePath);
+  }
+
+  private async pickAndAddExtras(scopePath: string): Promise<void> {
+    const result = await openDialog({
+      multiple: true,
+      directory: false,
+      title: 'Agregar extra(s)',
+    });
+    if (!result) return;
+    const paths = Array.isArray(result) ? result : [result];
+    await this.addExtraFiles(scopePath, paths);
+  }
+
+  private async addExtraFiles(scopePath: string, paths: string[]): Promise<void> {
+    let added = 0;
+    let failed = 0;
+    for (const p of paths) {
+      try {
+        await this.extras.addFromPath(scopePath, p);
+        added++;
+      } catch (e) {
+        failed++;
+        this.toast.error(`Falló agregar ${p}: ${e}`);
+      }
+    }
+    if (added > 0) {
+      this.extrasExpanded.update((s) => new Set([...s, scopePath]));
+      this.toast.info(`Agregado${added === 1 ? '' : 's'} ${added} extra${added === 1 ? '' : 's'}.`);
+    }
+    if (failed > 0 && added === 0) {
+      this.toast.error(`No se pudo agregar ningún extra.`);
+    }
+  }
+
+  protected async openExtra(): Promise<void> {
+    const m = this.menu();
+    if (!m || !m.extra) return;
+    const path = m.extra.entry.path;
+    this.closeMenu();
+    try {
+      await openPath(path);
+    } catch (e) {
+      this.toast.error(`No se pudo abrir: ${e}`);
+    }
+  }
+
+  protected async renameExtra(): Promise<void> {
+    const m = this.menu();
+    if (!m || !m.extra) return;
+    const { scopePath, entry } = m.extra;
+    this.closeMenu();
+    const newName = prompt('Nuevo nombre del archivo:', entry.name);
+    if (!newName?.trim() || newName.trim() === entry.name) return;
+    try {
+      await this.extras.rename(scopePath, entry.relative_path, newName.trim());
+    } catch (e) {
+      this.toast.error(`No se pudo renombrar: ${e}`);
+    }
+  }
+
+  protected async removeExtra(): Promise<void> {
+    const m = this.menu();
+    if (!m || !m.extra) return;
+    const { scopePath, entry } = m.extra;
+    this.closeMenu();
+    if (!confirm(`Borrar extra "${entry.name}"?\nEl archivo se borra de disco.`)) return;
+    try {
+      await this.extras.remove(scopePath, entry.relative_path);
+    } catch (e) {
+      this.toast.error(`No se pudo borrar: ${e}`);
+    }
+  }
+
+  protected async openExtraEntry(_scopePath: string, entry: ExtraEntry): Promise<void> {
+    try {
+      await openPath(entry.path);
+    } catch (e) {
+      this.toast.error(`No se pudo abrir: ${e}`);
+    }
+  }
+
+  private async bindDragDrop(): Promise<void> {
+    try {
+      const webview = getCurrentWebview();
+      const unlisten = await webview.onDragDropEvent((event) => {
+        const payload = event.payload;
+        if (payload.type === 'enter' || payload.type === 'over') {
+          const scope = this.scopeAtPosition(payload.position.x, payload.position.y);
+          this.dragOverScope.set(scope);
+        } else if (payload.type === 'drop') {
+          const scope = this.scopeAtPosition(payload.position.x, payload.position.y);
+          this.dragOverScope.set(null);
+          if (scope && payload.paths.length > 0) {
+            void this.addExtraFiles(scope, payload.paths);
+          }
+        } else {
+          this.dragOverScope.set(null);
+        }
+      });
+      this.dragUnlisten = unlisten;
+    } catch {
+      // En tests/SSR / no-Tauri queda sin drag&drop; ok.
+    }
+  }
+
+  /** Convierte coordenadas físicas del webview a CSS y devuelve scopePath del nodo target. */
+  private scopeAtPosition(physX: number, physY: number): string | null {
+    const dpr = window.devicePixelRatio || 1;
+    const x = physX / dpr;
+    const y = physY / dpr;
+    const el = document.elementFromPoint(x, y);
+    if (!el) return null;
+    const row = (el as HTMLElement).closest<HTMLElement>('[data-extra-scope]');
+    if (!row) return null;
+    return row.dataset['extraScope'] ?? null;
+  }
+
   private collectImportable(root: TreeNode): TreeNode[] {
     const out: TreeNode[] = [];
     this.walk(root, (n) => {
@@ -356,7 +576,6 @@ export class Tree {
     return out;
   }
 
-  /** Devuelve todos los .odt/.docx descendientes que SÍ tienen .html sibling. */
   private collectCleanable(root: TreeNode): TreeNode[] {
     const out: TreeNode[] = [];
     this.walk(root, (n) => {

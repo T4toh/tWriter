@@ -68,7 +68,9 @@
       [class.current]="node.path === currentPath()"
       [class.ancestor]="ancestorPaths().has(node.path)"
       [class.excluded]="node.excluded"
+      [class.drag-target]="(node.kind === 'saga' || node.kind === 'book') && dragOverScope() === node.path"
       [attr.data-kind]="node.kind"
+      [attr.data-extra-scope]="(node.kind === 'saga' || node.kind === 'book') ? node.path : null"
       [style.padding-left.px]="8 + depth * 14"
       (click)="toggle(node)"
       (contextmenu)="onContextMenu($event, node)"
@@ -88,6 +90,61 @@
           "
         />
       }
+      @if ((node.kind === 'saga' || node.kind === 'book') && !node.excluded) {
+        <ng-container
+          *ngTemplateOutlet="extrasSectionTpl; context: { scopePath: node.path, depth: depth + 1 }"
+        />
+      }
+    }
+  }
+</ng-template>
+
+<ng-template #extrasSectionTpl let-scopePath="scopePath" let-depth="depth">
+  <button
+    type="button"
+    class="row extras-header"
+    [class.drag-target]="dragOverScope() === scopePath"
+    [attr.data-extra-scope]="scopePath"
+    [style.padding-left.px]="8 + depth * 14"
+    (click)="toggleExtras(scopePath)"
+  >
+    <span class="chevron">{{ isExtrasExpanded(scopePath) ? '▾' : '▸' }}</span>
+    <span class="icon">📁</span>
+    <span class="name">Extras</span>
+    @if (hasLoadedExtras(scopePath); as _loaded) {
+      @if (getExtras(scopePath).length > 0) {
+        <span class="ext">{{ getExtras(scopePath).length }}</span>
+      }
+    }
+  </button>
+  @if (isExtrasExpanded(scopePath)) {
+    @if (!hasLoadedExtras(scopePath)) {
+      <p class="status" [style.padding-left.px]="8 + (depth + 1) * 14">Cargando…</p>
+    } @else if (getExtras(scopePath).length === 0) {
+      <p class="status" [style.padding-left.px]="8 + (depth + 1) * 14">
+        Sin extras. Arrastrá archivos acá o click derecho para agregar.
+      </p>
+    } @else {
+      @for (entry of getExtras(scopePath); track entry.relative_path) {
+        <button
+          type="button"
+          class="row extra"
+          [attr.data-extra-scope]="scopePath"
+          [style.padding-left.px]="8 + (depth + 1) * 14"
+          (click)="openExtraEntry(scopePath, entry)"
+          (contextmenu)="onExtraContextMenu($event, scopePath, entry)"
+          [title]="entry.relative_path"
+        >
+          <span class="icon">{{
+            entry.kind === 'image' ? '🖼' :
+            entry.kind === 'document' ? '📄' :
+            entry.kind === 'text' ? '📝' :
+            '📦'
+          }}</span>
+          <span class="name">{{ entry.name }}</span>
+          <span class="extra-badge">extra</span>
+        </button>
+      }
     }
   }
 </ng-template>
@@ -101,6 +158,18 @@
     (click)="$event.stopPropagation()"
   >
     @if (menuActions(); as a) {
+      @if (a.openExtra) {
+        <button type="button" class="ctx-item" (click)="openExtra()">
+          <span class="ctx-label">Abrir con sistema</span>
+        </button>
+        <button type="button" class="ctx-item" (click)="renameExtra()">
+          <span class="ctx-label">Renombrar…</span>
+        </button>
+        <div class="ctx-sep"></div>
+        <button type="button" class="ctx-item danger" (click)="removeExtra()">
+          <span class="ctx-label">Borrar extra</span>
+        </button>
+      }
       @if (a.createSaga) {
         <button type="button" class="ctx-item" (click)="createSaga()">
           <span class="ctx-label">Crear saga / novela</span>
@@ -122,8 +191,14 @@
           <span class="ctx-label">Crear libro</span>
         </button>
       }
-      @if ((a.createChapter || a.createSection || a.createBook) && (a.importThis || a.deleteOriginal || a.importBulk > 0 || a.cleanupBulk > 0 || a.deleteFile || a.deleteDir)) {
+      @if ((a.createChapter || a.createSection || a.createBook) && (a.importThis || a.deleteOriginal || a.importBulk > 0 || a.cleanupBulk > 0 || a.deleteFile || a.deleteDir || a.addExtra)) {
         <div class="ctx-sep"></div>
+      }
+      @if (a.addExtra) {
+        <button type="button" class="ctx-item" (click)="addExtraFromMenu()">
+          <span class="ctx-label">Agregar extra…</span>
+          <span class="ctx-kbd">extras/</span>
+        </button>
       }
       @if (a.importThis) {
         <button type="button" class="ctx-item" (click)="importThis()">
@@ -205,7 +280,7 @@
           </button>
         }
       }
-      @if (!a.importThis && !a.deleteOriginal && a.importBulk === 0 && a.cleanupBulk === 0 && !a.deleteFile && !a.deleteDir && !a.createChapter && !a.createSection && !a.createBook && !a.createSaga && !a.exportEpub && !a.configBook && !a.excludable && !a.includable) {
+      @if (!a.openExtra && !a.importThis && !a.deleteOriginal && a.importBulk === 0 && a.cleanupBulk === 0 && !a.deleteFile && !a.deleteDir && !a.createChapter && !a.createSection && !a.createBook && !a.createSaga && !a.exportEpub && !a.configBook && !a.excludable && !a.includable && !a.addExtra) {
         <span class="ctx-empty">Sin acciones disponibles.</span>
       }
     }

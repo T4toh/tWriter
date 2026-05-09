@@ -11,6 +11,7 @@ export interface BookConfig {
   idioma?: string | null;
   isbn?: string | null;
   tapa?: string | null;
+  contratapa?: string | null;
   copyright_anio?: number | null;
   derechos_reservados?: boolean | null;
   dedicatoria?: string | null;

@@ -349,6 +349,8 @@ pub struct BookImportSpec {
 pub struct SagaImportSpec {
     pub dir_name: String,
     pub config: SagaConfig,
+    #[serde(default)]
+    pub extras: Vec<ExtraImport>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -391,6 +393,9 @@ pub async fn import_wizard_apply(
 
 fn count_total_files(plan: &WizardPlan) -> u32 {
     let mut t = 0u32;
+    if let Some(saga) = &plan.saga {
+        t += saga.extras.len() as u32;
+    }
     for b in &plan.books {
         t += b.direct_chapters.len() as u32;
         t += b.extras.len() as u32;
@@ -415,6 +420,11 @@ fn apply_impl(app: AppHandle, plan: WizardPlan) -> Result<ImportSummary, String>
         let dir = target_root.join(&saga.dir_name);
         ensure_dir(&dir, &mut summary)?;
         write_saga_json(&dir, &saga.config)?;
+        for x in &saga.extras {
+            done += 1;
+            emit_progress(&app, done, total, &x.source_path);
+            handle_extra(&dir, x, &mut summary);
+        }
         dir
     } else {
         target_root.clone()
@@ -424,34 +434,36 @@ fn apply_impl(app: AppHandle, plan: WizardPlan) -> Result<ImportSummary, String>
         let book_dir = saga_dir.join(&book.dir_name);
         ensure_dir(&book_dir, &mut summary)?;
 
-        // Normalizar tapa: si es path absoluto fuera del book_dir, copiar a <book_dir>/cover.<ext>
-        // y rescribir el field tapa a relativo.
+        // Normalizar tapa/contratapa: si son paths absolutos fuera del book_dir, copiar a
+        // <book_dir>/cover.<ext> y <book_dir>/back-cover.<ext> y rescribir el field a relativo.
         let mut book_cfg = book.config.clone();
-        let mut cover_copy: Option<(PathBuf, PathBuf)> = None;
-        if let Some(tapa) = book_cfg.tapa.as_deref().filter(|s| !s.trim().is_empty()) {
-            let candidate = PathBuf::from(tapa);
-            if candidate.is_absolute() && candidate.is_file() {
-                let ext = candidate
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(|s| s.to_lowercase())
-                    .unwrap_or_else(|| "png".to_string());
-                let dest_name = format!("cover.{}", ext);
-                let dest = book_dir.join(&dest_name);
-                cover_copy = Some((candidate, dest));
-                book_cfg.tapa = Some(dest_name);
+        let mut image_copies: Vec<(PathBuf, PathBuf)> = Vec::new();
+        for (field, stem) in [(&mut book_cfg.tapa, "cover"), (&mut book_cfg.contratapa, "back-cover")] {
+            if let Some(value) = field.as_deref().filter(|s| !s.trim().is_empty()) {
+                let candidate = PathBuf::from(value);
+                if candidate.is_absolute() && candidate.is_file() {
+                    let ext = candidate
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .map(|s| s.to_lowercase())
+                        .unwrap_or_else(|| "png".to_string());
+                    let dest_name = format!("{}.{}", stem, ext);
+                    let dest = book_dir.join(&dest_name);
+                    image_copies.push((candidate, dest));
+                    *field = Some(dest_name);
+                }
             }
         }
         if let Err(e) = write_book_json(&book_dir, &book_cfg) {
             summary.failed.push(format!("book.json {}: {}", book.dir_name, e));
         }
-        if let Some((src, dst)) = cover_copy {
+        for (src, dst) in image_copies {
             if !dst.exists() {
                 match fs::copy(&src, &dst) {
                     Ok(_) => summary.copied_extras += 1,
                     Err(e) => summary
                         .failed
-                        .push(format!("copiar tapa {}: {}", src.display(), e)),
+                        .push(format!("copiar imagen {}: {}", src.display(), e)),
                 }
             }
         }

@@ -1,6 +1,28 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+const COVER_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp"];
+
+/// Busca `cover.<ext>` en `dir`. Devuelve el nombre relativo (ej: "cover.jpg") si existe.
+pub fn find_cover_in(dir: &Path) -> Option<String> {
+    find_named_image(dir, "cover")
+}
+
+/// Busca `back-cover.<ext>` en `dir`. Devuelve el nombre relativo si existe.
+pub fn find_back_cover_in(dir: &Path) -> Option<String> {
+    find_named_image(dir, "back-cover")
+}
+
+fn find_named_image(dir: &Path, stem: &str) -> Option<String> {
+    for ext in COVER_EXTS {
+        let candidate = dir.join(format!("{}.{}", stem, ext));
+        if candidate.is_file() {
+            return Some(format!("{}.{}", stem, ext));
+        }
+    }
+    None
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct BookConfig {
@@ -17,6 +39,9 @@ pub struct BookConfig {
     /// Path relativo al book dir (ej: "cover.png") o absoluto.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tapa: Option<String>,
+    /// Contratapa. Path relativo al book dir (ej: "back-cover.png") o absoluto.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contratapa: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copyright_anio: Option<u32>,
     #[serde(default)]
@@ -51,22 +76,34 @@ pub struct BookConfig {
 
 #[tauri::command]
 pub fn get_book_config(book_path: String) -> Result<BookConfig, String> {
-    let p = PathBuf::from(&book_path).join("book.json");
-    if !p.exists() {
-        // Defaults inferidos del nombre del dir
-        let dir_name = PathBuf::from(&book_path)
+    let book_dir = PathBuf::from(&book_path);
+    let p = book_dir.join("book.json");
+    let mut cfg = if p.exists() {
+        let raw = fs::read_to_string(&p).map_err(|e| e.to_string())?;
+        serde_json::from_str::<BookConfig>(&raw).map_err(|e| e.to_string())?
+    } else {
+        let dir_name = book_dir
             .file_name()
             .and_then(|s| s.to_str())
             .map(strip_numeric_prefix)
             .unwrap_or_default();
-        return Ok(BookConfig {
+        BookConfig {
             titulo: dir_name,
             idioma: Some("es".to_string()),
             ..Default::default()
-        });
+        }
+    };
+    if cfg.tapa.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+        if let Some(found) = find_cover_in(&book_dir) {
+            cfg.tapa = Some(found);
+        }
     }
-    let raw = fs::read_to_string(&p).map_err(|e| e.to_string())?;
-    serde_json::from_str(&raw).map_err(|e| e.to_string())
+    if cfg.contratapa.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+        if let Some(found) = find_back_cover_in(&book_dir) {
+            cfg.contratapa = Some(found);
+        }
+    }
+    Ok(cfg)
 }
 
 #[tauri::command]

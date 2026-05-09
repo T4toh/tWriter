@@ -125,6 +125,20 @@
         </div>
         <div class="row">
           <label>
+            <span>Contratapa (imagen)</span>
+            <div class="cover-row">
+              <input
+                type="text"
+                [ngModel]="c.contratapa"
+                (ngModelChange)="update('contratapa', $event)"
+                placeholder="ej: back-cover.png o ruta absoluta"
+              />
+              <button type="button" (click)="pickBackCover()">Buscar…</button>
+            </div>
+          </label>
+        </div>
+        <div class="row">
+          <label>
             <span>Dedicatoria</span>
             <textarea
               [ngModel]="c.dedicatoria"

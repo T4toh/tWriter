@@ -46,6 +46,7 @@ export class BookConfigModal {
         idioma: cfg.idioma ?? 'es',
         isbn: cfg.isbn ?? '',
         tapa: cfg.tapa ?? '',
+        contratapa: cfg.contratapa ?? '',
         copyright_anio: cfg.copyright_anio ?? new Date().getFullYear(),
         derechos_reservados: cfg.derechos_reservados ?? true,
         dedicatoria: cfg.dedicatoria ?? '',
@@ -76,6 +77,19 @@ export class BookConfigModal {
     if (cur) this.config.set({ ...cur, tapa: result });
   }
 
+  protected async pickBackCover(): Promise<void> {
+    const result = await openDialog({
+      multiple: false,
+      directory: false,
+      title: 'Seleccionar contratapa',
+      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+      defaultPath: this.bookPath() ?? undefined,
+    });
+    if (typeof result !== 'string') return;
+    const cur = this.config();
+    if (cur) this.config.set({ ...cur, contratapa: result });
+  }
+
   protected update<K extends keyof BookConfig>(key: K, value: BookConfig[K]): void {
     const cur = this.config();
     if (!cur) return;
@@ -97,6 +111,7 @@ export class BookConfigModal {
         idioma: cfg.idioma,
         isbn: blank(cfg.isbn),
         tapa: blank(cfg.tapa),
+        contratapa: blank(cfg.contratapa),
         copyright_anio: cfg.copyright_anio || null,
         derechos_reservados: cfg.derechos_reservados ?? null,
         dedicatoria: blank(cfg.dedicatoria),
