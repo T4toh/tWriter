@@ -1,0 +1,15 @@
+@if (viewing(); as entry) {
+  <header class="iv-header">
+    <span class="iv-title" [title]="entry.relative_path">{{ entry.name }}</span>
+    <button type="button" class="iv-close" (click)="close()" title="Cerrar (Esc)">×</button>
+  </header>
+  <div class="iv-body">
+    @if (loading()) {
+      <p class="iv-status">Cargando…</p>
+    } @else if (error(); as err) {
+      <p class="iv-status iv-error">{{ err }}</p>
+    } @else if (dataUrl(); as url) {
+      <img [src]="url" [alt]="entry.name" class="iv-img" />
+    }
+  </div>
+}

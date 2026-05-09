@@ -7,6 +7,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { ExtraEntry, ExtrasService } from '../core/extras-service';
+import { ImageViewerService } from '../core/image-viewer-service';
 import { NavigationService } from '../core/navigation-service';
 import { ProjectService } from '../core/project-service';
 import { SettingsService } from '../core/settings-service';
@@ -33,6 +34,7 @@ export class Tree implements OnDestroy {
   private nav = inject(NavigationService);
   private bookCfg = inject(BookConfigService);
   private extras = inject(ExtrasService);
+  private imageViewer = inject(ImageViewerService);
   private toast = inject(ToastService);
 
   protected readonly root = this.project.tree;
@@ -482,10 +484,14 @@ export class Tree implements OnDestroy {
   protected async openExtra(): Promise<void> {
     const m = this.menu();
     if (!m || !m.extra) return;
-    const path = m.extra.entry.path;
+    const entry = m.extra.entry;
     this.closeMenu();
+    if (entry.kind === 'image') {
+      void this.imageViewer.open(entry);
+      return;
+    }
     try {
-      await openPath(path);
+      await openPath(entry.path);
     } catch (e) {
       this.toast.error(`No se pudo abrir: ${e}`);
     }
@@ -519,6 +525,10 @@ export class Tree implements OnDestroy {
   }
 
   protected async openExtraEntry(_scopePath: string, entry: ExtraEntry): Promise<void> {
+    if (entry.kind === 'image') {
+      void this.imageViewer.open(entry);
+      return;
+    }
     try {
       await openPath(entry.path);
     } catch (e) {

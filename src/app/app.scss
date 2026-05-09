@@ -11,13 +11,26 @@
   background: var(--bg);
   color: var(--fg);
 
+  &.with-viewer {
+    grid-template-columns: 280px 1fr 380px;
+  }
+
   &.focus {
     grid-template-columns: 1fr;
+  }
+
+  &.focus.with-viewer {
+    grid-template-columns: 1fr 380px;
   }
 
   &.focus .panel-left {
     display: none;
   }
+}
+
+.panel-right {
+  border-left: 1px solid var(--border);
+  background: var(--bg-soft);
 }
 
 .panel {
