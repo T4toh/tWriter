@@ -15,6 +15,66 @@ pub struct ExportResult {
     pub chapters: u32,
 }
 
+#[derive(Serialize, Debug, Clone)]
+pub struct ExportEntry {
+    pub name: String,
+    pub path: String,
+    pub size_bytes: u64,
+    pub modified_ms: Option<u64>,
+}
+
+#[tauri::command]
+pub fn list_exports(book_path: String) -> Result<Vec<ExportEntry>, String> {
+    let dir = PathBuf::from(&book_path).join("Exportados");
+    if !dir.is_dir() {
+        // Fallback al nombre viejo "exports" para libros pre-rename.
+        let legacy = PathBuf::from(&book_path).join("exports");
+        if legacy.is_dir() {
+            return read_export_dir(&legacy);
+        }
+        return Ok(Vec::new());
+    }
+    read_export_dir(&dir)
+}
+
+fn read_export_dir(dir: &Path) -> Result<Vec<ExportEntry>, String> {
+    let mut out: Vec<ExportEntry> = Vec::new();
+    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|s| s.to_lowercase())
+            .unwrap_or_default();
+        if ext != "epub" {
+            continue;
+        }
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        let meta = fs::metadata(&path).ok();
+        let size_bytes = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+        let modified_ms = meta
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as u64);
+        out.push(ExportEntry {
+            name,
+            path: path.to_string_lossy().into_owned(),
+            size_bytes,
+            modified_ms,
+        });
+    }
+    out.sort_by(|a, b| b.modified_ms.unwrap_or(0).cmp(&a.modified_ms.unwrap_or(0)));
+    Ok(out)
+}
+
 const CSS_TEMPLATE: &str = include_str!("epub_style.css");
 
 fn build_css(template: &str) -> String {
@@ -65,7 +125,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         return Err("libro sin capítulos .html".to_string());
     }
 
-    let exports_dir = book_dir.join("exports");
+    let exports_dir = book_dir.join("Exportados");
     fs::create_dir_all(&exports_dir).map_err(|e| e.to_string())?;
     let safe_title = sanitize_filename(&cfg.titulo);
     let epub_path = exports_dir.join(format!("{}.epub", safe_title));
@@ -394,7 +454,7 @@ fn collect_chapters(book_dir: &Path) -> Result<Vec<Chapter>, String> {
             }
             p.file_name()
                 .and_then(|s| s.to_str())
-                .map(|n| !["exports", "Revisiones", "convertidos", ".git"].contains(&n))
+                .map(|n| !["exports", "Exportados", "Revisiones", "convertidos", ".git"].contains(&n))
                 .unwrap_or(true)
         })
         .collect();

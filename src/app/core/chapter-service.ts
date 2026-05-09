@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { detectLang } from '../dialogos/detect';
 import { DebugService } from './debug-service';
+import { ExportsService } from './exports-service';
 import { GitService } from './git-service';
 import { ProjectService } from './project-service';
 import { ToastService } from './toast-service';
@@ -15,6 +16,7 @@ export class ChapterService {
   private debug = inject(DebugService);
   private git = inject(GitService);
   private toast = inject(ToastService);
+  private exports = inject(ExportsService);
 
   readonly active = signal<TreeNode | null>(null);
   readonly importing = signal<boolean>(false);
@@ -245,6 +247,7 @@ export class ChapterService {
         `EPUB generado: ${filename} (${result.chapters} parte${result.chapters === 1 ? '' : 's'})`,
       );
       await this.project.loadTree();
+      void this.exports.refresh(node.path);
       return result.epub_path;
     } catch (err) {
       this.debug.error('epub', `${node.name}: ${err}`);

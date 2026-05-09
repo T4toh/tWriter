@@ -257,6 +257,7 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 - Flag `epilogo` en `meta.json` para separar epílogos del TOC principal
 - Preview EPUB tipo Kindle (B/N, distintos tamaños de pantalla — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
 - Temas para las sagas así se configuran una sola vez. (Tema sería fuente para el cuerpo, fuente para los títulos y sus respectivos tamaños. Depende de haber implementado la instalación de fuentes)
+- Revisiones de EPUB: hoy el export sobreescribe siempre `Exportados/<titulo>.epub`. Agregar input "guardar últimas N revisiones" (default 5) en `BookConfig` o settings global. Cuando se exporta, renombrar la versión actual a `<titulo>-revN.epub` antes de generar la nueva. Borrar las que excedan N. Permite volver a una compilación anterior si rompiste algo.
 
 #### Bundle / Distribución (Linux nativo)
 

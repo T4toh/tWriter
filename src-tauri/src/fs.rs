@@ -8,6 +8,7 @@ const SKIP_DIRS: &[&str] = &[
     "convertidos",
     "Revisiones",
     "exports",
+    "Exportados",
     ".git",
     "zTapas",
     "extras",

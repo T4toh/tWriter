@@ -95,6 +95,50 @@
           *ngTemplateOutlet="extrasSectionTpl; context: { scopePath: node.path, depth: depth + 1 }"
         />
       }
+      @if (node.kind === 'book' && !node.excluded) {
+        <ng-container
+          *ngTemplateOutlet="exportsSectionTpl; context: { bookPath: node.path, depth: depth + 1 }"
+        />
+      }
+    }
+  }
+</ng-template>
+
+<ng-template #exportsSectionTpl let-bookPath="bookPath" let-depth="depth">
+  <button
+    type="button"
+    class="row exports-header"
+    [style.padding-left.px]="8 + depth * 14"
+    (click)="toggleExports(bookPath)"
+  >
+    <span class="chevron">{{ isExportsExpanded(bookPath) ? '▾' : '▸' }}</span>
+    <span class="icon">📚</span>
+    <span class="name">Exportados</span>
+    @if (hasLoadedExports(bookPath) && getExports(bookPath).length > 0) {
+      <span class="ext">{{ getExports(bookPath).length }}</span>
+    }
+  </button>
+  @if (isExportsExpanded(bookPath)) {
+    @if (!hasLoadedExports(bookPath)) {
+      <p class="status" [style.padding-left.px]="8 + (depth + 1) * 14">Cargando…</p>
+    } @else if (getExports(bookPath).length === 0) {
+      <p class="status" [style.padding-left.px]="8 + (depth + 1) * 14">
+        Sin exportados todavía. Generá EPUB desde el menú del libro.
+      </p>
+    } @else {
+      @for (entry of getExports(bookPath); track entry.path) {
+        <button
+          type="button"
+          class="row export"
+          [style.padding-left.px]="8 + (depth + 1) * 14"
+          (click)="openExportEntry(entry)"
+          [title]="entry.path"
+        >
+          <span class="icon">📕</span>
+          <span class="name">{{ entry.name }}</span>
+          <span class="export-badge">epub</span>
+        </button>
+      }
     }
   }
 </ng-template>

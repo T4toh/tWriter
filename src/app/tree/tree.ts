@@ -7,6 +7,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { ExtraEntry, ExtrasService } from '../core/extras-service';
+import { ExportEntry, ExportsService } from '../core/exports-service';
 import { ImageViewerService } from '../core/image-viewer-service';
 import { NavigationService } from '../core/navigation-service';
 import { SagaConfigService } from '../core/saga-config-service';
@@ -36,6 +37,7 @@ export class Tree implements OnDestroy {
   private bookCfg = inject(BookConfigService);
   private sagaCfg = inject(SagaConfigService);
   private extras = inject(ExtrasService);
+  private exports = inject(ExportsService);
   private imageViewer = inject(ImageViewerService);
   private toast = inject(ToastService);
 
@@ -75,9 +77,10 @@ export class Tree implements OnDestroy {
   constructor() {
     void this.bindDragDrop();
     effect(() => {
-      // Limpiar cache de extras cuando cambia el root del proyecto
+      // Limpiar cache cuando cambia el root del proyecto
       this.project.root();
       this.extras.clear();
+      this.exports.clear();
     });
   }
 
@@ -91,6 +94,14 @@ export class Tree implements OnDestroy {
 
   protected hasLoadedExtras(scopePath: string): boolean {
     return this.extras.hasLoaded(scopePath);
+  }
+
+  protected getExports(bookPath: string): ExportEntry[] {
+    return this.exports.get(bookPath);
+  }
+
+  protected hasLoadedExports(bookPath: string): boolean {
+    return this.exports.hasLoaded(bookPath);
   }
 
   /** Acciones disponibles para el nodo del menú. */
@@ -211,6 +222,8 @@ export class Tree implements OnDestroy {
   private readonly forceState = signal<'collapsed' | 'expanded' | null>(null);
   /** Estado expand/collapse de la sección Extras por scopePath. Default: collapsed. */
   private readonly extrasExpanded = signal<Set<string>>(new Set());
+  /** Estado expand/collapse de la sección Exportados por bookPath. Default: collapsed. */
+  private readonly exportsExpanded = signal<Set<string>>(new Set());
 
   protected isExpanded(node: TreeNode): boolean {
     const force = this.forceState();
@@ -247,6 +260,39 @@ export class Tree implements OnDestroy {
     }
   }
 
+  protected isExportsExpanded(bookPath: string): boolean {
+    return this.exportsExpanded().has(bookPath);
+  }
+
+  protected toggleExports(bookPath: string): void {
+    const expanded = this.exportsExpanded().has(bookPath);
+    this.exportsExpanded.update((s) => {
+      const next = new Set(s);
+      if (expanded) next.delete(bookPath);
+      else next.add(bookPath);
+      return next;
+    });
+    if (!expanded && !this.exports.hasLoaded(bookPath)) {
+      void this.refreshExports(bookPath);
+    }
+  }
+
+  private async refreshExports(bookPath: string): Promise<void> {
+    try {
+      await this.exports.refresh(bookPath);
+    } catch (e) {
+      this.toast.error(`No se pudieron cargar exportados: ${e}`);
+    }
+  }
+
+  protected async openExportEntry(entry: ExportEntry): Promise<void> {
+    try {
+      await openPath(entry.path);
+    } catch (e) {
+      this.toast.error(`No se pudo abrir: ${e}`);
+    }
+  }
+
   protected toggle(node: TreeNode): void {
     this.nav.setBrowsing(node.path);
     this.chapter.close();
@@ -265,6 +311,7 @@ export class Tree implements OnDestroy {
     this.explicit.set(new Map());
     this.forceState.set('collapsed');
     this.extrasExpanded.set(new Set());
+    this.exportsExpanded.set(new Set());
   }
 
   protected expandAll(): void {
