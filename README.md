@@ -215,20 +215,85 @@ Para detenerlo:
 Resource: ~2GB RAM corriendo. La imagen `erikvl87/languagetool` incluye hunspell para
 ortografía en español/inglés — no necesitás un diccionario aparte.
 
+## Cómo instalar (desarrollo)
+
+Setup inicial en **Arch / CachyOS** desde cero.
+
+### 1. Toolchain Rust
+
+Usar `rustup` (toolchain manager oficial), no el paquete `rust` de Arch. Permite cambiar entre stable/nightly y matchea la doc de Tauri.
+
+```bash
+sudo pacman -S rustup
+rustup default stable
+```
+
+Verificar:
+
+```bash
+rustc --version
+cargo --version
+```
+
+### 2. Node.js + pnpm
+
+```bash
+sudo pacman -S nodejs pnpm
+```
+
+### 3. System libs (Tauri 2 + WebKit)
+
+```bash
+sudo pacman -S --needed \
+  webkit2gtk-4.1 \
+  librsvg \
+  libayatana-appindicator \
+  base-devel \
+  openssl \
+  gtk3 \
+  file
+```
+
+`base-devel` trae `gcc`, `make`, `pkg-config` (necesarios para compilar crates nativas como `git2`).
+
+### 4. Pandoc (importer .docx/.odt)
+
+```bash
+sudo pacman -S pandoc
+```
+
+### 5. Docker (opcional, para LanguageTool local)
+
+```bash
+sudo pacman -S docker
+sudo systemctl start docker        # arrancar on-demand, no enable
+sudo usermod -aG docker $USER     # logout/login para que tome efecto
+```
+
+Sin Docker la app igual anda — usa el API público de LanguageTool por default.
+
+### 6. Clonar e instalar
+
+```bash
+git clone <repo-url> tWriter
+cd tWriter
+pnpm install
+pnpm tauri dev
+```
+
+Primera build de Rust ~5 min (compila `git2`, `webkit`, `zip`, etc.). Después es incremental.
+
 ## Desarrollo
 
 ```bash
-pnpm install
 pnpm tauri dev      # frontend :1420 + backend Rust
 pnpm build          # solo Angular
 pnpm tauri build    # paquete (.AppImage / .deb)
+ng test             # Karma tests (Angular)
+cargo test --manifest-path src-tauri/Cargo.toml   # tests Rust
 ```
 
-Primera build de Rust ~5 min. Después es incremental.
-
-Linux (Arch / CachyOS) requiere `webkit2gtk-4.1`, `librsvg`, `libayatana-appindicator`.
-
-En **Arch / CachyOS** (system libs con secciones ELF `.relr.dyn`) el `strip` que linuxdeploy embebe falla. Workaround:
+En **Arch / CachyOS** (system libs con secciones ELF `.relr.dyn`) el `strip` que linuxdeploy embebe falla. Workaround para `tauri build`:
 
 ```bash
 NO_STRIP=true pnpm tauri build
