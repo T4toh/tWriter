@@ -267,6 +267,13 @@
           <span class="ctx-kbd">▼</span>
         </button>
       }
+      @if (a.renameable) {
+        <div class="ctx-sep"></div>
+        <button type="button" class="ctx-item" (click)="renameNode()">
+          <span class="ctx-label">Renombrar…</span>
+          <span class="ctx-kbd">F2</span>
+        </button>
+      }
       @if (a.markAsEpilogo) {
         <div class="ctx-sep"></div>
         <button type="button" class="ctx-item" (click)="markAsEpilogo()">
@@ -327,7 +334,7 @@
           </button>
         }
       }
-      @if (!a.openExtra && !a.importThis && !a.deleteOriginal && a.importBulk === 0 && a.cleanupBulk === 0 && !a.deleteFile && !a.deleteDir && !a.createChapter && !a.createSection && !a.createBook && !a.createSaga && !a.exportEpub && !a.configBook && !a.configSaga && !a.excludable && !a.includable && !a.addExtra && !a.markAsEpilogo) {
+      @if (!a.openExtra && !a.importThis && !a.deleteOriginal && a.importBulk === 0 && a.cleanupBulk === 0 && !a.deleteFile && !a.deleteDir && !a.createChapter && !a.createSection && !a.createBook && !a.createSaga && !a.exportEpub && !a.configBook && !a.configSaga && !a.excludable && !a.includable && !a.addExtra && !a.markAsEpilogo && !a.renameable) {
         <span class="ctx-empty">Sin acciones disponibles.</span>
       }
     }

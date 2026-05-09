@@ -130,6 +130,7 @@ export class Tree implements OnDestroy {
         renameExtra: true,
         removeExtra: true,
         markAsEpilogo: false,
+        renameable: false,
       };
     }
     const node = m.node;
@@ -156,6 +157,7 @@ export class Tree implements OnDestroy {
         renameExtra: false,
         removeExtra: false,
         markAsEpilogo: false,
+        renameable: false,
       };
     }
     if (node.kind === 'chapter') {
@@ -183,6 +185,7 @@ export class Tree implements OnDestroy {
         renameExtra: false,
         removeExtra: false,
         markAsEpilogo: false,
+        renameable: true,
       };
     }
     const importable = this.collectImportable(node);
@@ -211,6 +214,7 @@ export class Tree implements OnDestroy {
       renameExtra: false,
       removeExtra: false,
       markAsEpilogo: !isExcluded && node.kind === 'section' && isEpilogoName(node.name),
+      renameable: !isExcluded,
     };
   });
 
@@ -474,6 +478,45 @@ export class Tree implements OnDestroy {
     if (!m || !m.node) return;
     this.closeMenu();
     this.sagaCfg.openFor(m.node);
+  }
+
+  protected async renameNode(): Promise<void> {
+    const m = this.menu();
+    if (!m || !m.node) return;
+    const node = m.node;
+    this.closeMenu();
+    const current = node.kind === 'chapter' && node.ext
+      ? `${node.name}.${node.ext}`
+      : node.name;
+    const input = prompt('Nuevo nombre:', current);
+    if (!input) return;
+    const trimmed = input.trim();
+    if (!trimmed || trimmed === current) return;
+    const wasActive = this.chapter.active()?.path === node.path;
+    try {
+      const newPath = await invoke<string>('rename_node', {
+        path: node.path,
+        newName: trimmed,
+      });
+      await this.project.loadTree();
+      if (wasActive) {
+        const newNode = this.findNodeByPath(this.root(), newPath);
+        if (newNode) await this.chapter.open(newNode);
+      }
+      this.toast.success(`Renombrado a "${trimmed}"`);
+    } catch (err) {
+      this.toast.error(`Renombrar: ${err}`);
+    }
+  }
+
+  private findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
+    if (!root) return null;
+    if (root.path === path) return root;
+    for (const c of root.children) {
+      const found = this.findNodeByPath(c, path);
+      if (found) return found;
+    }
+    return null;
   }
 
   protected async markAsEpilogo(): Promise<void> {
