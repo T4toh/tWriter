@@ -14,7 +14,7 @@ mod settings;
 
 use book_config::{get_book_config, set_book_config};
 use saga_config::{find_saga_dir, get_saga_config, set_saga_config};
-use create::{create_chapter, create_directory};
+use create::{create_book, create_chapter, create_directory};
 use epub::export_book;
 use extras::{add_extra, has_extras, list_extras, remove_extra, rename_extra};
 use fs::{
@@ -56,6 +56,7 @@ pub fn run() {
             delete_directory,
             create_chapter,
             create_directory,
+            create_book,
             move_node,
             export_book,
             get_book_config,

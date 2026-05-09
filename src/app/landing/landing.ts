@@ -5,6 +5,7 @@ import { ProjectService } from '../core/project-service';
 import { TreeNode } from '../core/types';
 import { BookCard } from './book-card';
 import { SagaCard } from './saga-card';
+import { SagaHeader } from './saga-header';
 
 interface Crumb {
   label: string;
@@ -13,7 +14,7 @@ interface Crumb {
 
 @Component({
   selector: 'app-landing',
-  imports: [BookCard, SagaCard],
+  imports: [BookCard, SagaCard, SagaHeader],
   templateUrl: './landing.html',
   styleUrl: './landing.scss',
 })

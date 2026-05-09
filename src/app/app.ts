@@ -11,6 +11,7 @@ import { Tree } from './tree/tree';
 import { Editor } from './editor/editor';
 import { DebugPanel } from './debug/debug-panel';
 import { BookConfigModal } from './book-config/book-config-modal';
+import { SagaConfigModal } from './saga-config/saga-config-modal';
 import { ImageViewer } from './image-viewer/image-viewer';
 import { ToastContainer } from './toast/toast-container';
 import { GrammarSettings } from './grammar-settings/grammar-settings';
@@ -19,7 +20,7 @@ import { UpdateBanner } from './update-banner/update-banner';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, DebugPanel, BookConfigModal, ImageViewer, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner],
+  imports: [Tree, Editor, DebugPanel, BookConfigModal, SagaConfigModal, ImageViewer, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

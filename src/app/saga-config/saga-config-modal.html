@@ -1,0 +1,90 @@
+@if (editing(); as node) {
+  <div class="bc-backdrop" (click)="close()"></div>
+  <div class="bc-modal" (click)="$event.stopPropagation()">
+    <header class="bc-header">
+      <h2>Configurar saga</h2>
+      <p class="path">{{ node.name }}</p>
+    </header>
+
+    @if (config(); as c) {
+      <div class="bc-body">
+        <div class="row">
+          <label>
+            <span>Nombre</span>
+            <input
+              type="text"
+              [ngModel]="c.nombre"
+              (ngModelChange)="update('nombre', $event)"
+              placeholder="Nombre de la saga"
+            />
+          </label>
+        </div>
+        <div class="row split">
+          <label>
+            <span>Autor</span>
+            <input
+              type="text"
+              [ngModel]="c.autor"
+              (ngModelChange)="update('autor', $event)"
+              placeholder="Heredado a libros nuevos"
+            />
+          </label>
+          <label>
+            <span>Idioma</span>
+            <select
+              [ngModel]="c.idioma"
+              (ngModelChange)="update('idioma', $event)"
+            >
+              <option value="es">Español</option>
+              <option value="en">Inglés</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            <span>Tapa de saga (imagen)</span>
+            <div class="cover-row">
+              <input
+                type="text"
+                [ngModel]="c.tapa"
+                (ngModelChange)="update('tapa', $event)"
+                placeholder="ej: cover.png o ruta absoluta"
+              />
+              <button type="button" (click)="pickCover()">Buscar…</button>
+            </div>
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            <span>Diccionario (una palabra por línea)</span>
+            <textarea
+              [ngModel]="diccionarioText()"
+              (ngModelChange)="updateDiccionarioText($event)"
+              rows="6"
+              placeholder="nombres propios, neologismos, palabras del mundo de la saga"
+            ></textarea>
+          </label>
+        </div>
+        @if (error(); as err) {
+          <p class="error">{{ err }}</p>
+        }
+      </div>
+    } @else if (error(); as err) {
+      <p class="error">{{ err }}</p>
+    } @else {
+      <p class="loading">Cargando…</p>
+    }
+
+    <footer class="bc-actions">
+      <button type="button" class="btn btn-secondary" (click)="close()">Cancelar</button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        [disabled]="saving() || !config()"
+        (click)="save()"
+      >
+        {{ saving() ? 'Guardando…' : 'Guardar' }}
+      </button>
+    </footer>
+  </div>
+}

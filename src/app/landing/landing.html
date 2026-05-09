@@ -19,6 +19,10 @@
     <div class="book-header">
       <app-book-card [node]="node" (select)="onItemClick(node)" />
     </div>
+  } @else if (node.kind === 'saga') {
+    <div class="saga-header-wrap">
+      <app-saga-header [node]="node" />
+    </div>
   }
 }
 

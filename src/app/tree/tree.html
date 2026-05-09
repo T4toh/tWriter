@@ -241,6 +241,13 @@
           <span class="ctx-kbd">book.json</span>
         </button>
       }
+      @if (a.configSaga) {
+        <div class="ctx-sep"></div>
+        <button type="button" class="ctx-item" (click)="configSaga()">
+          <span class="ctx-label">Configurar saga…</span>
+          <span class="ctx-kbd">saga.json</span>
+        </button>
+      }
       @if (a.exportEpub) {
         @if (!a.configBook) {
           <div class="ctx-sep"></div>
@@ -280,7 +287,7 @@
           </button>
         }
       }
-      @if (!a.openExtra && !a.importThis && !a.deleteOriginal && a.importBulk === 0 && a.cleanupBulk === 0 && !a.deleteFile && !a.deleteDir && !a.createChapter && !a.createSection && !a.createBook && !a.createSaga && !a.exportEpub && !a.configBook && !a.excludable && !a.includable && !a.addExtra) {
+      @if (!a.openExtra && !a.importThis && !a.deleteOriginal && a.importBulk === 0 && a.cleanupBulk === 0 && !a.deleteFile && !a.deleteDir && !a.createChapter && !a.createSection && !a.createBook && !a.createSaga && !a.exportEpub && !a.configBook && !a.configSaga && !a.excludable && !a.includable && !a.addExtra) {
         <span class="ctx-empty">Sin acciones disponibles.</span>
       }
     }

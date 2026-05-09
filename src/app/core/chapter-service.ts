@@ -311,6 +311,24 @@ export class ChapterService {
     }
   }
 
+  /** Crea un libro dentro de una saga, escribiendo book.json con autor/idioma heredados + defaults. */
+  async createBook(parentDir: string, name: string): Promise<string | null> {
+    try {
+      const result = await invoke<{ path: string }>('create_book', {
+        parentDir,
+        name,
+      });
+      this.debug.info('create', `Libro creado: ${result.path}`);
+      await this.project.loadTree();
+      void this.git.refreshStatus();
+      return result.path;
+    } catch (err) {
+      this.debug.error('create', String(err));
+      this.error.set(String(err));
+      return null;
+    }
+  }
+
   /** Borra todos los .odt/.docx que ya tienen .html sibling. */
   async bulkCleanup(nodes: TreeNode[]): Promise<{ ok: number; failed: number }> {
     const total = nodes.length;

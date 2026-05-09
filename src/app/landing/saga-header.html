@@ -1,0 +1,44 @@
+<div class="saga-header">
+  <div class="cover-slot" [class.borrowed]="coverFromBook()">
+    @if (coverDataUrl(); as url) {
+      <img [src]="url" [alt]="displayName()" />
+      @if (coverFromBook()) {
+        <span class="borrowed-tag" title="Tapa heredada del primer libro">heredada</span>
+      }
+    } @else {
+      <div class="cover-placeholder">
+        <span>{{ displayName() }}</span>
+      </div>
+    }
+  </div>
+  <div class="info">
+    <div class="title-row">
+      <span class="kind">SAGA</span>
+      <h2 class="title">{{ displayName() }}</h2>
+    </div>
+    @if (author(); as a) {
+      <p class="author">{{ a }}</p>
+    } @else {
+      <p class="hint">Sin autor — configurar saga para heredarlo a libros nuevos</p>
+    }
+    <div class="meta">
+      <span class="meta-item">{{ bookCount() }} libro{{ bookCount() === 1 ? '' : 's' }}</span>
+      @if (idioma(); as l) {
+        <span class="meta-item">· {{ formatLang(l) }}</span>
+      }
+      @if (hasDictionary()) {
+        <span class="meta-item">· dicc. {{ dictSize() }}</span>
+      }
+    </div>
+  </div>
+  <div class="actions">
+    <button
+      type="button"
+      class="card-btn"
+      (click)="openConfig($event)"
+      title="Configurar saga"
+    >
+      ⚙
+    </button>
+  </div>
+</div>

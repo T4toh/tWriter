@@ -9,6 +9,7 @@ import { ChapterService } from '../core/chapter-service';
 import { ExtraEntry, ExtrasService } from '../core/extras-service';
 import { ImageViewerService } from '../core/image-viewer-service';
 import { NavigationService } from '../core/navigation-service';
+import { SagaConfigService } from '../core/saga-config-service';
 import { ProjectService } from '../core/project-service';
 import { SettingsService } from '../core/settings-service';
 import { ToastService } from '../core/toast-service';
@@ -33,6 +34,7 @@ export class Tree implements OnDestroy {
   private settings = inject(SettingsService);
   private nav = inject(NavigationService);
   private bookCfg = inject(BookConfigService);
+  private sagaCfg = inject(SagaConfigService);
   private extras = inject(ExtrasService);
   private imageViewer = inject(ImageViewerService);
   private toast = inject(ToastService);
@@ -110,6 +112,7 @@ export class Tree implements OnDestroy {
         moveable: false,
         exportEpub: false,
         configBook: false,
+        configSaga: false,
         excludable: false,
         includable: false,
         addExtra: false,
@@ -134,6 +137,7 @@ export class Tree implements OnDestroy {
         moveable: false,
         exportEpub: false,
         configBook: false,
+        configSaga: false,
         excludable: false,
         includable: false,
         addExtra: false,
@@ -159,6 +163,7 @@ export class Tree implements OnDestroy {
         moveable: this.isMoveable(node),
         exportEpub: false,
         configBook: false,
+        configSaga: false,
         excludable: false,
         includable: false,
         addExtra: false,
@@ -185,6 +190,7 @@ export class Tree implements OnDestroy {
       moveable: !isExcluded && node.kind !== 'saga' && this.isMoveable(node),
       exportEpub: !isExcluded && node.kind === 'book',
       configBook: !isExcluded && node.kind === 'book',
+      configSaga: !isExcluded && node.kind === 'saga',
       excludable: !isExcluded,
       includable: isExcluded,
       addExtra: canAddExtra,
@@ -373,7 +379,7 @@ export class Tree implements OnDestroy {
     const name = prompt('Nombre del libro (sin número, se prepende automático):');
     this.closeMenu();
     if (!name?.trim()) return;
-    await this.chapter.createDirectory(m.node.path, name.trim(), true);
+    await this.chapter.createBook(m.node.path, name.trim());
   }
 
   protected async createSaga(): Promise<void> {
@@ -411,6 +417,13 @@ export class Tree implements OnDestroy {
     if (!m || !m.node) return;
     this.closeMenu();
     this.bookCfg.openFor(m.node);
+  }
+
+  protected configSaga(): void {
+    const m = this.menu();
+    if (!m || !m.node) return;
+    this.closeMenu();
+    this.sagaCfg.openFor(m.node);
   }
 
   protected async excludeFolder(): Promise<void> {
