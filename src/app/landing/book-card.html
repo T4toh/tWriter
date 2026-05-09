@@ -46,12 +46,15 @@
     <button
       type="button"
       class="card-btn"
-      [class.spinning]="exporting()"
       [disabled]="exporting()"
       (click)="exportEpub($event)"
       title="Exportar a EPUB"
     >
-      {{ exporting() ? '⋯' : '⤓' }}
+      @if (exporting()) {
+        <app-spinner [size]="14" />
+      } @else {
+        ⤓
+      }
     </button>
   </div>
 </button>

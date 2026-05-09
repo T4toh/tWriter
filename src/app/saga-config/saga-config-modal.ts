@@ -48,6 +48,7 @@ export class SagaConfigModal {
         dropcap: cfg.dropcap ?? false,
         mostrar_numero_parte: cfg.mostrar_numero_parte ?? false,
         formato_parte: cfg.formato_parte ?? 'raw',
+        finalizada: cfg.finalizada ?? false,
       });
       this.diccionarioText.set((cfg.diccionario ?? []).join('\n'));
     } catch (err) {
@@ -102,6 +103,7 @@ export class SagaConfigModal {
         dropcap: cfg.dropcap ?? null,
         mostrar_numero_parte: cfg.mostrar_numero_parte ?? null,
         formato_parte: cfg.formato_parte ?? null,
+        finalizada: cfg.finalizada ?? null,
       };
       await this.svc.save(path, cleaned);
       this.svc.close();

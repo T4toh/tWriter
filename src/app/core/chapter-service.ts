@@ -208,11 +208,16 @@ export class ChapterService {
   }
 
   /** Crea un capítulo .html vacío + .meta.json en parentDir. */
-  async createChapter(parentDir: string, idioma: 'es' | 'en' = 'es'): Promise<string | null> {
+  async createChapter(
+    parentDir: string,
+    idioma: 'es' | 'en' = 'es',
+    opts?: { titulo?: string },
+  ): Promise<string | null> {
     try {
       const result = await invoke<{ path: string }>('create_chapter', {
         parentDir,
         idioma,
+        titulo: opts?.titulo ?? null,
       });
       this.debug.info('create', `Capítulo creado: ${result.path}`);
       await this.project.loadTree();

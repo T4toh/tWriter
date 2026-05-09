@@ -6,51 +6,6 @@
         <div class="actions">
           <button
             type="button"
-            class="icon-btn sync-btn"
-            [class.spinning]="git.syncing()"
-            (click)="syncNow()"
-            [disabled]="!root() || git.syncing() || git.state() === 'clean'"
-            [title]="syncTitle()"
-          >
-            ⇅
-          </button>
-          <button
-            type="button"
-            class="icon-btn"
-            (click)="pull()"
-            [disabled]="!root() || git.syncing()"
-            title="Pull desde remoto (fast-forward, sin merge)"
-          >
-            ⤓
-          </button>
-          <button
-            type="button"
-            class="icon-btn"
-            (click)="refresh()"
-            [disabled]="!root()"
-            title="Recargar árbol"
-          >
-            ↻
-          </button>
-          <button
-            type="button"
-            class="icon-btn"
-            (click)="createSaga()"
-            [disabled]="!root()"
-            title="Crear saga / novela"
-          >
-            ＋
-          </button>
-          <button
-            type="button"
-            class="icon-btn"
-            (click)="pickFolder()"
-            title="Cambiar carpeta"
-          >
-            📁
-          </button>
-          <button
-            type="button"
             class="icon-btn"
             [disabled]="!root()"
             (click)="openImportWizard()"
@@ -77,6 +32,25 @@
           </button>
         </div>
       </div>
+    </header>
+    <app-tree />
+    <footer class="panel-left-footer">
+      @if (saving()) {
+        <div class="loading-row">
+          <app-spinner [size]="12" />
+          <span class="loading-text">guardando…</span>
+        </div>
+      }
+      @if (bulkProgress(); as bp) {
+        <div class="bulk-progress">
+          <div class="bp-text">
+            {{ bp.done }} / {{ bp.total }} — {{ bp.current }}
+          </div>
+          <div class="bp-bar">
+            <div class="bp-fill" [style.width.%]="(bp.done / bp.total) * 100"></div>
+          </div>
+        </div>
+      }
       @if (root(); as r) {
         <div class="path-row" [title]="syncTitle()">
           <span class="dot" [attr.data-state]="git.state()"></span>
@@ -86,10 +60,65 @@
           {{ git.error() ?? git.summary() }}
         </div>
       } @else {
-        <span class="path muted">sin carpeta</span>
+        <div class="path-row">
+          <span class="path muted">sin carpeta</span>
+        </div>
       }
-    </header>
-    <app-tree />
+      <div class="actions actions-footer">
+        <button
+          type="button"
+          class="icon-btn"
+          (click)="syncNow()"
+          [disabled]="!root() || git.syncing() || git.state() === 'clean'"
+          [title]="syncTitle()"
+        >
+          @if (git.currentOp() === 'sync') {
+            <app-spinner />
+          } @else {
+            ⇅
+          }
+        </button>
+        <button
+          type="button"
+          class="icon-btn"
+          (click)="pull()"
+          [disabled]="!root() || git.syncing()"
+          title="Pull desde remoto (fast-forward, sin merge)"
+        >
+          @if (git.currentOp() === 'pull') {
+            <app-spinner />
+          } @else {
+            ⤓
+          }
+        </button>
+        <button
+          type="button"
+          class="icon-btn"
+          (click)="refresh()"
+          [disabled]="!root()"
+          title="Recargar árbol"
+        >
+          ↻
+        </button>
+        <button
+          type="button"
+          class="icon-btn"
+          (click)="createSaga()"
+          [disabled]="!root()"
+          title="Crear saga / novela"
+        >
+          ＋
+        </button>
+        <button
+          type="button"
+          class="icon-btn"
+          (click)="pickFolder()"
+          title="Cambiar carpeta"
+        >
+          📁
+        </button>
+      </div>
+    </footer>
   </aside>
 
   <main class="panel panel-center">
@@ -110,4 +139,3 @@
 <app-import-wizard />
 <app-toast-container />
 <app-update-banner />
-

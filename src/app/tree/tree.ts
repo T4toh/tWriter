@@ -67,7 +67,6 @@ export class Tree implements OnDestroy {
     walk(root, []);
     return set;
   });
-  protected readonly bulkProgress = this.chapter.bulkProgress;
   protected readonly menu = signal<ContextMenu | null>(null);
   /** Path del scope (saga/book) que está siendo target de drag&drop OS files. */
   protected readonly dragOverScope = signal<string | null>(null);
@@ -130,6 +129,7 @@ export class Tree implements OnDestroy {
         openExtra: true,
         renameExtra: true,
         removeExtra: true,
+        markAsEpilogo: false,
       };
     }
     const node = m.node;
@@ -155,6 +155,7 @@ export class Tree implements OnDestroy {
         openExtra: false,
         renameExtra: false,
         removeExtra: false,
+        markAsEpilogo: false,
       };
     }
     if (node.kind === 'chapter') {
@@ -181,6 +182,7 @@ export class Tree implements OnDestroy {
         openExtra: false,
         renameExtra: false,
         removeExtra: false,
+        markAsEpilogo: false,
       };
     }
     const importable = this.collectImportable(node);
@@ -208,6 +210,7 @@ export class Tree implements OnDestroy {
       openExtra: false,
       renameExtra: false,
       removeExtra: false,
+      markAsEpilogo: !isExcluded && node.kind === 'section' && isEpilogoName(node.name),
     };
   });
 
@@ -473,6 +476,20 @@ export class Tree implements OnDestroy {
     this.sagaCfg.openFor(m.node);
   }
 
+  protected async markAsEpilogo(): Promise<void> {
+    const m = this.menu();
+    if (!m || !m.node || m.node.kind !== 'section') return;
+    const section = m.node;
+    this.closeMenu();
+    try {
+      await invoke<string>('mark_as_epilogo', { sectionPath: section.path });
+      await this.project.loadTree();
+      this.toast.success(`"${section.name}" marcado como epílogo`);
+    } catch (err) {
+      this.toast.error(`Marcar epílogo: ${err}`);
+    }
+  }
+
   protected async excludeFolder(): Promise<void> {
     const m = this.menu();
     if (!m || !m.node) return;
@@ -683,4 +700,10 @@ export class Tree implements OnDestroy {
     fn(node);
     for (const c of node.children) this.walk(c, fn);
   }
+}
+
+function isEpilogoName(name: string): boolean {
+  const stripped = name.replace(/^\d+\s*-\s*/, '').trim().toLowerCase();
+  const flat = stripped.normalize('NFD').replace(/\p{M}/gu, '');
+  return flat === 'epilogo' || flat === 'epilogue';
 }

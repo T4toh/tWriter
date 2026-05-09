@@ -110,15 +110,53 @@
   color: var(--bg);
 }
 
-.icon-btn.sync-btn.spinning {
-  color: var(--accent);
-  animation: spin 1.2s linear infinite;
-  opacity: 1 !important;
+.panel-left-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg-soft);
+  font-family: var(--font-ui);
+  padding: 6px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.loading-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.loading-text {
+  font-style: italic;
+  color: var(--fg-muted);
+}
+
+.bulk-progress {
+  font-size: 11px;
+
+  .bp-text {
+    color: var(--fg-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 4px;
+  }
+
+  .bp-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .bp-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.2s;
+  }
 }
 
 .path-row {
@@ -185,6 +223,11 @@
   &.error {
     color: #c87070;
   }
+}
+
+.actions-footer {
+  margin-top: 2px;
+  gap: 4px;
 }
 
 .panel-center {

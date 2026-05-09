@@ -26,12 +26,12 @@
   }
 }
 
-@if (items().length === 0) {
+@if (items().length === 0 && !canCreateCapitulo() && !canCreateEpilogo() && !canCreateParte() && !canCreateBook()) {
   <p class="empty">
     Sin items todavía. Click derecho en el árbol para crear.
   </p>
 } @else {
-  <div class="grid" [attr.data-mode]="items()[0].kind === 'book' ? 'books' : 'generic'">
+  <div class="grid" [attr.data-mode]="items()[0]?.kind === 'book' ? 'books' : 'generic'">
     @for (item of items(); track item.path) {
       @if (item.kind === 'book') {
         <app-book-card [node]="item" (select)="onBookSelect($event)" />
@@ -59,6 +59,38 @@
           </div>
         </button>
       }
+    }
+    @if (canCreateCapitulo()) {
+      <app-create-card
+        kind="chapter"
+        label="Nuevo capítulo"
+        [busy]="creating()"
+        (create)="createCapituloHere()"
+      />
+    }
+    @if (canCreateEpilogo()) {
+      <app-create-card
+        kind="chapter"
+        label="Nuevo epílogo"
+        [busy]="creating()"
+        (create)="createEpilogoHere()"
+      />
+    }
+    @if (canCreateParte()) {
+      <app-create-card
+        kind="chapter"
+        label="Nueva parte"
+        [busy]="creating()"
+        (create)="createParteHere()"
+      />
+    }
+    @if (canCreateBook()) {
+      <app-create-card
+        kind="book"
+        label="Nueva novela"
+        [busy]="creating()"
+        (create)="createBookHere()"
+      />
     }
   </div>
 }

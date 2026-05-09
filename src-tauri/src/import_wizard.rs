@@ -365,6 +365,25 @@ fn default_true() -> bool {
     true
 }
 
+/// Devuelve true si el nombre de la sección representa un epílogo.
+/// Acepta "Epílogo"/"epilogo"/"Epilogue" con o sin prefijo numérico.
+fn is_epilogo_name(name: &str) -> bool {
+    let stripped = strip_numeric_prefix(name).trim().to_lowercase();
+    let flat: String = stripped
+        .chars()
+        .map(|c| match c {
+            'á' => 'a',
+            'é' => 'e',
+            'í' => 'i',
+            'ó' => 'o',
+            'ú' | 'ü' => 'u',
+            'ñ' => 'n',
+            other => other,
+        })
+        .collect();
+    matches!(flat.as_str(), "epilogo" | "epilogue")
+}
+
 #[derive(Serialize, Debug, Clone, Default)]
 pub struct ImportSummary {
     pub created_dirs: u32,
@@ -437,6 +456,15 @@ fn apply_impl(app: AppHandle, plan: WizardPlan) -> Result<ImportSummary, String>
         // Normalizar tapa/contratapa: si son paths absolutos fuera del book_dir, copiar a
         // <book_dir>/cover.<ext> y <book_dir>/back-cover.<ext> y rescribir el field a relativo.
         let mut book_cfg = book.config.clone();
+        // Auto-detectar epílogo por nombre de sección si no estaba seteado.
+        if book_cfg.epilogo.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+            for sec in &book.sections {
+                if is_epilogo_name(&sec.dir_name) {
+                    book_cfg.epilogo = Some(sec.dir_name.clone());
+                    break;
+                }
+            }
+        }
         let mut image_copies: Vec<(PathBuf, PathBuf)> = Vec::new();
         for (field, stem) in [(&mut book_cfg.tapa, "cover"), (&mut book_cfg.contratapa, "back-cover")] {
             if let Some(value) = field.as_deref().filter(|s| !s.trim().is_empty()) {

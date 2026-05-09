@@ -33,7 +33,8 @@ export class GitService {
   private settings = inject(SettingsService);
 
   readonly status = signal<GitStatus | null>(null);
-  readonly syncing = signal<boolean>(false);
+  readonly currentOp = signal<'sync' | 'pull' | null>(null);
+  readonly syncing = computed<boolean>(() => this.currentOp() !== null);
   readonly error = signal<string | null>(null);
   readonly lastSyncAt = signal<number | null>(null);
   readonly lastCommitInfo = signal<string | null>(null);
@@ -89,7 +90,7 @@ export class GitService {
   async syncNow(message?: string): Promise<void> {
     const root = this.settings.root();
     if (!root || this.syncing()) return;
-    this.syncing.set(true);
+    this.currentOp.set('sync');
     this.error.set(null);
     try {
       const msg = message ?? this.defaultMessage();
@@ -110,14 +111,14 @@ export class GitService {
     } catch (err) {
       this.error.set(String(err));
     } finally {
-      this.syncing.set(false);
+      this.currentOp.set(null);
     }
   }
 
   async pull(): Promise<void> {
     const root = this.settings.root();
-    if (!root) return;
-    this.syncing.set(true);
+    if (!root || this.syncing()) return;
+    this.currentOp.set('pull');
     this.error.set(null);
     try {
       await invoke('git_pull', { repoPath: root });
@@ -125,7 +126,7 @@ export class GitService {
     } catch (err) {
       this.error.set(String(err));
     } finally {
-      this.syncing.set(false);
+      this.currentOp.set(null);
     }
   }
 

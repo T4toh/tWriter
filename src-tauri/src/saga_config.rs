@@ -34,6 +34,9 @@ pub struct SagaConfig {
     pub mostrar_numero_parte: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub formato_parte: Option<String>,
+    /// Marca la saga como finalizada (sin más novelas por agregar). Oculta el creador de novelas.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finalizada: Option<bool>,
 }
 
 #[tauri::command]

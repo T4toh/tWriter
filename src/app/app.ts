@@ -17,10 +17,11 @@ import { ToastContainer } from './toast/toast-container';
 import { GrammarSettings } from './grammar-settings/grammar-settings';
 import { ImportWizard } from './import-wizard/import-wizard';
 import { UpdateBanner } from './update-banner/update-banner';
+import { Spinner } from './shared/spinner';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, DebugPanel, BookConfigModal, SagaConfigModal, ImageViewer, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner],
+  imports: [Tree, Editor, DebugPanel, BookConfigModal, SagaConfigModal, ImageViewer, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner, Spinner],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -31,10 +32,13 @@ export class App {
 
   private project = inject(ProjectService);
   protected settings = inject(SettingsService);
-  private chapter = inject(ChapterService);
+  protected chapter = inject(ChapterService);
   protected git = inject(GitService);
   protected debug = inject(DebugService);
   private updater = inject(UpdaterService);
+
+  protected readonly saving = this.chapter.saving;
+  protected readonly bulkProgress = this.chapter.bulkProgress;
 
   private lastChapterErr: string | null = null;
   private lastProjectErr: string | null = null;

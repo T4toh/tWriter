@@ -32,17 +32,6 @@
   }
 </div>
 
-@if (bulkProgress(); as bp) {
-  <div class="bulk-progress">
-    <div class="bp-text">
-      {{ bp.done }} / {{ bp.total }} — {{ bp.current }}
-    </div>
-    <div class="bp-bar">
-      <div class="bp-fill" [style.width.%]="(bp.done / bp.total) * 100"></div>
-    </div>
-  </div>
-}
-
 <ng-template #nodeTpl let-node let-depth="depth">
   @if (node.kind === 'chapter') {
     <button
@@ -278,6 +267,13 @@
           <span class="ctx-kbd">▼</span>
         </button>
       }
+      @if (a.markAsEpilogo) {
+        <div class="ctx-sep"></div>
+        <button type="button" class="ctx-item" (click)="markAsEpilogo()">
+          <span class="ctx-label">Marcar como epílogo</span>
+          <span class="ctx-kbd">book.json</span>
+        </button>
+      }
       @if (a.configBook) {
         <div class="ctx-sep"></div>
         <button type="button" class="ctx-item" (click)="configBook()">
@@ -331,7 +327,7 @@
           </button>
         }
       }
-      @if (!a.openExtra && !a.importThis && !a.deleteOriginal && a.importBulk === 0 && a.cleanupBulk === 0 && !a.deleteFile && !a.deleteDir && !a.createChapter && !a.createSection && !a.createBook && !a.createSaga && !a.exportEpub && !a.configBook && !a.configSaga && !a.excludable && !a.includable && !a.addExtra) {
+      @if (!a.openExtra && !a.importThis && !a.deleteOriginal && a.importBulk === 0 && a.cleanupBulk === 0 && !a.deleteFile && !a.deleteDir && !a.createChapter && !a.createSection && !a.createBook && !a.createSaga && !a.exportEpub && !a.configBook && !a.configSaga && !a.excludable && !a.includable && !a.addExtra && !a.markAsEpilogo) {
         <span class="ctx-empty">Sin acciones disponibles.</span>
       }
     }

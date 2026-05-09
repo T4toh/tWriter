@@ -12,7 +12,7 @@ mod reorder;
 mod saga_config;
 mod settings;
 
-use book_config::{get_book_config, set_book_config};
+use book_config::{get_book_config, mark_as_epilogo, set_book_config};
 use saga_config::{find_saga_dir, get_saga_config, set_saga_config};
 use create::{create_book, create_chapter, create_directory};
 use epub::{export_book, list_exports};
@@ -62,6 +62,7 @@ pub fn run() {
             list_exports,
             get_book_config,
             set_book_config,
+            mark_as_epilogo,
             get_saga_config,
             set_saga_config,
             find_saga_dir,

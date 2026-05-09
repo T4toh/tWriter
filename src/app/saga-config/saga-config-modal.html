@@ -19,6 +19,16 @@
             />
           </label>
         </div>
+        <div class="row">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="c.finalizada"
+              (ngModelChange)="update('finalizada', $event)"
+            />
+            <span>Saga finalizada (oculta el creador de novelas)</span>
+          </label>
+        </div>
         <div class="row split">
           <label>
             <span>Autor</span>

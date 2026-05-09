@@ -1,9 +1,12 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
+import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { NavigationService } from '../core/navigation-service';
 import { ProjectService } from '../core/project-service';
+import { SagaConfigService } from '../core/saga-config-service';
 import { TreeNode } from '../core/types';
 import { BookCard } from './book-card';
+import { CreateCard } from './create-card';
 import { SagaCard } from './saga-card';
 import { SagaHeader } from './saga-header';
 
@@ -14,7 +17,7 @@ interface Crumb {
 
 @Component({
   selector: 'app-landing',
-  imports: [BookCard, SagaCard, SagaHeader],
+  imports: [BookCard, SagaCard, SagaHeader, CreateCard],
   templateUrl: './landing.html',
   styleUrl: './landing.scss',
 })
@@ -22,8 +25,11 @@ export class Landing {
   private project = inject(ProjectService);
   private chapter = inject(ChapterService);
   private nav = inject(NavigationService);
+  private bookCfg = inject(BookConfigService);
+  private sagaCfg = inject(SagaConfigService);
 
   protected readonly browsing = this.nav.browsingPath;
+  protected readonly creating = signal<boolean>(false);
 
   protected readonly currentNode = computed<TreeNode | null>(() => {
     const path = this.browsing();
@@ -37,8 +43,6 @@ export class Landing {
     if (!root) return [];
     const node = this.currentNode();
     const target = node ?? root;
-    // Inicio: ordenar por última edición (más reciente arriba).
-    // Adentro de saga/book/section: respetar orden del backend (prefijo numérico).
     if (!node) {
       return [...target.children].sort((a, b) => {
         const am = a.modifiedMs ?? 0;
@@ -62,6 +66,97 @@ export class Landing {
     return list;
   });
 
+  protected readonly bookContextPath = computed<string | null>(() => {
+    const node = this.currentNode();
+    if (!node) return null;
+    if (node.kind === 'book') return node.path;
+    if (node.kind === 'section') {
+      const root = this.project.tree();
+      if (!root) return null;
+      const chain = pathChain(root, node.path);
+      for (const n of chain) {
+        if (n.kind === 'book') return n.path;
+      }
+    }
+    return null;
+  });
+
+  protected readonly sagaContextPath = computed<string | null>(() => {
+    const node = this.currentNode();
+    return node && node.kind === 'saga' ? node.path : null;
+  });
+
+  protected readonly bookFinalizada = signal<boolean>(false);
+  protected readonly sagaFinalizada = signal<boolean>(false);
+  protected readonly bookEpilogoPath = signal<string | null>(null);
+
+  protected readonly canCreateCapitulo = computed<boolean>(() => {
+    const node = this.currentNode();
+    if (!node || node.kind !== 'book') return false;
+    return !this.bookFinalizada();
+  });
+
+  protected readonly canCreateEpilogo = computed<boolean>(() => {
+    const node = this.currentNode();
+    if (!node || node.kind !== 'book') return false;
+    if (this.bookFinalizada()) return false;
+    return this.bookEpilogoPath() === null;
+  });
+
+  protected readonly canCreateParte = computed<boolean>(() => {
+    const node = this.currentNode();
+    if (!node || node.kind !== 'section') return false;
+    return !this.bookFinalizada();
+  });
+
+  protected readonly canCreateBook = computed<boolean>(() => {
+    const node = this.currentNode();
+    if (!node || node.kind !== 'saga') return false;
+    return !this.sagaFinalizada();
+  });
+
+  constructor() {
+    effect(() => {
+      const path = this.bookContextPath();
+      this.bookCfg.savedAt();
+      if (!path) {
+        this.bookFinalizada.set(false);
+        return;
+      }
+      void this.loadBookFinalizada(path);
+    });
+    effect(() => {
+      const path = this.sagaContextPath();
+      this.sagaCfg.savedAt();
+      if (!path) {
+        this.sagaFinalizada.set(false);
+        return;
+      }
+      void this.loadSagaFinalizada(path);
+    });
+  }
+
+  private async loadBookFinalizada(path: string): Promise<void> {
+    try {
+      const cfg = await this.bookCfg.load(path);
+      this.bookFinalizada.set(!!cfg.finalizada);
+      const ep = cfg.epilogo?.trim();
+      this.bookEpilogoPath.set(ep && ep.length > 0 ? ep : null);
+    } catch {
+      this.bookFinalizada.set(false);
+      this.bookEpilogoPath.set(null);
+    }
+  }
+
+  private async loadSagaFinalizada(path: string): Promise<void> {
+    try {
+      const cfg = await this.sagaCfg.load(path);
+      this.sagaFinalizada.set(!!cfg.finalizada);
+    } catch {
+      this.sagaFinalizada.set(false);
+    }
+  }
+
   protected onItemClick(node: TreeNode): void {
     if (node.kind === 'chapter') {
       void this.chapter.open(node);
@@ -76,6 +171,62 @@ export class Landing {
 
   protected goCrumb(crumb: Crumb): void {
     this.nav.setBrowsing(crumb.node?.path ?? null);
+  }
+
+  protected async createCapituloHere(): Promise<void> {
+    const node = this.currentNode();
+    if (!node || node.kind !== 'book' || this.creating()) return;
+    const name = prompt('Nombre del capítulo:');
+    if (!name?.trim()) return;
+    this.creating.set(true);
+    try {
+      await this.chapter.createDirectory(node.path, name.trim(), true);
+    } finally {
+      this.creating.set(false);
+    }
+  }
+
+  protected async createEpilogoHere(): Promise<void> {
+    const node = this.currentNode();
+    if (!node || node.kind !== 'book' || this.creating()) return;
+    if (this.bookEpilogoPath() !== null) return;
+    const name = prompt('Nombre del epílogo:', 'Epílogo');
+    if (!name?.trim()) return;
+    const dirName = name.trim();
+    this.creating.set(true);
+    try {
+      const dirPath = await this.chapter.createDirectory(node.path, dirName, false);
+      if (!dirPath) return;
+      const cfg = await this.bookCfg.load(node.path);
+      await this.bookCfg.save(node.path, { ...cfg, epilogo: dirName });
+      this.bookEpilogoPath.set(dirName);
+    } finally {
+      this.creating.set(false);
+    }
+  }
+
+  protected async createParteHere(): Promise<void> {
+    const node = this.currentNode();
+    if (!node || node.kind !== 'section' || this.creating()) return;
+    this.creating.set(true);
+    try {
+      await this.chapter.createChapter(node.path);
+    } finally {
+      this.creating.set(false);
+    }
+  }
+
+  protected async createBookHere(): Promise<void> {
+    const node = this.currentNode();
+    if (!node || node.kind !== 'saga' || this.creating()) return;
+    const name = prompt('Nombre de la novela:');
+    if (!name?.trim()) return;
+    this.creating.set(true);
+    try {
+      await this.chapter.createBook(node.path, name.trim());
+    } finally {
+      this.creating.set(false);
+    }
   }
 
   protected formatDate(ms: number | undefined): string {

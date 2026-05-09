@@ -147,20 +147,11 @@
   &:disabled {
     cursor: wait;
   }
-
-  &.spinning {
-    animation: card-spin 1s linear infinite;
-  }
 }
 
 .book-card:hover .card-actions,
 .book-card.unconfigured .card-actions {
   opacity: 1;
-}
-
-@keyframes card-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 @media (prefers-color-scheme: dark) {

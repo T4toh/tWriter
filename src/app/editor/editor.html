@@ -311,9 +311,7 @@
       </button>
     }
     <span class="counter">{{ wordCount() }} palabras</span>
-    @if (saving()) {
-      <span class="indicator saving">guardando…</span>
-    } @else if (dirty()) {
+    @if (dirty()) {
       <span class="indicator dirty">sin guardar</span>
     } @else if (canEdit()) {
       <span class="indicator saved">guardado</span>
