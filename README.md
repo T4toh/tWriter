@@ -165,29 +165,52 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 
 ### Diferido (Fase 3+)
 
+#### Editor / UX
+
+- Organizar archivos para abrir el paso al feature de Notas (Más que nada manejar mejor los extras/diccionarios a la altura de saga o novela según corresponda)
+- Botones giran cuando está en loading. Deberían girar los íconos o tener un loading apropiado.
 - Más variantes de divisor de escena (más allá del `* * *`)
+- Divisor automático de partes (reglas confusas, lo hago a mano)
+- Drag & drop reorder de capítulos
+- Editor split (dos capítulos lado a lado)
+- Notas/research sidebar derecho
+- Reemplazar `window.prompt()` (crear saga, etc.) por modal propio consistente con el resto de la UI (`BookConfigModal` style). (Este está dos veoces, creo)
+- Auto-abrir el modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
+
+#### Tree / Importer
+
+- Mostrar archivos no-chapter en el tree (PNG, txt, md — quedan en disco pero invisibles)
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero)
 - Editar diccionario per-saga desde UI (hoy se agregan palabras desde el popover, borrar requiere editar `saga.json` a mano)
-- Mostrar archivos no-chapter en el tree (PNG, txt, md — quedan en disco pero invisibles)
-- Divisor automático de partes (reglas confusas, lo hago a mano)
-- File picker via xdg-desktop-portal (hoy usa GTK 3 vía `tauri-plugin-dialog`/`rfd`, se ve foreign en KDE/Wayland). Requiere reemplazar `open()` por comandos Rust con `rfd { features = ["xdg-portal", "tokio"] }`. Fix unifica también el picker de tapas en wizard.
-- Reemplazar `window.prompt()` (crear saga, etc.) por modal propio consistente con el resto de la UI (`BookConfigModal` style).
-- Auto-abrir el modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Template de saga/libro/cap precargado en instalación nueva (sin novelas en disco) para probar features sin tener que importar nada — capítulo dummy con texto en ES y EN, diálogos sin convertir, errores ortográficos a propósito, scene break, dropcap.
-- Metadata + branding del bundle: ícono propio en `.deb`/`.msi`/`.exe` (hoy fallback genérico), description real (hoy "A Tauri App" en `Cargo.toml`), `bundle.copyright`, `bundle.publisher`, `bundle.shortDescription`/`longDescription` en `tauri.conf.json`, `bundle.category` ("Productivity"). Esto fixea el `.desktop` (Comment + Categories) que hoy queda vacío.
-- Sizes de ícono adicionales en `.deb` (hoy solo 32, 128, 256@2 — algunos launchers buscan 48/64).
-- Tema GTK del window decoration / dialogs nativos respetando sistema (hoy linuxdeploy AppRun fuerza `GTK_THEME=Adwaita:light/dark` leyendo gsettings de GNOME — en KDE/Plasma queda Adwaita default en vez de Breeze). Workaround: env var `APPIMAGE_GTK_THEME=Breeze:dark` o patchear el AppRun hook en CI.
-- Notas/research sidebar derecho
-- Drag & drop reorder de capítulos
-- Diff/historial visual via git log
-- Stats: gráfico palabras/día
-- Editor split (dos capítulos lado a lado)
-- Pantalla de debug (logs Rust + estado de signals + stderr de git)
+
+#### EPUB
+
 - Fonts embebidas en EPUB (Merriweather, Lato, Roboto Mono)
 - Página "About the author" en EPUB
 - Flag `epilogo` en `meta.json` para separar epílogos del TOC principal
 - Preview EPUB tipo Kindle (B/N, distintos tamaños de pantalla — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
-- Mobile
+- Temas para las sagas así se configuran una sola vez. (Tema sería fuente para el cuerpo, fuente para los títulos y sus respectivos tamaños. Depende de haber implementado la instalación de fuentes)
+
+#### Bundle / Distribución (Linux nativo)
+
+> Grupo relacionado: todo toca `tauri.conf.json`, `Cargo.toml` o el AppRun hook de linuxdeploy. Atacar junto en un sprint de packaging.
+
+- File picker via xdg-desktop-portal (hoy usa GTK 3 vía `tauri-plugin-dialog`/`rfd`, se ve foreign en KDE/Wayland). Requiere reemplazar `open()` por comandos Rust con `rfd { features = ["xdg-portal", "tokio"] }`. Fix unifica también el picker de tapas en wizard.
+- Metadata + branding del bundle: ícono propio en `.deb`/`.msi`/`.exe` (hoy fallback genérico), description real (hoy "A Tauri App" en `Cargo.toml`), `bundle.copyright`, `bundle.publisher`, `bundle.shortDescription`/`longDescription` en `tauri.conf.json`, `bundle.category` ("Productivity"). Esto fixea el `.desktop` (Comment + Categories) que hoy queda vacío.
+- Sizes de ícono adicionales en `.deb` (hoy solo 32, 128, 256@2 — algunos launchers buscan 48/64).
+- Tema GTK del window decoration / dialogs nativos respetando sistema (hoy linuxdeploy AppRun fuerza `GTK_THEME=Adwaita:light/dark` leyendo gsettings de GNOME — en KDE/Plasma queda Adwaita default en vez de Breeze). Workaround: env var `APPIMAGE_GTK_THEME=Breeze:dark` o patchear el AppRun hook en CI.
+- Mejorar la instalación de docker y poner algo más copado para mostar que está instalando la imagen y eso (Una barrita o algo que gire)
+
+#### Observabilidad / Stats
+
+- Diff/historial visual via git log
+- Stats: gráfico palabras/día
+- Pantalla de debug (logs Rust + estado de signals + stderr de git)
+
+#### Plataformas
+
+- Mobile (No sé si es importante, capaz un exportador a epub estaría bueno porque puedo ver los archivos en gh)
 
 ## Gramática (LanguageTool)
 
