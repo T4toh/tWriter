@@ -89,6 +89,81 @@
               </label>
             </div>
           </fieldset>
+
+          <fieldset class="iw-fieldset">
+            <legend>Defaults EPUB (heredados a cada libro)</legend>
+            <label class="iw-field">
+              <span>Imprenta</span>
+              <input
+                type="text"
+                [ngModel]="wizard.sagaConfig().imprenta ?? ''"
+                (ngModelChange)="updateSagaField('imprenta', $event)"
+                placeholder="Independiente"
+              />
+            </label>
+            <div class="iw-row">
+              <label class="iw-field">
+                <span>Tamaño de página</span>
+                <select
+                  [ngModel]="wizard.sagaConfig().template ?? '6x9'"
+                  (ngModelChange)="updateSagaSelect('template', $event)"
+                >
+                  <option value="6x9">6 × 9 in (default)</option>
+                  <option value="5x8">5 × 8 in</option>
+                  <option value="a5">A5 (148 × 210 mm)</option>
+                </select>
+              </label>
+              <label class="iw-field">
+                <span>Prefijo del capítulo</span>
+                <select
+                  [ngModel]="wizard.sagaConfig().prefijo_capitulo ?? 'none'"
+                  (ngModelChange)="updateSagaSelect('prefijo_capitulo', $event)"
+                >
+                  <option value="none">Sin prefijo</option>
+                  <option value="decimal">Número (1, 2, 3…)</option>
+                  <option value="roman">Romano (I, II, III…)</option>
+                </select>
+              </label>
+            </div>
+            <label class="iw-check">
+              <input
+                type="checkbox"
+                [checked]="wizard.sagaConfig().mostrar_titulo_capitulo ?? true"
+                (change)="updateSagaBool('mostrar_titulo_capitulo', $any($event.target).checked)"
+              />
+              <span>Mostrar título del capítulo</span>
+            </label>
+            <label class="iw-check">
+              <input
+                type="checkbox"
+                [checked]="wizard.sagaConfig().dropcap ?? false"
+                (change)="updateSagaBool('dropcap', $any($event.target).checked)"
+              />
+              <span>Letrina (dropcap) en primer párrafo</span>
+            </label>
+            <div class="iw-row">
+              <label class="iw-check">
+                <input
+                  type="checkbox"
+                  [checked]="wizard.sagaConfig().mostrar_numero_parte ?? false"
+                  (change)="updateSagaBool('mostrar_numero_parte', $any($event.target).checked)"
+                />
+                <span>Mostrar header de parte</span>
+              </label>
+              <label class="iw-field">
+                <span>Formato de parte</span>
+                <select
+                  [ngModel]="wizard.sagaConfig().formato_parte ?? 'raw'"
+                  (ngModelChange)="updateSagaSelect('formato_parte', $event)"
+                  [disabled]="!(wizard.sagaConfig().mostrar_numero_parte ?? false)"
+                >
+                  <option value="raw">1</option>
+                  <option value="parte">Parte 1</option>
+                  <option value="punto">1.</option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
         }
 
         @case ('estructura') {

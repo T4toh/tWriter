@@ -285,13 +285,31 @@ export class ImportWizard {
     this.wizard.sagaDirName.set(value);
   }
 
-  protected updateSagaField<K extends keyof { autor: string; idioma: string }>(
+  protected updateSagaField<K extends keyof { autor: string; idioma: string; imprenta: string }>(
     field: K,
     value: string,
   ): void {
     this.wizard.sagaConfig.update((c) => ({
       ...c,
       [field]: value || null,
+    }));
+  }
+
+  protected updateSagaSelect<
+    K extends 'template' | 'prefijo_capitulo' | 'formato_parte',
+  >(field: K, value: string): void {
+    this.wizard.sagaConfig.update((c) => ({
+      ...c,
+      [field]: (value || null) as any,
+    }));
+  }
+
+  protected updateSagaBool<
+    K extends 'mostrar_titulo_capitulo' | 'dropcap' | 'mostrar_numero_parte',
+  >(field: K, value: boolean): void {
+    this.wizard.sagaConfig.update((c) => ({
+      ...c,
+      [field]: value,
     }));
   }
 

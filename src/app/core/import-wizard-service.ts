@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { BookConfig } from './book-config-service';
-import { SagaConfig } from './saga-context-service';
+import { SagaConfig } from './saga-config-service';
 import { SettingsService } from './settings-service';
 
 export type WizardStep =
@@ -216,7 +216,7 @@ export class ImportWizardService {
     }
   }
 
-  /** Aplica defaults de saga a todos los books (titulo no se toca, autor/idioma sí si están vacíos). */
+  /** Aplica defaults de saga a todos los books (titulo no se toca, resto sí si está vacío). */
   applySagaDefaultsToBooks(): void {
     const cfg = this.sagaConfig();
     this.books.update((list) =>
@@ -226,6 +226,15 @@ export class ImportWizardService {
           ...b.config,
           autor: b.config.autor || cfg.autor || null,
           idioma: b.config.idioma || cfg.idioma || null,
+          imprenta: b.config.imprenta || cfg.imprenta || null,
+          template: b.config.template ?? cfg.template ?? null,
+          mostrar_titulo_capitulo:
+            b.config.mostrar_titulo_capitulo ?? cfg.mostrar_titulo_capitulo ?? null,
+          prefijo_capitulo: b.config.prefijo_capitulo ?? cfg.prefijo_capitulo ?? null,
+          dropcap: b.config.dropcap ?? cfg.dropcap ?? null,
+          mostrar_numero_parte:
+            b.config.mostrar_numero_parte ?? cfg.mostrar_numero_parte ?? null,
+          formato_parte: b.config.formato_parte ?? cfg.formato_parte ?? null,
         },
       })),
     );
@@ -240,6 +249,13 @@ export class ImportWizardService {
         autor: null,
         idioma: null,
         diccionario: null,
+        imprenta: 'Independiente',
+        template: '6x9',
+        mostrar_titulo_capitulo: true,
+        prefijo_capitulo: 'none',
+        dropcap: false,
+        mostrar_numero_parte: false,
+        formato_parte: 'raw',
       });
     } else {
       this.sagaDirName.set('');

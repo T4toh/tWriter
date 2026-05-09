@@ -65,6 +65,88 @@
             ></textarea>
           </label>
         </div>
+
+        <div class="row section-divider">
+          <span class="section-label">Defaults heredados a libros nuevos</span>
+        </div>
+        <div class="row">
+          <label>
+            <span>Imprenta</span>
+            <input
+              type="text"
+              [ngModel]="c.imprenta"
+              (ngModelChange)="update('imprenta', $event)"
+              placeholder="Independiente"
+            />
+          </label>
+        </div>
+        <div class="row split">
+          <label>
+            <span>Tamaño de página (EPUB)</span>
+            <select
+              [ngModel]="c.template ?? '6x9'"
+              (ngModelChange)="update('template', $event)"
+            >
+              <option value="6x9">6 × 9 in (default)</option>
+              <option value="5x8">5 × 8 in</option>
+              <option value="a5">A5 (148 × 210 mm)</option>
+            </select>
+          </label>
+          <label>
+            <span>Prefijo del capítulo</span>
+            <select
+              [ngModel]="c.prefijo_capitulo"
+              (ngModelChange)="update('prefijo_capitulo', $event)"
+            >
+              <option value="none">Sin prefijo</option>
+              <option value="decimal">Número (1, 2, 3…)</option>
+              <option value="roman">Romano (I, II, III…)</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="c.mostrar_titulo_capitulo"
+              (ngModelChange)="update('mostrar_titulo_capitulo', $event)"
+            />
+            <span>Mostrar título del capítulo</span>
+          </label>
+        </div>
+        <div class="row">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="c.dropcap"
+              (ngModelChange)="update('dropcap', $event)"
+            />
+            <span>Letrina (dropcap) en primer párrafo de cada capítulo</span>
+          </label>
+        </div>
+        <div class="row split">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="c.mostrar_numero_parte"
+              (ngModelChange)="update('mostrar_numero_parte', $event)"
+            />
+            <span>Mostrar header de parte</span>
+          </label>
+          <label>
+            <span>Formato de parte</span>
+            <select
+              [ngModel]="c.formato_parte"
+              (ngModelChange)="update('formato_parte', $event)"
+              [disabled]="!c.mostrar_numero_parte"
+            >
+              <option value="raw">1</option>
+              <option value="parte">Parte 1</option>
+              <option value="punto">1.</option>
+            </select>
+          </label>
+        </div>
+
         @if (error(); as err) {
           <p class="error">{{ err }}</p>
         }

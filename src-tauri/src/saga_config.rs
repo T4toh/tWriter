@@ -18,6 +18,22 @@ pub struct SagaConfig {
     /// Glosario compartido por todos los libros de la saga (nombres propios, neologismos).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub diccionario: Option<Vec<String>>,
+    /// Imprenta heredada a libros nuevos.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imprenta: Option<String>,
+    /// Defaults EPUB heredados a libros nuevos.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mostrar_titulo_capitulo: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prefijo_capitulo: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropcap: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mostrar_numero_parte: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formato_parte: Option<String>,
 }
 
 #[tauri::command]

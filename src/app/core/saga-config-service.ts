@@ -2,12 +2,21 @@ import { Injectable, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { TreeNode } from './types';
 
+export type ChapterPrefix = 'none' | 'decimal' | 'roman';
+
 export interface SagaConfig {
   nombre: string;
   autor?: string | null;
   idioma?: string | null;
   tapa?: string | null;
   diccionario?: string[] | null;
+  imprenta?: string | null;
+  template?: '6x9' | '5x8' | 'a5' | null;
+  mostrar_titulo_capitulo?: boolean | null;
+  prefijo_capitulo?: ChapterPrefix | null;
+  dropcap?: boolean | null;
+  mostrar_numero_parte?: boolean | null;
+  formato_parte?: 'raw' | 'parte' | 'punto' | null;
 }
 
 @Injectable({ providedIn: 'root' })

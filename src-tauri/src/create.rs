@@ -165,13 +165,29 @@ fn build_inherited_book_config(
         numero_en_serie: Some(numero),
         copyright_anio: Some(current_year()),
         derechos_reservados: Some(true),
-        template: Some("6x9".to_string()),
-        mostrar_titulo_capitulo: Some(true),
-        prefijo_capitulo: Some("none".to_string()),
-        dropcap: Some(false),
-        mostrar_numero_parte: Some(false),
-        formato_parte: Some("raw".to_string()),
-        imprenta: Some("Independiente".to_string()),
+        template: Some(
+            saga.and_then(|s| s.template.clone())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "6x9".to_string()),
+        ),
+        mostrar_titulo_capitulo: Some(saga.and_then(|s| s.mostrar_titulo_capitulo).unwrap_or(true)),
+        prefijo_capitulo: Some(
+            saga.and_then(|s| s.prefijo_capitulo.clone())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "none".to_string()),
+        ),
+        dropcap: Some(saga.and_then(|s| s.dropcap).unwrap_or(false)),
+        mostrar_numero_parte: Some(saga.and_then(|s| s.mostrar_numero_parte).unwrap_or(false)),
+        formato_parte: Some(
+            saga.and_then(|s| s.formato_parte.clone())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "raw".to_string()),
+        ),
+        imprenta: Some(
+            saga.and_then(|s| s.imprenta.clone())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "Independiente".to_string()),
+        ),
         ..Default::default()
     }
 }

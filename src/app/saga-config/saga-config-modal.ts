@@ -41,6 +41,13 @@ export class SagaConfigModal {
         idioma: cfg.idioma ?? 'es',
         tapa: cfg.tapa ?? '',
         diccionario: cfg.diccionario ?? [],
+        imprenta: cfg.imprenta ?? 'Independiente',
+        template: cfg.template ?? '6x9',
+        mostrar_titulo_capitulo: cfg.mostrar_titulo_capitulo ?? true,
+        prefijo_capitulo: cfg.prefijo_capitulo ?? 'none',
+        dropcap: cfg.dropcap ?? false,
+        mostrar_numero_parte: cfg.mostrar_numero_parte ?? false,
+        formato_parte: cfg.formato_parte ?? 'raw',
       });
       this.diccionarioText.set((cfg.diccionario ?? []).join('\n'));
     } catch (err) {
@@ -88,6 +95,13 @@ export class SagaConfigModal {
         idioma: cfg.idioma,
         tapa: blank(cfg.tapa),
         diccionario: palabras.length > 0 ? palabras : null,
+        imprenta: blank(cfg.imprenta),
+        template: cfg.template ?? null,
+        mostrar_titulo_capitulo: cfg.mostrar_titulo_capitulo ?? null,
+        prefijo_capitulo: cfg.prefijo_capitulo ?? null,
+        dropcap: cfg.dropcap ?? null,
+        mostrar_numero_parte: cfg.mostrar_numero_parte ?? null,
+        formato_parte: cfg.formato_parte ?? null,
       };
       await this.svc.save(path, cleaned);
       this.svc.close();
