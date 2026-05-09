@@ -1,34 +1,30 @@
-import {
-  Component,
-  computed,
-  effect,
-  inject,
-  signal,
-} from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
-import { BookConfig, BookConfigService } from '../core/book-config-service';
+import { SagaConfig, SagaConfigService } from '../core/saga-config-service';
 
 @Component({
-  selector: 'app-book-config-modal',
+  selector: 'app-saga-config-modal',
   imports: [FormsModule],
-  templateUrl: './book-config-modal.html',
-  styleUrl: './book-config-modal.scss',
+  templateUrl: './saga-config-modal.html',
+  styleUrl: './saga-config-modal.scss',
 })
-export class BookConfigModal {
-  private svc = inject(BookConfigService);
+export class SagaConfigModal {
+  private svc = inject(SagaConfigService);
 
   protected readonly editing = this.svc.editing;
-  protected readonly config = signal<BookConfig | null>(null);
+  protected readonly config = signal<SagaConfig | null>(null);
+  protected readonly diccionarioText = signal<string>('');
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
-  protected readonly bookPath = computed(() => this.editing()?.path ?? null);
+  protected readonly sagaPath = computed(() => this.editing()?.path ?? null);
 
   constructor() {
     effect(() => {
       const node = this.editing();
       if (!node) {
         this.config.set(null);
+        this.diccionarioText.set('');
         return;
       }
       void this.load(node.path);
@@ -40,25 +36,20 @@ export class BookConfigModal {
     try {
       const cfg = await this.svc.load(path);
       this.config.set({
-        titulo: cfg.titulo ?? '',
-        subtitulo: cfg.subtitulo ?? '',
+        nombre: cfg.nombre ?? '',
         autor: cfg.autor ?? '',
         idioma: cfg.idioma ?? 'es',
-        isbn: cfg.isbn ?? '',
         tapa: cfg.tapa ?? '',
-        contratapa: cfg.contratapa ?? '',
-        copyright_anio: cfg.copyright_anio ?? new Date().getFullYear(),
-        derechos_reservados: cfg.derechos_reservados ?? true,
-        dedicatoria: cfg.dedicatoria ?? '',
+        diccionario: cfg.diccionario ?? [],
         imprenta: cfg.imprenta ?? 'Independiente',
-        serie: cfg.serie ?? '',
-        numero_en_serie: cfg.numero_en_serie ?? null,
+        template: cfg.template ?? '6x9',
         mostrar_titulo_capitulo: cfg.mostrar_titulo_capitulo ?? true,
         prefijo_capitulo: cfg.prefijo_capitulo ?? 'none',
         dropcap: cfg.dropcap ?? false,
         mostrar_numero_parte: cfg.mostrar_numero_parte ?? false,
         formato_parte: cfg.formato_parte ?? 'raw',
       });
+      this.diccionarioText.set((cfg.diccionario ?? []).join('\n'));
     } catch (err) {
       this.error.set(String(err));
     }
@@ -68,56 +59,44 @@ export class BookConfigModal {
     const result = await openDialog({
       multiple: false,
       directory: false,
-      title: 'Seleccionar tapa',
+      title: 'Seleccionar tapa de saga',
       filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
-      defaultPath: this.bookPath() ?? undefined,
+      defaultPath: this.sagaPath() ?? undefined,
     });
     if (typeof result !== 'string') return;
     const cur = this.config();
     if (cur) this.config.set({ ...cur, tapa: result });
   }
 
-  protected async pickBackCover(): Promise<void> {
-    const result = await openDialog({
-      multiple: false,
-      directory: false,
-      title: 'Seleccionar contratapa',
-      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
-      defaultPath: this.bookPath() ?? undefined,
-    });
-    if (typeof result !== 'string') return;
-    const cur = this.config();
-    if (cur) this.config.set({ ...cur, contratapa: result });
-  }
-
-  protected update<K extends keyof BookConfig>(key: K, value: BookConfig[K]): void {
+  protected update<K extends keyof SagaConfig>(key: K, value: SagaConfig[K]): void {
     const cur = this.config();
     if (!cur) return;
     this.config.set({ ...cur, [key]: value });
   }
 
+  protected updateDiccionarioText(value: string): void {
+    this.diccionarioText.set(value);
+  }
+
   protected async save(): Promise<void> {
-    const path = this.bookPath();
+    const path = this.sagaPath();
     const cfg = this.config();
     if (!path || !cfg) return;
     this.saving.set(true);
     this.error.set(null);
     try {
-      // Normalizar: vacíos a null
-      const cleaned: BookConfig = {
-        titulo: cfg.titulo,
-        subtitulo: blank(cfg.subtitulo),
+      const palabras = this.diccionarioText()
+        .split('\n')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      const cleaned: SagaConfig = {
+        nombre: cfg.nombre,
         autor: blank(cfg.autor),
         idioma: cfg.idioma,
-        isbn: blank(cfg.isbn),
         tapa: blank(cfg.tapa),
-        contratapa: blank(cfg.contratapa),
-        copyright_anio: cfg.copyright_anio || null,
-        derechos_reservados: cfg.derechos_reservados ?? null,
-        dedicatoria: blank(cfg.dedicatoria),
+        diccionario: palabras.length > 0 ? palabras : null,
         imprenta: blank(cfg.imprenta),
-        serie: blank(cfg.serie),
-        numero_en_serie: cfg.numero_en_serie || null,
+        template: cfg.template ?? null,
         mostrar_titulo_capitulo: cfg.mostrar_titulo_capitulo ?? null,
         prefijo_capitulo: cfg.prefijo_capitulo ?? null,
         dropcap: cfg.dropcap ?? null,

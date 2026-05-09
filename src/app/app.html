@@ -1,4 +1,4 @@
-<div class="shell" [class.focus]="settings.focusMode()">
+<div class="shell" [class.focus]="settings.focusMode()" [class.with-viewer]="imageViewer.viewing() !== null">
   <aside class="panel panel-left">
     <header>
       <div class="title-row">
@@ -95,10 +95,17 @@
   <main class="panel panel-center">
     <app-editor />
   </main>
+
+  @if (imageViewer.viewing() !== null) {
+    <aside class="panel panel-right">
+      <app-image-viewer />
+    </aside>
+  }
 </div>
 
 <app-debug-panel />
 <app-book-config-modal />
+<app-saga-config-modal />
 <app-grammar-settings />
 <app-import-wizard />
 <app-toast-container />

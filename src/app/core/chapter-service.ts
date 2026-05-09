@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { detectLang } from '../dialogos/detect';
 import { DebugService } from './debug-service';
+import { ExportsService } from './exports-service';
 import { GitService } from './git-service';
 import { ProjectService } from './project-service';
 import { ToastService } from './toast-service';
@@ -15,6 +16,7 @@ export class ChapterService {
   private debug = inject(DebugService);
   private git = inject(GitService);
   private toast = inject(ToastService);
+  private exports = inject(ExportsService);
 
   readonly active = signal<TreeNode | null>(null);
   readonly importing = signal<boolean>(false);
@@ -245,6 +247,7 @@ export class ChapterService {
         `EPUB generado: ${filename} (${result.chapters} parte${result.chapters === 1 ? '' : 's'})`,
       );
       await this.project.loadTree();
+      void this.exports.refresh(node.path);
       return result.epub_path;
     } catch (err) {
       this.debug.error('epub', `${node.name}: ${err}`);
@@ -301,6 +304,24 @@ export class ChapterService {
         numbered,
       });
       this.debug.info('create', `Carpeta creada: ${result.path}`);
+      await this.project.loadTree();
+      void this.git.refreshStatus();
+      return result.path;
+    } catch (err) {
+      this.debug.error('create', String(err));
+      this.error.set(String(err));
+      return null;
+    }
+  }
+
+  /** Crea un libro dentro de una saga, escribiendo book.json con autor/idioma heredados + defaults. */
+  async createBook(parentDir: string, name: string): Promise<string | null> {
+    try {
+      const result = await invoke<{ path: string }>('create_book', {
+        parentDir,
+        name,
+      });
+      this.debug.info('create', `Libro creado: ${result.path}`);
       await this.project.loadTree();
       void this.git.refreshStatus();
       return result.path;

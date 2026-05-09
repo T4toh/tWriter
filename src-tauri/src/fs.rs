@@ -4,7 +4,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const SKIP_DIRS: &[&str] = &["convertidos", "Revisiones", "exports", ".git", "zTapas"];
+const SKIP_DIRS: &[&str] = &[
+    "convertidos",
+    "Revisiones",
+    "exports",
+    "Exportados",
+    ".git",
+    "zTapas",
+    "extras",
+    "notas",
+];
 const CHAPTER_EXTS: &[&str] = &["html", "odt", "docx"];
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]

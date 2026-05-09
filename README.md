@@ -6,9 +6,45 @@ Las novelas viven en un repo privado aparte (HTML + JSON). Esta app es solo el e
 
 **Stack**: Tauri 2 + Angular 21 + TipTap. Backend Rust, frontend signals.
 
+## Layout de archivos
+
+Cada saga/libro en el repo de novelas sigue una convención canónica para
+distinguir capítulos (lo que va al EPUB) de extras (manuscritos viejos, mapas,
+glosarios, tapas alternativas) y notas (research — feature futura).
+
+```
+<saga>/
+  saga.json
+  cover.{jpg,png,jpeg,webp}        # opcional, tapa de la serie
+  extras/                          # opcional, mapas/glosarios saga-level
+    <cualquier-archivo>
+  notas/                           # RESERVADO (feature futura)
+  <libro>/
+    book.json
+    cover.{jpg,png,jpeg,webp}      # opcional
+    back-cover.{jpg,png,jpeg,webp} # opcional, contratapa
+    extras/                        # opcional, manuscritos/refs book-level
+      <cualquier-archivo>
+    notas/                         # RESERVADO (feature futura)
+    <n>.html + <n>.meta.json       # capítulos
+    <sección>?/<n>.html            # capítulos en secciones
+```
+
+Reglas:
+
+- `cover.*` y `back-cover.*` son archivos directos en la raíz del nivel. Si no
+  los tenés explícitos en `book.json`/`saga.json`, la app los autodetecta del
+  filesystem.
+- `extras/` es flat. Podés crear subcarpetas si querés; la app no impone
+  taxonomía. Cualquier tipo de archivo entra (imagen, docx, odt, txt, md, pdf).
+- `extras/` y `notas/` quedan auto-excluidos del export EPUB. No necesitan
+  `.twriter-ignore`.
+- Para libros standalone (sin saga padre), el layout del libro es idéntico —
+  `<book>/cover.*`, `<book>/extras/`, etc.
+
 ## Estado
 
-MVP completo. Sprints 1–7 hechos.
+MVP completo. Sprints 1–8 hechos.
 
 - **Editor**: TipTap con HTML subset (`<p>`, `<i>`, `<em>`, `<strong>`, `<u>`, `<hr>`, `<h1>`, `<blockquote>`), autosave debounced 1.5s, toolbar (B/I/U, alineación, salto de escena, RAE, gramática, ancho hoja, font size), menú contextual propio.
 - **Tree explorer** del repo (Saga / Libro / Sección / Capítulo) con context menu (crear, mover, importar, exportar EPUB, configurar libro, excluir del EPUB), badge "excluido" para `.twriter-ignore`.
@@ -17,6 +53,7 @@ MVP completo. Sprints 1–7 hechos.
 - **Git auto-sync**: commit cada 5 min, status polling 30s, push manual desde header.
 - **Importer Pandoc**: `.docx`/`.odt` → HTML subset (single chapter o bulk).
 - **Wizard de importación de saga/novela** (📥 en header): trae carpeta externa al repo con detección de estructura, conversión per-carpeta opcional, metadata de saga + libros, copia de tapas y extras normalizada.
+- **Extras + covers** unificados: layout canónico `extras/` por saga y libro, `cover.*` y `back-cover.*` autodetectados desde disco. Tree muestra "📁 Extras" colapsable, drag&drop de archivos del OS al saga/libro, context menu para abrir/renombrar/borrar.
 - **Conversor RAE de diálogos** (D1–D5 portados de `dialogos_a_esp`): botón "RAE" con preview side-by-side antes de aplicar.
 - **Gramática + ortografía** vía LanguageTool (público / Docker local / custom URL): underlines diferenciados, popover con sugerencias clickeables, atribución, diccionario per-saga.
 - **Export EPUB**: builder Rust con CSS subset Reedsy, templates 6×9"/5×8"/A5, cover image, dedicatoria, copyright, TOC navegable.
@@ -118,6 +155,32 @@ Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automáti
 - Progress bar con eventos `import-progress` desde Rust (archivo actual + done/total)
 - ImportSummary final: counts de dirs creados, caps convertidos, caps copiados, extras + lista de errores
 
+### Sprint 8 — Extras + covers homogéneos ✓
+
+> Manejo uniforme de archivos no-capítulo (extras + covers) a nivel saga y
+> libro, preparando terreno para la feature de Notas.
+
+- Layout canónico: `<saga>/cover.*`, `<saga>/extras/`, `<book>/cover.*`,
+  `<book>/back-cover.*`, `<book>/extras/`. `notas/` reservado.
+- Auto-discovery de `cover.*` y `back-cover.*` desde disco si no están seteados
+  en `book.json`/`saga.json`. Las novelas viejas no se rompen; la tapa aparece
+  sola si seguías la convención implícita.
+- `back-cover` (contratapa) en `BookConfig` + input file en el modal
+  Configurar Novela. Embebida al final del EPUB si está presente.
+- Backend Rust `extras.rs`: comandos `list_extras`, `add_extra`, `remove_extra`,
+  `rename_extra`, `has_extras` + tipo `ExtraEntry` con clasificación
+  (image/document/text/other).
+- Tree explorer: sección "📁 Extras" colapsable bajo cada saga y libro, badge
+  "extra" por archivo, ícono según tipo, click abre con sistema.
+- Crear extra desde la app con dos UX: drag&drop de archivos del OS sobre el
+  nodo saga/libro (vía `tauri://drag-drop` event) o context menu "Agregar
+  extra…" con file picker.
+- Context menu sobre cada extra: Abrir, Renombrar, Borrar.
+- `SKIP_DIRS` Rust agrega `extras` y `notas` para que NO aparezcan como
+  capítulos accidentales en el tree ni en el export EPUB.
+- Wizard de importación: extras a nivel saga (`<saga>/extras/`), no solo libro;
+  normaliza también `back-cover.*` igual que cover.
+
 ### Distribución ✓
 
 CI: `.github/workflows/release.yml`. Trigger: `git push --tags v*.*.*`. Linux job
@@ -167,7 +230,6 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 
 #### Editor / UX
 
-- Organizar archivos para abrir el paso al feature de Notas (Más que nada manejar mejor los extras/diccionarios a la altura de saga o novela según corresponda)
 - Botones giran cuando está en loading. Deberían girar los íconos o tener un loading apropiado.
 - Implementar Markdown (Lectura y escritura, para las notas)
 - Más variantes de divisor de escena (más allá del `* * *`)
@@ -175,8 +237,9 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 - Drag & drop reorder de capítulos
 - Editor split (dos capítulos lado a lado)
 - Notas/research sidebar derecho
-- Reemplazar `window.prompt()` (crear saga, etc.) por modal propio consistente con el resto de la UI (`BookConfigModal` style). (Este está dos veoces, creo)
+- Reemplazar `window.prompt()` (crear saga, etc.) por modal propio consistente con el resto de la UI (`BookConfigModal` style).
 - Auto-abrir el modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
+- Mover los controles de archivos (sync ⇅, pull ⤓, refresh ↻, file picker 📁) del header del tree a un footer del tree. El header arriba queda solo con título/path + acciones de creación/import. Los controles "de proyecto" abajo, separados del flujo de creación.
 
 #### Tree / Importer
 
@@ -194,6 +257,7 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 - Flag `epilogo` en `meta.json` para separar epílogos del TOC principal
 - Preview EPUB tipo Kindle (B/N, distintos tamaños de pantalla — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
 - Temas para las sagas así se configuran una sola vez. (Tema sería fuente para el cuerpo, fuente para los títulos y sus respectivos tamaños. Depende de haber implementado la instalación de fuentes)
+- Revisiones de EPUB: hoy el export sobreescribe siempre `Exportados/<titulo>.epub`. Agregar input "guardar últimas N revisiones" (default 5) en `BookConfig` o settings global. Cuando se exporta, renombrar la versión actual a `<titulo>-revN.epub` antes de generar la nueva. Borrar las que excedan N. Permite volver a una compilación anterior si rompiste algo.
 
 #### Bundle / Distribución (Linux nativo)
 

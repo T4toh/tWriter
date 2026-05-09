@@ -2,6 +2,7 @@ import { Component, ViewChild, computed, effect, HostListener, inject } from '@a
 import { ChapterService } from './core/chapter-service';
 import { DebugService } from './core/debug-service';
 import { GitService } from './core/git-service';
+import { ImageViewerService } from './core/image-viewer-service';
 import { ImportWizardService } from './core/import-wizard-service';
 import { ProjectService } from './core/project-service';
 import { SettingsService } from './core/settings-service';
@@ -10,6 +11,8 @@ import { Tree } from './tree/tree';
 import { Editor } from './editor/editor';
 import { DebugPanel } from './debug/debug-panel';
 import { BookConfigModal } from './book-config/book-config-modal';
+import { SagaConfigModal } from './saga-config/saga-config-modal';
+import { ImageViewer } from './image-viewer/image-viewer';
 import { ToastContainer } from './toast/toast-container';
 import { GrammarSettings } from './grammar-settings/grammar-settings';
 import { ImportWizard } from './import-wizard/import-wizard';
@@ -17,13 +20,14 @@ import { UpdateBanner } from './update-banner/update-banner';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, DebugPanel, BookConfigModal, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner],
+  imports: [Tree, Editor, DebugPanel, BookConfigModal, SagaConfigModal, ImageViewer, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
 export class App {
   @ViewChild(GrammarSettings) private grammarSettings?: GrammarSettings;
   protected importWizard = inject(ImportWizardService);
+  protected imageViewer = inject(ImageViewerService);
 
   private project = inject(ProjectService);
   protected settings = inject(SettingsService);

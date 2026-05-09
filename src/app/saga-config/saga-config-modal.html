@@ -2,7 +2,7 @@
   <div class="bc-backdrop" (click)="close()"></div>
   <div class="bc-modal" (click)="$event.stopPropagation()">
     <header class="bc-header">
-      <h2>Configurar novela</h2>
+      <h2>Configurar saga</h2>
       <p class="path">{{ node.name }}</p>
     </header>
 
@@ -10,23 +10,12 @@
       <div class="bc-body">
         <div class="row">
           <label>
-            <span>Título</span>
+            <span>Nombre</span>
             <input
               type="text"
-              [ngModel]="c.titulo"
-              (ngModelChange)="update('titulo', $event)"
-              placeholder="Título de la novela"
-            />
-          </label>
-        </div>
-        <div class="row">
-          <label>
-            <span>Subtítulo</span>
-            <input
-              type="text"
-              [ngModel]="c.subtitulo"
-              (ngModelChange)="update('subtitulo', $event)"
-              placeholder="(opcional)"
+              [ngModel]="c.nombre"
+              (ngModelChange)="update('nombre', $event)"
+              placeholder="Nombre de la saga"
             />
           </label>
         </div>
@@ -37,6 +26,7 @@
               type="text"
               [ngModel]="c.autor"
               (ngModelChange)="update('autor', $event)"
+              placeholder="Heredado a libros nuevos"
             />
           </label>
           <label>
@@ -50,68 +40,9 @@
             </select>
           </label>
         </div>
-        <div class="row split">
-          <label>
-            <span>Serie</span>
-            <input
-              type="text"
-              [ngModel]="c.serie"
-              (ngModelChange)="update('serie', $event)"
-              placeholder="ej: BA2077"
-            />
-          </label>
-          <label>
-            <span>Número en serie</span>
-            <input
-              type="number"
-              [ngModel]="c.numero_en_serie"
-              (ngModelChange)="update('numero_en_serie', $event)"
-              placeholder="1"
-            />
-          </label>
-        </div>
-        <div class="row split">
-          <label>
-            <span>ISBN</span>
-            <input
-              type="text"
-              [ngModel]="c.isbn"
-              (ngModelChange)="update('isbn', $event)"
-              placeholder="(opcional)"
-            />
-          </label>
-          <label>
-            <span>Año copyright</span>
-            <input
-              type="number"
-              [ngModel]="c.copyright_anio"
-              (ngModelChange)="update('copyright_anio', $event)"
-            />
-          </label>
-        </div>
         <div class="row">
           <label>
-            <span>Imprenta</span>
-            <input
-              type="text"
-              [ngModel]="c.imprenta"
-              (ngModelChange)="update('imprenta', $event)"
-            />
-          </label>
-        </div>
-        <div class="row">
-          <label class="checkbox">
-            <input
-              type="checkbox"
-              [ngModel]="c.derechos_reservados"
-              (ngModelChange)="update('derechos_reservados', $event)"
-            />
-            <span>Incluir cláusula de derechos reservados</span>
-          </label>
-        </div>
-        <div class="row">
-          <label>
-            <span>Tapa (imagen)</span>
+            <span>Tapa de saga (imagen)</span>
             <div class="cover-row">
               <input
                 type="text"
@@ -125,34 +56,42 @@
         </div>
         <div class="row">
           <label>
-            <span>Contratapa (imagen)</span>
-            <div class="cover-row">
-              <input
-                type="text"
-                [ngModel]="c.contratapa"
-                (ngModelChange)="update('contratapa', $event)"
-                placeholder="ej: back-cover.png o ruta absoluta"
-              />
-              <button type="button" (click)="pickBackCover()">Buscar…</button>
-            </div>
-          </label>
-        </div>
-        <div class="row">
-          <label>
-            <span>Dedicatoria</span>
+            <span>Diccionario (una palabra por línea)</span>
             <textarea
-              [ngModel]="c.dedicatoria"
-              (ngModelChange)="update('dedicatoria', $event)"
-              rows="3"
-              placeholder="(opcional)"
+              [ngModel]="diccionarioText()"
+              (ngModelChange)="updateDiccionarioText($event)"
+              rows="6"
+              placeholder="nombres propios, neologismos, palabras del mundo de la saga"
             ></textarea>
           </label>
         </div>
 
         <div class="row section-divider">
-          <span class="section-label">Estilo de capítulos en el EPUB</span>
+          <span class="section-label">Defaults heredados a libros nuevos</span>
+        </div>
+        <div class="row">
+          <label>
+            <span>Imprenta</span>
+            <input
+              type="text"
+              [ngModel]="c.imprenta"
+              (ngModelChange)="update('imprenta', $event)"
+              placeholder="Independiente"
+            />
+          </label>
         </div>
         <div class="row split">
+          <label>
+            <span>Tamaño de página (EPUB)</span>
+            <select
+              [ngModel]="c.template ?? '6x9'"
+              (ngModelChange)="update('template', $event)"
+            >
+              <option value="6x9">6 × 9 in (default)</option>
+              <option value="5x8">5 × 8 in</option>
+              <option value="a5">A5 (148 × 210 mm)</option>
+            </select>
+          </label>
           <label>
             <span>Prefijo del capítulo</span>
             <select
@@ -164,6 +103,8 @@
               <option value="roman">Romano (I, II, III…)</option>
             </select>
           </label>
+        </div>
+        <div class="row">
           <label class="checkbox">
             <input
               type="checkbox"
@@ -190,7 +131,7 @@
               [ngModel]="c.mostrar_numero_parte"
               (ngModelChange)="update('mostrar_numero_parte', $event)"
             />
-            <span>Mostrar header de parte (número o título)</span>
+            <span>Mostrar header de parte</span>
           </label>
           <label>
             <span>Formato de parte</span>
@@ -205,19 +146,7 @@
             </select>
           </label>
         </div>
-        <div class="row split">
-          <label>
-            <span>Tamaño de página (EPUB)</span>
-            <select
-              [ngModel]="c.template ?? '6x9'"
-              (ngModelChange)="update('template', $event)"
-            >
-              <option value="6x9">6 × 9 in (default)</option>
-              <option value="5x8">5 × 8 in</option>
-              <option value="a5">A5 (148 × 210 mm)</option>
-            </select>
-          </label>
-        </div>
+
         @if (error(); as err) {
           <p class="error">{{ err }}</p>
         }

@@ -6,13 +6,73 @@ use uuid::Uuid;
 use zip::write::{SimpleFileOptions, ZipWriter};
 use zip::CompressionMethod;
 
-use crate::book_config::BookConfig;
+use crate::book_config::{find_back_cover_in, find_cover_in, BookConfig};
 use crate::fs::is_excluded_dir;
 
 #[derive(Serialize, Debug)]
 pub struct ExportResult {
     pub epub_path: String,
     pub chapters: u32,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct ExportEntry {
+    pub name: String,
+    pub path: String,
+    pub size_bytes: u64,
+    pub modified_ms: Option<u64>,
+}
+
+#[tauri::command]
+pub fn list_exports(book_path: String) -> Result<Vec<ExportEntry>, String> {
+    let dir = PathBuf::from(&book_path).join("Exportados");
+    if !dir.is_dir() {
+        // Fallback al nombre viejo "exports" para libros pre-rename.
+        let legacy = PathBuf::from(&book_path).join("exports");
+        if legacy.is_dir() {
+            return read_export_dir(&legacy);
+        }
+        return Ok(Vec::new());
+    }
+    read_export_dir(&dir)
+}
+
+fn read_export_dir(dir: &Path) -> Result<Vec<ExportEntry>, String> {
+    let mut out: Vec<ExportEntry> = Vec::new();
+    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|s| s.to_lowercase())
+            .unwrap_or_default();
+        if ext != "epub" {
+            continue;
+        }
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        let meta = fs::metadata(&path).ok();
+        let size_bytes = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+        let modified_ms = meta
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as u64);
+        out.push(ExportEntry {
+            name,
+            path: path.to_string_lossy().into_owned(),
+            size_bytes,
+            modified_ms,
+        });
+    }
+    out.sort_by(|a, b| b.modified_ms.unwrap_or(0).cmp(&a.modified_ms.unwrap_or(0)));
+    Ok(out)
 }
 
 const CSS_TEMPLATE: &str = include_str!("epub_style.css");
@@ -65,7 +125,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         return Err("libro sin capítulos .html".to_string());
     }
 
-    let exports_dir = book_dir.join("exports");
+    let exports_dir = book_dir.join("Exportados");
     fs::create_dir_all(&exports_dir).map_err(|e| e.to_string())?;
     let safe_title = sanitize_filename(&cfg.titulo);
     let epub_path = exports_dir.join(format!("{}.epub", safe_title));
@@ -105,7 +165,9 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
 
     // 1) Cover (si hay imagen)
     if let Some(cover_rel) = &cfg.tapa {
-        if let Some((cover_filename, cover_mime)) = embed_cover(&book_dir, cover_rel, &mut zip, opts)? {
+        if let Some((cover_filename, cover_mime)) =
+            embed_image(&book_dir, cover_rel, "cover", &mut zip, opts)?
+        {
             items.push(Item {
                 id: "cover-image".into(),
                 href: cover_filename.clone(),
@@ -258,6 +320,34 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         toc_entries.push(entry);
     }
 
+    // 5b) Back cover (si hay imagen)
+    if let Some(back_rel) = &cfg.contratapa {
+        if let Some((bc_filename, bc_mime)) =
+            embed_image(&book_dir, back_rel, "back-cover", &mut zip, opts)?
+        {
+            spine_idx += 1;
+            items.push(Item {
+                id: "back-cover-image".into(),
+                href: bc_filename.clone(),
+                media_type: bc_mime,
+                spine_order: None,
+
+                properties: None,
+            });
+            let xhtml = build_back_cover_xhtml(&bc_filename);
+            zip.start_file("OEBPS/9_back_cover.xhtml", opts).map_err(|e| e.to_string())?;
+            zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
+            items.push(Item {
+                id: "back-cover".into(),
+                href: "9_back_cover.xhtml".into(),
+                media_type: "application/xhtml+xml".into(),
+                spine_order: Some(spine_idx),
+
+                properties: None,
+            });
+        }
+    }
+
     // 6) toc.xhtml (visible nav + EPUB 3 properties="nav"). Lo metemos al spine
     //    después del frontmatter para que el lector pueda navegar a él.
     //    Lo agregamos al final del array para que aparezca al final, pero su
@@ -364,7 +454,7 @@ fn collect_chapters(book_dir: &Path) -> Result<Vec<Chapter>, String> {
             }
             p.file_name()
                 .and_then(|s| s.to_str())
-                .map(|n| !["exports", "Revisiones", "convertidos", ".git"].contains(&n))
+                .map(|n| !["exports", "Exportados", "Revisiones", "convertidos", ".git"].contains(&n))
                 .unwrap_or(true)
         })
         .collect();
@@ -456,18 +546,19 @@ fn collect_html_parts(dir: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(out)
 }
 
-// ───────── Cover image ─────────
+// ───────── Imágenes (cover / back-cover) ─────────
 
-fn embed_cover(
+fn embed_image(
     book_dir: &Path,
-    cover_rel: &str,
+    image_rel: &str,
+    dest_stem: &str,
     zip: &mut ZipWriter<File>,
     opts: SimpleFileOptions,
 ) -> Result<Option<(String, String)>, String> {
-    let candidate = if Path::new(cover_rel).is_absolute() {
-        PathBuf::from(cover_rel)
+    let candidate = if Path::new(image_rel).is_absolute() {
+        PathBuf::from(image_rel)
     } else {
-        book_dir.join(cover_rel)
+        book_dir.join(image_rel)
     };
     if !candidate.is_file() {
         return Ok(None);
@@ -485,7 +576,7 @@ fn embed_cover(
         _ => return Ok(None),
     };
     let bytes = fs::read(&candidate).map_err(|e| e.to_string())?;
-    let dest = format!("cover.{}", dest_ext);
+    let dest = format!("{}.{}", dest_stem, dest_ext);
     zip.start_file(format!("OEBPS/{}", dest), opts)
         .map_err(|e| e.to_string())?;
     zip.write_all(&bytes).map_err(|e| e.to_string())?;
@@ -522,6 +613,14 @@ fn build_cover_xhtml(cover_filename: &str) -> String {
         xml_escape(cover_filename)
     );
     xhtml_shell("Cover", &body, "es", "cover-body")
+}
+
+fn build_back_cover_xhtml(filename: &str) -> String {
+    let body = format!(
+        r#"<img src="{}" alt="Back cover"/>"#,
+        xml_escape(filename)
+    );
+    xhtml_shell("Back cover", &body, "es", "cover-body")
 }
 
 fn build_title_xhtml(cfg: &BookConfig) -> String {
@@ -944,36 +1043,53 @@ fn build_opf(cfg: &BookConfig, items: &[Item], book_uuid: &str) -> String {
 
 fn read_or_default_config(book_dir: &Path) -> BookConfig {
     let book_json = book_dir.join("book.json");
-    if let Ok(raw) = fs::read_to_string(&book_json) {
-        if let Ok(mut cfg) = serde_json::from_str::<BookConfig>(&raw) {
-            if cfg.titulo.trim().is_empty() {
-                cfg.titulo = strip_numeric_prefix(
-                    book_dir.file_name().and_then(|s| s.to_str()).unwrap_or("Sin título"),
-                );
-            }
-            // Fallback autor desde saga.json
-            if cfg.autor.as_deref().unwrap_or("").is_empty() {
-                if let Some(parent) = book_dir.parent() {
-                    let saga_json = parent.join("saga.json");
-                    if let Ok(raw) = fs::read_to_string(&saga_json) {
-                        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
-                            if let Some(a) = v.get("autor").and_then(|s| s.as_str()) {
-                                cfg.autor = Some(a.to_string());
-                            }
-                        }
+    let mut cfg = if let Ok(raw) = fs::read_to_string(&book_json) {
+        serde_json::from_str::<BookConfig>(&raw).unwrap_or_else(|_| BookConfig {
+            titulo: strip_numeric_prefix(
+                book_dir.file_name().and_then(|s| s.to_str()).unwrap_or("Sin título"),
+            ),
+            idioma: Some("es".to_string()),
+            ..Default::default()
+        })
+    } else {
+        BookConfig {
+            titulo: strip_numeric_prefix(
+                book_dir.file_name().and_then(|s| s.to_str()).unwrap_or("Sin título"),
+            ),
+            idioma: Some("es".to_string()),
+            ..Default::default()
+        }
+    };
+    if cfg.titulo.trim().is_empty() {
+        cfg.titulo = strip_numeric_prefix(
+            book_dir.file_name().and_then(|s| s.to_str()).unwrap_or("Sin título"),
+        );
+    }
+    // Fallback autor desde saga.json
+    if cfg.autor.as_deref().unwrap_or("").is_empty() {
+        if let Some(parent) = book_dir.parent() {
+            let saga_json = parent.join("saga.json");
+            if let Ok(raw) = fs::read_to_string(&saga_json) {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+                    if let Some(a) = v.get("autor").and_then(|s| s.as_str()) {
+                        cfg.autor = Some(a.to_string());
                     }
                 }
             }
-            return cfg;
         }
     }
-    BookConfig {
-        titulo: strip_numeric_prefix(
-            book_dir.file_name().and_then(|s| s.to_str()).unwrap_or("Sin título"),
-        ),
-        idioma: Some("es".to_string()),
-        ..Default::default()
+    // Auto-discovery de cover/back-cover en disco si el JSON no los tiene
+    if cfg.tapa.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+        if let Some(found) = find_cover_in(book_dir) {
+            cfg.tapa = Some(found);
+        }
     }
+    if cfg.contratapa.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+        if let Some(found) = find_back_cover_in(book_dir) {
+            cfg.contratapa = Some(found);
+        }
+    }
+    cfg
 }
 
 fn xml_escape(s: &str) -> String {
