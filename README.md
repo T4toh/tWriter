@@ -169,6 +169,7 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 
 - Organizar archivos para abrir el paso al feature de Notas (Más que nada manejar mejor los extras/diccionarios a la altura de saga o novela según corresponda)
 - Botones giran cuando está en loading. Deberían girar los íconos o tener un loading apropiado.
+- Implementar Markdown (Lectura y escritura, para las notas)
 - Más variantes de divisor de escena (más allá del `* * *`)
 - Divisor automático de partes (reglas confusas, lo hago a mano)
 - Drag & drop reorder de capítulos
@@ -183,6 +184,7 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero)
 - Editar diccionario per-saga desde UI (hoy se agregan palabras desde el popover, borrar requiere editar `saga.json` a mano)
 - Template de saga/libro/cap precargado en instalación nueva (sin novelas en disco) para probar features sin tener que importar nada — capítulo dummy con texto en ES y EN, diálogos sin convertir, errores ortográficos a propósito, scene break, dropcap.
+- Importar notas de Joplin (o cualquier .md depende de implementar .mds)
 
 #### EPUB
 
