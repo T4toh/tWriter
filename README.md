@@ -188,8 +188,9 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 
 #### EPUB
 
-- Fonts embebidas en EPUB (Merriweather, Lato, Roboto Mono)
+- Fonts embebidas en EPUB (Merriweather, Lato, Roboto Mono o cualquiera)
 - Página "About the author" en EPUB
+- Contratapa y otros libros en EPUB
 - Flag `epilogo` en `meta.json` para separar epílogos del TOC principal
 - Preview EPUB tipo Kindle (B/N, distintos tamaños de pantalla — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
 - Temas para las sagas así se configuran una sola vez. (Tema sería fuente para el cuerpo, fuente para los títulos y sus respectivos tamaños. Depende de haber implementado la instalación de fuentes)
