@@ -239,6 +239,7 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 - Notas/research sidebar derecho
 - Reemplazar `window.prompt()` (crear saga, etc.) por modal propio consistente con el resto de la UI (`BookConfigModal` style).
 - Auto-abrir el modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
+- Mover los controles de archivos (sync ⇅, pull ⤓, refresh ↻, file picker 📁) del header del tree a un footer del tree. El header arriba queda solo con título/path + acciones de creación/import. Los controles "de proyecto" abajo, separados del flujo de creación.
 
 #### Tree / Importer
 
