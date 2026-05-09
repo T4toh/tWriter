@@ -1,4 +1,4 @@
-import { Component, OnDestroy, computed, effect, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { invoke } from '@tauri-apps/api/core';
 import { openPath } from '@tauri-apps/plugin-opener';
@@ -485,6 +485,24 @@ export class Tree implements OnDestroy {
     if (!m || !m.node) return;
     const node = m.node;
     this.closeMenu();
+    await this.renameNodeFor(node);
+  }
+
+  @HostListener('window:keydown.F2', ['$event'])
+  protected onF2(event: Event): void {
+    const target = event.target as HTMLElement | null;
+    if (target && target.matches('input, textarea, [contenteditable="true"]')) {
+      return;
+    }
+    const m = this.menu();
+    const node = m?.node ?? this.chapter.active() ?? this.findNodeByPath(this.root(), this.browsingPath() ?? '');
+    if (!node) return;
+    event.preventDefault();
+    if (m) this.closeMenu();
+    void this.renameNodeFor(node);
+  }
+
+  private async renameNodeFor(node: TreeNode): Promise<void> {
     const current = node.kind === 'chapter' && node.ext
       ? `${node.name}.${node.ext}`
       : node.name;
