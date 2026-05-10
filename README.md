@@ -55,7 +55,7 @@ Reglas:
 
 ## Estado
 
-MVP completo. Sprints 1–10 hechos.
+MVP completo. Sprints 1–11 hechos.
 
 - **Editor**: TipTap con HTML subset (`<p>`, `<i>`, `<em>`, `<strong>`, `<u>`, `<hr>`, `<h1>`, `<blockquote>`), autosave debounced 1.5s, toolbar (B/I/U, alineación, salto de escena, RAE, gramática, ancho hoja, font size), menú contextual propio.
 - **Tree explorer** del repo (Saga / Libro / Sección / Capítulo) con context menu (crear, mover, importar, exportar EPUB, configurar libro, excluir del EPUB), badge "excluido" para `.twriter-ignore`.
@@ -71,6 +71,7 @@ MVP completo. Sprints 1–10 hechos.
 - **Tema** claro/oscuro, tipografía serif que matchea el EPUB output.
 - **Indicador idioma** footer (badge color por idioma) + toggle ES/EN.
 - **Temas + fuentes embebidas**: temas reutilizables a nivel root (`<root>/themes/<id>/`) con tipografía + márgenes. Override per-saga y per-libro. Detección automática de bold/italic via sufijos en filename. Cero regresión cuando no hay tema configurado.
+- **Per-style faces**: `body_font_italic`/`body_font_bold`/`body_font_bold_italic` en el tema apuntan a un filename stem específico para `<em>`/`<strong>` y combinaciones. Pisa el auto-pick por sufijo. Útil cuando la italic auto de la familia es muy sutil. Theme editor incluye preview real con FontFace API.
 
 ## Roadmap
 
@@ -218,6 +219,42 @@ Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automáti
 - Pickers nativos OS (cover, carpeta raíz, extras, import source) **se
   mantienen nativos** — la migración a xdg-portal queda en sprint de
   packaging.
+
+### Sprint 11 — Per-style faces (italic / bold / bold-italic) ✓
+
+> Pisar el auto-pick por sufijo de filename con un face específico por estilo.
+> Caso real: la italic de IBM Plex Sans (Italic.ttf) apenas se distingue del
+> Regular en Kindle. Mapear `<em>` a `IBMPlexSans-MediumItalic` da una italic
+> mucho más pronunciada.
+
+- 3 fields nuevos en `Theme`: `body_font_italic`, `body_font_bold`,
+  `body_font_bold_italic`. Cada uno apunta a un filename stem (no a una
+  familia). Filename stem = nombre del archivo sin extensión.
+- `locate_face_by_stem` busca el archivo en `<book>/fonts/` →
+  `<saga>/fonts/` → `<root>/themes/<id>/fonts/`. Primer match gana.
+- Embed: el face explícito se suma a los FontEmbed con weight/style
+  forzados al slot (italic=normal+italic, bold=bold+normal,
+  bolditalic=bold+italic). Family CSS = sanitized stem (no la familia base).
+  Dedup por filename para no embebrir el mismo archivo dos veces si auto-pick
+  ya lo tomó.
+- CSS emite reglas dedicadas con fallback chain:
+  ```css
+  em, i { font-family: "<face>", "<body>", serif; font-style: italic; }
+  strong, b { font-family: "<face>", "<body>", serif; font-weight: bold; }
+  strong em, em strong, ... { font-family: "<face>", "<body>", serif; font-weight: bold; font-style: italic; }
+  ```
+  Solo cuando el slot está set. Sin slot configurado → CSS idéntico al de Sprint 10.
+- Override en cascada: `book.theme.overrides` > `saga.theme.overrides` > tema base.
+- Theme editor modal: 3 dropdowns con stems disponibles + bloque de preview
+  que carga las fuentes via `convertFileSrc` + `FontFace` API. Re-renderiza
+  on cambio de selección. Sample HTML con `<em>`/`<strong>`/combinación
+  visible antes de exportar.
+- Saga + Book config modals: 3 selects override per-saga/per-libro con
+  placeholder mostrando el valor heredado.
+- Modal CSS fix: `min-width: 0` en flex children + `width: 100%` /
+  `max-width: 100%` / `box-sizing: border-box` en inputs/selects.
+  `text-overflow: ellipsis` en select para clipping limpio cuando los stems
+  son largos. Aplica a theme-editor / saga-config / book-config.
 
 ### Sprint 10 — Temas + fuentes embebidas ✓
 
