@@ -5,6 +5,7 @@ import { NavigationService } from '../core/navigation-service';
 import { ProjectService } from '../core/project-service';
 import { SagaConfigService } from '../core/saga-config-service';
 import { TreeNode } from '../core/types';
+import { ModalService } from '../shared/modal-service';
 import { BookCard } from './book-card';
 import { CreateCard } from './create-card';
 import { SagaCard } from './saga-card';
@@ -27,6 +28,7 @@ export class Landing {
   private nav = inject(NavigationService);
   private bookCfg = inject(BookConfigService);
   private sagaCfg = inject(SagaConfigService);
+  private modal = inject(ModalService);
 
   protected readonly browsing = this.nav.browsingPath;
   protected readonly creating = signal<boolean>(false);
@@ -176,7 +178,12 @@ export class Landing {
   protected async createCapituloHere(): Promise<void> {
     const node = this.currentNode();
     if (!node || node.kind !== 'book' || this.creating()) return;
-    const name = prompt('Nombre del capítulo:');
+    const name = await this.modal.prompt({
+      title: 'Nuevo capítulo',
+      message: 'Sin número, se prepende automático.',
+      placeholder: 'Nombre',
+      validate: (v) => (v.trim() ? null : 'Ingresá un nombre'),
+    });
     if (!name?.trim()) return;
     this.creating.set(true);
     try {
@@ -190,7 +197,11 @@ export class Landing {
     const node = this.currentNode();
     if (!node || node.kind !== 'book' || this.creating()) return;
     if (this.bookEpilogoPath() !== null) return;
-    const name = prompt('Nombre del epílogo:', 'Epílogo');
+    const name = await this.modal.prompt({
+      title: 'Nuevo epílogo',
+      defaultValue: 'Epílogo',
+      validate: (v) => (v.trim() ? null : 'Ingresá un nombre'),
+    });
     if (!name?.trim()) return;
     const dirName = name.trim();
     this.creating.set(true);
@@ -219,7 +230,12 @@ export class Landing {
   protected async createBookHere(): Promise<void> {
     const node = this.currentNode();
     if (!node || node.kind !== 'saga' || this.creating()) return;
-    const name = prompt('Nombre de la novela:');
+    const name = await this.modal.prompt({
+      title: 'Nueva novela',
+      message: 'Sin número, se prepende automático.',
+      placeholder: 'Nombre',
+      validate: (v) => (v.trim() ? null : 'Ingresá un nombre'),
+    });
     if (!name?.trim()) return;
     this.creating.set(true);
     try {

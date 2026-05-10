@@ -18,10 +18,12 @@ import { GrammarSettings } from './grammar-settings/grammar-settings';
 import { ImportWizard } from './import-wizard/import-wizard';
 import { UpdateBanner } from './update-banner/update-banner';
 import { Spinner } from './shared/spinner';
+import { ModalHost } from './shared/modal-host';
+import { ModalService } from './shared/modal-service';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, DebugPanel, BookConfigModal, SagaConfigModal, ImageViewer, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner, Spinner],
+  imports: [Tree, Editor, DebugPanel, BookConfigModal, SagaConfigModal, ImageViewer, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner, Spinner, ModalHost],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -36,6 +38,7 @@ export class App {
   protected git = inject(GitService);
   protected debug = inject(DebugService);
   private updater = inject(UpdaterService);
+  private modal = inject(ModalService);
 
   protected readonly saving = this.chapter.saving;
   protected readonly bulkProgress = this.chapter.bulkProgress;
@@ -130,7 +133,11 @@ export class App {
   protected async createSaga(): Promise<void> {
     const root = this.settings.root();
     if (!root) return;
-    const name = prompt('Nombre de la saga / novela:');
+    const name = await this.modal.prompt({
+      title: 'Nueva saga / novela',
+      placeholder: 'Nombre',
+      validate: (v) => (v.trim() ? null : 'Ingresá un nombre'),
+    });
     if (!name?.trim()) return;
     await this.chapter.createDirectory(root, name.trim(), false);
   }

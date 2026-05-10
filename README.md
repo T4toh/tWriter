@@ -44,7 +44,7 @@ Reglas:
 
 ## Estado
 
-MVP completo. Sprints 1–8 hechos.
+MVP completo. Sprints 1–9 hechos.
 
 - **Editor**: TipTap con HTML subset (`<p>`, `<i>`, `<em>`, `<strong>`, `<u>`, `<hr>`, `<h1>`, `<blockquote>`), autosave debounced 1.5s, toolbar (B/I/U, alineación, salto de escena, RAE, gramática, ancho hoja, font size), menú contextual propio.
 - **Tree explorer** del repo (Saga / Libro / Sección / Capítulo) con context menu (crear, mover, importar, exportar EPUB, configurar libro, excluir del EPUB), badge "excluido" para `.twriter-ignore`.
@@ -181,6 +181,32 @@ Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automáti
 - Wizard de importación: extras a nivel saga (`<saga>/extras/`), no solo libro;
   normaliza también `back-cover.*` igual que cover.
 
+### Sprint 9 — Diálogos custom ✓
+
+> Reemplazar los `window.prompt`/`confirm`/`alert` nativos del WebKit (feos,
+> con header "JavaScript - http://localhost:1420/" sin tema) por un sistema
+> de modales propio coherente con `BookConfigModal` & co.
+
+- `ModalService` promise-based en `src/app/shared/modal-service.ts`:
+  `modal.prompt()`, `modal.confirm()`, `modal.alert()`. Drop-in para los
+  globals nativos. Solo una instancia activa a la vez.
+- `ModalHost` root-level (`src/app/shared/modal-host.ts/html/scss`) montado
+  una sola vez en `app.html`. Renderiza el shape adecuado según `kind`
+  (prompt / confirm / alert).
+- 14 prompts + 5 confirms migrados (header, tree, landing). Los 2 `alert()`
+  se convirtieron a `toast.error()` (errores transitorios encajan mejor en
+  toast que en modal).
+- F2 (rename) con input pre-lleno + select-all, validación inline (no
+  vacío, sin `/` ni `\`), Esc cancela, Enter confirma.
+- Confirms destructivos pintan OK rojo (`btn-danger`): borrar capítulo,
+  borrar carpeta, borrar extra, bulk delete .docx/.odt.
+- Animaciones CSS-only: backdrop fade-in 120ms + card slide-up 160ms con
+  40ms de stagger. Salida invertida (card primero, backdrop después).
+  Respeta `prefers-reduced-motion`.
+- Pickers nativos OS (cover, carpeta raíz, extras, import source) **se
+  mantienen nativos** — la migración a xdg-portal queda en sprint de
+  packaging.
+
 ### Distribución ✓
 
 CI: `.github/workflows/release.yml`. Trigger: `git push --tags v*.*.*`. Linux job
@@ -236,7 +262,6 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 - Drag & drop reorder de capítulos
 - Editor split (dos capítulos lado a lado)
 - Notas/research sidebar derecho
-- Reemplazar `window.prompt()` (crear saga, etc.) por modal propio consistente con el resto de la UI (`BookConfigModal` style).
 - Auto-abrir el modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Mover los controles de archivos (sync ⇅, pull ⤓, refresh ↻, file picker 📁) del header del tree a un footer del tree. El header arriba queda solo con título/path + acciones de creación/import. Los controles "de proyecto" abajo, separados del flujo de creación.
 
