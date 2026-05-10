@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
-import { TreeNode } from './types';
+import { ThemeRef, TreeNode } from './types';
 
 export type ChapterPrefix = 'none' | 'decimal' | 'roman';
 
@@ -26,6 +26,7 @@ export interface BookConfig {
   template?: '6x9' | '5x8' | 'a5' | null;
   finalizada?: boolean | null;
   epilogo?: string | null;
+  theme?: ThemeRef | null;
 }
 
 @Injectable({ providedIn: 'root' })

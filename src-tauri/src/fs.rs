@@ -13,6 +13,8 @@ const SKIP_DIRS: &[&str] = &[
     "zTapas",
     "extras",
     "notas",
+    "fonts",
+    "themes",
 ];
 const CHAPTER_EXTS: &[&str] = &["html", "odt", "docx"];
 

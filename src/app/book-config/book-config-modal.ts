@@ -8,6 +8,9 @@ import {
 import { FormsModule } from '@angular/forms';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { BookConfig, BookConfigService } from '../core/book-config-service';
+import { FontsService } from '../core/fonts-service';
+import { ThemesService } from '../core/themes-service';
+import { Theme, ThemeRef } from '../core/types';
 
 @Component({
   selector: 'app-book-config-modal',
@@ -17,6 +20,8 @@ import { BookConfig, BookConfigService } from '../core/book-config-service';
 })
 export class BookConfigModal {
   private svc = inject(BookConfigService);
+  protected themesSvc = inject(ThemesService);
+  private fontsSvc = inject(FontsService);
 
   protected readonly editing = this.svc.editing;
   protected readonly config = signal<BookConfig | null>(null);
@@ -24,15 +29,88 @@ export class BookConfigModal {
   protected readonly error = signal<string | null>(null);
   protected readonly bookPath = computed(() => this.editing()?.path ?? null);
 
+  protected readonly themeBase = signal<string>('');
+  protected readonly ovBodyFont = signal<string>('');
+  protected readonly ovBodySize = signal<string>('');
+  protected readonly ovHeadingFont = signal<string>('');
+  protected readonly ovHeadingSize = signal<string>('');
+  protected readonly ovLineHeight = signal<string>('');
+  protected readonly ovPageMargin = signal<string>('');
+
+  protected readonly availableThemes = computed(() => this.themesSvc.list());
+  protected readonly selectedBaseTheme = computed(() => {
+    const id = this.themeBase();
+    if (!id) return null;
+    return this.availableThemes().find((t) => t.id === id) ?? null;
+  });
+  protected readonly availableFamilies = computed(() => {
+    const set = new Set<string>();
+    const path = this.bookPath();
+    if (path) {
+      for (const f of this.fontsSvc.get(path)) set.add(f.family);
+    }
+    const base = this.selectedBaseTheme();
+    if (base?.body_font) set.add(base.body_font);
+    if (base?.heading_font) set.add(base.heading_font);
+    return Array.from(set).sort();
+  });
+
   constructor() {
     effect(() => {
       const node = this.editing();
       if (!node) {
         this.config.set(null);
+        this.resetTheme();
         return;
       }
       void this.load(node.path);
+      void this.themesSvc.refresh();
+      void this.fontsSvc.refresh(node.path);
     });
+  }
+
+  private resetTheme(): void {
+    this.themeBase.set('');
+    this.ovBodyFont.set('');
+    this.ovBodySize.set('');
+    this.ovHeadingFont.set('');
+    this.ovHeadingSize.set('');
+    this.ovLineHeight.set('');
+    this.ovPageMargin.set('');
+  }
+
+  private hydrateTheme(theme: ThemeRef | null | undefined): void {
+    this.themeBase.set(theme?.base ?? '');
+    const ov = theme?.overrides ?? null;
+    this.ovBodyFont.set(ov?.body_font ?? '');
+    this.ovBodySize.set(ov?.body_size ?? '');
+    this.ovHeadingFont.set(ov?.heading_font ?? '');
+    this.ovHeadingSize.set(ov?.heading_size ?? '');
+    this.ovLineHeight.set(ov?.line_height ?? '');
+    this.ovPageMargin.set(ov?.page_margin ?? '');
+  }
+
+  private buildThemeRef(): ThemeRef | null {
+    const base = blank(this.themeBase());
+    const overrides: Theme = {
+      body_font: blank(this.ovBodyFont()),
+      body_size: blank(this.ovBodySize()),
+      heading_font: blank(this.ovHeadingFont()),
+      heading_size: blank(this.ovHeadingSize()),
+      line_height: blank(this.ovLineHeight()),
+      page_margin: blank(this.ovPageMargin()),
+    };
+    const hasOverrides = Object.values(overrides).some((v) => v !== null);
+    if (!base && !hasOverrides) return null;
+    return {
+      base,
+      overrides: hasOverrides ? overrides : null,
+    };
+  }
+
+  protected editTheme(): void {
+    const id = this.themeBase();
+    if (id) this.themesSvc.openEditor(id);
   }
 
   private async load(path: string): Promise<void> {
@@ -62,6 +140,7 @@ export class BookConfigModal {
         finalizada: cfg.finalizada ?? false,
         epilogo: cfg.epilogo ?? null,
       });
+      this.hydrateTheme(cfg.theme ?? null);
     } catch (err) {
       this.error.set(String(err));
     }
@@ -129,6 +208,7 @@ export class BookConfigModal {
         template: cfg.template ?? null,
         finalizada: cfg.finalizada ?? null,
         epilogo: blank(cfg.epilogo ?? null),
+        theme: this.buildThemeRef(),
       };
       await this.svc.save(path, cleaned);
       this.svc.close();

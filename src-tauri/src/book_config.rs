@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::theme::ThemeRef;
+
 const COVER_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp"];
 
 /// Busca `cover.<ext>` en `dir`. Devuelve el nombre relativo (ej: "cover.jpg") si existe.
@@ -79,6 +81,9 @@ pub struct BookConfig {
     /// El epílogo se trata como un capítulo independiente al final del libro, fuera del TOC principal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub epilogo: Option<String>,
+    /// Tema base + overrides per-campo. Sobrescribe lo heredado de la saga.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme: Option<ThemeRef>,
 }
 
 #[tauri::command]

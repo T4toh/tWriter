@@ -157,6 +157,110 @@
           </label>
         </div>
 
+        <div class="row section-divider">
+          <span class="section-label">Tema (tipografía + márgenes)</span>
+        </div>
+        <div class="row split">
+          <label>
+            <span>Tema base</span>
+            <select
+              [ngModel]="themeBase()"
+              (ngModelChange)="themeBase.set($event)"
+            >
+              <option value="">Sin tema</option>
+              @for (t of availableThemes(); track t.id) {
+                <option [value]="t.id">{{ t.nombre || t.id }}</option>
+              }
+            </select>
+          </label>
+          <label>
+            <span>&nbsp;</span>
+            <button
+              type="button"
+              class="ghost-btn"
+              [disabled]="!themeBase()"
+              (click)="editTheme()"
+            >
+              Editar tema base…
+            </button>
+          </label>
+        </div>
+        @if (themeBase()) {
+          @if (selectedBaseTheme(); as base) {
+            <p class="hint-soft">
+              Dejá los campos vacíos para heredar del tema base. Lo que escribas
+              sobreescribe ese valor solo para esta saga.
+            </p>
+            <div class="row split">
+              <label>
+                <span>Fuente cuerpo</span>
+                <input
+                  type="text"
+                  [attr.list]="'sc-fams'"
+                  [ngModel]="ovBodyFont()"
+                  (ngModelChange)="ovBodyFont.set($event)"
+                  [placeholder]="base.body_font || '(genérico)'"
+                />
+              </label>
+              <label>
+                <span>Tamaño cuerpo</span>
+                <input
+                  type="text"
+                  [ngModel]="ovBodySize()"
+                  (ngModelChange)="ovBodySize.set($event)"
+                  [placeholder]="base.body_size || '(default)'"
+                />
+              </label>
+            </div>
+            <div class="row split">
+              <label>
+                <span>Fuente títulos</span>
+                <input
+                  type="text"
+                  [attr.list]="'sc-fams'"
+                  [ngModel]="ovHeadingFont()"
+                  (ngModelChange)="ovHeadingFont.set($event)"
+                  [placeholder]="base.heading_font || '(genérico)'"
+                />
+              </label>
+              <label>
+                <span>Tamaño títulos</span>
+                <input
+                  type="text"
+                  [ngModel]="ovHeadingSize()"
+                  (ngModelChange)="ovHeadingSize.set($event)"
+                  [placeholder]="base.heading_size || '(default)'"
+                />
+              </label>
+            </div>
+            <div class="row split">
+              <label>
+                <span>Line-height</span>
+                <input
+                  type="text"
+                  [ngModel]="ovLineHeight()"
+                  (ngModelChange)="ovLineHeight.set($event)"
+                  [placeholder]="base.line_height || '(default)'"
+                />
+              </label>
+              <label>
+                <span>Margen de página</span>
+                <input
+                  type="text"
+                  [ngModel]="ovPageMargin()"
+                  (ngModelChange)="ovPageMargin.set($event)"
+                  [placeholder]="base.page_margin || '(default)'"
+                />
+              </label>
+            </div>
+            <datalist id="sc-fams">
+              @for (fam of availableFamilies(); track fam) {
+                <option [value]="fam"></option>
+              }
+            </datalist>
+          }
+        }
+
         @if (error(); as err) {
           <p class="error">{{ err }}</p>
         }
