@@ -93,6 +93,37 @@
         </datalist>
 
         <div class="row section-divider">
+          <span class="section-label">Páginas editoriales (opcional)</span>
+        </div>
+        <p class="hint-soft">
+          Fuentes dedicadas para TOC, copyright, dedicatoria, title page y
+          sobre el autor. Si no las setés, esas páginas heredan la fuente
+          cuerpo y la fuente títulos del tema.
+        </p>
+        <div class="row split">
+          <label>
+            <span>Fuente cuerpo editorial</span>
+            <input
+              type="text"
+              [attr.list]="'te-fams-' + id"
+              [ngModel]="f.editorial_body_font"
+              (ngModelChange)="update('editorial_body_font', $event)"
+              placeholder="Ej: Cormorant Garamond"
+            />
+          </label>
+          <label>
+            <span>Fuente títulos editorial</span>
+            <input
+              type="text"
+              [attr.list]="'te-fams-' + id"
+              [ngModel]="f.editorial_heading_font"
+              (ngModelChange)="update('editorial_heading_font', $event)"
+              placeholder="Ej: Playfair Display"
+            />
+          </label>
+        </div>
+
+        <div class="row section-divider">
           <span class="section-label">Faces explícitas (opcional)</span>
         </div>
         <p class="hint-soft">

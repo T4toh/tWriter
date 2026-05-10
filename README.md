@@ -55,7 +55,7 @@ Reglas:
 
 ## Estado
 
-MVP completo. Sprints 1–11 hechos.
+MVP completo. Sprints 1–12 hechos.
 
 - **Editor**: TipTap con HTML subset (`<p>`, `<i>`, `<em>`, `<strong>`, `<u>`, `<hr>`, `<h1>`, `<blockquote>`), autosave debounced 1.5s, toolbar (B/I/U, alineación, salto de escena, RAE, gramática, ancho hoja, font size), menú contextual propio.
 - **Tree explorer** del repo (Saga / Libro / Sección / Capítulo) con context menu (crear, mover, importar, exportar EPUB, configurar libro, excluir del EPUB), badge "excluido" para `.twriter-ignore`.
@@ -72,6 +72,7 @@ MVP completo. Sprints 1–11 hechos.
 - **Indicador idioma** footer (badge color por idioma) + toggle ES/EN.
 - **Temas + fuentes embebidas**: temas reutilizables a nivel root (`<root>/themes/<id>/`) con tipografía + márgenes. Override per-saga y per-libro. Detección automática de bold/italic via sufijos en filename. Cero regresión cuando no hay tema configurado.
 - **Per-style faces**: `body_font_italic`/`body_font_bold`/`body_font_bold_italic` en el tema apuntan a un filename stem específico para `<em>`/`<strong>` y combinaciones. Pisa el auto-pick por sufijo. Útil cuando la italic auto de la familia es muy sutil. Theme editor incluye preview real con FontFace API.
+- **Tema editorial**: `editorial_body_font` + `editorial_heading_font` aíslan la tipografía de las páginas no-autor (title page, copyright, dedicatoria, TOC, sobre el autor) de la prosa. Cascada idéntica al body (theme + saga + book). Cero regresión cuando no se setean — esas páginas heredan body/heading como antes. Página "Sobre el autor" generada al final del EPUB con foto + bio configurables desde Configurar Novela.
 
 ## Roadmap
 
@@ -238,12 +239,29 @@ Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automáti
   Dedup por filename para no embebrir el mismo archivo dos veces si auto-pick
   ya lo tomó.
 - CSS emite reglas dedicadas con fallback chain:
+
   ```css
-  em, i { font-family: "<face>", "<body>", serif; font-style: italic; }
-  strong, b { font-family: "<face>", "<body>", serif; font-weight: bold; }
-  strong em, em strong, ... { font-family: "<face>", "<body>", serif; font-weight: bold; font-style: italic; }
+  em,
+  i {
+    font-family: '<face>', '<body>', serif;
+    font-style: italic;
+  }
+  strong,
+  b {
+    font-family: '<face>', '<body>', serif;
+    font-weight: bold;
+  }
+  strong em,
+  em strong,
+  ... {
+    font-family: '<face>', '<body>', serif;
+    font-weight: bold;
+    font-style: italic;
+  }
   ```
+
   Solo cuando el slot está set. Sin slot configurado → CSS idéntico al de Sprint 10.
+
 - Override en cascada: `book.theme.overrides` > `saga.theme.overrides` > tema base.
 - Theme editor modal: 3 dropdowns con stems disponibles + bloque de preview
   que carga las fuentes via `convertFileSrc` + `FontFace` API. Re-renderiza
@@ -308,6 +326,43 @@ Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automáti
 - **Drag&drop inteligente**: archivos arrastrados a un tema van a su `fonts/`.
   Arrastrados a una saga/libro: si todos son fuentes (`.ttf/.otf/.woff/.woff2`)
   van al `fonts/` de ese scope; sino van al `extras/` como antes.
+
+### Sprint 12 — Tema editorial + Sobre el autor ✓
+
+> Aislar la tipografía de las páginas editoriales (title page, copyright,
+> dedicatoria, TOC, sobre el autor) de la prosa del autor. Sumar la página
+> "Sobre el autor" al EPUB con foto + bio configurables.
+
+- 2 fields nuevos en `Theme`: `editorial_body_font` + `editorial_heading_font`.
+  Cascada idéntica a body/heading (theme base → saga override → book override).
+- CSS subset: nuevas reglas dedicadas que pisan el body/heading default cuando
+  los slots editoriales están seteados:
+  - `body.title-body, body.copyright-body, body.dedication-body, body.nav-body, body.about-author-body { font-family: <editorial_body>, serif; }`
+  - `p.title-page-title, nav h1, nav ol.toc > li.toc-part > a, h1.about-author-title { font-family: <editorial_heading>, sans-serif; }`
+- **Cero regresión**: si no setés `editorial_*_font`, esas páginas siguen
+  heredando body/heading como antes — el CSS no emite las reglas nuevas.
+- Auto-pick de bold/italic igual que body_font: `EditorialBody-Italic.ttf` se
+  detecta por sufijo. Sin slot per-style explícito (overkill — el copyright en
+  italic ya queda fino).
+- Search dirs y embedding: el resolver itera `editorial_body_font`/
+  `editorial_heading_font` igual que las families base, busca archivos en
+  book/saga/theme fonts/ y los embebe en el EPUB.
+- 2 fields nuevos en `BookConfig`: `sobre_el_autor` (plain text, una línea =
+  un `<p>`) y `foto_autor` (path relativo o absoluto, copiado al EPUB).
+- **Página "Sobre el autor"** generada al final del libro (después del último
+  capítulo / epílogo, antes de la contratapa) si `sobre_el_autor` está set.
+  Incluye `<h1 class="about-author-title">` (texto "Sobre el autor" / "About
+  the author" según `idioma`), foto centrada con border-radius 50% si está,
+  bio con un `<p>` por línea no vacía.
+- **Auto-detect** de la foto del autor desde disco: stems `author.*` o
+  `autor.*` con extensiones jpg/jpeg/png/webp. Mismo patrón que cover/back-cover.
+- UI:
+  - Theme editor: 2 inputs nuevos en sub-sección "Páginas editoriales" con
+    datalist de families disponibles.
+  - Saga config + Book config: 2 inputs de override con placeholder mostrando
+    el valor heredado (igual que body_font/heading_font hoy).
+  - Book config: bloque "Sobre el autor" con textarea de bio + file picker
+    de foto del autor (mismo patrón que cover/back-cover).
 
 ### Distribución ✓
 
@@ -379,16 +434,16 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 
 #### EPUB
 
-- Página "About the author" en EPUB
 - Contratapa y otros libros en EPUB
 - Preview EPUB tipo Kindle (B/N, distintos tamaños de pantalla — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
-- Configurar las páginas comunes del libro por separado (TOC, copyright, dedicatoria, title page, "About the author"). Hoy todo lo no-novela usa hardcoded styling/layout. Setup ideal: cada página tipo tiene su propio mini-template configurable (título, body, márgenes, posición vertical) que se hereda saga → libro. Cierra el círculo del tema visual completo.
 - Configurar la altura del título de capítulo: hoy el chapter-title-body usa `display: table-cell; vertical-align: middle` que centra vertical. Sumar opción al tema para elegir entre `top` (margen 2em) / `center` / `bottom`. Algunos lectores ignoran flex/table-cell y caen a top automático — el config explícito permite forzar el comportamiento.
 - Pesos extra de fuente (300 Light, 600 SemiBold, 900 Black). Hoy solo se detectan Regular/Bold/Italic/BoldItalic; pesos custom requieren edit manual del theme.json.
 - Auto-migración de tema renombrado: hoy renombrar un tema deja sagas/libros con `base` dangling (mostramos warning). Implementar scan recursivo de `*.json` y rewrite del `base`.
 - Colores en el tema (body color, heading color, scene-break color). Hoy el tema es solo tipografía + márgenes.
 - Theme presets compartibles entre repos distintos (export/import como zip). Hoy un repo = sus temas; copiá la carpeta `themes/<id>/` manualmente.
 - Revisiones de EPUB: hoy el export sobreescribe siempre `Exportados/<titulo>.epub`. Agregar input "guardar últimas N revisiones" (default 5) en `BookConfig` o settings global. Cuando se exporta, renombrar la versión actual a `<titulo>-revN.epub` antes de generar la nueva. Borrar las que excedan N. Permite volver a una compilación anterior si rompiste algo.
+- Diseño de la página "Sobre el autor": hoy es funcional pero genérica (foto circular centrada + bio justified). Pensar layout más editorial — quizás dos columnas (foto chica izquierda + bio derecha), variantes de retrato (cuadrado / completo / corner), opción de incluir un epígrafe/quote. Cerrar cuando haya idea visual clara.
+- Bio + foto del autor a nivel saga (y opcionalmente global de repo): hoy `sobre_el_autor` y `foto_autor` viven en `book.json`. Sumar campos análogos en `saga.json` (heredados a libros nuevos) y/o en `settings.json` (defaults globales del repo). Permite cruzar libros de referencia / bibliografía / "otros libros del autor" en una misma fuente sin repetir cada vez.
 
 #### Bundle / Distribución (Linux nativo)
 

@@ -16,6 +16,12 @@ pub fn find_back_cover_in(dir: &Path) -> Option<String> {
     find_named_image(dir, "back-cover")
 }
 
+/// Busca `author.<ext>` o `autor.<ext>` en `dir`. Devuelve el nombre relativo
+/// si existe. Permite ambas convenciones (en/es).
+pub fn find_author_photo_in(dir: &Path) -> Option<String> {
+    find_named_image(dir, "author").or_else(|| find_named_image(dir, "autor"))
+}
+
 fn find_named_image(dir: &Path, stem: &str) -> Option<String> {
     for ext in COVER_EXTS {
         let candidate = dir.join(format!("{}.{}", stem, ext));
@@ -84,6 +90,15 @@ pub struct BookConfig {
     /// Tema base + overrides per-campo. Sobrescribe lo heredado de la saga.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<ThemeRef>,
+    /// Bio del autor para la página "Sobre el autor" del EPUB. Plain text;
+    /// cada línea no vacía se renderea como un `<p>`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sobre_el_autor: Option<String>,
+    /// Path relativo al book dir (ej: "author.jpg") o absoluto. Si es absoluto,
+    /// el builder lo copia al EPUB; si es relativo, se busca en `<book>/`.
+    /// Auto-detecta `author.*`/`autor.*` en disco si está vacío.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foto_autor: Option<String>,
 }
 
 #[tauri::command]
@@ -113,6 +128,11 @@ pub fn get_book_config(book_path: String) -> Result<BookConfig, String> {
     if cfg.contratapa.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
         if let Some(found) = find_back_cover_in(&book_dir) {
             cfg.contratapa = Some(found);
+        }
+    }
+    if cfg.foto_autor.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+        if let Some(found) = find_author_photo_in(&book_dir) {
+            cfg.foto_autor = Some(found);
         }
     }
     Ok(cfg)

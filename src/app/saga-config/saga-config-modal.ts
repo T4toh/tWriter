@@ -35,6 +35,8 @@ export class SagaConfigModal {
   protected readonly ovBodyFontItalic = signal<string>('');
   protected readonly ovBodyFontBold = signal<string>('');
   protected readonly ovBodyFontBoldItalic = signal<string>('');
+  protected readonly ovEditorialBodyFont = signal<string>('');
+  protected readonly ovEditorialHeadingFont = signal<string>('');
 
   protected readonly availableThemes = computed(() => this.themesSvc.list());
   protected readonly selectedBaseTheme = computed(() => {
@@ -90,6 +92,8 @@ export class SagaConfigModal {
     this.ovBodyFontItalic.set('');
     this.ovBodyFontBold.set('');
     this.ovBodyFontBoldItalic.set('');
+    this.ovEditorialBodyFont.set('');
+    this.ovEditorialHeadingFont.set('');
   }
 
   private hydrateTheme(theme: ThemeRef | null | undefined): void {
@@ -104,6 +108,8 @@ export class SagaConfigModal {
     this.ovBodyFontItalic.set(ov?.body_font_italic ?? '');
     this.ovBodyFontBold.set(ov?.body_font_bold ?? '');
     this.ovBodyFontBoldItalic.set(ov?.body_font_bold_italic ?? '');
+    this.ovEditorialBodyFont.set(ov?.editorial_body_font ?? '');
+    this.ovEditorialHeadingFont.set(ov?.editorial_heading_font ?? '');
   }
 
   private buildThemeRef(): ThemeRef | null {
@@ -118,6 +124,8 @@ export class SagaConfigModal {
       body_font_italic: blank(this.ovBodyFontItalic()),
       body_font_bold: blank(this.ovBodyFontBold()),
       body_font_bold_italic: blank(this.ovBodyFontBoldItalic()),
+      editorial_body_font: blank(this.ovEditorialBodyFont()),
+      editorial_heading_font: blank(this.ovEditorialHeadingFont()),
     };
     const hasOverrides = Object.values(overrides).some((v) => v !== null);
     if (!base && !hasOverrides) return null;

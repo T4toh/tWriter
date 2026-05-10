@@ -133,10 +133,43 @@ fn build_theme_rules_block(theme: &ResolvedTheme) -> String {
 
     let heading_family = theme.heading_font.as_deref().map(str::trim).filter(|s| !s.is_empty());
     if let Some(hf) = heading_family {
+        // Headings de capítulo solamente. nav h1 + parte-headings del TOC NO van
+        // acá — esos son editoriales (ver bloque editorial_heading abajo).
         out.push_str(
-            "h1.chapter-title, .chapter-prefix, h2.part-label, span.dropcap, nav h1, nav ol.toc > li.toc-part > a {\n",
+            "h1.chapter-title, .chapter-prefix, h2.part-label, span.dropcap {\n",
         );
         out.push_str(&format!("  font-family: \"{}\", sans-serif;\n", hf));
+        out.push_str("}\n");
+    }
+
+    // Editorial fonts: aplican a páginas no-autor (title page, copyright,
+    // dedicatoria, TOC, sobre el autor). Si el tema no las setea, las páginas
+    // editoriales heredan body_font/heading_font como antes (cero regresión).
+    let editorial_body = theme
+        .editorial_body_font
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    if let Some(ef) = editorial_body {
+        out.push_str(
+            "body.title-body, body.copyright-body, body.dedication-body, body.nav-body, body.about-author-body {\n",
+        );
+        out.push_str(&format!("  font-family: \"{}\", serif;\n", ef));
+        out.push_str("}\n");
+    }
+    let editorial_heading = theme
+        .editorial_heading_font
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    if let Some(eh) = editorial_heading {
+        // Emitido DESPUÉS del bloque heading_font para pisar `nav h1` y
+        // `nav ol.toc > li.toc-part > a` cuando editorial está set (mismo
+        // selector pelado en specificity, gana orden de cascada).
+        out.push_str(
+            "p.title-page-title, nav h1, nav ol.toc > li.toc-part > a, h1.about-author-title {\n",
+        );
+        out.push_str(&format!("  font-family: \"{}\", sans-serif;\n", eh));
         out.push_str("}\n");
     }
 
@@ -423,6 +456,9 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     let show_part_num = cfg.mostrar_numero_parte.unwrap_or(false);
     let part_format = cfg.formato_parte.as_deref().unwrap_or("raw");
 
+    let lang_str = cfg.idioma.as_deref().unwrap_or("es").to_string();
+    let is_en = lang_str == "en";
+
     let mut toc_entries: Vec<TocEntry> = Vec::new();
     let mut file_seq = 10u32;
     for (ch_idx, chapter) in chapters.iter().enumerate() {
@@ -449,7 +485,10 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             (Some(p), true) => format!("{} {}", p, chapter.title),
             (Some(p), false) => p.clone(),
             (None, true) => chapter.title.clone(),
-            (None, false) => format!("Capítulo {}", ch_idx + 1),
+            (None, false) => {
+                let word = if is_en { "Chapter" } else { "Capítulo" };
+                format!("{} {}", word, ch_idx + 1)
+            }
         };
         let mut entry = TocEntry {
             href: title_href,
@@ -464,7 +503,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             total_chapter_files += 1;
             let part_href = format!("{}_ch{}_p{}.xhtml", file_seq, ch_idx + 1, p_idx + 1);
             let is_first = p_idx == 0;
-            let part_label = part_label(part, part_format);
+            let part_label = part_label(part, part_format, &lang_str);
             let toc_label = part
                 .meta_title
                 .clone()
@@ -519,6 +558,8 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         });
         let toc_label = if show_chapter_title {
             ep.title.clone()
+        } else if is_en {
+            "Epilogue".to_string()
         } else {
             "Epílogo".to_string()
         };
@@ -534,7 +575,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             total_chapter_files += 1;
             let part_href = format!("{}_epilog_p{}.xhtml", file_seq, p_idx + 1);
             let is_first = p_idx == 0;
-            let part_label = part_label(part, part_format);
+            let part_label = part_label(part, part_format, &lang_str);
             let toc_label = part
                 .meta_title
                 .clone()
@@ -569,6 +610,42 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             });
         }
         toc_entries.push(entry);
+    }
+
+    // 5a-bis) Sobre el autor (si hay bio). Va después del último capítulo /
+    // epílogo y antes de la contratapa.
+    if cfg
+        .sobre_el_autor
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .is_some()
+    {
+        let photo_filename: Option<String> = if let Some(rel) = &cfg.foto_autor {
+            embed_image(&book_dir, rel, "author", &mut zip, opts)?.map(|(name, mime)| {
+                items.push(Item {
+                    id: "author-image".into(),
+                    href: name.clone(),
+                    media_type: mime,
+                    spine_order: None,
+                    properties: None,
+                });
+                name
+            })
+        } else {
+            None
+        };
+        spine_idx += 1;
+        let xhtml = build_about_author_xhtml(&cfg, photo_filename.as_deref());
+        zip.start_file("OEBPS/8_about_author.xhtml", opts).map_err(|e| e.to_string())?;
+        zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
+        items.push(Item {
+            id: "about-author".into(),
+            href: "8_about_author.xhtml".into(),
+            media_type: "application/xhtml+xml".into(),
+            spine_order: Some(spine_idx),
+            properties: None,
+        });
     }
 
     // 5b) Back cover (si hay imagen)
@@ -926,36 +1003,55 @@ fn build_title_xhtml(cfg: &BookConfig) -> String {
 fn build_copyright_xhtml(cfg: &BookConfig) -> String {
     let autor = cfg.autor.as_deref().unwrap_or("");
     let anio = cfg.copyright_anio.unwrap_or_else(current_year);
-    let imprenta = cfg.imprenta.as_deref().unwrap_or("Independiente");
+    let lang = cfg.idioma.as_deref().unwrap_or("es");
+    let is_en = lang == "en";
+    let imprenta = cfg
+        .imprenta
+        .as_deref()
+        .unwrap_or(if is_en { "Independent" } else { "Independiente" });
+
     let mut body = String::new();
+    let by_word = if is_en { "by" } else { "por" };
     body.push_str(&format!(
-        "<p>Copyright \u{00A9} {} by {}</p>\n",
+        "<p>Copyright \u{00A9} {} {} {}</p>\n",
         anio,
+        by_word,
         xml_escape(autor)
     ));
     if cfg.derechos_reservados.unwrap_or(true) {
-        body.push_str(
-            "<p>Todos los derechos reservados. Ninguna parte de esta publicación puede ser reproducida, almacenada ni transmitida en forma alguna por medio electrónico, mecánico, fotocopia, grabación u otros sin autorización escrita del autor.</p>\n",
-        );
-        body.push_str(
-            "<p>Esta novela es enteramente una obra de ficción. Los nombres, personajes y eventos retratados son producto de la imaginación del autor. Cualquier parecido con personas reales, vivas o fallecidas, eventos o lugares es enteramente coincidencia.</p>\n",
-        );
+        if is_en {
+            body.push_str(
+                "<p>All rights reserved. No part of this publication may be reproduced, stored or transmitted in any form or by any means, electronic, mechanical, photocopying, recording or otherwise, without the prior written permission of the author.</p>\n",
+            );
+            body.push_str(
+                "<p>This novel is entirely a work of fiction. The names, characters and incidents portrayed in it are the work of the author's imagination. Any resemblance to actual persons, living or dead, events or localities is entirely coincidental.</p>\n",
+            );
+        } else {
+            body.push_str(
+                "<p>Todos los derechos reservados. Ninguna parte de esta publicación puede ser reproducida, almacenada ni transmitida en forma alguna por medio electrónico, mecánico, fotocopia, grabación u otros sin autorización escrita del autor.</p>\n",
+            );
+            body.push_str(
+                "<p>Esta novela es enteramente una obra de ficción. Los nombres, personajes y eventos retratados son producto de la imaginación del autor. Cualquier parecido con personas reales, vivas o fallecidas, eventos o lugares es enteramente coincidencia.</p>\n",
+            );
+        }
     }
     if let Some(isbn) = cfg.isbn.as_deref().filter(|s| !s.is_empty()) {
         body.push_str(&format!("<p>ISBN: {}</p>\n", xml_escape(isbn)));
     }
-    body.push_str(&format!(
-        "<p>{}</p>\n",
-        xml_escape(&format!("Publicado por {}", imprenta))
-    ));
-    body.push_str("<p>Editado con tWriter</p>");
+    let publicado = if is_en {
+        format!("Published by {}", imprenta)
+    } else {
+        format!("Publicado por {}", imprenta)
+    };
+    body.push_str(&format!("<p>{}</p>\n", xml_escape(&publicado)));
+    let edited = if is_en {
+        "Edited with tWriter"
+    } else {
+        "Editado con tWriter"
+    };
+    body.push_str(&format!("<p>{}</p>", edited));
 
-    xhtml_shell(
-        &cfg.titulo,
-        &body,
-        cfg.idioma.as_deref().unwrap_or("es"),
-        "copyright-body",
-    )
+    xhtml_shell(&cfg.titulo, &body, lang, "copyright-body")
 }
 
 fn build_dedication_xhtml(text: &str) -> String {
@@ -965,6 +1061,44 @@ fn build_dedication_xhtml(text: &str) -> String {
         .collect::<Vec<_>>()
         .join("\n");
     xhtml_shell("Dedicatoria", &body, "es", "dedication-body")
+}
+
+fn build_about_author_xhtml(cfg: &BookConfig, photo_filename: Option<&str>) -> String {
+    let lang = cfg.idioma.as_deref().unwrap_or("es");
+    let heading = if lang == "en" {
+        "About the author"
+    } else {
+        "Sobre el autor"
+    };
+    let bio = cfg.sobre_el_autor.as_deref().unwrap_or("");
+    let bio_paragraphs: String = bio
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .map(|l| format!("<p>{}</p>", xml_escape(l)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let photo_html = match photo_filename {
+        Some(name) => format!(
+            r#"<img class="about-author-photo" src="{}" alt="{}"/>"#,
+            xml_escape(name),
+            xml_escape(cfg.autor.as_deref().unwrap_or(""))
+        ),
+        None => String::new(),
+    };
+    let body = format!(
+        r#"<div class="about-author">
+<h1 class="about-author-title">{}</h1>
+{}
+<div class="about-author-bio">
+{}
+</div>
+</div>"#,
+        xml_escape(heading),
+        photo_html,
+        bio_paragraphs,
+    );
+    xhtml_shell(heading, &body, lang, "about-author-body")
 }
 
 fn build_chapter_title_xhtml(title: &str, show_title: bool, prefix: Option<&str>) -> String {
@@ -1009,15 +1143,16 @@ fn build_part_xhtml(
     xhtml_shell(title, &body, "es", "chapter-content-body")
 }
 
-fn part_label(part: &ChapterPart, format: &str) -> String {
+fn part_label(part: &ChapterPart, format: &str, lang: &str) -> String {
     if let Some(t) = &part.meta_title {
         return t.clone();
     }
     // Fallback: usar stem con formato
     let stem = &part.stem;
     let is_numeric = stem.chars().all(|c| c.is_ascii_digit());
+    let parte_word = if lang == "en" { "Part" } else { "Parte" };
     match format {
-        "parte" if is_numeric => format!("Parte {}", stem),
+        "parte" if is_numeric => format!("{} {}", parte_word, stem),
         "punto" if is_numeric => format!("{}.", stem),
         _ => stem.clone(),
     }
@@ -1138,21 +1273,19 @@ fn build_toc_xhtml(cfg: &BookConfig, entries: &[TocEntry]) -> String {
         }
         lis.push_str("</li>\n");
     }
+    let lang = cfg.idioma.as_deref().unwrap_or("es");
+    let toc_label = if lang == "en" { "Contents" } else { "Índice" };
     let body = format!(
         r#"<nav id="toc" epub:type="toc" role="doc-toc">
-<h1 class="chapter-title">Índice</h1>
+<h1>{}</h1>
 <ol class="toc">
 {}
 </ol>
 </nav>"#,
+        xml_escape(toc_label),
         lis
     );
-    xhtml_shell(
-        &cfg.titulo,
-        &body,
-        cfg.idioma.as_deref().unwrap_or("es"),
-        "nav-body",
-    )
+    xhtml_shell(&cfg.titulo, &body, lang, "nav-body")
 }
 
 // ───────── NCX (legacy) ─────────
@@ -1479,6 +1612,8 @@ mod tests {
             body_italic_family: None,
             body_bold_family: None,
             body_bold_italic_family: None,
+            editorial_body_font: None,
+            editorial_heading_font: None,
             fonts: vec![
                 FontEmbed {
                     family: "Merriweather".into(),
@@ -1729,6 +1864,204 @@ mod tests {
         assert!(css.contains(
             "font-family: \"Plex-MediumItalic\", \"Plex\", serif;"
         ));
+    }
+
+    #[test]
+    fn theme_rules_emit_editorial_fonts_when_set() {
+        let resolved = ResolvedTheme {
+            editorial_body_font: Some("Cormorant".into()),
+            editorial_heading_font: Some("Playfair".into()),
+            ..Default::default()
+        };
+        let block = build_theme_rules_block(&resolved);
+        assert!(block.contains(
+            "body.title-body, body.copyright-body, body.dedication-body, body.nav-body, body.about-author-body {"
+        ));
+        assert!(block.contains("font-family: \"Cormorant\", serif;"));
+        assert!(block.contains(
+            "p.title-page-title, nav h1, nav ol.toc > li.toc-part > a, h1.about-author-title {"
+        ));
+        assert!(block.contains("font-family: \"Playfair\", sans-serif;"));
+    }
+
+    #[test]
+    fn heading_font_excludes_nav_selectors() {
+        let resolved = ResolvedTheme {
+            heading_font: Some("Lato".into()),
+            ..Default::default()
+        };
+        let block = build_theme_rules_block(&resolved);
+        // Chapter heading selectors permanecen.
+        assert!(block.contains("h1.chapter-title, .chapter-prefix, h2.part-label, span.dropcap {"));
+        // nav h1 + parte-headings ya NO viven en el bloque heading_font — son
+        // editorial. Cuando editorial NO se setea, nav cae al cascade del body.
+        assert!(!block.contains("nav h1"));
+        assert!(!block.contains("nav ol.toc > li.toc-part > a"));
+    }
+
+    #[test]
+    fn copyright_localizes_by_idioma() {
+        let cfg_es = BookConfig {
+            titulo: "Test".into(),
+            autor: Some("Ignacio".into()),
+            idioma: Some("es".into()),
+            copyright_anio: Some(2026),
+            derechos_reservados: Some(true),
+            imprenta: Some("Mi Imprenta".into()),
+            ..Default::default()
+        };
+        let xhtml_es = build_copyright_xhtml(&cfg_es);
+        assert!(xhtml_es.contains("Copyright \u{00A9} 2026 por Ignacio"));
+        assert!(xhtml_es.contains("Todos los derechos reservados"));
+        assert!(xhtml_es.contains("Publicado por Mi Imprenta"));
+        assert!(xhtml_es.contains("Editado con tWriter"));
+        assert!(!xhtml_es.contains(" by Ignacio"));
+
+        let cfg_en = BookConfig {
+            titulo: "Test".into(),
+            autor: Some("Ignacio".into()),
+            idioma: Some("en".into()),
+            copyright_anio: Some(2026),
+            derechos_reservados: Some(true),
+            imprenta: Some("My Press".into()),
+            ..Default::default()
+        };
+        let xhtml_en = build_copyright_xhtml(&cfg_en);
+        assert!(xhtml_en.contains("Copyright \u{00A9} 2026 by Ignacio"));
+        assert!(xhtml_en.contains("All rights reserved"));
+        assert!(xhtml_en.contains("Published by My Press"));
+        assert!(xhtml_en.contains("Edited with tWriter"));
+        assert!(!xhtml_en.contains(" por Ignacio"));
+    }
+
+    #[test]
+    fn toc_heading_localizes_and_drops_chapter_class() {
+        let cfg_es = BookConfig {
+            titulo: "Test".into(),
+            idioma: Some("es".into()),
+            ..Default::default()
+        };
+        let xhtml_es = build_toc_xhtml(&cfg_es, &[]);
+        assert!(xhtml_es.contains("<h1>Índice</h1>"));
+        // El heading del TOC ya no usa `class="chapter-title"`. Sin esa clase,
+        // no se contagia el font del chapter heading.
+        assert!(!xhtml_es.contains(r#"<h1 class="chapter-title">"#));
+
+        let cfg_en = BookConfig {
+            titulo: "Test".into(),
+            idioma: Some("en".into()),
+            ..Default::default()
+        };
+        let xhtml_en = build_toc_xhtml(&cfg_en, &[]);
+        assert!(xhtml_en.contains("<h1>Contents</h1>"));
+    }
+
+    #[test]
+    fn theme_rules_no_editorial_when_unset() {
+        let resolved = ResolvedTheme {
+            body_font: Some("Merriweather".into()),
+            heading_font: Some("Lato".into()),
+            ..Default::default()
+        };
+        let block = build_theme_rules_block(&resolved);
+        // Sin slots editoriales: no aparecen las reglas dedicadas.
+        assert!(!block.contains("body.copyright-body, body.dedication-body"));
+        assert!(!block.contains("h1.about-author-title"));
+    }
+
+    #[test]
+    fn about_author_xhtml_renders_heading_photo_and_bio() {
+        let cfg = BookConfig {
+            titulo: "Test".into(),
+            autor: Some("Ignacio".into()),
+            idioma: Some("es".into()),
+            sobre_el_autor: Some("Nací en Cipolletti.\nVivo escribiendo.".into()),
+            ..Default::default()
+        };
+        let xhtml = build_about_author_xhtml(&cfg, Some("author.jpg"));
+        assert!(xhtml.contains("<body class=\"about-author-body\">"));
+        assert!(xhtml.contains("<h1 class=\"about-author-title\">Sobre el autor</h1>"));
+        assert!(xhtml.contains("<img class=\"about-author-photo\" src=\"author.jpg\""));
+        assert!(xhtml.contains("<p>Nací en Cipolletti.</p>"));
+        assert!(xhtml.contains("<p>Vivo escribiendo.</p>"));
+    }
+
+    #[test]
+    fn about_author_xhtml_english_heading() {
+        let cfg = BookConfig {
+            titulo: "Test".into(),
+            idioma: Some("en".into()),
+            sobre_el_autor: Some("Bio.".into()),
+            ..Default::default()
+        };
+        let xhtml = build_about_author_xhtml(&cfg, None);
+        assert!(xhtml.contains("About the author"));
+        // Sin photo: no aparece <img>.
+        assert!(!xhtml.contains("<img"));
+    }
+
+    #[test]
+    fn part_label_localizes_parte_format() {
+        let part = ChapterPart {
+            stem: "1".into(),
+            meta_title: None,
+            content_html: String::new(),
+        };
+        assert_eq!(part_label(&part, "parte", "es"), "Parte 1");
+        assert_eq!(part_label(&part, "parte", "en"), "Part 1");
+        // "punto" no varía por idioma.
+        assert_eq!(part_label(&part, "punto", "es"), "1.");
+        assert_eq!(part_label(&part, "punto", "en"), "1.");
+    }
+
+    #[test]
+    fn export_impl_localizes_chapter_label_in_english() {
+        let tmp = tempdir();
+        let book = tmp.join("book");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        // idioma=en, sin prefijo y sin mostrar título → fallback "Chapter N".
+        std::fs::write(
+            book.join("book.json"),
+            r#"{"titulo":"X","idioma":"en","mostrar_titulo_capitulo":false}"#,
+        )
+        .unwrap();
+        std::fs::write(book.join("Cap1").join("1.html"), "<p>x</p>").unwrap();
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let toc = String::from_utf8(entries.get("OEBPS/toc.xhtml").unwrap().clone()).unwrap();
+        assert!(toc.contains(">Chapter 1<"));
+        assert!(!toc.contains("Capítulo"));
+    }
+
+    #[test]
+    fn export_impl_with_about_author_inserts_page() {
+        let tmp = tempdir();
+        let book = tmp.join("book");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        std::fs::write(
+            book.join("book.json"),
+            r#"{"titulo":"Test","autor":"X","sobre_el_autor":"Una bio."}"#,
+        )
+        .unwrap();
+        std::fs::write(book.join("Cap1").join("1.html"), "<p>Hi.</p>").unwrap();
+        let result = export_impl(book.to_str().unwrap()).expect("export ok");
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        assert!(entries.contains_key("OEBPS/8_about_author.xhtml"));
+        let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
+        assert!(opf.contains("8_about_author.xhtml"));
+        assert!(opf.contains(r#"id="about-author""#));
+    }
+
+    #[test]
+    fn export_impl_without_bio_skips_about_author() {
+        let tmp = tempdir();
+        let book = tmp.join("book");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        std::fs::write(book.join("book.json"), r#"{"titulo":"Test"}"#).unwrap();
+        std::fs::write(book.join("Cap1").join("1.html"), "<p>Hi.</p>").unwrap();
+        let result = export_impl(book.to_str().unwrap()).expect("export ok");
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        assert!(!entries.contains_key("OEBPS/8_about_author.xhtml"));
     }
 
     #[test]

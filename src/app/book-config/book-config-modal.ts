@@ -39,6 +39,8 @@ export class BookConfigModal {
   protected readonly ovBodyFontItalic = signal<string>('');
   protected readonly ovBodyFontBold = signal<string>('');
   protected readonly ovBodyFontBoldItalic = signal<string>('');
+  protected readonly ovEditorialBodyFont = signal<string>('');
+  protected readonly ovEditorialHeadingFont = signal<string>('');
 
   protected readonly availableThemes = computed(() => this.themesSvc.list());
   protected readonly selectedBaseTheme = computed(() => {
@@ -93,6 +95,8 @@ export class BookConfigModal {
     this.ovBodyFontItalic.set('');
     this.ovBodyFontBold.set('');
     this.ovBodyFontBoldItalic.set('');
+    this.ovEditorialBodyFont.set('');
+    this.ovEditorialHeadingFont.set('');
   }
 
   private hydrateTheme(theme: ThemeRef | null | undefined): void {
@@ -107,6 +111,8 @@ export class BookConfigModal {
     this.ovBodyFontItalic.set(ov?.body_font_italic ?? '');
     this.ovBodyFontBold.set(ov?.body_font_bold ?? '');
     this.ovBodyFontBoldItalic.set(ov?.body_font_bold_italic ?? '');
+    this.ovEditorialBodyFont.set(ov?.editorial_body_font ?? '');
+    this.ovEditorialHeadingFont.set(ov?.editorial_heading_font ?? '');
   }
 
   private buildThemeRef(): ThemeRef | null {
@@ -121,6 +127,8 @@ export class BookConfigModal {
       body_font_italic: blank(this.ovBodyFontItalic()),
       body_font_bold: blank(this.ovBodyFontBold()),
       body_font_bold_italic: blank(this.ovBodyFontBoldItalic()),
+      editorial_body_font: blank(this.ovEditorialBodyFont()),
+      editorial_heading_font: blank(this.ovEditorialHeadingFont()),
     };
     const hasOverrides = Object.values(overrides).some((v) => v !== null);
     if (!base && !hasOverrides) return null;
@@ -161,6 +169,8 @@ export class BookConfigModal {
         template: cfg.template ?? '6x9',
         finalizada: cfg.finalizada ?? false,
         epilogo: cfg.epilogo ?? null,
+        sobre_el_autor: cfg.sobre_el_autor ?? '',
+        foto_autor: cfg.foto_autor ?? '',
       });
       this.hydrateTheme(cfg.theme ?? null);
     } catch (err) {
@@ -192,6 +202,19 @@ export class BookConfigModal {
     if (typeof result !== 'string') return;
     const cur = this.config();
     if (cur) this.config.set({ ...cur, contratapa: result });
+  }
+
+  protected async pickAuthorPhoto(): Promise<void> {
+    const result = await openDialog({
+      multiple: false,
+      directory: false,
+      title: 'Seleccionar foto del autor',
+      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+      defaultPath: this.bookPath() ?? undefined,
+    });
+    if (typeof result !== 'string') return;
+    const cur = this.config();
+    if (cur) this.config.set({ ...cur, foto_autor: result });
   }
 
   protected update<K extends keyof BookConfig>(key: K, value: BookConfig[K]): void {
@@ -231,6 +254,8 @@ export class BookConfigModal {
         finalizada: cfg.finalizada ?? null,
         epilogo: blank(cfg.epilogo ?? null),
         theme: this.buildThemeRef(),
+        sobre_el_autor: blank(cfg.sobre_el_autor),
+        foto_autor: blank(cfg.foto_autor),
       };
       await this.svc.save(path, cleaned);
       this.svc.close();
