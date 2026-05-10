@@ -233,6 +233,31 @@ fn build_theme_rules_block(theme: &ResolvedTheme) -> String {
         out.push_str("}\n");
     }
 
+    // Posición vertical del título de capítulo: solo `top` y `bottom` emiten
+    // override. `center` o ausente → CSS base (table-cell + fallback @media
+    // amzn-kf8 en epub_style.css). Whitelist explícito para evitar inyección
+    // de CSS arbitrario desde un theme.json editado a mano.
+    let position = theme
+        .chapter_title_position
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| matches!(*s, "top" | "bottom"));
+    if let Some(pos) = position {
+        if pos == "top" {
+            out.push_str(
+                "body.chapter-title-body {\n  display: block;\n  height: auto;\n  min-height: 0;\n  padding-top: 2em;\n}\n",
+            );
+            out.push_str(".chapter-heading-inner {\n  display: block;\n}\n");
+        } else {
+            out.push_str(
+                ".chapter-heading-inner {\n  vertical-align: bottom;\n  padding-bottom: 2em;\n}\n",
+            );
+            out.push_str(
+                "@media amzn-kf8 {\n  body.chapter-title-body {\n    display: block;\n    padding-top: 80%;\n  }\n  .chapter-heading-inner {\n    display: block;\n  }\n}\n",
+            );
+        }
+    }
+
     out
 }
 
@@ -1614,6 +1639,7 @@ mod tests {
             body_bold_italic_family: None,
             editorial_body_font: None,
             editorial_heading_font: None,
+            chapter_title_position: None,
             fonts: vec![
                 FontEmbed {
                     family: "Merriweather".into(),
@@ -1882,6 +1908,76 @@ mod tests {
             "p.title-page-title, nav h1, nav ol.toc > li.toc-part > a, h1.about-author-title {"
         ));
         assert!(block.contains("font-family: \"Playfair\", sans-serif;"));
+    }
+
+    #[test]
+    fn theme_rules_no_chapter_position_when_unset() {
+        let resolved = ResolvedTheme::default();
+        let block = build_theme_rules_block(&resolved);
+        assert!(!block.contains("padding-top: 2em"));
+        assert!(!block.contains("vertical-align: bottom"));
+        assert!(!block.contains("amzn-kf8"));
+    }
+
+    #[test]
+    fn theme_rules_emit_chapter_position_top() {
+        let resolved = ResolvedTheme {
+            chapter_title_position: Some("top".into()),
+            ..Default::default()
+        };
+        let block = build_theme_rules_block(&resolved);
+        assert!(block.contains("body.chapter-title-body {"));
+        assert!(block.contains("display: block;"));
+        assert!(block.contains("padding-top: 2em;"));
+        assert!(block.contains(".chapter-heading-inner {"));
+        assert!(!block.contains("amzn-kf8"));
+    }
+
+    #[test]
+    fn theme_rules_emit_chapter_position_bottom() {
+        let resolved = ResolvedTheme {
+            chapter_title_position: Some("bottom".into()),
+            ..Default::default()
+        };
+        let block = build_theme_rules_block(&resolved);
+        assert!(block.contains("vertical-align: bottom;"));
+        assert!(block.contains("padding-bottom: 2em;"));
+        assert!(block.contains("@media amzn-kf8 {"));
+        assert!(block.contains("padding-top: 80%;"));
+    }
+
+    #[test]
+    fn theme_rules_ignore_invalid_chapter_position() {
+        for val in ["center", "garbage", "TOP", " top", ""] {
+            let resolved = ResolvedTheme {
+                chapter_title_position: Some(val.into()),
+                ..Default::default()
+            };
+            let block = build_theme_rules_block(&resolved);
+            // "center" y valores fuera del whitelist → comportamiento default
+            // (CSS base centra; nada emitido acá). " top" tiene whitespace
+            // alrededor: el trim lo acepta, así que ese caso sí emite. Ajuste:
+            if val.trim() == "top" {
+                assert!(block.contains("padding-top: 2em;"), "expected top for '{}'", val);
+            } else {
+                assert!(
+                    !block.contains("padding-top: 2em") && !block.contains("vertical-align: bottom"),
+                    "expected no override for '{}'", val
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn theme_rules_chapter_position_does_not_collide_with_font_rules() {
+        let resolved = ResolvedTheme {
+            body_font: Some("Merriweather".into()),
+            chapter_title_position: Some("top".into()),
+            ..Default::default()
+        };
+        let block = build_theme_rules_block(&resolved);
+        assert!(block.contains("font-family: \"Merriweather\", serif;"));
+        assert!(block.contains("padding-top: 2em;"));
     }
 
     #[test]

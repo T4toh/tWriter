@@ -73,6 +73,7 @@ MVP completo. Sprints 1–12 hechos.
 - **Temas + fuentes embebidas**: temas reutilizables a nivel root (`<root>/themes/<id>/`) con tipografía + márgenes. Override per-saga y per-libro. Detección automática de bold/italic via sufijos en filename. Cero regresión cuando no hay tema configurado.
 - **Per-style faces**: `body_font_italic`/`body_font_bold`/`body_font_bold_italic` en el tema apuntan a un filename stem específico para `<em>`/`<strong>` y combinaciones. Pisa el auto-pick por sufijo. Útil cuando la italic auto de la familia es muy sutil. Theme editor incluye preview real con FontFace API.
 - **Tema editorial**: `editorial_body_font` + `editorial_heading_font` aíslan la tipografía de las páginas no-autor (title page, copyright, dedicatoria, TOC, sobre el autor) de la prosa. Cascada idéntica al body (theme + saga + book). Cero regresión cuando no se setean — esas páginas heredan body/heading como antes. Página "Sobre el autor" generada al final del EPUB con foto + bio configurables desde Configurar Novela.
+- **Posición del título de capítulo**: `chapter_title_position` en `Theme` permite forzar `top` / `center` / `bottom` para el bloque título+prefijo de la chapter-title page. Default (campo vacío) centra vertical en readers EPUB3 estándar (Calibre/Thorium/Foliate) y suma un `@media amzn-kf8` fallback para que Kindle KF8/KFX también lo centre (sin el fallback caía a top porque Kindle ignora `vh` + `display: table` en body). Cascada theme → saga → book. Cero regresión visual fuera de Kindle.
 
 ## Roadmap
 
@@ -436,7 +437,6 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 
 - Contratapa y otros libros en EPUB
 - Preview EPUB tipo Kindle (B/N, distintos tamaños de pantalla — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
-- Configurar la altura del título de capítulo: hoy el chapter-title-body usa `display: table-cell; vertical-align: middle` que centra vertical. Sumar opción al tema para elegir entre `top` (margen 2em) / `center` / `bottom`. Algunos lectores ignoran flex/table-cell y caen a top automático — el config explícito permite forzar el comportamiento.
 - Pesos extra de fuente (300 Light, 600 SemiBold, 900 Black). Hoy solo se detectan Regular/Bold/Italic/BoldItalic; pesos custom requieren edit manual del theme.json.
 - Auto-migración de tema renombrado: hoy renombrar un tema deja sagas/libros con `base` dangling (mostramos warning). Implementar scan recursivo de `*.json` y rewrite del `base`.
 - Colores en el tema (body color, heading color, scene-break color). Hoy el tema es solo tipografía + márgenes.

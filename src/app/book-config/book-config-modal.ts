@@ -41,6 +41,7 @@ export class BookConfigModal {
   protected readonly ovBodyFontBoldItalic = signal<string>('');
   protected readonly ovEditorialBodyFont = signal<string>('');
   protected readonly ovEditorialHeadingFont = signal<string>('');
+  protected readonly ovChapterTitlePosition = signal<string>('');
 
   protected readonly availableThemes = computed(() => this.themesSvc.list());
   protected readonly selectedBaseTheme = computed(() => {
@@ -97,6 +98,7 @@ export class BookConfigModal {
     this.ovBodyFontBoldItalic.set('');
     this.ovEditorialBodyFont.set('');
     this.ovEditorialHeadingFont.set('');
+    this.ovChapterTitlePosition.set('');
   }
 
   private hydrateTheme(theme: ThemeRef | null | undefined): void {
@@ -113,6 +115,7 @@ export class BookConfigModal {
     this.ovBodyFontBoldItalic.set(ov?.body_font_bold_italic ?? '');
     this.ovEditorialBodyFont.set(ov?.editorial_body_font ?? '');
     this.ovEditorialHeadingFont.set(ov?.editorial_heading_font ?? '');
+    this.ovChapterTitlePosition.set(ov?.chapter_title_position ?? '');
   }
 
   private buildThemeRef(): ThemeRef | null {
@@ -129,6 +132,7 @@ export class BookConfigModal {
       body_font_bold_italic: blank(this.ovBodyFontBoldItalic()),
       editorial_body_font: blank(this.ovEditorialBodyFont()),
       editorial_heading_font: blank(this.ovEditorialHeadingFont()),
+      chapter_title_position: blank(this.ovChapterTitlePosition()),
     };
     const hasOverrides = Object.values(overrides).some((v) => v !== null);
     if (!base && !hasOverrides) return null;

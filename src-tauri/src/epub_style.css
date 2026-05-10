@@ -103,6 +103,21 @@ body.chapter-title-body {
   text-align: center;
 }
 
+/* Kindle KF8/KFX ignora `height: 100vh` y a veces `display: table` en <body>:
+   sin esto el bloque cae a layout normal y el inner table-cell no tiene altura
+   contra la cual centrar → título + prefix quedan pegados arriba. El padding %
+   los empuja a ~⅓ desde arriba. Readers EPUB3 (Calibre/Thorium/Foliate) ignoran
+   este @media por completo. */
+@media amzn-kf8 {
+  body.chapter-title-body {
+    display: block;
+    padding-top: 30%;
+  }
+  .chapter-heading-inner {
+    display: block;
+  }
+}
+
 .chapter-prefix {
   font-family: sans-serif;
   font-size: 1.1em;

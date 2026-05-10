@@ -124,6 +124,30 @@
         </div>
 
         <div class="row section-divider">
+          <span class="section-label">Página de título de capítulo</span>
+        </div>
+        <p class="hint-soft">
+          Posición vertical del bloque título + prefijo (I, II…) en la página
+          de chapter-title. Default (vacío) centra vertical con fallback para
+          Kindle. Useá <em>arriba</em> o <em>abajo</em> si querés forzar otra
+          posición.
+        </p>
+        <div class="row">
+          <label>
+            <span>Posición del título</span>
+            <select
+              [ngModel]="f.chapter_title_position"
+              (ngModelChange)="update('chapter_title_position', $event)"
+            >
+              <option value="">Centrado (default)</option>
+              <option value="top">Arriba</option>
+              <option value="center">Centrado (explícito)</option>
+              <option value="bottom">Abajo</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="row section-divider">
           <span class="section-label">Faces explícitas (opcional)</span>
         </div>
         <p class="hint-soft">
