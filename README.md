@@ -345,6 +345,8 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 - Página "About the author" en EPUB
 - Contratapa y otros libros en EPUB
 - Preview EPUB tipo Kindle (B/N, distintos tamaños de pantalla — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
+- Configurar las páginas comunes del libro por separado (TOC, copyright, dedicatoria, title page, "About the author"). Hoy todo lo no-novela usa hardcoded styling/layout. Setup ideal: cada página tipo tiene su propio mini-template configurable (título, body, márgenes, posición vertical) que se hereda saga → libro. Cierra el círculo del tema visual completo.
+- Configurar la altura del título de capítulo: hoy el chapter-title-body usa `display: table-cell; vertical-align: middle` que centra vertical. Sumar opción al tema para elegir entre `top` (margen 2em) / `center` / `bottom`. Algunos lectores ignoran flex/table-cell y caen a top automático — el config explícito permite forzar el comportamiento.
 - Pesos extra de fuente (300 Light, 600 SemiBold, 900 Black). Hoy solo se detectan Regular/Bold/Italic/BoldItalic; pesos custom requieren edit manual del theme.json.
 - Auto-migración de tema renombrado: hoy renombrar un tema deja sagas/libros con `base` dangling (mostramos warning). Implementar scan recursivo de `*.json` y rewrite del `base`.
 - Colores en el tema (body color, heading color, scene-break color). Hoy el tema es solo tipografía + márgenes.
