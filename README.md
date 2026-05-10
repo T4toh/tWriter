@@ -242,6 +242,14 @@ Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automáti
   Sufijos soportados (case-insensitive, separador `-` o `_`): `Regular`,
   `Bold`, `Italic`, `BoldItalic`, `Roman`, `Oblique`. Sin sufijo reconocido
   → familia = stem completo, single face (faux-bold/italic del lector).
+- **Per-style faces explícitas** (override del auto-pick): `body_font_italic`,
+  `body_font_bold`, `body_font_bold_italic` apuntan a un filename stem
+  específico. Útil cuando la italic auto de la familia es muy sutil — elegís
+  un face más pronunciado (e.g. `IBMPlexSans-MediumItalic` en vez del
+  `-Italic` regular). Override en cascada: book > saga > tema base. CSS
+  emite reglas dedicadas para `em`/`strong` con la familia explícita y
+  fallback a la familia base. El theme editor incluye preview real con
+  `FontFace` API.
 - **EPUB embed**: las fuentes referenciadas por el tema resuelto se copian a
   `OEBPS/fonts/<filename>` y entran al manifest OPF con media-type EPUB-3
   (`font/ttf`, `font/otf`, `font/woff`, `font/woff2`). El CSS del EPUB suma

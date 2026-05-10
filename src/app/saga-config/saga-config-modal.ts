@@ -32,6 +32,9 @@ export class SagaConfigModal {
   protected readonly ovHeadingSize = signal<string>('');
   protected readonly ovLineHeight = signal<string>('');
   protected readonly ovPageMargin = signal<string>('');
+  protected readonly ovBodyFontItalic = signal<string>('');
+  protected readonly ovBodyFontBold = signal<string>('');
+  protected readonly ovBodyFontBoldItalic = signal<string>('');
 
   protected readonly availableThemes = computed(() => this.themesSvc.list());
   protected readonly selectedBaseTheme = computed(() => {
@@ -49,6 +52,16 @@ export class SagaConfigModal {
     if (base?.body_font) set.add(base.body_font);
     if (base?.heading_font) set.add(base.heading_font);
     return Array.from(set).sort();
+  });
+
+  /** Stems disponibles en saga/fonts/ para los selectores de per-style. */
+  protected readonly availableStems = computed(() => {
+    const path = this.sagaPath();
+    if (!path) return [];
+    return this.fontsSvc
+      .get(path)
+      .map((f) => stripExt(f.name))
+      .sort();
   });
 
   constructor() {
@@ -74,6 +87,9 @@ export class SagaConfigModal {
     this.ovHeadingSize.set('');
     this.ovLineHeight.set('');
     this.ovPageMargin.set('');
+    this.ovBodyFontItalic.set('');
+    this.ovBodyFontBold.set('');
+    this.ovBodyFontBoldItalic.set('');
   }
 
   private hydrateTheme(theme: ThemeRef | null | undefined): void {
@@ -85,6 +101,9 @@ export class SagaConfigModal {
     this.ovHeadingSize.set(ov?.heading_size ?? '');
     this.ovLineHeight.set(ov?.line_height ?? '');
     this.ovPageMargin.set(ov?.page_margin ?? '');
+    this.ovBodyFontItalic.set(ov?.body_font_italic ?? '');
+    this.ovBodyFontBold.set(ov?.body_font_bold ?? '');
+    this.ovBodyFontBoldItalic.set(ov?.body_font_bold_italic ?? '');
   }
 
   private buildThemeRef(): ThemeRef | null {
@@ -96,6 +115,9 @@ export class SagaConfigModal {
       heading_size: blank(this.ovHeadingSize()),
       line_height: blank(this.ovLineHeight()),
       page_margin: blank(this.ovPageMargin()),
+      body_font_italic: blank(this.ovBodyFontItalic()),
+      body_font_bold: blank(this.ovBodyFontBold()),
+      body_font_bold_italic: blank(this.ovBodyFontBoldItalic()),
     };
     const hasOverrides = Object.values(overrides).some((v) => v !== null);
     if (!base && !hasOverrides) return null;
@@ -204,4 +226,10 @@ function blank(s: string | null | undefined): string | null {
   if (!s) return null;
   const t = s.trim();
   return t.length ? t : null;
+}
+
+function stripExt(name: string): string {
+  const idx = name.lastIndexOf('.');
+  if (idx <= 0) return name;
+  return name.slice(0, idx);
 }

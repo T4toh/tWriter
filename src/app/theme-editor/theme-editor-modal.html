@@ -93,6 +93,71 @@
         </datalist>
 
         <div class="row section-divider">
+          <span class="section-label">Faces explícitas (opcional)</span>
+        </div>
+        <p class="hint-soft">
+          Pisa el auto-pick por sufijo del filename. Útil si la italic de la
+          familia es muy sutil — elegí un face más pronunciado
+          (ej: <code>-MediumItalic</code>).
+        </p>
+        <div class="row split">
+          <label>
+            <span>Italic (em / i)</span>
+            <select
+              [ngModel]="f.body_font_italic"
+              (ngModelChange)="update('body_font_italic', $event)"
+            >
+              <option value="">Auto (de body_font)</option>
+              @for (s of availableStems(); track s.stem) {
+                <option [value]="s.stem">{{ s.stem }} — {{ s.label }}</option>
+              }
+            </select>
+          </label>
+          <label>
+            <span>Bold (strong / b)</span>
+            <select
+              [ngModel]="f.body_font_bold"
+              (ngModelChange)="update('body_font_bold', $event)"
+            >
+              <option value="">Auto (de body_font)</option>
+              @for (s of availableStems(); track s.stem) {
+                <option [value]="s.stem">{{ s.stem }} — {{ s.label }}</option>
+              }
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            <span>Bold + Italic</span>
+            <select
+              [ngModel]="f.body_font_bold_italic"
+              (ngModelChange)="update('body_font_bold_italic', $event)"
+            >
+              <option value="">Auto (de body_font)</option>
+              @for (s of availableStems(); track s.stem) {
+                <option [value]="s.stem">{{ s.stem }} — {{ s.label }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <div class="row section-divider">
+          <span class="section-label">Preview</span>
+        </div>
+        <div class="preview-box">
+          <p [attr.style]="previewBodyStyle()">
+            La quietud de la noche envolvía el callejón.
+          </p>
+          <p [attr.style]="previewBodyStyle()">
+            Texto normal con
+            <span [attr.style]="previewItalicStyle()">italic</span>,
+            <span [attr.style]="previewBoldStyle()">bold</span>
+            y
+            <span [attr.style]="previewBoldItalicStyle()">bold + italic</span>.
+          </p>
+        </div>
+
+        <div class="row section-divider">
           <span class="section-label">Fuentes del tema</span>
           <button type="button" class="add-btn" (click)="pickFont()">
             + Agregar fuente…

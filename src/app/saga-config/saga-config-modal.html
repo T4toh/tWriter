@@ -253,6 +253,46 @@
                 />
               </label>
             </div>
+            <div class="row split">
+              <label>
+                <span>Italic face (em / i)</span>
+                <select
+                  [ngModel]="ovBodyFontItalic()"
+                  (ngModelChange)="ovBodyFontItalic.set($event)"
+                >
+                  <option value="">{{ base.body_font_italic || 'Heredar' }}</option>
+                  @for (s of availableStems(); track s) {
+                    <option [value]="s">{{ s }}</option>
+                  }
+                </select>
+              </label>
+              <label>
+                <span>Bold face (strong / b)</span>
+                <select
+                  [ngModel]="ovBodyFontBold()"
+                  (ngModelChange)="ovBodyFontBold.set($event)"
+                >
+                  <option value="">{{ base.body_font_bold || 'Heredar' }}</option>
+                  @for (s of availableStems(); track s) {
+                    <option [value]="s">{{ s }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+            <div class="row">
+              <label>
+                <span>Bold + Italic face</span>
+                <select
+                  [ngModel]="ovBodyFontBoldItalic()"
+                  (ngModelChange)="ovBodyFontBoldItalic.set($event)"
+                >
+                  <option value="">{{ base.body_font_bold_italic || 'Heredar' }}</option>
+                  @for (s of availableStems(); track s) {
+                    <option [value]="s">{{ s }}</option>
+                  }
+                </select>
+              </label>
+            </div>
             <datalist id="sc-fams">
               @for (fam of availableFamilies(); track fam) {
                 <option [value]="fam"></option>

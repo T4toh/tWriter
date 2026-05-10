@@ -39,6 +39,12 @@ export interface Theme {
   heading_size?: string | null;
   line_height?: string | null;
   page_margin?: string | null;
+  /** Filename stem del face explícito para `<em>`/`<i>`. Pisa auto-pick. */
+  body_font_italic?: string | null;
+  /** Filename stem del face explícito para `<strong>`/`<b>`. */
+  body_font_bold?: string | null;
+  /** Filename stem del face explícito para combinaciones bold+italic. */
+  body_font_bold_italic?: string | null;
 }
 
 export interface ThemeRef {
