@@ -172,6 +172,37 @@ textarea {
   }
 }
 
+.hint-soft {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--accent);
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ghost-btn {
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: var(--bg-soft);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  height: 100%;
+
+  &:hover:not(:disabled) {
+    background: var(--border);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
 .loading,
 .error {
   padding: 2rem;

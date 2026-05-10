@@ -6,6 +6,9 @@
     <button type="button" class="tt-btn" (click)="expandAll()" title="Expandir todo">
       <span class="ico">⇩</span>
     </button>
+    <button type="button" class="tt-btn" (click)="createTheme()" title="Crear tema">
+      <span class="ico">🎨</span>
+    </button>
   </div>
 }
 <div class="tree-area" (contextmenu)="onEmptyContext($event)">
@@ -19,6 +22,7 @@
     <p class="status">Elegí una carpeta arriba.</p>
   }
   @if (root(); as r) {
+    <ng-container *ngTemplateOutlet="themesSectionTpl" />
     @for (child of r.children; track child.path) {
       <ng-container
         *ngTemplateOutlet="nodeTpl; context: { $implicit: child, depth: 0 }"
@@ -82,6 +86,11 @@
       @if ((node.kind === 'saga' || node.kind === 'book') && !node.excluded) {
         <ng-container
           *ngTemplateOutlet="extrasSectionTpl; context: { scopePath: node.path, depth: depth + 1 }"
+        />
+      }
+      @if ((node.kind === 'saga' || (node.kind === 'book' && depth === 0)) && !node.excluded) {
+        <ng-container
+          *ngTemplateOutlet="fontsSectionTpl; context: { scopePath: node.path, depth: depth + 1 }"
         />
       }
       @if (node.kind === 'book' && !node.excluded) {
@@ -182,6 +191,87 @@
   }
 </ng-template>
 
+<ng-template #themesSectionTpl>
+  <button
+    type="button"
+    class="row themes-header"
+    (click)="toggleThemes()"
+  >
+    <span class="chevron">{{ isThemesExpanded() ? '▾' : '▸' }}</span>
+    <span class="icon">🎨</span>
+    <span class="name">Temas</span>
+    @if (themesList().length > 0) {
+      <span class="ext">{{ themesList().length }}</span>
+    }
+  </button>
+  @if (isThemesExpanded()) {
+    @if (themesList().length === 0) {
+      <p class="status" style="padding-left: 22px">
+        Sin temas. Click en 🎨 arriba para crear uno.
+      </p>
+    } @else {
+      @for (theme of themesList(); track theme.id) {
+        <button
+          type="button"
+          class="row theme"
+          [class.drag-target]="dragOverTheme() === theme.id"
+          [attr.data-theme-scope]="theme.id"
+          style="padding-left: 22px"
+          (click)="openTheme(theme)"
+          (contextmenu)="onThemeContextMenu($event, theme)"
+          [title]="theme.id"
+        >
+          <span class="icon">🎨</span>
+          <span class="name">{{ theme.nombre || theme.id }}</span>
+        </button>
+      }
+    }
+  }
+</ng-template>
+
+<ng-template #fontsSectionTpl let-scopePath="scopePath" let-depth="depth">
+  <button
+    type="button"
+    class="row fonts-header"
+    [class.drag-target]="dragOverScope() === scopePath"
+    [attr.data-extra-scope]="scopePath"
+    [style.padding-left.px]="8 + depth * 14"
+    (click)="toggleFonts(scopePath)"
+  >
+    <span class="chevron">{{ isFontsExpanded(scopePath) ? '▾' : '▸' }}</span>
+    <span class="icon">🔤</span>
+    <span class="name">Fuentes</span>
+    @if (hasLoadedFonts(scopePath) && getFonts(scopePath).length > 0) {
+      <span class="ext">{{ getFonts(scopePath).length }}</span>
+    }
+  </button>
+  @if (isFontsExpanded(scopePath)) {
+    @if (!hasLoadedFonts(scopePath)) {
+      <p class="status" [style.padding-left.px]="8 + (depth + 1) * 14">Cargando…</p>
+    } @else if (getFonts(scopePath).length === 0) {
+      <p class="status" [style.padding-left.px]="8 + (depth + 1) * 14">
+        Sin fuentes. Arrastrá .ttf/.otf/.woff/.woff2 acá.
+      </p>
+    } @else {
+      @for (entry of getFonts(scopePath); track entry.relative_path) {
+        <button
+          type="button"
+          class="row font"
+          [attr.data-extra-scope]="scopePath"
+          [style.padding-left.px]="8 + (depth + 1) * 14"
+          (click)="openFont(scopePath, entry)"
+          (contextmenu)="onFontContextMenu($event, scopePath, entry)"
+          [title]="entry.relative_path"
+        >
+          <span class="icon">🔤</span>
+          <span class="name">{{ entry.name }}</span>
+          <span class="font-badge">{{ entry.family }}{{ entry.weight === 700 ? ' B' : '' }}{{ entry.style === 'italic' ? ' I' : '' }}</span>
+        </button>
+      }
+    }
+  }
+</ng-template>
+
 @if (menu(); as m) {
   <div class="ctx-backdrop" (click)="closeMenu()" (contextmenu)="$event.preventDefault(); closeMenu()"></div>
   <div
@@ -190,7 +280,29 @@
     [style.top.px]="m.y"
     (click)="$event.stopPropagation()"
   >
-    @if (menuActions(); as a) {
+    @if (m.font) {
+      <button type="button" class="ctx-item" (click)="renameFont()">
+        <span class="ctx-label">Renombrar fuente…</span>
+      </button>
+      <div class="ctx-sep"></div>
+      <button type="button" class="ctx-item danger" (click)="removeFont()">
+        <span class="ctx-label">Borrar fuente</span>
+      </button>
+    } @else if (m.theme) {
+      <button type="button" class="ctx-item" (click)="openTheme(m.theme)">
+        <span class="ctx-label">Editar tema…</span>
+      </button>
+      <button type="button" class="ctx-item" (click)="renameTheme()">
+        <span class="ctx-label">Renombrar ID…</span>
+      </button>
+      <button type="button" class="ctx-item" (click)="duplicateTheme()">
+        <span class="ctx-label">Duplicar…</span>
+      </button>
+      <div class="ctx-sep"></div>
+      <button type="button" class="ctx-item danger" (click)="deleteTheme()">
+        <span class="ctx-label">Borrar tema</span>
+      </button>
+    } @else if (menuActions(); as a) {
       @if (a.openExtra) {
         <button type="button" class="ctx-item" (click)="openExtra()">
           <span class="ctx-label">Abrir con sistema</span>

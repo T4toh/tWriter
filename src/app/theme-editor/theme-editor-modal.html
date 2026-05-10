@@ -1,0 +1,166 @@
+@if (editing(); as id) {
+  <div class="te-backdrop" (click)="close()"></div>
+  <div class="te-modal" (click)="$event.stopPropagation()">
+    <header class="te-header">
+      <h2>Editar tema</h2>
+      <p class="path">{{ id }}</p>
+    </header>
+
+    @if (form(); as f) {
+      <div class="te-body">
+        <div class="row">
+          <label>
+            <span>Nombre</span>
+            <input
+              type="text"
+              [ngModel]="f.nombre"
+              (ngModelChange)="update('nombre', $event)"
+              placeholder="Nombre legible del tema"
+            />
+          </label>
+        </div>
+
+        <div class="row section-divider">
+          <span class="section-label">Tipografía</span>
+        </div>
+        <div class="row split">
+          <label>
+            <span>Fuente cuerpo</span>
+            <input
+              type="text"
+              [attr.list]="'te-fams-' + id"
+              [ngModel]="f.body_font"
+              (ngModelChange)="update('body_font', $event)"
+              placeholder="Ej: Merriweather"
+            />
+          </label>
+          <label>
+            <span>Tamaño cuerpo</span>
+            <input
+              type="text"
+              [ngModel]="f.body_size"
+              (ngModelChange)="update('body_size', $event)"
+              placeholder="11pt"
+            />
+          </label>
+        </div>
+        <div class="row split">
+          <label>
+            <span>Fuente títulos</span>
+            <input
+              type="text"
+              [attr.list]="'te-fams-' + id"
+              [ngModel]="f.heading_font"
+              (ngModelChange)="update('heading_font', $event)"
+              placeholder="Ej: Lato"
+            />
+          </label>
+          <label>
+            <span>Tamaño títulos</span>
+            <input
+              type="text"
+              [ngModel]="f.heading_size"
+              (ngModelChange)="update('heading_size', $event)"
+              placeholder="2em"
+            />
+          </label>
+        </div>
+        <div class="row split">
+          <label>
+            <span>Line-height</span>
+            <input
+              type="text"
+              [ngModel]="f.line_height"
+              (ngModelChange)="update('line_height', $event)"
+              placeholder="1.6"
+            />
+          </label>
+          <label>
+            <span>Margen de página</span>
+            <input
+              type="text"
+              [ngModel]="f.page_margin"
+              (ngModelChange)="update('page_margin', $event)"
+              placeholder="0.75in"
+            />
+          </label>
+        </div>
+
+        <datalist [attr.id]="'te-fams-' + id">
+          @for (fam of availableFamilies(); track fam) {
+            <option [value]="fam"></option>
+          }
+        </datalist>
+
+        <div class="row section-divider">
+          <span class="section-label">Fuentes del tema</span>
+          <button type="button" class="add-btn" (click)="pickFont()">
+            + Agregar fuente…
+          </button>
+        </div>
+
+        @if (fonts().length === 0) {
+          <p class="hint">
+            Aún no hay fuentes en este tema. Agregá archivos
+            <code>.ttf</code>, <code>.otf</code>, <code>.woff</code> o
+            <code>.woff2</code>. Para que <code>&lt;strong&gt;</code> y
+            <code>&lt;em&gt;</code> tengan face propio, usá nombres como
+            <code>Merriweather-Bold.ttf</code>,
+            <code>Merriweather-Italic.ttf</code>,
+            <code>Merriweather-BoldItalic.ttf</code>.
+          </p>
+        } @else {
+          <ul class="fonts-list">
+            @for (font of fonts(); track font.relative_path) {
+              <li>
+                <div class="font-row">
+                  <button
+                    type="button"
+                    class="link"
+                    (click)="openFontFile(font)"
+                    [title]="font.path"
+                  >
+                    {{ font.name }}
+                  </button>
+                  <span class="meta">{{ formatStyle(font) }}</span>
+                </div>
+                <div class="font-actions">
+                  <button type="button" class="icon-btn" (click)="renameFont(font)">
+                    Renombrar
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-btn danger"
+                    (click)="removeFont(font)"
+                  >
+                    Borrar
+                  </button>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+
+        @if (error(); as err) {
+          <p class="error">{{ err }}</p>
+        }
+      </div>
+    } @else if (error(); as err) {
+      <p class="error">{{ err }}</p>
+    } @else {
+      <p class="loading">Cargando…</p>
+    }
+
+    <footer class="te-actions">
+      <button type="button" class="btn btn-secondary" (click)="close()">Cancelar</button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        [disabled]="saving() || !form()"
+        (click)="save()"
+      >
+        {{ saving() ? 'Guardando…' : 'Guardar' }}
+      </button>
+    </footer>
+  </div>
+}

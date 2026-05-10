@@ -3,6 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::book_config::find_cover_in;
+use crate::theme::ThemeRef;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct SagaConfig {
@@ -37,6 +38,9 @@ pub struct SagaConfig {
     /// Marca la saga como finalizada (sin más novelas por agregar). Oculta el creador de novelas.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finalizada: Option<bool>,
+    /// Tema base + overrides per-campo. Heredado por libros que no definan `theme` propio.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme: Option<ThemeRef>,
 }
 
 #[tauri::command]

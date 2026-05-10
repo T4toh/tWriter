@@ -2,6 +2,7 @@ mod book_config;
 mod create;
 mod epub;
 mod extras;
+mod fonts;
 mod fs;
 mod git;
 mod grammar;
@@ -11,12 +12,16 @@ mod import_wizard;
 mod reorder;
 mod saga_config;
 mod settings;
+mod theme;
+mod themes;
+mod util;
 
 use book_config::{get_book_config, mark_as_epilogo, set_book_config};
 use saga_config::{find_saga_dir, get_saga_config, set_saga_config};
 use create::{create_book, create_chapter, create_directory};
 use epub::{export_book, list_exports};
 use extras::{add_extra, has_extras, list_extras, remove_extra, rename_extra};
+use fonts::{add_font, has_fonts, list_fonts, remove_font, rename_font};
 use fs::{
     get_tree, is_directory_excluded, read_chapter, read_meta, rename_node, set_directory_excluded,
     write_chapter, write_meta,
@@ -31,6 +36,10 @@ use import::{delete_chapter_file, delete_directory, import_chapter};
 use import_wizard::{import_wizard_apply, scan_import_source};
 use reorder::move_node;
 use settings::{get_settings, set_settings};
+use themes::{
+    add_theme_font, create_theme, delete_theme, duplicate_theme, get_theme, list_theme_fonts,
+    list_themes, remove_theme_font, rename_theme, rename_theme_font, set_theme,
+};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -82,6 +91,22 @@ pub fn run() {
             add_extra,
             remove_extra,
             rename_extra,
+            list_fonts,
+            has_fonts,
+            add_font,
+            remove_font,
+            rename_font,
+            list_themes,
+            get_theme,
+            set_theme,
+            create_theme,
+            rename_theme,
+            duplicate_theme,
+            delete_theme,
+            list_theme_fonts,
+            add_theme_font,
+            remove_theme_font,
+            rename_theme_font,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

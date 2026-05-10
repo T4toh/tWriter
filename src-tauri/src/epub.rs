@@ -8,6 +8,7 @@ use zip::CompressionMethod;
 
 use crate::book_config::{find_back_cover_in, find_cover_in, BookConfig};
 use crate::fs::is_excluded_dir;
+use crate::theme::{resolve_theme, FontEmbed, ResolvedTheme};
 
 #[derive(Serialize, Debug)]
 pub struct ExportResult {
@@ -77,13 +78,119 @@ fn read_export_dir(dir: &Path) -> Result<Vec<ExportEntry>, String> {
 
 const CSS_TEMPLATE: &str = include_str!("epub_style.css");
 
-fn build_css(template: &str) -> String {
-    let page_rule = match template {
-        "5x8" => "@page { size: 5in 8in; margin: 0.6in; }",
-        "a5" => "@page { size: A5; margin: 18mm; }",
-        _ => "@page { size: 6in 9in; margin: 0.75in; }",
+fn page_rule_for(template: &str, override_margin: Option<&str>) -> String {
+    let (size, default_margin) = match template {
+        "5x8" => ("5in 8in", "0.4in"),
+        "a5" => ("A5", "12mm"),
+        _ => ("6in 9in", "0.5in"),
     };
-    CSS_TEMPLATE.replace("/* @PAGE_SIZE */", page_rule)
+    let margin = override_margin
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(default_margin);
+    format!("@page {{ size: {}; margin: {}; }}", size, margin)
+}
+
+fn build_font_face_block(fonts: &[FontEmbed]) -> String {
+    if fonts.is_empty() {
+        return String::new();
+    }
+    let mut out = String::new();
+    for f in fonts {
+        // Match Reedsy CSS exactamente: keywords (normal/bold), sin format().
+        // KFX converter de Kindle valida estricto y rechaza format() inesperado.
+        let weight = if f.weight >= 700 { "bold" } else { "normal" };
+        out.push_str(&format!(
+            "@font-face {{\n  font-family: \"{}\";\n  font-style: {};\n  font-weight: {};\n  src: url(\"fonts/{}\");\n}}\n",
+            f.family, f.style, weight, f.filename,
+        ));
+    }
+    out
+}
+
+fn build_theme_rules_block(theme: &ResolvedTheme) -> String {
+    let mut out = String::new();
+
+    let body_family = theme.body_font.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let body_size = theme.body_size.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let line_height = theme.line_height.as_deref().map(str::trim).filter(|s| !s.is_empty());
+
+    // body como root, único lugar donde se setea body family. Reedsy hace lo
+    // mismo. Sumar selectores extra confunde al converter KFX de Kindle.
+    if body_family.is_some() || body_size.is_some() || line_height.is_some() {
+        out.push_str("body {\n");
+        if let Some(f) = body_family {
+            out.push_str(&format!("  font-family: \"{}\", serif;\n", f));
+        }
+        if let Some(s) = body_size {
+            out.push_str(&format!("  font-size: {};\n", s));
+        }
+        if let Some(lh) = line_height {
+            out.push_str(&format!("  line-height: {};\n", lh));
+        }
+        out.push_str("}\n");
+    }
+
+    let heading_family = theme.heading_font.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    if let Some(hf) = heading_family {
+        out.push_str(
+            "h1.chapter-title, .chapter-prefix, h2.part-label, span.dropcap, nav h1, nav ol.toc > li.toc-part > a {\n",
+        );
+        out.push_str(&format!("  font-family: \"{}\", sans-serif;\n", hf));
+        out.push_str("}\n");
+    }
+
+    let heading_size = theme.heading_size.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    if heading_size.is_some() || heading_has_bold(theme) {
+        out.push_str("h1.chapter-title {\n");
+        if let Some(s) = heading_size {
+            out.push_str(&format!("  font-size: {};\n", s));
+        }
+        if heading_has_bold(theme) {
+            out.push_str("  font-weight: 700;\n");
+        }
+        out.push_str("}\n");
+    }
+
+    out
+}
+
+fn heading_has_bold(theme: &ResolvedTheme) -> bool {
+    let Some(hf) = theme.heading_font.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
+        return false;
+    };
+    let target = hf.to_ascii_lowercase();
+    theme
+        .fonts
+        .iter()
+        .any(|f| f.family.to_ascii_lowercase() == target && f.weight >= 700 && f.style == "normal")
+}
+
+fn build_css(template: &str, theme: &ResolvedTheme) -> String {
+    let page_rule = page_rule_for(template, theme.page_margin.as_deref());
+    let font_face = build_font_face_block(&theme.fonts);
+    let theme_rules = build_theme_rules_block(theme);
+    CSS_TEMPLATE
+        .replace("/* @PAGE_SIZE */", &page_rule)
+        .replace("/* @FONT_FACE */", &font_face)
+        .replace("/* @THEME_RULES */", &theme_rules)
+}
+
+/// Sube hasta el padre del book buscando saga.json. Retorna (saga_dir, root_dir).
+/// Si no hay saga.json, libro standalone: saga_dir=None, root_dir = parent del book.
+fn find_saga_and_root(book_dir: &Path) -> (Option<PathBuf>, PathBuf) {
+    let parent = match book_dir.parent() {
+        Some(p) => p.to_path_buf(),
+        None => return (None, book_dir.to_path_buf()),
+    };
+    if parent.join("saga.json").is_file() {
+        let root = parent
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| parent.clone());
+        return (Some(parent), root);
+    }
+    (None, parent)
 }
 
 const CONTAINER_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -144,9 +251,13 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     zip.start_file("META-INF/container.xml", opts).map_err(|e| e.to_string())?;
     zip.write_all(CONTAINER_XML.as_bytes()).map_err(|e| e.to_string())?;
 
+    // Resolver tema (saga + book + base) ANTES del CSS para inyectar @font-face.
+    let (saga_dir, root_dir) = find_saga_and_root(&book_dir);
+    let resolved_theme = resolve_theme(&book_dir, saga_dir.as_deref(), &root_dir);
+
     // OEBPS/style.css
     let template = cfg.template.as_deref().unwrap_or("6x9");
-    let css = build_css(template);
+    let css = build_css(template, &resolved_theme);
     zip.start_file("OEBPS/style.css", opts).map_err(|e| e.to_string())?;
     zip.write_all(css.as_bytes()).map_err(|e| e.to_string())?;
 
@@ -159,6 +270,28 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
 
         properties: None,
     });
+
+    // Embebido de fuentes referenciadas por el tema. Cada FontEmbed va a OEBPS/fonts/<filename>
+    // y entra al manifest OPF con el media-type EPUB-3 correspondiente.
+    for (idx, font) in resolved_theme.fonts.iter().enumerate() {
+        let bytes = match fs::read(&font.abs_path) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("[theme] no pude leer {}: {}", font.abs_path.display(), e);
+                continue;
+            }
+        };
+        let dest = format!("OEBPS/fonts/{}", font.filename);
+        zip.start_file(&dest, opts).map_err(|e| e.to_string())?;
+        zip.write_all(&bytes).map_err(|e| e.to_string())?;
+        items.push(Item {
+            id: format!("font-{}", idx),
+            href: format!("fonts/{}", font.filename),
+            media_type: font.media_type.clone(),
+            spine_order: None,
+            properties: None,
+        });
+    }
 
     let mut spine_idx = 0u32;
     let mut total_chapter_files = 0u32;
@@ -527,7 +660,10 @@ fn collect_chapters(
             }
             p.file_name()
                 .and_then(|s| s.to_str())
-                .map(|n| !["exports", "Exportados", "Revisiones", "convertidos", ".git"].contains(&n))
+                .map(|n| {
+                    !["exports", "Exportados", "Revisiones", "convertidos", ".git", "extras", "notas", "fonts"]
+                        .contains(&n)
+                })
                 .unwrap_or(true)
         })
         .collect();
@@ -1084,9 +1220,24 @@ fn build_opf(cfg: &BookConfig, items: &[Item], book_uuid: &str) -> String {
         _ => String::new(),
     };
 
+    // Si hay fuentes embebidas, declarar `ibooks:specified-fonts` para que
+    // Apple Books / Kindle KFX activen "Publisher Font" en vez de pisar la
+    // tipografía con la del lector.
+    let has_fonts = items
+        .iter()
+        .any(|i| i.media_type.starts_with("font/"));
+    let (package_prefix, fonts_meta) = if has_fonts {
+        (
+            r#" prefix="ibooks: http://vocabulary.itunes.apple.com/rdf/ibooks/vocabulary-extensions-1.0/""#,
+            "<meta property=\"ibooks:specified-fonts\">true</meta>",
+        )
+    } else {
+        ("", "")
+    };
+
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="BookId" xml:lang="{}">
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="BookId" xml:lang="{}"{}>
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 <dc:identifier id="BookId">urn:uuid:{}</dc:identifier>
 {}
@@ -1094,6 +1245,7 @@ fn build_opf(cfg: &BookConfig, items: &[Item], book_uuid: &str) -> String {
 {}
 <dc:language>{}</dc:language>
 <meta property="dcterms:modified">{}</meta>
+{}
 {}
 {}
 </metadata>
@@ -1106,6 +1258,7 @@ fn build_opf(cfg: &BookConfig, items: &[Item], book_uuid: &str) -> String {
 </package>
 "#,
         lang,
+        package_prefix,
         book_uuid,
         isbn_id,
         xml_escape(&cfg.titulo),
@@ -1114,6 +1267,7 @@ fn build_opf(cfg: &BookConfig, items: &[Item], book_uuid: &str) -> String {
         modified,
         cover_meta,
         serie_meta,
+        fonts_meta,
         manifest,
         spine
     )
@@ -1241,4 +1395,235 @@ fn ymd_from_days(days: i64) -> (i32, u32, u32) {
     let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
     let year = if m <= 2 { y + 1 } else { y };
     (year, m, d)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::theme::{FontEmbed, ResolvedTheme};
+    use std::path::PathBuf;
+
+    #[test]
+    fn unconfigured_css_keeps_placeholders_empty() {
+        let resolved = ResolvedTheme::default();
+        let css = build_css("6x9", &resolved);
+        // El placeholder de @page se reemplaza, los otros dos deben quedar vacíos.
+        assert!(css.contains("@page { size: 6in 9in; margin: 0.5in; }"));
+        assert!(!css.contains("/* @PAGE_SIZE */"));
+        assert!(!css.contains("/* @FONT_FACE */"));
+        assert!(!css.contains("/* @THEME_RULES */"));
+        // Sin tema configurado: ningún @font-face debe aparecer.
+        assert!(!css.contains("@font-face"));
+        // El CSS base debe seguir intacto en sus reglas críticas.
+        assert!(css.contains("font-family: serif;"));
+        assert!(css.contains("font-family: sans-serif;"));
+    }
+
+    #[test]
+    fn configured_css_emits_font_face_and_theme_rules() {
+        let resolved = ResolvedTheme {
+            body_font: Some("Merriweather".into()),
+            body_size: Some("11pt".into()),
+            heading_font: Some("Lato".into()),
+            heading_size: Some("2em".into()),
+            line_height: Some("1.6".into()),
+            page_margin: Some("0.5in".into()),
+            fonts: vec![
+                FontEmbed {
+                    family: "Merriweather".into(),
+                    weight: 400,
+                    style: "normal".into(),
+                    filename: "Merriweather-Regular.ttf".into(),
+                    abs_path: PathBuf::from("/x/Merriweather-Regular.ttf"),
+                    media_type: "font/ttf".into(),
+                },
+                FontEmbed {
+                    family: "Merriweather".into(),
+                    weight: 700,
+                    style: "normal".into(),
+                    filename: "Merriweather-Bold.ttf".into(),
+                    abs_path: PathBuf::from("/x/Merriweather-Bold.ttf"),
+                    media_type: "font/ttf".into(),
+                },
+                FontEmbed {
+                    family: "Lato".into(),
+                    weight: 700,
+                    style: "normal".into(),
+                    filename: "Lato-Bold.ttf".into(),
+                    abs_path: PathBuf::from("/x/Lato-Bold.ttf"),
+                    media_type: "font/ttf".into(),
+                },
+            ],
+        };
+        let css = build_css("6x9", &resolved);
+        // Margen del tema gana sobre el default del template.
+        assert!(css.contains("margin: 0.5in"));
+        // @font-face por archivo. Sin format() para compatibilidad KFX.
+        assert!(css.contains("@font-face"));
+        assert!(css.contains("src: url(\"fonts/Merriweather-Regular.ttf\")"));
+        assert!(css.contains("src: url(\"fonts/Merriweather-Bold.ttf\")"));
+        assert!(css.contains("src: url(\"fonts/Lato-Bold.ttf\")"));
+        // Keywords no números.
+        assert!(css.contains("font-weight: bold"));
+        assert!(css.contains("font-weight: normal"));
+        // Theme rules.
+        assert!(css.contains("font-family: \"Merriweather\", serif"));
+        assert!(css.contains("font-family: \"Lato\", sans-serif"));
+        assert!(css.contains("font-size: 11pt"));
+        assert!(css.contains("font-size: 2em"));
+        assert!(css.contains("line-height: 1.6"));
+        // Heading tiene Bold disponible → font-weight: 700.
+        assert!(css.contains("font-weight: 700"));
+    }
+
+    #[test]
+    fn theme_rules_only_emit_set_fields() {
+        let resolved = ResolvedTheme {
+            body_size: Some("12pt".into()),
+            ..Default::default()
+        };
+        let block = build_theme_rules_block(&resolved);
+        assert!(block.contains("font-size: 12pt"));
+        // Sin font-family configurado, no debe aparecer.
+        assert!(!block.contains("font-family"));
+        // Sin heading.
+        assert!(!block.contains("h1.chapter-title"));
+    }
+
+    #[test]
+    fn font_face_block_empty_when_no_fonts() {
+        let resolved = ResolvedTheme::default();
+        assert!(build_font_face_block(&resolved.fonts).is_empty());
+    }
+
+    #[test]
+    fn page_rule_default_per_template() {
+        assert_eq!(page_rule_for("6x9", None), "@page { size: 6in 9in; margin: 0.5in; }");
+        assert_eq!(page_rule_for("5x8", None), "@page { size: 5in 8in; margin: 0.4in; }");
+        assert_eq!(page_rule_for("a5", None), "@page { size: A5; margin: 12mm; }");
+    }
+
+    #[test]
+    fn page_rule_override_margin() {
+        assert_eq!(
+            page_rule_for("6x9", Some("1in")),
+            "@page { size: 6in 9in; margin: 1in; }"
+        );
+        // String vacío cae al default.
+        assert_eq!(
+            page_rule_for("6x9", Some("")),
+            "@page { size: 6in 9in; margin: 0.5in; }"
+        );
+    }
+
+    fn read_epub_entries(epub_path: &std::path::Path) -> std::collections::HashMap<String, Vec<u8>> {
+        use std::io::Read;
+        let f = std::fs::File::open(epub_path).unwrap();
+        let mut archive = zip::ZipArchive::new(f).unwrap();
+        let mut out: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
+        for i in 0..archive.len() {
+            let mut entry = archive.by_index(i).unwrap();
+            let name = entry.name().to_string();
+            let mut buf = Vec::new();
+            entry.read_to_end(&mut buf).ok();
+            out.insert(name, buf);
+        }
+        out
+    }
+
+    #[test]
+    fn export_impl_unconfigured_does_not_embed_fonts() {
+        let tmp = tempdir();
+        let book = tmp.join("book");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        std::fs::write(book.join("book.json"), r#"{"titulo":"Test"}"#).unwrap();
+        std::fs::write(
+            book.join("Cap1").join("1.html"),
+            "<p>Hello world.</p>",
+        )
+        .unwrap();
+        let result = export_impl(book.to_str().unwrap()).expect("export ok");
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        // Sin entries OEBPS/fonts/.
+        assert!(
+            !entries.keys().any(|k| k.starts_with("OEBPS/fonts/")),
+            "no debería haber OEBPS/fonts/ en EPUB sin tema"
+        );
+        let css = String::from_utf8(entries.get("OEBPS/style.css").unwrap().clone()).unwrap();
+        assert!(!css.contains("@font-face"), "CSS no debería tener @font-face sin tema");
+        assert!(css.contains("font-family: serif;"), "CSS base intacto");
+        // OPF no menciona font/ttf.
+        let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
+        assert!(!opf.contains("font/ttf"));
+    }
+
+    #[test]
+    fn export_impl_with_theme_embeds_fonts() {
+        let tmp = tempdir();
+        let theme_fonts = tmp.join("themes").join("classic").join("fonts");
+        std::fs::create_dir_all(&theme_fonts).unwrap();
+        std::fs::write(theme_fonts.join("Merriweather-Regular.ttf"), b"FAKE_TTF_DATA").unwrap();
+        std::fs::write(theme_fonts.join("Merriweather-Bold.ttf"), b"FAKE_TTF_BOLD").unwrap();
+        std::fs::write(
+            tmp.join("themes").join("classic").join("theme.json"),
+            r#"{"id":"classic","body_font":"Merriweather","body_size":"11pt"}"#,
+        )
+        .unwrap();
+        let saga = tmp.join("Saga");
+        let book = saga.join("Book");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        std::fs::write(saga.join("saga.json"), r#"{"nombre":"Saga"}"#).unwrap();
+        std::fs::write(
+            book.join("book.json"),
+            r#"{"titulo":"Test","theme":{"base":"classic"}}"#,
+        )
+        .unwrap();
+        std::fs::write(book.join("Cap1").join("1.html"), "<p>Hello.</p>").unwrap();
+
+        let result = export_impl(book.to_str().unwrap()).expect("export ok");
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        // Fonts embebidas.
+        assert!(entries.contains_key("OEBPS/fonts/Merriweather-Regular.ttf"));
+        assert!(entries.contains_key("OEBPS/fonts/Merriweather-Bold.ttf"));
+        // CSS con @font-face y theme rules.
+        let css = String::from_utf8(entries.get("OEBPS/style.css").unwrap().clone()).unwrap();
+        assert!(css.contains("@font-face"));
+        assert!(css.contains("font-family: \"Merriweather\""));
+        assert!(css.contains("font-size: 11pt"));
+        // OPF manifest tiene los items con media-type correcto.
+        let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
+        assert!(opf.contains("font/ttf"));
+        assert!(opf.contains("fonts/Merriweather-Regular.ttf"));
+        assert!(opf.contains("fonts/Merriweather-Bold.ttf"));
+        // Activa "Publisher Font" en Apple Books / Kindle KFX.
+        assert!(opf.contains("ibooks:specified-fonts"));
+        assert!(opf.contains("vocabulary.itunes.apple.com"));
+    }
+
+    #[test]
+    fn export_impl_unconfigured_no_ibooks_meta() {
+        let tmp = tempdir();
+        let book = tmp.join("book");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        std::fs::write(book.join("book.json"), r#"{"titulo":"X"}"#).unwrap();
+        std::fs::write(book.join("Cap1").join("1.html"), "<p>x</p>").unwrap();
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
+        // Sin fuentes embebidas: no se declara el namespace ibooks ni el meta.
+        assert!(!opf.contains("ibooks:specified-fonts"));
+        assert!(!opf.contains("vocabulary.itunes.apple.com"));
+    }
+
+    fn tempdir() -> std::path::PathBuf {
+        let mut p = std::env::temp_dir();
+        let suffix: u128 = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        p.push(format!("twriter-epub-test-{}", suffix));
+        let _ = std::fs::remove_dir_all(&p);
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
 }

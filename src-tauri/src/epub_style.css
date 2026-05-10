@@ -1,5 +1,6 @@
 /* tWriter EPUB style. Subset extendido del look Reedsy. */
 /* @PAGE_SIZE */
+/* @FONT_FACE */
 
 html, body {
   margin: 0;
@@ -53,7 +54,7 @@ body.title-body {
   align-items: center;
   min-height: 100vh;
   text-align: center;
-  padding: 2em 1.5em;
+  padding: 0;
   box-sizing: border-box;
 }
 
@@ -65,7 +66,7 @@ body.copyright-body {
   align-items: center;
   min-height: 100vh;
   text-align: center;
-  padding: 2em 1.5em 4em;
+  padding: 0 0 2em;
   box-sizing: border-box;
   font-style: italic;
 }
@@ -78,24 +79,26 @@ body.dedication-body {
   align-items: center;
   min-height: 100vh;
   text-align: center;
-  padding: 2em 1.5em;
+  padding: 0;
   box-sizing: border-box;
   font-style: italic;
 }
 
-/* Chapter title page: gran título centrado */
+/* Chapter title page: gran título centrado vertical+horizontal.
+   Usa table+table-cell porque Kindle KF8/KFX no respeta flex+vh. */
 body.chapter-title-body {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  display: table;
+  width: 100%;
+  height: 100vh;
   min-height: 100vh;
+  margin: 0;
+  padding: 0;
   text-align: center;
-  padding: 2em 1.5em;
-  box-sizing: border-box;
 }
 
 .chapter-heading-inner {
+  display: table-cell;
+  vertical-align: middle;
   width: 100%;
   text-align: center;
 }
@@ -112,15 +115,15 @@ body.chapter-title-body {
   text-transform: uppercase;
 }
 
-/* Chapter content: lectura normal, padding razonable */
+/* Chapter content: lectura normal. @page maneja margins, body sin padding extra. */
 body.chapter-content-body {
-  padding: 2em 1.5em;
+  padding: 0;
   text-align: justify;
 }
 
 /* Nav (TOC) */
 body.nav-body {
-  padding: 2em 1.5em;
+  padding: 0;
 }
 
 /* ─────────────────── Title page elementos ─────────────────── */
@@ -274,13 +277,13 @@ blockquote em {
 
 /* ─────────────────── Dropcap ─────────────────── */
 span.dropcap {
-  font-size: 3.4em;
+  font-size: 4.2em;
   height: 1.5em;
-  line-height: 1.1em;
+  line-height: 1em;
   overflow: hidden;
   float: left;
-  margin-right: 0.05em;
-  margin-bottom: -0.6em;
+  margin-right: 0.08em;
+  margin-bottom: -0.5em;
   font-family: sans-serif;
 }
 
@@ -332,3 +335,5 @@ nav ol.toc-sub > li.toc-chapter > a {
 /* Misc */
 .center-align { text-align: center; text-indent: 0; }
 .right-align { text-align: right; text-indent: 0; }
+
+/* @THEME_RULES */

@@ -8,20 +8,29 @@ import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { ExtraEntry, ExtrasService } from '../core/extras-service';
 import { ExportEntry, ExportsService } from '../core/exports-service';
+import { FontsService } from '../core/fonts-service';
 import { ImageViewerService } from '../core/image-viewer-service';
 import { NavigationService } from '../core/navigation-service';
 import { SagaConfigService } from '../core/saga-config-service';
 import { ProjectService } from '../core/project-service';
 import { SettingsService } from '../core/settings-service';
+import { ThemesService } from '../core/themes-service';
 import { ToastService } from '../core/toast-service';
-import { TreeNode } from '../core/types';
+import { FontEntry, ThemeMeta, TreeNode } from '../core/types';
 import { ModalService } from '../shared/modal-service';
+
+const FONT_EXT_RE = /\.(ttf|otf|woff|woff2)$/i;
+type DropScope =
+  | { kind: 'fs'; path: string }
+  | { kind: 'theme'; id: string };
 
 interface ContextMenu {
   x: number;
   y: number;
   node: TreeNode | null;
   extra: { scopePath: string; entry: ExtraEntry } | null;
+  font: { scopePath: string; entry: FontEntry } | null;
+  theme: ThemeMeta | null;
 }
 
 @Component({
@@ -39,9 +48,18 @@ export class Tree implements OnDestroy {
   private sagaCfg = inject(SagaConfigService);
   private extras = inject(ExtrasService);
   private exports = inject(ExportsService);
+  private fonts = inject(FontsService);
+  private themesSvc = inject(ThemesService);
   private imageViewer = inject(ImageViewerService);
   private toast = inject(ToastService);
   private modal = inject(ModalService);
+
+  /** Cache de fuentes per-saga/per-book (mismo patrón que extras). */
+  private readonly fontsLoaded = signal<Set<string>>(new Set());
+  protected readonly fontsExpanded = signal<Set<string>>(new Set());
+  protected readonly themesExpanded = signal<boolean>(false);
+  /** Path/id que está siendo target de drag&drop OS para themes. null = no theme target. */
+  protected readonly dragOverTheme = signal<string | null>(null);
 
   protected readonly root = this.project.tree;
   protected readonly loading = this.project.loading;
@@ -82,6 +100,10 @@ export class Tree implements OnDestroy {
       this.project.root();
       this.extras.clear();
       this.exports.clear();
+      this.fonts.clear();
+      this.fontsLoaded.set(new Set());
+      this.fontsExpanded.set(new Set());
+      this.themesExpanded.set(false);
     });
   }
 
@@ -103,6 +125,249 @@ export class Tree implements OnDestroy {
 
   protected hasLoadedExports(bookPath: string): boolean {
     return this.exports.hasLoaded(bookPath);
+  }
+
+  // ───── Fonts (per-saga/per-book) ─────
+
+  protected getFonts(scopePath: string): FontEntry[] {
+    return this.fonts.get(scopePath);
+  }
+
+  protected hasLoadedFonts(scopePath: string): boolean {
+    return this.fontsLoaded().has(scopePath);
+  }
+
+  protected isFontsExpanded(scopePath: string): boolean {
+    return this.fontsExpanded().has(scopePath);
+  }
+
+  protected toggleFonts(scopePath: string): void {
+    const expanded = this.fontsExpanded().has(scopePath);
+    this.fontsExpanded.update((s) => {
+      const next = new Set(s);
+      if (expanded) next.delete(scopePath);
+      else next.add(scopePath);
+      return next;
+    });
+    if (!expanded && !this.hasLoadedFonts(scopePath)) {
+      void this.refreshFonts(scopePath);
+    }
+  }
+
+  private async refreshFonts(scopePath: string): Promise<void> {
+    try {
+      await this.fonts.refresh(scopePath);
+      this.fontsLoaded.update((s) => new Set([...s, scopePath]));
+    } catch (e) {
+      this.toast.error(`No se pudieron cargar fuentes: ${e}`);
+    }
+  }
+
+  protected async openFont(_scopePath: string, entry: FontEntry): Promise<void> {
+    try {
+      await openPath(entry.path);
+    } catch (e) {
+      this.toast.error(`No se pudo abrir: ${e}`);
+    }
+  }
+
+  protected onFontContextMenu(event: MouseEvent, scopePath: string, entry: FontEntry): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.menu.set({
+      x: event.clientX,
+      y: event.clientY,
+      node: null,
+      extra: null,
+      font: { scopePath, entry },
+      theme: null,
+    });
+  }
+
+  // ───── Themes (root level) ─────
+
+  protected readonly themesList = computed(() => this.themesSvc.list());
+
+  protected isThemesExpanded(): boolean {
+    return this.themesExpanded();
+  }
+
+  protected toggleThemes(): void {
+    const expanded = this.themesExpanded();
+    this.themesExpanded.set(!expanded);
+    if (!expanded && !this.themesSvc.hasLoaded()) {
+      void this.refreshThemes();
+    }
+  }
+
+  private async refreshThemes(): Promise<void> {
+    try {
+      await this.themesSvc.refresh();
+    } catch (e) {
+      this.toast.error(`No se pudieron cargar temas: ${e}`);
+    }
+  }
+
+  protected openTheme(theme: ThemeMeta): void {
+    this.themesSvc.openEditor(theme.id);
+  }
+
+  protected onThemeContextMenu(event: MouseEvent, theme: ThemeMeta): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.menu.set({
+      x: event.clientX,
+      y: event.clientY,
+      node: null,
+      extra: null,
+      font: null,
+      theme,
+    });
+  }
+
+  protected async createTheme(): Promise<void> {
+    if (!this.settings.root()) {
+      this.toast.error('Elegí una carpeta primero');
+      return;
+    }
+    const id = await this.modal.prompt({
+      title: 'Nuevo tema',
+      message: 'Identificador del tema (slug, sin espacios — ej: "reedsy-classic"):',
+      validate: (v) => {
+        const t = v.trim();
+        if (!t) return 'ID vacío';
+        if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
+        if (t.includes(' ')) return 'Sin espacios; usá guiones';
+        return null;
+      },
+    });
+    if (!id?.trim()) return;
+    const slug = id.trim();
+    try {
+      await this.themesSvc.create(slug, { id: slug, nombre: slug });
+      this.themesExpanded.set(true);
+      this.themesSvc.openEditor(slug);
+    } catch (e) {
+      this.toast.error(`No se pudo crear: ${e}`);
+    }
+  }
+
+  protected async renameTheme(): Promise<void> {
+    const m = this.menu();
+    if (!m?.theme) return;
+    const old = m.theme.id;
+    this.closeMenu();
+    const newId = await this.modal.prompt({
+      title: 'Renombrar tema',
+      message: 'Nuevo ID. Las sagas y libros que apunten al ID viejo quedarán dangling.',
+      defaultValue: old,
+      validate: (v) => {
+        const t = v.trim();
+        if (!t) return 'ID vacío';
+        if (t === old) return 'Mismo ID';
+        if (t.includes('/') || t.includes('\\') || t.includes(' ')) return 'Inválido';
+        return null;
+      },
+    });
+    if (!newId?.trim() || newId.trim() === old) return;
+    try {
+      await this.themesSvc.rename(old, newId.trim());
+      this.toast.warn(
+        'Tema renombrado. Si alguna saga o novela apuntaba al ID viejo, ' +
+          'tenés que actualizarla a mano.',
+      );
+    } catch (e) {
+      this.toast.error(`No se pudo renombrar: ${e}`);
+    }
+  }
+
+  protected async duplicateTheme(): Promise<void> {
+    const m = this.menu();
+    if (!m?.theme) return;
+    const src = m.theme.id;
+    this.closeMenu();
+    const dst = await this.modal.prompt({
+      title: 'Duplicar tema',
+      message: `Crear copia de "${src}" con qué ID?`,
+      defaultValue: `${src}-copia`,
+      validate: (v) => {
+        const t = v.trim();
+        if (!t) return 'ID vacío';
+        if (t === src) return 'Mismo ID que el origen';
+        if (t.includes('/') || t.includes('\\') || t.includes(' ')) return 'Inválido';
+        return null;
+      },
+    });
+    if (!dst?.trim()) return;
+    try {
+      await this.themesSvc.duplicate(src, dst.trim());
+      this.toast.success(`Tema "${dst.trim()}" creado`);
+    } catch (e) {
+      this.toast.error(`No se pudo duplicar: ${e}`);
+    }
+  }
+
+  protected async deleteTheme(): Promise<void> {
+    const m = this.menu();
+    if (!m?.theme) return;
+    const id = m.theme.id;
+    this.closeMenu();
+    const ok = await this.modal.confirm({
+      title: 'Borrar tema',
+      message: `Borrar tema "${id}"? La carpeta themes/${id}/ y sus fuentes se eliminan del disco.`,
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await this.themesSvc.delete(id);
+    } catch (e) {
+      this.toast.error(`No se pudo borrar: ${e}`);
+    }
+  }
+
+  // ───── Font context menu actions ─────
+
+  protected async renameFont(): Promise<void> {
+    const m = this.menu();
+    if (!m?.font) return;
+    const { scopePath, entry } = m.font;
+    this.closeMenu();
+    const newName = await this.modal.prompt({
+      title: 'Renombrar fuente',
+      defaultValue: entry.name,
+      validate: (v) => {
+        const t = v.trim();
+        if (!t) return 'Nombre vacío';
+        if (t === entry.name) return 'Mismo nombre';
+        if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
+        if (!FONT_EXT_RE.test(t)) return 'Extensión inválida (ttf/otf/woff/woff2)';
+        return null;
+      },
+    });
+    if (!newName?.trim() || newName.trim() === entry.name) return;
+    try {
+      await this.fonts.rename(scopePath, entry.relative_path, newName.trim());
+    } catch (e) {
+      this.toast.error(`No se pudo renombrar: ${e}`);
+    }
+  }
+
+  protected async removeFont(): Promise<void> {
+    const m = this.menu();
+    if (!m?.font) return;
+    const { scopePath, entry } = m.font;
+    this.closeMenu();
+    const ok = await this.modal.confirm({
+      title: 'Borrar fuente',
+      message: `Borrar "${entry.name}"? El archivo se elimina del disco.`,
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await this.fonts.remove(scopePath, entry.relative_path);
+    } catch (e) {
+      this.toast.error(`No se pudo borrar: ${e}`);
+    }
   }
 
   /** Acciones disponibles para el nodo del menú. */
@@ -339,18 +604,18 @@ export class Tree implements OnDestroy {
   protected onContextMenu(event: MouseEvent, node: TreeNode): void {
     event.preventDefault();
     event.stopPropagation();
-    this.menu.set({ x: event.clientX, y: event.clientY, node, extra: null });
+    this.menu.set({ x: event.clientX, y: event.clientY, node, extra: null, font: null, theme: null });
   }
 
   protected onExtraContextMenu(event: MouseEvent, scopePath: string, entry: ExtraEntry): void {
     event.preventDefault();
     event.stopPropagation();
-    this.menu.set({ x: event.clientX, y: event.clientY, node: null, extra: { scopePath, entry } });
+    this.menu.set({ x: event.clientX, y: event.clientY, node: null, extra: { scopePath, entry }, font: null, theme: null });
   }
 
   protected onEmptyContext(event: MouseEvent): void {
     event.preventDefault();
-    this.menu.set({ x: event.clientX, y: event.clientY, node: null, extra: null });
+    this.menu.set({ x: event.clientX, y: event.clientY, node: null, extra: null, font: null, theme: null });
   }
 
   protected closeMenu(): void {
@@ -738,15 +1003,26 @@ export class Tree implements OnDestroy {
         const payload = event.payload;
         if (payload.type === 'enter' || payload.type === 'over') {
           const scope = this.scopeAtPosition(payload.position.x, payload.position.y);
-          this.dragOverScope.set(scope);
+          if (scope?.kind === 'fs') {
+            this.dragOverScope.set(scope.path);
+            this.dragOverTheme.set(null);
+          } else if (scope?.kind === 'theme') {
+            this.dragOverScope.set(null);
+            this.dragOverTheme.set(scope.id);
+          } else {
+            this.dragOverScope.set(null);
+            this.dragOverTheme.set(null);
+          }
         } else if (payload.type === 'drop') {
           const scope = this.scopeAtPosition(payload.position.x, payload.position.y);
           this.dragOverScope.set(null);
+          this.dragOverTheme.set(null);
           if (scope && payload.paths.length > 0) {
-            void this.addExtraFiles(scope, payload.paths);
+            void this.routeDroppedFiles(scope, payload.paths);
           }
         } else {
           this.dragOverScope.set(null);
+          this.dragOverTheme.set(null);
         }
       });
       this.dragUnlisten = unlisten;
@@ -755,16 +1031,90 @@ export class Tree implements OnDestroy {
     }
   }
 
-  /** Convierte coordenadas físicas del webview a CSS y devuelve scopePath del nodo target. */
-  private scopeAtPosition(physX: number, physY: number): string | null {
+  /** Convierte coordenadas físicas del webview a CSS y devuelve scope target (saga/book o theme). */
+  private scopeAtPosition(physX: number, physY: number): DropScope | null {
     const dpr = window.devicePixelRatio || 1;
     const x = physX / dpr;
     const y = physY / dpr;
     const el = document.elementFromPoint(x, y);
     if (!el) return null;
-    const row = (el as HTMLElement).closest<HTMLElement>('[data-extra-scope]');
-    if (!row) return null;
-    return row.dataset['extraScope'] ?? null;
+    const themeRow = (el as HTMLElement).closest<HTMLElement>('[data-theme-scope]');
+    if (themeRow?.dataset['themeScope']) {
+      return { kind: 'theme', id: themeRow.dataset['themeScope']! };
+    }
+    const fsRow = (el as HTMLElement).closest<HTMLElement>('[data-extra-scope]');
+    if (fsRow?.dataset['extraScope']) {
+      return { kind: 'fs', path: fsRow.dataset['extraScope']! };
+    }
+    return null;
+  }
+
+  /** Rutea archivos arrastrados según scope y extensión. Fonts → fonts service; resto → extras. */
+  private async routeDroppedFiles(scope: DropScope, paths: string[]): Promise<void> {
+    if (scope.kind === 'theme') {
+      await this.addThemeFonts(scope.id, paths);
+      return;
+    }
+    const fontPaths: string[] = [];
+    const extraPaths: string[] = [];
+    for (const p of paths) {
+      if (FONT_EXT_RE.test(p)) fontPaths.push(p);
+      else extraPaths.push(p);
+    }
+    if (fontPaths.length > 0) {
+      await this.addFontFiles(scope.path, fontPaths);
+    }
+    if (extraPaths.length > 0) {
+      await this.addExtraFiles(scope.path, extraPaths);
+    }
+  }
+
+  private async addFontFiles(scopePath: string, paths: string[]): Promise<void> {
+    let added = 0;
+    let failed = 0;
+    for (const p of paths) {
+      try {
+        await this.fonts.addFromPath(scopePath, p);
+        added++;
+      } catch (e) {
+        failed++;
+        this.toast.error(`Falló agregar ${p}: ${e}`);
+      }
+    }
+    if (added > 0) {
+      this.fontsLoaded.update((s) => new Set([...s, scopePath]));
+      this.fontsExpanded.update((s) => new Set([...s, scopePath]));
+      this.toast.info(`Agregada${added === 1 ? '' : 's'} ${added} fuente${added === 1 ? '' : 's'}.`);
+    }
+    if (failed > 0 && added === 0) {
+      this.toast.error('No se pudo agregar ninguna fuente.');
+    }
+  }
+
+  private async addThemeFonts(themeId: string, paths: string[]): Promise<void> {
+    const fontPaths = paths.filter((p) => FONT_EXT_RE.test(p));
+    if (fontPaths.length === 0) {
+      this.toast.warn('Solo se aceptan fuentes .ttf/.otf/.woff/.woff2 en temas');
+      return;
+    }
+    let added = 0;
+    let failed = 0;
+    for (const p of fontPaths) {
+      try {
+        await this.themesSvc.addFont(themeId, p);
+        added++;
+      } catch (e) {
+        failed++;
+        this.toast.error(`Falló agregar ${p}: ${e}`);
+      }
+    }
+    if (added > 0) {
+      await this.themesSvc.refresh();
+      this.toast.info(`Agregada${added === 1 ? '' : 's'} ${added} fuente${added === 1 ? '' : 's'} al tema ${themeId}.`);
+    }
+    if (failed > 0 && added === 0) {
+      this.toast.error('No se pudo agregar ninguna fuente al tema.');
+    }
   }
 
   private collectImportable(root: TreeNode): TreeNode[] {

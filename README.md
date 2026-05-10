@@ -13,21 +13,28 @@ distinguir capítulos (lo que va al EPUB) de extras (manuscritos viejos, mapas,
 glosarios, tapas alternativas) y notas (research — feature futura).
 
 ```
-<saga>/
-  saga.json
-  cover.{jpg,png,jpeg,webp}        # opcional, tapa de la serie
-  extras/                          # opcional, mapas/glosarios saga-level
-    <cualquier-archivo>
-  notas/                           # RESERVADO (feature futura)
-  <libro>/
-    book.json
-    cover.{jpg,png,jpeg,webp}      # opcional
-    back-cover.{jpg,png,jpeg,webp} # opcional, contratapa
-    extras/                        # opcional, manuscritos/refs book-level
+<root>/
+  themes/                          # opcional, temas reutilizables (Sprint 10)
+    <id>/
+      theme.json                   # { body_font, body_size, heading_font, heading_size, line_height, page_margin }
+      fonts/                       # .ttf/.otf/.woff/.woff2
+  <saga>/
+    saga.json
+    cover.{jpg,png,jpeg,webp}      # opcional, tapa de la serie
+    extras/                        # opcional, mapas/glosarios saga-level
       <cualquier-archivo>
+    fonts/                         # opcional, override de fuentes per-saga
     notas/                         # RESERVADO (feature futura)
-    <n>.html + <n>.meta.json       # capítulos
-    <sección>?/<n>.html            # capítulos en secciones
+    <libro>/
+      book.json
+      cover.{jpg,png,jpeg,webp}    # opcional
+      back-cover.{jpg,png,jpeg,webp} # opcional, contratapa
+      extras/                      # opcional, manuscritos/refs book-level
+        <cualquier-archivo>
+      fonts/                       # opcional, override de fuentes per-libro
+      notas/                       # RESERVADO (feature futura)
+      <n>.html + <n>.meta.json     # capítulos
+      <sección>?/<n>.html          # capítulos en secciones
 ```
 
 Reglas:
@@ -37,14 +44,18 @@ Reglas:
   filesystem.
 - `extras/` es flat. Podés crear subcarpetas si querés; la app no impone
   taxonomía. Cualquier tipo de archivo entra (imagen, docx, odt, txt, md, pdf).
-- `extras/` y `notas/` quedan auto-excluidos del export EPUB. No necesitan
-  `.twriter-ignore`.
+- `extras/`, `notas/`, `fonts/` y `themes/` quedan auto-excluidos del export
+  EPUB y del walk del tree. No necesitan `.twriter-ignore`.
 - Para libros standalone (sin saga padre), el layout del libro es idéntico —
-  `<book>/cover.*`, `<book>/extras/`, etc.
+  `<book>/cover.*`, `<book>/extras/`, `<book>/fonts/`, etc.
+- `themes/` vive solo en la raíz del repo. Cada tema es autocontenido (su
+  propio `theme.json` + carpeta `fonts/`). Sagas y libros referencian un tema
+  por id en `saga.json::theme.base` / `book.json::theme.base`. Ver sección
+  "Temas y tipografía" abajo.
 
 ## Estado
 
-MVP completo. Sprints 1–9 hechos.
+MVP completo. Sprints 1–10 hechos.
 
 - **Editor**: TipTap con HTML subset (`<p>`, `<i>`, `<em>`, `<strong>`, `<u>`, `<hr>`, `<h1>`, `<blockquote>`), autosave debounced 1.5s, toolbar (B/I/U, alineación, salto de escena, RAE, gramática, ancho hoja, font size), menú contextual propio.
 - **Tree explorer** del repo (Saga / Libro / Sección / Capítulo) con context menu (crear, mover, importar, exportar EPUB, configurar libro, excluir del EPUB), badge "excluido" para `.twriter-ignore`.
@@ -59,6 +70,7 @@ MVP completo. Sprints 1–9 hechos.
 - **Export EPUB**: builder Rust con CSS subset Reedsy, templates 6×9"/5×8"/A5, cover image, dedicatoria, copyright, TOC navegable.
 - **Tema** claro/oscuro, tipografía serif que matchea el EPUB output.
 - **Indicador idioma** footer (badge color por idioma) + toggle ES/EN.
+- **Temas + fuentes embebidas**: temas reutilizables a nivel root (`<root>/themes/<id>/`) con tipografía + márgenes. Override per-saga y per-libro. Detección automática de bold/italic via sufijos en filename. Cero regresión cuando no hay tema configurado.
 
 ## Roadmap
 
@@ -181,6 +193,51 @@ Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automáti
 - Wizard de importación: extras a nivel saga (`<saga>/extras/`), no solo libro;
   normaliza también `back-cover.*` igual que cover.
 
+### Sprint 10 — Temas + fuentes embebidas ✓
+
+> Reemplazar `font-family: serif`/`sans-serif` genéricos del EPUB con
+> tipografía custom. Temas reutilizables a nivel root del repo, override
+> per-saga y per-libro.
+
+- **Temas reutilizables** en `<root>/themes/<id>/`. Cada tema autocontenido:
+  `theme.json` (body_font, body_size, heading_font, heading_size, line_height,
+  page_margin) + carpeta `fonts/` con archivos `.ttf/.otf/.woff/.woff2`.
+- **Referencia + overrides**: `saga.json::theme = { base: "<id>", overrides: {…} }`.
+  Mismo shape en `book.json`. El base aporta defaults; los overrides pisan
+  campo a campo. Saga aporta default a sus libros; book sobreescribe.
+  Standalone book usa solo `book.json`.
+- **Fonts override per-saga/per-libro**: `<saga>/fonts/` y `<book>/fonts/`
+  pisan los archivos del tema base. Útil para una novela que necesita una
+  variante específica sin tocar el tema compartido.
+- **Detección de bold/italic** desde el nombre del archivo:
+  `Merriweather-Regular.ttf`, `-Bold.ttf`, `-Italic.ttf`, `-BoldItalic.ttf`
+  se agrupan en una familia `Merriweather` con cuatro `@font-face`
+  (cruz weight × style). `<strong>` y `<em>` del HTML usan el face real.
+  Sufijos soportados (case-insensitive, separador `-` o `_`): `Regular`,
+  `Bold`, `Italic`, `BoldItalic`, `Roman`, `Oblique`. Sin sufijo reconocido
+  → familia = stem completo, single face (faux-bold/italic del lector).
+- **EPUB embed**: las fuentes referenciadas por el tema resuelto se copian a
+  `OEBPS/fonts/<filename>` y entran al manifest OPF con media-type EPUB-3
+  (`font/ttf`, `font/otf`, `font/woff`, `font/woff2`). El CSS del EPUB suma
+  `@font-face` por archivo + reglas de tema (body family/size/line-height,
+  heading family/size/weight, `@page` margin override).
+- **Cero regresión**: tema sin configurar (sin `theme.base` en saga y book)
+  produce un CSS byte-idéntico al de antes. Libros existentes siguen
+  exportando exactamente igual sin tocar nada.
+- **UI**:
+  - Botón 🎨 en el toolbar del tree para crear un tema nuevo.
+  - Sección "🎨 Temas" en la raíz del tree, lista los temas, click → abre
+    editor, context menu con renombrar / duplicar / borrar.
+  - Sección "🔤 Fuentes" colapsable bajo cada saga y libro (paralelo a
+    "📁 Extras"), con drag&drop OS y context menu.
+  - Modal "Editor de tema" con 6 inputs + grilla de fuentes propias del tema.
+  - Modales "Configurar Saga" y "Configurar Novela" suman bloque "Tema":
+    select de tema base + 6 inputs de override con placeholders mostrando el
+    valor heredado.
+- **Drag&drop inteligente**: archivos arrastrados a un tema van a su `fonts/`.
+  Arrastrados a una saga/libro: si todos son fuentes (`.ttf/.otf/.woff/.woff2`)
+  van al `fonts/` de ese scope; sino van al `extras/` como antes.
+
 ### Sprint 9 — Diálogos custom ✓
 
 > Reemplazar los `window.prompt`/`confirm`/`alert` nativos del WebKit (feos,
@@ -275,11 +332,13 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 
 #### EPUB
 
-- Fonts embebidas en EPUB (Merriweather, Lato, Roboto Mono o cualquiera)
 - Página "About the author" en EPUB
 - Contratapa y otros libros en EPUB
 - Preview EPUB tipo Kindle (B/N, distintos tamaños de pantalla — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
-- Temas para las sagas así se configuran una sola vez. (Tema sería fuente para el cuerpo, fuente para los títulos y sus respectivos tamaños. Depende de haber implementado la instalación de fuentes)
+- Pesos extra de fuente (300 Light, 600 SemiBold, 900 Black). Hoy solo se detectan Regular/Bold/Italic/BoldItalic; pesos custom requieren edit manual del theme.json.
+- Auto-migración de tema renombrado: hoy renombrar un tema deja sagas/libros con `base` dangling (mostramos warning). Implementar scan recursivo de `*.json` y rewrite del `base`.
+- Colores en el tema (body color, heading color, scene-break color). Hoy el tema es solo tipografía + márgenes.
+- Theme presets compartibles entre repos distintos (export/import como zip). Hoy un repo = sus temas; copiá la carpeta `themes/<id>/` manualmente.
 - Revisiones de EPUB: hoy el export sobreescribe siempre `Exportados/<titulo>.epub`. Agregar input "guardar últimas N revisiones" (default 5) en `BookConfig` o settings global. Cuando se exporta, renombrar la versión actual a `<titulo>-revN.epub` antes de generar la nueva. Borrar las que excedan N. Permite volver a una compilación anterior si rompiste algo.
 
 #### Bundle / Distribución (Linux nativo)

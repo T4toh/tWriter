@@ -290,6 +290,51 @@
   font-weight: 600;
 }
 
+.row.fonts-header {
+  font-style: italic;
+  color: var(--fg-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.row.font {
+  font-size: 12px;
+  color: var(--fg-muted);
+
+  .name {
+    font-style: normal;
+  }
+}
+
+.font-badge {
+  margin-left: auto;
+  font-size: 9px;
+  font-style: normal;
+  background: var(--border);
+  color: var(--fg-muted);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+}
+
+.row.themes-header {
+  font-style: italic;
+  color: var(--fg-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-left: 8px;
+}
+
+.row.theme {
+  font-size: 13px;
+
+  .name {
+    font-style: normal;
+  }
+}
+
 .row.group.excluded {
   opacity: 0.55;
   font-style: italic;

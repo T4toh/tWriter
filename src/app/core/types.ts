@@ -30,6 +30,37 @@ export const EMPTY_META: ChapterMeta = {
   idioma: null,
 };
 
+export interface Theme {
+  id?: string | null;
+  nombre?: string | null;
+  body_font?: string | null;
+  body_size?: string | null;
+  heading_font?: string | null;
+  heading_size?: string | null;
+  line_height?: string | null;
+  page_margin?: string | null;
+}
+
+export interface ThemeRef {
+  base?: string | null;
+  overrides?: Theme | null;
+}
+
+export interface ThemeMeta extends Theme {
+  id: string;
+}
+
+export interface FontEntry {
+  name: string;
+  path: string;
+  relative_path: string;
+  size_bytes: number;
+  ext?: string | null;
+  family: string;
+  weight: number;
+  style: string;
+}
+
 export type GrammarMode = 'public' | 'local' | 'custom';
 
 export interface GrammarMatch {
