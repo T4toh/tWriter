@@ -1,0 +1,95 @@
+@if (state(); as s) {
+  <div
+    class="mh-backdrop"
+    [class.is-closing]="closing()"
+    (click)="onBackdropClick()"
+    role="presentation"
+  ></div>
+
+  <div
+    class="mh-card"
+    [class.is-closing]="closing()"
+    [attr.data-kind]="s.kind"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-labelledby]="'mh-title'"
+    (click)="onCardClick($event)"
+  >
+    <header class="mh-header">
+      <h2 id="mh-title">{{ s.title }}</h2>
+    </header>
+
+    <div class="mh-body">
+      @switch (s.kind) {
+        @case ('prompt') {
+          @if (promptState(); as p) {
+            @if (p.message) {
+              <p class="message">{{ p.message }}</p>
+            }
+            <input
+              #promptInput
+              type="text"
+              [ngModel]="value()"
+              (ngModelChange)="onValueChange($event)"
+              [placeholder]="p.placeholder ?? ''"
+              (keydown)="onPromptKeydown($event)"
+              [attr.aria-invalid]="errorMsg() ? 'true' : null"
+            />
+            @if (errorMsg(); as err) {
+              <p class="error">{{ err }}</p>
+            }
+          }
+        }
+        @case ('confirm') {
+          @if (confirmState(); as c) {
+            <p class="message">{{ c.message }}</p>
+          }
+        }
+        @case ('alert') {
+          @if (alertState(); as a) {
+            <p class="message" [attr.data-variant]="a.variant ?? 'info'">{{ a.message }}</p>
+          }
+        }
+      }
+    </div>
+
+    <footer class="mh-actions">
+      @switch (s.kind) {
+        @case ('prompt') {
+          @if (promptState(); as p) {
+            <button type="button" class="btn btn-secondary" (click)="cancel()">
+              {{ p.cancelLabel ?? 'Cancelar' }}
+            </button>
+            <button #okButton type="button" class="btn btn-primary" (click)="confirmPrompt()">
+              {{ p.okLabel ?? 'OK' }}
+            </button>
+          }
+        }
+        @case ('confirm') {
+          @if (confirmState(); as c) {
+            <button type="button" class="btn btn-secondary" (click)="cancel()">
+              {{ c.cancelLabel ?? 'Cancelar' }}
+            </button>
+            <button
+              #okButton
+              type="button"
+              class="btn"
+              [class.btn-danger]="c.danger"
+              [class.btn-primary]="!c.danger"
+              (click)="confirmConfirm()"
+            >
+              {{ c.okLabel ?? 'OK' }}
+            </button>
+          }
+        }
+        @case ('alert') {
+          @if (alertState(); as a) {
+            <button #okButton type="button" class="btn btn-primary" (click)="confirmAlert()">
+              {{ a.okLabel ?? 'OK' }}
+            </button>
+          }
+        }
+      }
+    </footer>
+  </div>
+}

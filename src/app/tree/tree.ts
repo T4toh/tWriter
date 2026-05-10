@@ -15,6 +15,7 @@ import { ProjectService } from '../core/project-service';
 import { SettingsService } from '../core/settings-service';
 import { ToastService } from '../core/toast-service';
 import { TreeNode } from '../core/types';
+import { ModalService } from '../shared/modal-service';
 
 interface ContextMenu {
   x: number;
@@ -40,6 +41,7 @@ export class Tree implements OnDestroy {
   private exports = inject(ExportsService);
   private imageViewer = inject(ImageViewerService);
   private toast = inject(ToastService);
+  private modal = inject(ModalService);
 
   protected readonly root = this.project.tree;
   protected readonly loading = this.project.loading;
@@ -384,20 +386,27 @@ export class Tree implements OnDestroy {
     const nodes = this.collectCleanable(m.node);
     this.closeMenu();
     if (nodes.length === 0) return;
-    if (!confirm(`Borrar ${nodes.length} archivo${nodes.length === 1 ? '' : 's'} original${nodes.length === 1 ? '' : 'es'} (.odt/.docx)?\nSolo se borran los que ya tienen .html.`)) {
-      return;
-    }
+    const ok = await this.modal.confirm({
+      title: 'Borrar originales',
+      message: `Borrar ${nodes.length} archivo${nodes.length === 1 ? '' : 's'} original${nodes.length === 1 ? '' : 'es'} (.odt/.docx)?\nSolo se borran los que ya tienen .html.`,
+      danger: true,
+    });
+    if (!ok) return;
     await this.chapter.bulkCleanup(nodes);
   }
 
   protected async deleteFile(): Promise<void> {
     const m = this.menu();
     if (!m || !m.node) return;
+    const node = m.node;
     this.closeMenu();
-    if (!confirm(`Borrar ${m.node.name}.${m.node.ext}?\nSe borra el archivo y su .meta.json.`)) {
-      return;
-    }
-    await this.chapter.deleteChapterFile(m.node);
+    const ok = await this.modal.confirm({
+      title: 'Borrar capítulo',
+      message: `Borrar ${node.name}.${node.ext}?\nSe borra el archivo y su .meta.json.`,
+      danger: true,
+    });
+    if (!ok) return;
+    await this.chapter.deleteChapterFile(node);
   }
 
   protected async deleteDir(): Promise<void> {
@@ -406,8 +415,12 @@ export class Tree implements OnDestroy {
     if (!m || !m.node || !root) return;
     const node = m.node;
     this.closeMenu();
-    const msg = `BORRAR carpeta "${node.name}" y todo su contenido?\nEsto es irreversible. Si tenés sync git, podés recuperar haciendo git checkout.`;
-    if (!confirm(msg)) return;
+    const ok = await this.modal.confirm({
+      title: 'Borrar carpeta',
+      message: `BORRAR carpeta "${node.name}" y todo su contenido?\nEsto es irreversible. Si tenés sync git, podés recuperar haciendo git checkout.`,
+      danger: true,
+    });
+    if (!ok) return;
     await this.chapter.deleteDirectory(node, root);
   }
 
@@ -421,26 +434,42 @@ export class Tree implements OnDestroy {
   protected async createSection(): Promise<void> {
     const m = this.menu();
     if (!m || !m.node) return;
-    const name = prompt('Nombre del capítulo (sin número, se prepende automático):');
+    const node = m.node;
     this.closeMenu();
+    const name = await this.modal.prompt({
+      title: 'Nuevo capítulo',
+      message: 'Sin número, se prepende automático.',
+      placeholder: 'Nombre',
+      validate: (v) => (v.trim() ? null : 'Ingresá un nombre'),
+    });
     if (!name?.trim()) return;
-    await this.chapter.createDirectory(m.node.path, name.trim(), true);
+    await this.chapter.createDirectory(node.path, name.trim(), true);
   }
 
   protected async createBook(): Promise<void> {
     const m = this.menu();
     if (!m || !m.node) return;
-    const name = prompt('Nombre del libro (sin número, se prepende automático):');
+    const node = m.node;
     this.closeMenu();
+    const name = await this.modal.prompt({
+      title: 'Nuevo libro',
+      message: 'Sin número, se prepende automático.',
+      placeholder: 'Nombre',
+      validate: (v) => (v.trim() ? null : 'Ingresá un nombre'),
+    });
     if (!name?.trim()) return;
-    await this.chapter.createBook(m.node.path, name.trim());
+    await this.chapter.createBook(node.path, name.trim());
   }
 
   protected async createSaga(): Promise<void> {
     const root = this.settings.root();
     if (!root) return;
-    const name = prompt('Nombre de la saga / novela:');
     this.closeMenu();
+    const name = await this.modal.prompt({
+      title: 'Nueva saga / novela',
+      placeholder: 'Nombre',
+      validate: (v) => (v.trim() ? null : 'Ingresá un nombre'),
+    });
     if (!name?.trim()) return;
     await this.chapter.createDirectory(root, name.trim(), false);
   }
@@ -506,7 +535,17 @@ export class Tree implements OnDestroy {
     const current = node.kind === 'chapter' && node.ext
       ? `${node.name}.${node.ext}`
       : node.name;
-    const input = prompt('Nuevo nombre:', current);
+    const input = await this.modal.prompt({
+      title: 'Renombrar',
+      defaultValue: current,
+      validate: (v) => {
+        const t = v.trim();
+        if (!t) return 'Nombre vacío';
+        if (t === current) return 'Mismo nombre que el actual';
+        if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
+        return null;
+      },
+    });
     if (!input) return;
     const trimmed = input.trim();
     if (!trimmed || trimmed === current) return;
@@ -556,13 +595,16 @@ export class Tree implements OnDestroy {
     if (!m || !m.node) return;
     const node = m.node;
     this.closeMenu();
-    const msg = `Excluir "${node.name}" del export EPUB?\nSigue visible en el árbol pero no se incluye al armar el libro.`;
-    if (!confirm(msg)) return;
+    const ok = await this.modal.confirm({
+      title: 'Excluir del EPUB',
+      message: `Excluir "${node.name}" del export EPUB?\nSigue visible en el árbol pero no se incluye al armar el libro.`,
+    });
+    if (!ok) return;
     try {
       await invoke('set_directory_excluded', { path: node.path, excluded: true });
       await this.project.loadTree();
     } catch (e) {
-      alert(`No se pudo excluir: ${e}`);
+      this.toast.error(`No se pudo excluir: ${e}`);
     }
   }
 
@@ -575,7 +617,7 @@ export class Tree implements OnDestroy {
       await invoke('set_directory_excluded', { path: node.path, excluded: false });
       await this.project.loadTree();
     } catch (e) {
-      alert(`No se pudo incluir: ${e}`);
+      this.toast.error(`No se pudo incluir: ${e}`);
     }
   }
 
@@ -640,7 +682,17 @@ export class Tree implements OnDestroy {
     if (!m || !m.extra) return;
     const { scopePath, entry } = m.extra;
     this.closeMenu();
-    const newName = prompt('Nuevo nombre del archivo:', entry.name);
+    const newName = await this.modal.prompt({
+      title: 'Renombrar archivo',
+      defaultValue: entry.name,
+      validate: (v) => {
+        const t = v.trim();
+        if (!t) return 'Nombre vacío';
+        if (t === entry.name) return 'Mismo nombre que el actual';
+        if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
+        return null;
+      },
+    });
     if (!newName?.trim() || newName.trim() === entry.name) return;
     try {
       await this.extras.rename(scopePath, entry.relative_path, newName.trim());
@@ -654,7 +706,12 @@ export class Tree implements OnDestroy {
     if (!m || !m.extra) return;
     const { scopePath, entry } = m.extra;
     this.closeMenu();
-    if (!confirm(`Borrar extra "${entry.name}"?\nEl archivo se borra de disco.`)) return;
+    const ok = await this.modal.confirm({
+      title: 'Borrar extra',
+      message: `Borrar extra "${entry.name}"?\nEl archivo se borra de disco.`,
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await this.extras.remove(scopePath, entry.relative_path);
     } catch (e) {
