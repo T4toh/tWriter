@@ -17,6 +17,7 @@ export interface SagaConfig {
   dropcap?: boolean | null;
   mostrar_numero_parte?: boolean | null;
   formato_parte?: 'raw' | 'parte' | 'punto' | null;
+  finalizada?: boolean | null;
 }
 
 @Injectable({ providedIn: 'root' })

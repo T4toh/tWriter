@@ -72,6 +72,13 @@ pub struct BookConfig {
     /// Template de tamaño de página para export EPUB: "6x9" | "5x8" | "a5". Default: "6x9".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub template: Option<String>,
+    /// Marca la novela como finalizada (sin más capítulos por agregar). Oculta el creador de capítulos.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finalizada: Option<bool>,
+    /// Path relativo al book dir del directorio del epílogo (ej: "Epílogo"). Único por novela.
+    /// El epílogo se trata como un capítulo independiente al final del libro, fuera del TOC principal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub epilogo: Option<String>,
 }
 
 #[tauri::command]
@@ -117,6 +124,69 @@ pub fn set_book_config(book_path: String, config: BookConfig) -> Result<(), Stri
         serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
     json.push('\n');
     fs::write(&target, json).map_err(|e| e.to_string())
+}
+
+/// Marca un directorio sección como epílogo de su novela contenedora.
+/// Renombra el dir a "Epílogo" / "Epilogue" según `book.json::idioma`,
+/// quitando cualquier prefijo numérico, y escribe `book.json::epilogo`.
+/// Falla si ya hay epílogo o si la sección no es hija directa de la novela.
+#[tauri::command]
+pub async fn mark_as_epilogo(section_path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || mark_as_epilogo_impl(&section_path))
+        .await
+        .map_err(|e| format!("task: {}", e))?
+}
+
+fn mark_as_epilogo_impl(section_path: &str) -> Result<String, String> {
+    let section = PathBuf::from(section_path);
+    if !section.is_dir() {
+        return Err(format!("no es directorio: {}", section_path));
+    }
+    let parent = section
+        .parent()
+        .map(|p| p.to_path_buf())
+        .ok_or_else(|| "sección sin parent".to_string())?;
+    let book_json = parent.join("book.json");
+    if !book_json.is_file() {
+        return Err("la sección no es hija directa de una novela (sin book.json)".to_string());
+    }
+    let raw = fs::read_to_string(&book_json).map_err(|e| e.to_string())?;
+    let mut cfg: BookConfig = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    if cfg
+        .epilogo
+        .as_deref()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+    {
+        return Err(format!(
+            "la novela ya tiene epílogo: {}",
+            cfg.epilogo.as_deref().unwrap_or("")
+        ));
+    }
+    let target_name = match cfg.idioma.as_deref().unwrap_or("es") {
+        "en" => "Epilogue",
+        _ => "Epílogo",
+    };
+    let current_name = section
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| "nombre de sección inválido".to_string())?
+        .to_string();
+    let final_path = if current_name == target_name {
+        section.clone()
+    } else {
+        let target = parent.join(target_name);
+        if target.exists() {
+            return Err(format!("ya existe: {}", target.display()));
+        }
+        fs::rename(&section, &target).map_err(|e| e.to_string())?;
+        target
+    };
+    cfg.epilogo = Some(target_name.to_string());
+    let mut out = serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())?;
+    out.push('\n');
+    fs::write(&book_json, out).map_err(|e| e.to_string())?;
+    Ok(final_path.to_string_lossy().into_owned())
 }
 
 fn strip_numeric_prefix(s: &str) -> String {

@@ -543,10 +543,6 @@
   font-size: 11px;
   letter-spacing: 0.02em;
 
-  &.saving {
-    background: var(--accent);
-    color: var(--bg);
-  }
   &.dirty {
     background: var(--border);
   }

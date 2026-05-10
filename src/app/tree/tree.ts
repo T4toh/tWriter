@@ -1,4 +1,4 @@
-import { Component, OnDestroy, computed, effect, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { invoke } from '@tauri-apps/api/core';
 import { openPath } from '@tauri-apps/plugin-opener';
@@ -67,7 +67,6 @@ export class Tree implements OnDestroy {
     walk(root, []);
     return set;
   });
-  protected readonly bulkProgress = this.chapter.bulkProgress;
   protected readonly menu = signal<ContextMenu | null>(null);
   /** Path del scope (saga/book) que está siendo target de drag&drop OS files. */
   protected readonly dragOverScope = signal<string | null>(null);
@@ -130,6 +129,8 @@ export class Tree implements OnDestroy {
         openExtra: true,
         renameExtra: true,
         removeExtra: true,
+        markAsEpilogo: false,
+        renameable: false,
       };
     }
     const node = m.node;
@@ -155,6 +156,8 @@ export class Tree implements OnDestroy {
         openExtra: false,
         renameExtra: false,
         removeExtra: false,
+        markAsEpilogo: false,
+        renameable: false,
       };
     }
     if (node.kind === 'chapter') {
@@ -181,6 +184,8 @@ export class Tree implements OnDestroy {
         openExtra: false,
         renameExtra: false,
         removeExtra: false,
+        markAsEpilogo: false,
+        renameable: true,
       };
     }
     const importable = this.collectImportable(node);
@@ -208,6 +213,8 @@ export class Tree implements OnDestroy {
       openExtra: false,
       renameExtra: false,
       removeExtra: false,
+      markAsEpilogo: !isExcluded && node.kind === 'section' && isEpilogoName(node.name),
+      renameable: !isExcluded,
     };
   });
 
@@ -473,6 +480,77 @@ export class Tree implements OnDestroy {
     this.sagaCfg.openFor(m.node);
   }
 
+  protected async renameNode(): Promise<void> {
+    const m = this.menu();
+    if (!m || !m.node) return;
+    const node = m.node;
+    this.closeMenu();
+    await this.renameNodeFor(node);
+  }
+
+  @HostListener('window:keydown.F2', ['$event'])
+  protected onF2(event: Event): void {
+    const target = event.target as HTMLElement | null;
+    if (target && target.matches('input, textarea, [contenteditable="true"]')) {
+      return;
+    }
+    const m = this.menu();
+    const node = m?.node ?? this.chapter.active() ?? this.findNodeByPath(this.root(), this.browsingPath() ?? '');
+    if (!node) return;
+    event.preventDefault();
+    if (m) this.closeMenu();
+    void this.renameNodeFor(node);
+  }
+
+  private async renameNodeFor(node: TreeNode): Promise<void> {
+    const current = node.kind === 'chapter' && node.ext
+      ? `${node.name}.${node.ext}`
+      : node.name;
+    const input = prompt('Nuevo nombre:', current);
+    if (!input) return;
+    const trimmed = input.trim();
+    if (!trimmed || trimmed === current) return;
+    const wasActive = this.chapter.active()?.path === node.path;
+    try {
+      const newPath = await invoke<string>('rename_node', {
+        path: node.path,
+        newName: trimmed,
+      });
+      await this.project.loadTree();
+      if (wasActive) {
+        const newNode = this.findNodeByPath(this.root(), newPath);
+        if (newNode) await this.chapter.open(newNode);
+      }
+      this.toast.success(`Renombrado a "${trimmed}"`);
+    } catch (err) {
+      this.toast.error(`Renombrar: ${err}`);
+    }
+  }
+
+  private findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
+    if (!root) return null;
+    if (root.path === path) return root;
+    for (const c of root.children) {
+      const found = this.findNodeByPath(c, path);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  protected async markAsEpilogo(): Promise<void> {
+    const m = this.menu();
+    if (!m || !m.node || m.node.kind !== 'section') return;
+    const section = m.node;
+    this.closeMenu();
+    try {
+      await invoke<string>('mark_as_epilogo', { sectionPath: section.path });
+      await this.project.loadTree();
+      this.toast.success(`"${section.name}" marcado como epílogo`);
+    } catch (err) {
+      this.toast.error(`Marcar epílogo: ${err}`);
+    }
+  }
+
   protected async excludeFolder(): Promise<void> {
     const m = this.menu();
     if (!m || !m.node) return;
@@ -683,4 +761,10 @@ export class Tree implements OnDestroy {
     fn(node);
     for (const c of node.children) this.walk(c, fn);
   }
+}
+
+function isEpilogoName(name: string): boolean {
+  const stripped = name.replace(/^\d+\s*-\s*/, '').trim().toLowerCase();
+  const flat = stripped.normalize('NFD').replace(/\p{M}/gu, '');
+  return flat === 'epilogo' || flat === 'epilogue';
 }

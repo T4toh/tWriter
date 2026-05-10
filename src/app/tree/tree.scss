@@ -82,16 +82,6 @@
   background: var(--border);
 }
 
-.row.chapter.active {
-  background: var(--accent);
-  color: var(--bg);
-}
-
-.row.group.current {
-  background: var(--accent);
-  color: var(--bg);
-}
-
 .row.group.ancestor:not(.current) {
   background: rgba(200, 168, 120, 0.12);
 }
@@ -119,6 +109,16 @@
   color: var(--fg-muted);
 }
 
+.row.chapter.active,
+.row.group.current,
+.row.group[data-kind='saga'].current,
+.row.group[data-kind='book'].current,
+.row.group[data-kind='section'].current {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
 .chevron {
   width: 0.8em;
   font-size: 0.7em;
@@ -144,37 +144,6 @@
   font-family: var(--font-mono);
   opacity: 0.6;
   flex-shrink: 0;
-}
-
-.bulk-progress {
-  position: sticky;
-  bottom: 0;
-  background: var(--bg);
-  border-top: 1px solid var(--border);
-  padding: 8px 12px;
-  font-family: var(--font-ui);
-  font-size: 11px;
-
-  .bp-text {
-    color: var(--fg-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-bottom: 4px;
-  }
-
-  .bp-bar {
-    height: 3px;
-    background: var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-
-  .bp-fill {
-    height: 100%;
-    background: var(--accent);
-    transition: width 0.2s;
-  }
 }
 
 .ctx-backdrop {

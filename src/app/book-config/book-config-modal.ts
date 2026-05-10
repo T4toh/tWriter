@@ -58,6 +58,9 @@ export class BookConfigModal {
         dropcap: cfg.dropcap ?? false,
         mostrar_numero_parte: cfg.mostrar_numero_parte ?? false,
         formato_parte: cfg.formato_parte ?? 'raw',
+        template: cfg.template ?? '6x9',
+        finalizada: cfg.finalizada ?? false,
+        epilogo: cfg.epilogo ?? null,
       });
     } catch (err) {
       this.error.set(String(err));
@@ -123,6 +126,9 @@ export class BookConfigModal {
         dropcap: cfg.dropcap ?? null,
         mostrar_numero_parte: cfg.mostrar_numero_parte ?? null,
         formato_parte: cfg.formato_parte ?? null,
+        template: cfg.template ?? null,
+        finalizada: cfg.finalizada ?? null,
+        epilogo: blank(cfg.epilogo ?? null),
       };
       await this.svc.save(path, cleaned);
       this.svc.close();

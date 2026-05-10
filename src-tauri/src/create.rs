@@ -13,13 +13,23 @@ pub struct CreateResult {
 /// Crea un capítulo .html vacío + su .meta.json en `parent_dir`.
 /// Usa el próximo número entero disponible (1.html, 2.html…).
 #[tauri::command]
-pub async fn create_chapter(parent_dir: String, idioma: Option<String>) -> Result<CreateResult, String> {
-    tauri::async_runtime::spawn_blocking(move || create_chapter_impl(&parent_dir, idioma.as_deref()))
-        .await
-        .map_err(|e| format!("task: {}", e))?
+pub async fn create_chapter(
+    parent_dir: String,
+    idioma: Option<String>,
+    titulo: Option<String>,
+) -> Result<CreateResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        create_chapter_impl(&parent_dir, idioma.as_deref(), titulo.as_deref())
+    })
+    .await
+    .map_err(|e| format!("task: {}", e))?
 }
 
-fn create_chapter_impl(parent: &str, idioma: Option<&str>) -> Result<CreateResult, String> {
+fn create_chapter_impl(
+    parent: &str,
+    idioma: Option<&str>,
+    titulo: Option<&str>,
+) -> Result<CreateResult, String> {
     let parent = PathBuf::from(parent);
     if !parent.is_dir() {
         return Err(format!("no es directorio: {}", parent.display()));
@@ -32,9 +42,13 @@ fn create_chapter_impl(parent: &str, idioma: Option<&str>) -> Result<CreateResul
     }
     fs::write(&html, "<p></p>\n").map_err(|e| e.to_string())?;
     let lang = idioma.unwrap_or("es");
+    let title = titulo
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| format!("{}", n));
     let meta_json = serde_json::json!({
         "orden": n,
-        "titulo": format!("{}", n),
+        "titulo": title,
         "palabras": 0,
         "ultima_edicion": null,
         "status": "draft",

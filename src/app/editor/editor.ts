@@ -73,7 +73,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly canEdit = this.chapter.canEdit;
   protected readonly wordCount = this.chapter.wordCount;
   protected readonly dirty = this.chapter.dirty;
-  protected readonly saving = this.chapter.saving;
   protected readonly chapterError = this.chapter.error;
   protected readonly state = signal<ToolbarState>(EMPTY_STATE);
   protected readonly menu = signal<{ x: number; y: number } | null>(null);

@@ -133,6 +133,72 @@ pub fn read_meta(chapter_path: String) -> Result<ChapterMeta, String> {
     serde_json::from_str(&raw).map_err(|e| e.to_string())
 }
 
+/// Renombra un nodo (dir o archivo). Si es archivo, preserva extensión y renombra `<stem>.meta.json` sibling.
+#[tauri::command]
+pub fn rename_node(path: String, new_name: String) -> Result<String, String> {
+    let trimmed = new_name.trim();
+    if trimmed.is_empty() {
+        return Err("nombre vacío".to_string());
+    }
+    if trimmed.contains('/') || trimmed.contains('\\') {
+        return Err("nombre no puede contener separadores de path".to_string());
+    }
+    let p = PathBuf::from(&path);
+    if !p.exists() {
+        return Err(format!("no existe: {}", path));
+    }
+    let parent = p
+        .parent()
+        .ok_or_else(|| "sin parent".to_string())?
+        .to_path_buf();
+    if p.is_dir() {
+        let target = parent.join(trimmed);
+        if target.exists() {
+            return Err(format!("ya existe: {}", target.display()));
+        }
+        fs::rename(&p, &target).map_err(|e| e.to_string())?;
+        return Ok(target.to_string_lossy().into_owned());
+    }
+    if !p.is_file() {
+        return Err("ni archivo ni directorio".to_string());
+    }
+    let old_stem = p
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    let old_ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_string());
+    let new_path_buf = PathBuf::from(trimmed);
+    let new_filename = if new_path_buf.extension().is_some() {
+        trimmed.to_string()
+    } else if let Some(ext) = &old_ext {
+        format!("{}.{}", trimmed, ext)
+    } else {
+        trimmed.to_string()
+    };
+    let target = parent.join(&new_filename);
+    if target.exists() {
+        return Err(format!("ya existe: {}", target.display()));
+    }
+    fs::rename(&p, &target).map_err(|e| e.to_string())?;
+    let old_meta = parent.join(format!("{}.meta.json", old_stem));
+    if old_meta.is_file() {
+        let new_stem = PathBuf::from(&new_filename)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(trimmed)
+            .to_string();
+        let new_meta = parent.join(format!("{}.meta.json", new_stem));
+        if !new_meta.exists() {
+            let _ = fs::rename(&old_meta, &new_meta);
+        }
+    }
+    Ok(target.to_string_lossy().into_owned())
+}
+
 /// Escribe `<chapter>.meta.json`.
 #[tauri::command]
 pub fn write_meta(chapter_path: String, meta: ChapterMeta) -> Result<(), String> {

@@ -120,8 +120,8 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     }
     let cfg = read_or_default_config(&book_dir);
 
-    let chapters = collect_chapters(&book_dir)?;
-    if chapters.is_empty() {
+    let (chapters, epilogo) = collect_chapters(&book_dir, cfg.epilogo.as_deref())?;
+    if chapters.is_empty() && epilogo.is_none() {
         return Err("libro sin capítulos .html".to_string());
     }
 
@@ -320,6 +320,76 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         toc_entries.push(entry);
     }
 
+    // 5a) Epílogo (sin prefijo de número, va al final del cuerpo).
+    if let Some(ep) = epilogo.as_ref() {
+        spine_idx += 1;
+        file_seq += 1;
+        let title_href = format!("{}_epilog_title.xhtml", file_seq);
+        let title_xhtml =
+            build_chapter_title_xhtml(&ep.title, show_chapter_title, None);
+        zip.start_file(format!("OEBPS/{}", title_href), opts).map_err(|e| e.to_string())?;
+        zip.write_all(title_xhtml.as_bytes()).map_err(|e| e.to_string())?;
+        items.push(Item {
+            id: "epilog_title".into(),
+            href: title_href.clone(),
+            media_type: "application/xhtml+xml".into(),
+            spine_order: Some(spine_idx),
+            properties: None,
+        });
+        let toc_label = if show_chapter_title {
+            ep.title.clone()
+        } else {
+            "Epílogo".to_string()
+        };
+        let mut entry = TocEntry {
+            href: title_href,
+            label: toc_label,
+            children: Vec::new(),
+        };
+
+        for (p_idx, part) in ep.parts.iter().enumerate() {
+            spine_idx += 1;
+            file_seq += 1;
+            total_chapter_files += 1;
+            let part_href = format!("{}_epilog_p{}.xhtml", file_seq, p_idx + 1);
+            let is_first = p_idx == 0;
+            let part_label = part_label(part, part_format);
+            let toc_label = part
+                .meta_title
+                .clone()
+                .unwrap_or_else(|| part_label.clone());
+            let header_html = if show_part_num {
+                Some(format!(
+                    r#"<h2 class="part-label">{}</h2>"#,
+                    xml_escape(&part_label)
+                ))
+            } else {
+                None
+            };
+            let part_xhtml = build_part_xhtml(
+                &toc_label,
+                header_html.as_deref(),
+                &part.content_html,
+                use_dropcap && is_first,
+            );
+            zip.start_file(format!("OEBPS/{}", part_href), opts).map_err(|e| e.to_string())?;
+            zip.write_all(part_xhtml.as_bytes()).map_err(|e| e.to_string())?;
+            items.push(Item {
+                id: format!("epilog_p{}", p_idx + 1),
+                href: part_href.clone(),
+                media_type: "application/xhtml+xml".into(),
+                spine_order: Some(spine_idx),
+                properties: None,
+            });
+            entry.children.push(TocEntry {
+                href: part_href,
+                label: toc_label,
+                children: Vec::new(),
+            });
+        }
+        toc_entries.push(entry);
+    }
+
     // 5b) Back cover (si hay imagen)
     if let Some(back_rel) = &cfg.contratapa {
         if let Some((bc_filename, bc_mime)) =
@@ -440,7 +510,10 @@ struct TocEntry {
     children: Vec<TocEntry>,
 }
 
-fn collect_chapters(book_dir: &Path) -> Result<Vec<Chapter>, String> {
+fn collect_chapters(
+    book_dir: &Path,
+    epilogo_name: Option<&str>,
+) -> Result<(Vec<Chapter>, Option<Chapter>), String> {
     let mut subdirs: Vec<PathBuf> = fs::read_dir(book_dir)
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
@@ -464,11 +537,13 @@ fn collect_chapters(book_dir: &Path) -> Result<Vec<Chapter>, String> {
         na.cmp(&nb)
     });
 
+    let epilogo_match = epilogo_name.map(|s| s.trim()).filter(|s| !s.is_empty());
+
     let mut chapters = Vec::new();
+    let mut epilogo: Option<Chapter> = None;
     for d in &subdirs {
-        let ch_title = strip_numeric_prefix(
-            d.file_name().and_then(|s| s.to_str()).unwrap_or(""),
-        );
+        let dir_name = d.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        let ch_title = strip_numeric_prefix(dir_name);
         let mut parts = collect_html_parts(d)?;
         parts.sort();
         if parts.is_empty() {
@@ -478,11 +553,16 @@ fn collect_chapters(book_dir: &Path) -> Result<Vec<Chapter>, String> {
         for p in &parts {
             chapter_parts.push(load_part(p)?);
         }
-        chapters.push(Chapter { title: ch_title, parts: chapter_parts });
+        let is_epilogo = epilogo_match.map(|e| e == dir_name).unwrap_or(false);
+        if is_epilogo {
+            epilogo = Some(Chapter { title: ch_title, parts: chapter_parts });
+        } else {
+            chapters.push(Chapter { title: ch_title, parts: chapter_parts });
+        }
     }
 
     // Si no había secciones, tratamos el libro entero como un solo capítulo
-    if chapters.is_empty() {
+    if chapters.is_empty() && epilogo.is_none() {
         let mut direct = collect_html_parts(book_dir)?;
         direct.sort();
         if !direct.is_empty() {
@@ -496,7 +576,7 @@ fn collect_chapters(book_dir: &Path) -> Result<Vec<Chapter>, String> {
             chapters.push(Chapter { title, parts: chapter_parts });
         }
     }
-    Ok(chapters)
+    Ok((chapters, epilogo))
 }
 
 fn load_part(html_path: &Path) -> Result<ChapterPart, String> {

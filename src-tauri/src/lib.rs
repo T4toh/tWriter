@@ -12,13 +12,13 @@ mod reorder;
 mod saga_config;
 mod settings;
 
-use book_config::{get_book_config, set_book_config};
+use book_config::{get_book_config, mark_as_epilogo, set_book_config};
 use saga_config::{find_saga_dir, get_saga_config, set_saga_config};
 use create::{create_book, create_chapter, create_directory};
 use epub::{export_book, list_exports};
 use extras::{add_extra, has_extras, list_extras, remove_extra, rename_extra};
 use fs::{
-    get_tree, is_directory_excluded, read_chapter, read_meta, set_directory_excluded,
+    get_tree, is_directory_excluded, read_chapter, read_meta, rename_node, set_directory_excluded,
     write_chapter, write_meta,
 };
 use git::{git_commit_all, git_pull, git_push, git_status};
@@ -45,6 +45,7 @@ pub fn run() {
             write_chapter,
             read_meta,
             write_meta,
+            rename_node,
             get_settings,
             set_settings,
             git_status,
@@ -62,6 +63,7 @@ pub fn run() {
             list_exports,
             get_book_config,
             set_book_config,
+            mark_as_epilogo,
             get_saga_config,
             set_saga_config,
             find_saga_dir,

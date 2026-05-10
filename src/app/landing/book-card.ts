@@ -11,6 +11,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { BookConfig, BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { TreeNode } from '../core/types';
+import { Spinner } from '../shared/spinner';
 
 interface ImageData {
   mime: string;
@@ -19,7 +20,7 @@ interface ImageData {
 
 @Component({
   selector: 'app-book-card',
-  imports: [],
+  imports: [Spinner],
   templateUrl: './book-card.html',
   styleUrl: './book-card.scss',
 })

@@ -20,6 +20,16 @@
           </label>
         </div>
         <div class="row">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="c.finalizada"
+              (ngModelChange)="update('finalizada', $event)"
+            />
+            <span>Novela finalizada (oculta el creador de capítulos)</span>
+          </label>
+        </div>
+        <div class="row">
           <label>
             <span>Subtítulo</span>
             <input
