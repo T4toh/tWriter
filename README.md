@@ -55,7 +55,7 @@ Reglas:
 
 ## Estado
 
-MVP completo. Sprints 1–10 hechos.
+MVP completo. Sprints 1–11 hechos.
 
 - **Editor**: TipTap con HTML subset (`<p>`, `<i>`, `<em>`, `<strong>`, `<u>`, `<hr>`, `<h1>`, `<blockquote>`), autosave debounced 1.5s, toolbar (B/I/U, alineación, salto de escena, RAE, gramática, ancho hoja, font size), menú contextual propio.
 - **Tree explorer** del repo (Saga / Libro / Sección / Capítulo) con context menu (crear, mover, importar, exportar EPUB, configurar libro, excluir del EPUB), badge "excluido" para `.twriter-ignore`.
@@ -71,6 +71,7 @@ MVP completo. Sprints 1–10 hechos.
 - **Tema** claro/oscuro, tipografía serif que matchea el EPUB output.
 - **Indicador idioma** footer (badge color por idioma) + toggle ES/EN.
 - **Temas + fuentes embebidas**: temas reutilizables a nivel root (`<root>/themes/<id>/`) con tipografía + márgenes. Override per-saga y per-libro. Detección automática de bold/italic via sufijos en filename. Cero regresión cuando no hay tema configurado.
+- **Per-style faces**: `body_font_italic`/`body_font_bold`/`body_font_bold_italic` en el tema apuntan a un filename stem específico para `<em>`/`<strong>` y combinaciones. Pisa el auto-pick por sufijo. Útil cuando la italic auto de la familia es muy sutil. Theme editor incluye preview real con FontFace API.
 
 ## Roadmap
 
@@ -219,6 +220,42 @@ Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automáti
   mantienen nativos** — la migración a xdg-portal queda en sprint de
   packaging.
 
+### Sprint 11 — Per-style faces (italic / bold / bold-italic) ✓
+
+> Pisar el auto-pick por sufijo de filename con un face específico por estilo.
+> Caso real: la italic de IBM Plex Sans (Italic.ttf) apenas se distingue del
+> Regular en Kindle. Mapear `<em>` a `IBMPlexSans-MediumItalic` da una italic
+> mucho más pronunciada.
+
+- 3 fields nuevos en `Theme`: `body_font_italic`, `body_font_bold`,
+  `body_font_bold_italic`. Cada uno apunta a un filename stem (no a una
+  familia). Filename stem = nombre del archivo sin extensión.
+- `locate_face_by_stem` busca el archivo en `<book>/fonts/` →
+  `<saga>/fonts/` → `<root>/themes/<id>/fonts/`. Primer match gana.
+- Embed: el face explícito se suma a los FontEmbed con weight/style
+  forzados al slot (italic=normal+italic, bold=bold+normal,
+  bolditalic=bold+italic). Family CSS = sanitized stem (no la familia base).
+  Dedup por filename para no embebrir el mismo archivo dos veces si auto-pick
+  ya lo tomó.
+- CSS emite reglas dedicadas con fallback chain:
+  ```css
+  em, i { font-family: "<face>", "<body>", serif; font-style: italic; }
+  strong, b { font-family: "<face>", "<body>", serif; font-weight: bold; }
+  strong em, em strong, ... { font-family: "<face>", "<body>", serif; font-weight: bold; font-style: italic; }
+  ```
+  Solo cuando el slot está set. Sin slot configurado → CSS idéntico al de Sprint 10.
+- Override en cascada: `book.theme.overrides` > `saga.theme.overrides` > tema base.
+- Theme editor modal: 3 dropdowns con stems disponibles + bloque de preview
+  que carga las fuentes via `convertFileSrc` + `FontFace` API. Re-renderiza
+  on cambio de selección. Sample HTML con `<em>`/`<strong>`/combinación
+  visible antes de exportar.
+- Saga + Book config modals: 3 selects override per-saga/per-libro con
+  placeholder mostrando el valor heredado.
+- Modal CSS fix: `min-width: 0` en flex children + `width: 100%` /
+  `max-width: 100%` / `box-sizing: border-box` en inputs/selects.
+  `text-overflow: ellipsis` en select para clipping limpio cuando los stems
+  son largos. Aplica a theme-editor / saga-config / book-config.
+
 ### Sprint 10 — Temas + fuentes embebidas ✓
 
 > Reemplazar `font-family: serif`/`sans-serif` genéricos del EPUB con
@@ -242,6 +279,14 @@ Diferido a iteraciones futuras: cover image, fonts embebidas, dropcaps automáti
   Sufijos soportados (case-insensitive, separador `-` o `_`): `Regular`,
   `Bold`, `Italic`, `BoldItalic`, `Roman`, `Oblique`. Sin sufijo reconocido
   → familia = stem completo, single face (faux-bold/italic del lector).
+- **Per-style faces explícitas** (override del auto-pick): `body_font_italic`,
+  `body_font_bold`, `body_font_bold_italic` apuntan a un filename stem
+  específico. Útil cuando la italic auto de la familia es muy sutil — elegís
+  un face más pronunciado (e.g. `IBMPlexSans-MediumItalic` en vez del
+  `-Italic` regular). Override en cascada: book > saga > tema base. CSS
+  emite reglas dedicadas para `em`/`strong` con la familia explícita y
+  fallback a la familia base. El theme editor incluye preview real con
+  `FontFace` API.
 - **EPUB embed**: las fuentes referenciadas por el tema resuelto se copian a
   `OEBPS/fonts/<filename>` y entran al manifest OPF con media-type EPUB-3
   (`font/ttf`, `font/otf`, `font/woff`, `font/woff2`). El CSS del EPUB suma
@@ -337,6 +382,8 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 - Página "About the author" en EPUB
 - Contratapa y otros libros en EPUB
 - Preview EPUB tipo Kindle (B/N, distintos tamaños de pantalla — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
+- Configurar las páginas comunes del libro por separado (TOC, copyright, dedicatoria, title page, "About the author"). Hoy todo lo no-novela usa hardcoded styling/layout. Setup ideal: cada página tipo tiene su propio mini-template configurable (título, body, márgenes, posición vertical) que se hereda saga → libro. Cierra el círculo del tema visual completo.
+- Configurar la altura del título de capítulo: hoy el chapter-title-body usa `display: table-cell; vertical-align: middle` que centra vertical. Sumar opción al tema para elegir entre `top` (margen 2em) / `center` / `bottom`. Algunos lectores ignoran flex/table-cell y caen a top automático — el config explícito permite forzar el comportamiento.
 - Pesos extra de fuente (300 Light, 600 SemiBold, 900 Black). Hoy solo se detectan Regular/Bold/Italic/BoldItalic; pesos custom requieren edit manual del theme.json.
 - Auto-migración de tema renombrado: hoy renombrar un tema deja sagas/libros con `base` dangling (mostramos warning). Implementar scan recursivo de `*.json` y rewrite del `base`.
 - Colores en el tema (body color, heading color, scene-break color). Hoy el tema es solo tipografía + márgenes.
