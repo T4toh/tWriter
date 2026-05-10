@@ -19,6 +19,8 @@ interface EditableTheme {
   body_font_italic: string;
   body_font_bold: string;
   body_font_bold_italic: string;
+  editorial_body_font: string;
+  editorial_heading_font: string;
 }
 
 /** Genera nombre CSS único per-modal-instance para no chocar con otras
@@ -163,6 +165,8 @@ export class ThemeEditorModal {
         body_font_italic: t.body_font_italic ?? '',
         body_font_bold: t.body_font_bold ?? '',
         body_font_bold_italic: t.body_font_bold_italic ?? '',
+        editorial_body_font: t.editorial_body_font ?? '',
+        editorial_heading_font: t.editorial_heading_font ?? '',
       });
       const fonts = await this.svc.listFonts(id);
       this.fonts.set(fonts);
@@ -324,6 +328,8 @@ export class ThemeEditorModal {
         body_font_italic: blank(cur.body_font_italic),
         body_font_bold: blank(cur.body_font_bold),
         body_font_bold_italic: blank(cur.body_font_bold_italic),
+        editorial_body_font: blank(cur.editorial_body_font),
+        editorial_heading_font: blank(cur.editorial_heading_font),
       };
       await this.svc.save(id, theme);
       this.svc.closeEditor();

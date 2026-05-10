@@ -46,6 +46,16 @@ pub struct Theme {
     /// Filename stem del face explícito para combinaciones `<strong><em>` etc.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body_font_bold_italic: Option<String>,
+    /// Familia para texto de páginas editoriales (copyright, dedicatoria, TOC,
+    /// title page, sobre el autor). Se resuelve igual que `body_font` (auto-pick
+    /// por sufijo). None = cae al `body_font` del tema (cero regresión).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub editorial_body_font: Option<String>,
+    /// Familia para títulos de páginas editoriales (TÍTULO de la title page,
+    /// "Índice" del TOC, parte-headings del TOC, encabezado de about-author).
+    /// None = cae al `heading_font` del tema (cero regresión).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub editorial_heading_font: Option<String>,
 }
 
 /// Referencia a un tema en saga.json/book.json. `base` es el id del tema,
@@ -76,6 +86,10 @@ pub struct ResolvedTheme {
     pub body_bold_family: Option<String>,
     /// Familia CSS para combinaciones bold+italic.
     pub body_bold_italic_family: Option<String>,
+    /// Familia CSS para texto de páginas editoriales. None = sin override.
+    pub editorial_body_font: Option<String>,
+    /// Familia CSS para títulos de páginas editoriales. None = sin override.
+    pub editorial_heading_font: Option<String>,
 }
 
 impl ResolvedTheme {
@@ -93,6 +107,8 @@ impl ResolvedTheme {
             && self.body_italic_family.is_none()
             && self.body_bold_family.is_none()
             && self.body_bold_italic_family.is_none()
+            && self.editorial_body_font.is_none()
+            && self.editorial_heading_font.is_none()
     }
 }
 
@@ -305,6 +321,12 @@ fn merge_overrides(base: &mut Theme, ov: &Theme) {
     if ov.body_font_bold_italic.is_some() {
         base.body_font_bold_italic = ov.body_font_bold_italic.clone();
     }
+    if ov.editorial_body_font.is_some() {
+        base.editorial_body_font = ov.editorial_body_font.clone();
+    }
+    if ov.editorial_heading_font.is_some() {
+        base.editorial_heading_font = ov.editorial_heading_font.clone();
+    }
 }
 
 /// Resuelve el tema efectivo para un libro:
@@ -367,7 +389,12 @@ pub fn resolve_theme(
     let mut seen_families: BTreeSet<String> = BTreeSet::new();
     let mut seen_filenames: BTreeSet<String> = BTreeSet::new();
 
-    for family_opt in [&theme.body_font, &theme.heading_font] {
+    for family_opt in [
+        &theme.body_font,
+        &theme.heading_font,
+        &theme.editorial_body_font,
+        &theme.editorial_heading_font,
+    ] {
         let Some(fam) = family_opt
             .as_deref()
             .map(|s| s.trim().to_string())
@@ -459,6 +486,8 @@ pub fn resolve_theme(
         body_italic_family: italic_family,
         body_bold_family: bold_family,
         body_bold_italic_family: bold_italic_family,
+        editorial_body_font: theme.editorial_body_font,
+        editorial_heading_font: theme.editorial_heading_font,
     }
 }
 
@@ -844,6 +873,66 @@ mod tests {
         let resolved = resolve_theme(&book, None, &tmp);
         assert_eq!(resolved.body_font.as_deref(), Some("Ghost"));
         assert_eq!(resolved.fonts.len(), 0);
+    }
+
+    #[test]
+    fn resolve_theme_editorial_fonts_cascade() {
+        let tmp = tempdir();
+        let theme_dir = tmp.join("themes").join("classic");
+        fs::create_dir_all(theme_dir.join("fonts")).unwrap();
+        fs::write(
+            theme_dir.join("theme.json"),
+            r#"{"id":"classic","body_font":"Merri","heading_font":"Lato","editorial_body_font":"Cormorant","editorial_heading_font":"Playfair"}"#,
+        )
+        .unwrap();
+        let saga = tmp.join("saga");
+        let book = saga.join("book");
+        fs::create_dir_all(&book).unwrap();
+        fs::write(
+            saga.join("saga.json"),
+            r#"{"nombre":"S","theme":{"base":"classic","overrides":{"editorial_heading_font":"Bebas"}}}"#,
+        )
+        .unwrap();
+        fs::write(
+            book.join("book.json"),
+            r#"{"titulo":"B","theme":{"overrides":{"editorial_body_font":"Spectral"}}}"#,
+        )
+        .unwrap();
+
+        let resolved = resolve_theme(&book, Some(&saga), &tmp);
+        assert_eq!(resolved.body_font.as_deref(), Some("Merri"));
+        assert_eq!(resolved.heading_font.as_deref(), Some("Lato"));
+        assert_eq!(resolved.editorial_body_font.as_deref(), Some("Spectral"));
+        assert_eq!(resolved.editorial_heading_font.as_deref(), Some("Bebas"));
+    }
+
+    #[test]
+    fn resolve_theme_editorial_fonts_collected_in_embed_list() {
+        let tmp = tempdir();
+        let theme_fonts = tmp.join("themes").join("classic").join("fonts");
+        fs::create_dir_all(&theme_fonts).unwrap();
+        fs::write(theme_fonts.join("Cormorant-Regular.ttf"), b"").unwrap();
+        fs::write(theme_fonts.join("Cormorant-Italic.ttf"), b"").unwrap();
+        fs::write(theme_fonts.join("Playfair-Regular.ttf"), b"").unwrap();
+        fs::write(
+            tmp.join("themes").join("classic").join("theme.json"),
+            r#"{"id":"classic","editorial_body_font":"Cormorant","editorial_heading_font":"Playfair"}"#,
+        )
+        .unwrap();
+        let book = tmp.join("book");
+        fs::create_dir_all(&book).unwrap();
+        fs::write(
+            book.join("book.json"),
+            r#"{"titulo":"B","theme":{"base":"classic"}}"#,
+        )
+        .unwrap();
+
+        let resolved = resolve_theme(&book, None, &tmp);
+        assert_eq!(resolved.fonts.len(), 3);
+        let families: std::collections::BTreeSet<_> =
+            resolved.fonts.iter().map(|f| f.family.clone()).collect();
+        assert!(families.contains("Cormorant"));
+        assert!(families.contains("Playfair"));
     }
 
     fn tempdir() -> PathBuf {

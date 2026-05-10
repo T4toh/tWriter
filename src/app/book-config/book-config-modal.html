@@ -365,6 +365,28 @@
                 </select>
               </label>
             </div>
+            <div class="row split">
+              <label>
+                <span>Fuente cuerpo editorial</span>
+                <input
+                  type="text"
+                  [attr.list]="'bc-fams'"
+                  [ngModel]="ovEditorialBodyFont()"
+                  (ngModelChange)="ovEditorialBodyFont.set($event)"
+                  [placeholder]="base.editorial_body_font || '(hereda body)'"
+                />
+              </label>
+              <label>
+                <span>Fuente títulos editorial</span>
+                <input
+                  type="text"
+                  [attr.list]="'bc-fams'"
+                  [ngModel]="ovEditorialHeadingFont()"
+                  (ngModelChange)="ovEditorialHeadingFont.set($event)"
+                  [placeholder]="base.editorial_heading_font || '(hereda heading)'"
+                />
+              </label>
+            </div>
             <datalist id="bc-fams">
               @for (fam of availableFamilies(); track fam) {
                 <option [value]="fam"></option>
@@ -372,6 +394,39 @@
             </datalist>
           }
         }
+
+        <div class="row section-divider">
+          <span class="section-label">Sobre el autor</span>
+        </div>
+        <p class="hint-soft">
+          Si dejás la bio vacía, no se genera la página "Sobre el autor" en el
+          EPUB.
+        </p>
+        <div class="row">
+          <label>
+            <span>Bio (una línea = un párrafo)</span>
+            <textarea
+              [ngModel]="c.sobre_el_autor"
+              (ngModelChange)="update('sobre_el_autor', $event)"
+              rows="5"
+              placeholder="Nací en Cipolletti. Vivo escribiendo."
+            ></textarea>
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            <span>Foto del autor (imagen)</span>
+            <div class="cover-row">
+              <input
+                type="text"
+                [ngModel]="c.foto_autor"
+                (ngModelChange)="update('foto_autor', $event)"
+                placeholder="ej: author.jpg o ruta absoluta"
+              />
+              <button type="button" (click)="pickAuthorPhoto()">Buscar…</button>
+            </div>
+          </label>
+        </div>
 
         @if (error(); as err) {
           <p class="error">{{ err }}</p>

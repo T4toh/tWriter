@@ -45,6 +45,12 @@ export interface Theme {
   body_font_bold?: string | null;
   /** Filename stem del face explícito para combinaciones bold+italic. */
   body_font_bold_italic?: string | null;
+  /** Familia para texto de páginas editoriales (TOC, copyright, dedicatoria,
+   *  title page, sobre el autor). Auto-pick por sufijo igual que body_font. */
+  editorial_body_font?: string | null;
+  /** Familia para títulos de páginas editoriales (TÍTULO de title-page,
+   *  "Índice", parte-headings del TOC, encabezado de about-author). */
+  editorial_heading_font?: string | null;
 }
 
 export interface ThemeRef {

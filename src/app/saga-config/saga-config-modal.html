@@ -293,6 +293,28 @@
                 </select>
               </label>
             </div>
+            <div class="row split">
+              <label>
+                <span>Fuente cuerpo editorial</span>
+                <input
+                  type="text"
+                  [attr.list]="'sc-fams'"
+                  [ngModel]="ovEditorialBodyFont()"
+                  (ngModelChange)="ovEditorialBodyFont.set($event)"
+                  [placeholder]="base.editorial_body_font || '(hereda body)'"
+                />
+              </label>
+              <label>
+                <span>Fuente títulos editorial</span>
+                <input
+                  type="text"
+                  [attr.list]="'sc-fams'"
+                  [ngModel]="ovEditorialHeadingFont()"
+                  (ngModelChange)="ovEditorialHeadingFont.set($event)"
+                  [placeholder]="base.editorial_heading_font || '(hereda heading)'"
+                />
+              </label>
+            </div>
             <datalist id="sc-fams">
               @for (fam of availableFamilies(); track fam) {
                 <option [value]="fam"></option>
