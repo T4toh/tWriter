@@ -56,6 +56,12 @@ pub struct Theme {
     /// None = cae al `heading_font` del tema (cero regresión).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub editorial_heading_font: Option<String>,
+    /// Posición vertical del bloque título+prefix en la página de chapter-title.
+    /// Valores válidos: `top` | `center` | `bottom`. None o cualquier otro valor
+    /// = `center` (default — CSS base ya centra vía table-cell + fallback Kindle
+    /// vía @media amzn-kf8 en epub_style.css).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chapter_title_position: Option<String>,
 }
 
 /// Referencia a un tema en saga.json/book.json. `base` es el id del tema,
@@ -90,6 +96,9 @@ pub struct ResolvedTheme {
     pub editorial_body_font: Option<String>,
     /// Familia CSS para títulos de páginas editoriales. None = sin override.
     pub editorial_heading_font: Option<String>,
+    /// Posición vertical del bloque título+prefix en la página de chapter-title.
+    /// `top` | `bottom`. None = default (center vía CSS base).
+    pub chapter_title_position: Option<String>,
 }
 
 impl ResolvedTheme {
@@ -109,6 +118,7 @@ impl ResolvedTheme {
             && self.body_bold_italic_family.is_none()
             && self.editorial_body_font.is_none()
             && self.editorial_heading_font.is_none()
+            && self.chapter_title_position.is_none()
     }
 }
 
@@ -327,6 +337,9 @@ fn merge_overrides(base: &mut Theme, ov: &Theme) {
     if ov.editorial_heading_font.is_some() {
         base.editorial_heading_font = ov.editorial_heading_font.clone();
     }
+    if ov.chapter_title_position.is_some() {
+        base.chapter_title_position = ov.chapter_title_position.clone();
+    }
 }
 
 /// Resuelve el tema efectivo para un libro:
@@ -488,6 +501,7 @@ pub fn resolve_theme(
         body_bold_italic_family: bold_italic_family,
         editorial_body_font: theme.editorial_body_font,
         editorial_heading_font: theme.editorial_heading_font,
+        chapter_title_position: theme.chapter_title_position,
     }
 }
 
@@ -873,6 +887,56 @@ mod tests {
         let resolved = resolve_theme(&book, None, &tmp);
         assert_eq!(resolved.body_font.as_deref(), Some("Ghost"));
         assert_eq!(resolved.fonts.len(), 0);
+    }
+
+    #[test]
+    fn resolve_theme_chapter_position_book_overrides_saga() {
+        let tmp = tempdir();
+        let theme_dir = tmp.join("themes").join("classic");
+        fs::create_dir_all(theme_dir.join("fonts")).unwrap();
+        fs::write(
+            theme_dir.join("theme.json"),
+            r#"{"id":"classic","chapter_title_position":"center"}"#,
+        )
+        .unwrap();
+        let saga = tmp.join("saga");
+        let book = saga.join("book");
+        fs::create_dir_all(&book).unwrap();
+        fs::write(
+            saga.join("saga.json"),
+            r#"{"nombre":"S","theme":{"base":"classic","overrides":{"chapter_title_position":"top"}}}"#,
+        )
+        .unwrap();
+        fs::write(
+            book.join("book.json"),
+            r#"{"titulo":"B","theme":{"overrides":{"chapter_title_position":"bottom"}}}"#,
+        )
+        .unwrap();
+
+        let resolved = resolve_theme(&book, Some(&saga), &tmp);
+        assert_eq!(resolved.chapter_title_position.as_deref(), Some("bottom"));
+    }
+
+    #[test]
+    fn resolve_theme_chapter_position_from_base() {
+        let tmp = tempdir();
+        let theme_dir = tmp.join("themes").join("classic");
+        fs::create_dir_all(theme_dir.join("fonts")).unwrap();
+        fs::write(
+            theme_dir.join("theme.json"),
+            r#"{"id":"classic","chapter_title_position":"top"}"#,
+        )
+        .unwrap();
+        let book = tmp.join("book");
+        fs::create_dir_all(&book).unwrap();
+        fs::write(
+            book.join("book.json"),
+            r#"{"titulo":"B","theme":{"base":"classic"}}"#,
+        )
+        .unwrap();
+
+        let resolved = resolve_theme(&book, None, &tmp);
+        assert_eq!(resolved.chapter_title_position.as_deref(), Some("top"));
     }
 
     #[test]

@@ -387,6 +387,20 @@
                 />
               </label>
             </div>
+            <div class="row">
+              <label>
+                <span>Posición del título de capítulo</span>
+                <select
+                  [ngModel]="ovChapterTitlePosition()"
+                  (ngModelChange)="ovChapterTitlePosition.set($event)"
+                >
+                  <option value="">{{ base.chapter_title_position || 'Heredar (centrado)' }}</option>
+                  <option value="top">Arriba</option>
+                  <option value="center">Centrado (explícito)</option>
+                  <option value="bottom">Abajo</option>
+                </select>
+              </label>
+            </div>
             <datalist id="bc-fams">
               @for (fam of availableFamilies(); track fam) {
                 <option [value]="fam"></option>

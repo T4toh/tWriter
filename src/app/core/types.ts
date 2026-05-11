@@ -51,6 +51,9 @@ export interface Theme {
   /** Familia para títulos de páginas editoriales (TÍTULO de title-page,
    *  "Índice", parte-headings del TOC, encabezado de about-author). */
   editorial_heading_font?: string | null;
+  /** Posición vertical del bloque título+prefix en la página de chapter-title.
+   *  `top` | `center` | `bottom`. null o ausente = `center` (default). */
+  chapter_title_position?: string | null;
 }
 
 export interface ThemeRef {
