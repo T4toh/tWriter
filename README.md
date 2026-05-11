@@ -414,7 +414,7 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 
 #### Editor / UX
 
-- Chequear si podemos decirle al LT que voseamos. (es-ar)
+- Chequear si podemos decirle al LT que voseamos (es-ar), sino tiene buscar alternativas o seguir así.
 - Implementar Markdown (Lectura y escritura, para las notas)
 - Más variantes de divisor de escena (más allá del `* * *`)
 - Divisor automático de partes (reglas confusas, lo hago a mano)
