@@ -466,6 +466,7 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 - Diff/historial visual via git log
 - Stats: gráfico palabras/día
 - Pantalla de debug (logs Rust + estado de signals + stderr de git)
+- Preview pre-push: hoy el indicador del header dice "15 archivos para subir" pero sin detalle de cuáles. Sumar tooltip con la lista de paths (status: M/A/D) en el hover del indicador, y/o dialog "Ver cambios pendientes" antes del push manual con diff resumido por archivo (capítulos editados, libros nuevos, metadata tocada). Mismo dato que `git status --short` + opcionalmente `git diff --stat`. Útil para entender qué se va al remoto sin abrir terminal.
 
 #### Plataformas
 
