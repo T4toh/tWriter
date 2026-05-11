@@ -1,0 +1,188 @@
+:host {
+  display: inline-block;
+  position: relative;
+  width: 100%;
+}
+
+:host(.is-disabled) {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.sel-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.2;
+  cursor: pointer;
+  outline: none;
+  text-align: left;
+
+  &:hover:not(:disabled) {
+    border-color: var(--accent);
+  }
+
+  &:focus-visible {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(200, 168, 120, 0.25);
+  }
+
+  &.is-empty .sel-label {
+    color: var(--fg-muted);
+  }
+
+  &.is-invalid {
+    border-color: #c14b4b;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
+
+:host(.is-open) .sel-trigger {
+  border-color: var(--accent);
+}
+
+.sel-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sel-caret {
+  font-size: 10px;
+  color: var(--fg-muted);
+  transition: transform 120ms ease;
+}
+
+:host(.is-open) .sel-caret {
+  transform: rotate(180deg);
+}
+
+// Panel portalizado al body (escapa transform del modal padre)
+.sel-panel {
+  position: fixed;
+  z-index: 1000;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  max-height: 320px;
+  width: auto;
+  height: auto;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  display: none;
+
+  &.is-open {
+    display: flex;
+    flex-direction: column;
+    animation: sel-fade 100ms ease-out both;
+  }
+}
+
+.sel-panel.flip-up.is-open {
+  transform: translateY(-100%);
+  animation: sel-fade-up 100ms ease-out both;
+}
+
+@keyframes sel-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sel-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-100% + 4px));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sel-panel.is-open,
+  .sel-panel.flip-up.is-open {
+    animation: none;
+  }
+}
+
+.sel-filter {
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-soft);
+
+  input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    padding: 6px 8px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+
+    &:focus {
+      border-color: var(--accent);
+    }
+  }
+}
+
+.sel-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  overflow-y: auto;
+  flex: 1;
+
+  li {
+    padding: 7px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--fg);
+
+    &.is-highlighted:not(.is-disabled) {
+      background: var(--bg-soft);
+    }
+
+    &.is-selected {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    &.is-disabled {
+      color: var(--fg-muted);
+      cursor: not-allowed;
+    }
+  }
+
+  .sel-empty {
+    color: var(--fg-muted);
+    font-style: italic;
+    cursor: default;
+  }
+}

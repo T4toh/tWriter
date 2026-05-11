@@ -1,6 +1,6 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-dialog';
+import { NativeDialogsService } from './native-dialogs-service';
 import { GrammarMode } from './types';
 
 export type EditorWidth = 'narrow' | 'wide' | 'full';
@@ -22,6 +22,7 @@ interface Settings {
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
+  private dialogs = inject(NativeDialogsService);
   readonly root = signal<string | null>(null);
   readonly editorWidth = signal<EditorWidth>('narrow');
   readonly editorFontSize = signal<number>(FONT_DEFAULT);
@@ -111,15 +112,11 @@ export class SettingsService {
   }
 
   async pickRoot(): Promise<string | null> {
-    const result = await open({
-      directory: true,
-      multiple: false,
+    const result = await this.dialogs.pickFolder({
       title: 'Carpeta raíz de novelas',
       defaultPath: this.root() ?? undefined,
     });
-    if (typeof result !== 'string') {
-      return null;
-    }
+    if (result === null) return null;
     await this.setRoot(result);
     return result;
   }

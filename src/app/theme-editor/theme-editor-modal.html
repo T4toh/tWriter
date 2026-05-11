@@ -135,15 +135,11 @@
         <div class="row">
           <label>
             <span>Posición del título</span>
-            <select
+            <app-select
               [ngModel]="f.chapter_title_position"
               (ngModelChange)="update('chapter_title_position', $event)"
-            >
-              <option value="">Centrado (default)</option>
-              <option value="top">Arriba</option>
-              <option value="center">Centrado (explícito)</option>
-              <option value="bottom">Abajo</option>
-            </select>
+              [options]="chapterTitlePositionOptions"
+            />
           </label>
         </div>
 
@@ -158,41 +154,29 @@
         <div class="row split">
           <label>
             <span>Italic (em / i)</span>
-            <select
+            <app-select
               [ngModel]="f.body_font_italic"
               (ngModelChange)="update('body_font_italic', $event)"
-            >
-              <option value="">Auto (de body_font)</option>
-              @for (s of availableStems(); track s.stem) {
-                <option [value]="s.stem">{{ s.stem }} — {{ s.label }}</option>
-              }
-            </select>
+              [options]="stemSelectOptions()"
+            />
           </label>
           <label>
             <span>Bold (strong / b)</span>
-            <select
+            <app-select
               [ngModel]="f.body_font_bold"
               (ngModelChange)="update('body_font_bold', $event)"
-            >
-              <option value="">Auto (de body_font)</option>
-              @for (s of availableStems(); track s.stem) {
-                <option [value]="s.stem">{{ s.stem }} — {{ s.label }}</option>
-              }
-            </select>
+              [options]="stemSelectOptions()"
+            />
           </label>
         </div>
         <div class="row">
           <label>
             <span>Bold + Italic</span>
-            <select
+            <app-select
               [ngModel]="f.body_font_bold_italic"
               (ngModelChange)="update('body_font_bold_italic', $event)"
-            >
-              <option value="">Auto (de body_font)</option>
-              @for (s of availableStems(); track s.stem) {
-                <option [value]="s.stem">{{ s.stem }} — {{ s.label }}</option>
-              }
-            </select>
+              [options]="stemSelectOptions()"
+            />
           </label>
         </div>
 

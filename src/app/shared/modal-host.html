@@ -66,14 +66,11 @@
               [attr.aria-invalid]="errorMsg() ? 'true' : null"
             />
             <label class="field-label">{{ sp.selectLabel }}</label>
-            <select
+            <app-select
               [ngModel]="selectedValue()"
               (ngModelChange)="onSelectedChange($event)"
-            >
-              @for (opt of sp.selectOptions; track opt.value) {
-                <option [value]="opt.value">{{ opt.label }}</option>
-              }
-            </select>
+              [options]="sp.selectOptions"
+            />
             @if (errorMsg(); as err) {
               <p class="error">{{ err }}</p>
             }

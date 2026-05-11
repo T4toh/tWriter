@@ -11,10 +11,11 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ModalService, ModalState } from './modal-service';
+import { Select } from './select';
 
 @Component({
   selector: 'app-modal-host',
-  imports: [FormsModule],
+  imports: [FormsModule, Select],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './modal-host.html',
   styleUrl: './modal-host.scss',

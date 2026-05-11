@@ -41,37 +41,29 @@
           </label>
           <label>
             <span>Idioma</span>
-            <select
+            <app-select
               [ngModel]="c.idioma"
               (ngModelChange)="update('idioma', $event)"
-            >
-              <option value="es">Español</option>
-              <option value="en">Inglés</option>
-            </select>
+              [options]="idiomaOptions"
+            />
           </label>
         </div>
         <div class="row split">
           <label>
             <span>Variante ES (gramática)</span>
-            <select
-              [ngModel]="c.variante_es"
-              (ngModelChange)="update('variante_es', $event === '' ? null : $event)"
-            >
-              <option [ngValue]="null">Heredar global ({{ globalVariantEs() }})</option>
-              <option value="es-AR">es-AR — Argentina (voseo)</option>
-              <option value="es-ES">es-ES — España</option>
-            </select>
+            <app-select
+              [ngModel]="c.variante_es ?? ''"
+              (ngModelChange)="setVarianteEs($event)"
+              [options]="varianteEsOptions()"
+            />
           </label>
           <label>
             <span>Variante EN (gramática)</span>
-            <select
-              [ngModel]="c.variante_en"
-              (ngModelChange)="update('variante_en', $event === '' ? null : $event)"
-            >
-              <option [ngValue]="null">Heredar global ({{ globalVariantEn() }})</option>
-              <option value="en-US">en-US — Inglés (US)</option>
-              <option value="en-GB">en-GB — Inglés (UK)</option>
-            </select>
+            <app-select
+              [ngModel]="c.variante_en ?? ''"
+              (ngModelChange)="setVarianteEn($event)"
+              [options]="varianteEnOptions()"
+            />
           </label>
         </div>
         <div class="row">
@@ -117,25 +109,19 @@
         <div class="row split">
           <label>
             <span>Tamaño de página (EPUB)</span>
-            <select
+            <app-select
               [ngModel]="c.template ?? '6x9'"
               (ngModelChange)="update('template', $event)"
-            >
-              <option value="6x9">6 × 9 in (default)</option>
-              <option value="5x8">5 × 8 in</option>
-              <option value="a5">A5 (148 × 210 mm)</option>
-            </select>
+              [options]="templateOptions"
+            />
           </label>
           <label>
             <span>Prefijo del capítulo</span>
-            <select
+            <app-select
               [ngModel]="c.prefijo_capitulo"
               (ngModelChange)="update('prefijo_capitulo', $event)"
-            >
-              <option value="none">Sin prefijo</option>
-              <option value="decimal">Número (1, 2, 3…)</option>
-              <option value="roman">Romano (I, II, III…)</option>
-            </select>
+              [options]="prefijoCapituloOptions"
+            />
           </label>
         </div>
         <div class="row">
@@ -169,15 +155,12 @@
           </label>
           <label>
             <span>Formato de parte</span>
-            <select
+            <app-select
               [ngModel]="c.formato_parte"
               (ngModelChange)="update('formato_parte', $event)"
               [disabled]="!c.mostrar_numero_parte"
-            >
-              <option value="raw">1</option>
-              <option value="parte">Parte 1</option>
-              <option value="punto">1.</option>
-            </select>
+              [options]="formatoParteOptions"
+            />
           </label>
         </div>
 
@@ -187,15 +170,11 @@
         <div class="row split">
           <label>
             <span>Tema base</span>
-            <select
+            <app-select
               [ngModel]="themeBase()"
               (ngModelChange)="themeBase.set($event)"
-            >
-              <option value="">Sin tema</option>
-              @for (t of availableThemes(); track t.id) {
-                <option [value]="t.id">{{ t.nombre || t.id }}</option>
-              }
-            </select>
+              [options]="themeBaseOptions()"
+            />
           </label>
           <label>
             <span>&nbsp;</span>
@@ -280,41 +259,29 @@
             <div class="row split">
               <label>
                 <span>Italic face (em / i)</span>
-                <select
+                <app-select
                   [ngModel]="ovBodyFontItalic()"
                   (ngModelChange)="ovBodyFontItalic.set($event)"
-                >
-                  <option value="">{{ base.body_font_italic || 'Heredar' }}</option>
-                  @for (s of availableStems(); track s) {
-                    <option [value]="s">{{ s }}</option>
-                  }
-                </select>
+                  [options]="italicFaceOptions()"
+                />
               </label>
               <label>
                 <span>Bold face (strong / b)</span>
-                <select
+                <app-select
                   [ngModel]="ovBodyFontBold()"
                   (ngModelChange)="ovBodyFontBold.set($event)"
-                >
-                  <option value="">{{ base.body_font_bold || 'Heredar' }}</option>
-                  @for (s of availableStems(); track s) {
-                    <option [value]="s">{{ s }}</option>
-                  }
-                </select>
+                  [options]="boldFaceOptions()"
+                />
               </label>
             </div>
             <div class="row">
               <label>
                 <span>Bold + Italic face</span>
-                <select
+                <app-select
                   [ngModel]="ovBodyFontBoldItalic()"
                   (ngModelChange)="ovBodyFontBoldItalic.set($event)"
-                >
-                  <option value="">{{ base.body_font_bold_italic || 'Heredar' }}</option>
-                  @for (s of availableStems(); track s) {
-                    <option [value]="s">{{ s }}</option>
-                  }
-                </select>
+                  [options]="boldItalicFaceOptions()"
+                />
               </label>
             </div>
             <div class="row split">
@@ -342,15 +309,11 @@
             <div class="row">
               <label>
                 <span>Posición del título de capítulo</span>
-                <select
+                <app-select
                   [ngModel]="ovChapterTitlePosition()"
                   (ngModelChange)="ovChapterTitlePosition.set($event)"
-                >
-                  <option value="">{{ base.chapter_title_position || 'Heredar (centrado)' }}</option>
-                  <option value="top">Arriba</option>
-                  <option value="center">Centrado (explícito)</option>
-                  <option value="bottom">Abajo</option>
-                </select>
+                  [options]="chapterTitlePositionOptions()"
+                />
               </label>
             </div>
             <datalist id="sc-fams">

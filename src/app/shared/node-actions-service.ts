@@ -1,12 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { openPath } from '@tauri-apps/plugin-opener';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { ExtraEntry, ExtrasService } from '../core/extras-service';
 import { FontsService } from '../core/fonts-service';
 import { ImageViewerService } from '../core/image-viewer-service';
+import { NativeDialogsService } from '../core/native-dialogs-service';
 import { ProjectService } from '../core/project-service';
 import { SagaConfigService } from '../core/saga-config-service';
 import { SettingsService } from '../core/settings-service';
@@ -35,6 +35,7 @@ export class NodeActionsService {
   private imageViewer = inject(ImageViewerService);
   private toast = inject(ToastService);
   private modal = inject(ModalService);
+  private dialogs = inject(NativeDialogsService);
 
   // ───── Builders ─────
 
@@ -425,13 +426,11 @@ export class NodeActionsService {
 
   /** Abre file picker y agrega los archivos seleccionados al scope. Devuelve cantidad agregada. */
   async pickAndAddExtras(scopePath: string): Promise<number> {
-    const result = await openDialog({
-      multiple: true,
-      directory: false,
+    const paths = await this.dialogs.pickFile({
       title: 'Agregar extra(s)',
+      multiple: true,
     });
-    if (!result) return 0;
-    const paths = Array.isArray(result) ? result : [result];
+    if (paths.length === 0) return 0;
     return this.addExtraFiles(scopePath, paths);
   }
 

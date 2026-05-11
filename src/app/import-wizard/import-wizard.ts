@@ -6,7 +6,6 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import {
   EditableBook,
   EditableSection,
@@ -14,13 +13,15 @@ import {
   SourceKind,
   WizardStep,
 } from '../core/import-wizard-service';
+import { NativeDialogsService } from '../core/native-dialogs-service';
 import { ToastService } from '../core/toast-service';
 import { ProjectService } from '../core/project-service';
+import { Select, SelectOption } from '../shared/select';
 
 @Component({
   selector: 'app-import-wizard',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, Select],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './import-wizard.html',
   styleUrl: './import-wizard.scss',
@@ -28,6 +29,7 @@ import { ProjectService } from '../core/project-service';
 export class ImportWizard {
   protected wizard = inject(ImportWizardService);
   private toast = inject(ToastService);
+  private dialogs = inject(NativeDialogsService);
   private project = inject(ProjectService);
 
   protected readonly stepIndex = computed(() => {
@@ -40,6 +42,32 @@ export class ImportWizard {
   protected readonly totalSteps = computed(() => (this.wizard.tipo() === 'saga' ? 6 : 5));
   protected readonly expandedBookIdx = signal<number | null>(0);
   protected readonly expandedSections = signal<Set<string>>(new Set());
+
+  protected readonly idiomaSagaOptions: SelectOption[] = [
+    { value: '', label: '(auto-detect por capítulo)' },
+    { value: 'es', label: 'Español' },
+    { value: 'en', label: 'Inglés' },
+  ];
+  protected readonly idiomaBookOptions: SelectOption[] = [
+    { value: '', label: '(heredar saga / autodetect)' },
+    { value: 'es', label: 'Español' },
+    { value: 'en', label: 'Inglés' },
+  ];
+  protected readonly templateOptions: SelectOption[] = [
+    { value: '6x9', label: '6 × 9 in (default)' },
+    { value: '5x8', label: '5 × 8 in' },
+    { value: 'a5', label: 'A5 (148 × 210 mm)' },
+  ];
+  protected readonly prefijoCapituloOptions: SelectOption[] = [
+    { value: 'none', label: 'Sin prefijo' },
+    { value: 'decimal', label: 'Número (1, 2, 3…)' },
+    { value: 'roman', label: 'Romano (I, II, III…)' },
+  ];
+  protected readonly formatoParteOptions: SelectOption[] = [
+    { value: 'raw', label: '1' },
+    { value: 'parte', label: 'Parte 1' },
+    { value: 'punto', label: '1.' },
+  ];
 
   protected isSectionExpanded(path: string): boolean {
     return this.expandedSections().has(path);
@@ -59,12 +87,8 @@ export class ImportWizard {
   }
 
   protected async pickSource(): Promise<void> {
-    const result = await openDialog({
-      directory: true,
-      multiple: false,
-      title: 'Carpeta a importar',
-    });
-    if (typeof result !== 'string') return;
+    const result = await this.dialogs.pickFolder({ title: 'Carpeta a importar' });
+    if (!result) return;
     this.wizard.sourcePath.set(result);
   }
 
@@ -134,14 +158,12 @@ export class ImportWizard {
   }
 
   protected async pickBookCover(book: EditableBook): Promise<void> {
-    const result = await openDialog({
-      multiple: false,
-      directory: false,
+    const result = await this.dialogs.pickSingleFile({
       title: `Tapa para "${book.config.titulo || book.dir_name}"`,
       filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
       defaultPath: book.source_path,
     });
-    if (typeof result !== 'string') return;
+    if (!result) return;
     this.wizard.books.update((list) =>
       list.map((b) => (b === book ? { ...b, config: { ...b.config, tapa: result } } : b)),
     );
