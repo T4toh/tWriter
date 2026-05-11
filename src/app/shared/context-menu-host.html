@@ -1,0 +1,37 @@
+@if (state(); as s) {
+  <div
+    class="ctx-backdrop"
+    (click)="close()"
+    (contextmenu)="onBackdropContextMenu($event)"
+    role="presentation"
+  ></div>
+  <div
+    #menuEl
+    class="ctx-menu"
+    [style.left.px]="position().x"
+    [style.top.px]="position().y"
+    role="menu"
+    (click)="onCardClick($event)"
+  >
+    @for (entry of s.entries; track $index) {
+      @if (isSeparator(entry)) {
+        <div class="ctx-sep"></div>
+      } @else {
+        @let item = asItem(entry);
+        <button
+          type="button"
+          class="ctx-item"
+          [class.danger]="item.danger"
+          [disabled]="item.disabled"
+          role="menuitem"
+          (click)="run(item)"
+        >
+          <span class="ctx-label">{{ item.label }}</span>
+          @if (item.kbd) {
+            <span class="ctx-kbd">{{ item.kbd }}</span>
+          }
+        </button>
+      }
+    }
+  </div>
+}

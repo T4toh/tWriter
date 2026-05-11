@@ -21,10 +21,12 @@ import { UpdateBanner } from './update-banner/update-banner';
 import { Spinner } from './shared/spinner';
 import { ModalHost } from './shared/modal-host';
 import { ModalService } from './shared/modal-service';
+import { ContextMenuHost } from './shared/context-menu-host';
+import { ContextMenuService } from './shared/context-menu-service';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, DebugPanel, BookConfigModal, SagaConfigModal, ThemeEditorModal, ImageViewer, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner, Spinner, ModalHost],
+  imports: [Tree, Editor, DebugPanel, BookConfigModal, SagaConfigModal, ThemeEditorModal, ImageViewer, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner, Spinner, ModalHost, ContextMenuHost],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -40,6 +42,7 @@ export class App {
   protected debug = inject(DebugService);
   private updater = inject(UpdaterService);
   private modal = inject(ModalService);
+  private ctxMenu = inject(ContextMenuService);
 
   protected readonly saving = this.chapter.saving;
   protected readonly bulkProgress = this.chapter.bulkProgress;
@@ -116,6 +119,12 @@ export class App {
 
   protected openImportWizard(): void {
     this.importWizard.show();
+  }
+
+  @HostListener('document:contextmenu', ['$event'])
+  protected onGlobalContextMenu(event: MouseEvent): void {
+    if (event.defaultPrevented) return;
+    this.ctxMenu.openDefault(event);
   }
 
   @HostListener('window:keydown.F11', ['$event'])
