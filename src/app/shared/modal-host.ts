@@ -26,6 +26,7 @@ export class ModalHost {
   protected readonly closing = this.svc.closing;
 
   protected readonly value = signal('');
+  protected readonly selectedValue = signal('');
   protected readonly errorMsg = signal<string | null>(null);
 
   protected readonly promptState = computed(() => {
@@ -40,6 +41,10 @@ export class ModalHost {
     const s = this.state();
     return s?.kind === 'alert' ? s : null;
   });
+  protected readonly selectPromptState = computed(() => {
+    const s = this.state();
+    return s?.kind === 'select-prompt' ? s : null;
+  });
 
   private readonly promptInput = viewChild<ElementRef<HTMLInputElement>>('promptInput');
   private readonly okButton = viewChild<ElementRef<HTMLButtonElement>>('okButton');
@@ -49,6 +54,17 @@ export class ModalHost {
       const s = this.state();
       if (s?.kind === 'prompt') {
         this.value.set(s.defaultValue ?? '');
+        this.errorMsg.set(null);
+        queueMicrotask(() => {
+          const el = this.promptInput()?.nativeElement;
+          if (el) {
+            el.focus();
+            el.select();
+          }
+        });
+      } else if (s?.kind === 'select-prompt') {
+        this.value.set(s.inputDefault ?? '');
+        this.selectedValue.set(s.selectDefault ?? s.selectOptions[0]?.value ?? '');
         this.errorMsg.set(null);
         queueMicrotask(() => {
           const el = this.promptInput()?.nativeElement;
@@ -69,6 +85,11 @@ export class ModalHost {
     if (this.errorMsg()) this.errorMsg.set(null);
   }
 
+  protected onSelectedChange(v: string): void {
+    this.selectedValue.set(v);
+    if (this.errorMsg()) this.errorMsg.set(null);
+  }
+
   protected confirmPrompt(): void {
     const s = this.promptState();
     if (!s) return;
@@ -81,6 +102,20 @@ export class ModalHost {
       }
     }
     this.svc.resolve(v);
+  }
+
+  protected confirmSelectPrompt(): void {
+    const s = this.selectPromptState();
+    if (!s) return;
+    const result = { selected: this.selectedValue(), value: this.value() };
+    if (s.validate) {
+      const err = s.validate(result);
+      if (err) {
+        this.errorMsg.set(err);
+        return;
+      }
+    }
+    this.svc.resolve(result);
   }
 
   protected confirmConfirm(): void {
@@ -112,8 +147,11 @@ export class ModalHost {
   }
 
   protected onPromptKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter') {
-      event.preventDefault();
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    if (this.selectPromptState()) {
+      this.confirmSelectPrompt();
+    } else {
       this.confirmPrompt();
     }
   }
