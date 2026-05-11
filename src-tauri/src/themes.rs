@@ -156,10 +156,14 @@ pub fn rename_theme(
         return Err(format!("ya existe: {}", new_id));
     }
     fs::rename(&old, &new).map_err(|e| format!("rename: {}", e))?;
-    // Actualizar el id en theme.json.
+    // Actualizar el id en theme.json. También actualizar nombre si era el
+    // default (== old_id); preserva nombres custom.
     let theme_json = new.join("theme.json");
     if theme_json.is_file() {
         if let Ok(mut theme) = read_theme_file(&theme_json) {
+            if theme.nombre.as_deref() == Some(old_id.as_str()) {
+                theme.nombre = Some(new_id.clone());
+            }
             theme.id = Some(new_id);
             let _ = write_theme_file(&theme_json, &theme);
         }
@@ -184,9 +188,14 @@ pub fn duplicate_theme(
         return Err(format!("ya existe: {}", dst_id));
     }
     copy_dir_recursive(&src, &dst).map_err(|e| format!("copy: {}", e))?;
+    // Actualizar id en theme.json. También actualizar nombre si era el default
+    // (== src_id); preserva nombres custom.
     let theme_json = dst.join("theme.json");
     if theme_json.is_file() {
         if let Ok(mut theme) = read_theme_file(&theme_json) {
+            if theme.nombre.as_deref() == Some(src_id.as_str()) {
+                theme.nombre = Some(dst_id.clone());
+            }
             theme.id = Some(dst_id);
             let _ = write_theme_file(&theme_json, &theme);
         }
