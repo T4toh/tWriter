@@ -470,6 +470,10 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 
 - Mobile (No sé si es importante, capaz un exportador a epub estaría bueno porque puedo ver los archivos en gh)
 
+#### Detalles
+
+- Si tenés el auto de LT debería estar siempre encendido.
+
 ## Gramática (LanguageTool)
 
 Por defecto tWriter usa el API público gratis de LanguageTool (`api.languagetool.org`).
