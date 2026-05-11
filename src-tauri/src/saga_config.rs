@@ -13,6 +13,14 @@ pub struct SagaConfig {
     pub autor: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idioma: Option<String>,
+    /// Variante regional ES para LanguageTool. Ej: "es-AR", "es-ES". Si está
+    /// vacío, cae al global `settings.json::grammar_variant_es`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variante_es: Option<String>,
+    /// Variante regional EN para LanguageTool. Ej: "en-US", "en-GB". Si está
+    /// vacío, cae al global `settings.json::grammar_variant_en`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variante_en: Option<String>,
     /// Tapa de la serie. Path relativo al saga dir (ej: "cover.png") o absoluto.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tapa: Option<String>,

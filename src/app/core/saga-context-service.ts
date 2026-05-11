@@ -6,6 +6,8 @@ export interface SagaConfig {
   nombre: string;
   autor?: string | null;
   idioma?: string | null;
+  variante_es?: string | null;
+  variante_en?: string | null;
   diccionario?: string[] | null;
 }
 
@@ -19,6 +21,14 @@ export class SagaContextService {
     const cfg = this.config();
     const list = cfg?.diccionario ?? [];
     return new Set(list.map((w) => w.toLowerCase()));
+  });
+  readonly varianteEs = computed<string | null>(() => {
+    const v = this.config()?.variante_es;
+    return v && v.trim() ? v : null;
+  });
+  readonly varianteEn = computed<string | null>(() => {
+    const v = this.config()?.variante_en;
+    return v && v.trim() ? v : null;
   });
 
   constructor() {
@@ -58,6 +68,18 @@ export class SagaContextService {
 
   isInDictionary(word: string): boolean {
     return this.dictionary().has(word.toLowerCase());
+  }
+
+  async setVariante(base: 'es' | 'en', code: string | null): Promise<void> {
+    const path = this.sagaPath();
+    const cfg = this.config();
+    if (!path || !cfg) return;
+    const key = base === 'es' ? 'variante_es' : 'variante_en';
+    const current = cfg[key] ?? null;
+    if (current === code) return;
+    const next: SagaConfig = { ...cfg, [key]: code };
+    await invoke('set_saga_config', { sagaPath: path, config: next });
+    this.config.set(next);
   }
 
   async addToDictionary(word: string): Promise<void> {

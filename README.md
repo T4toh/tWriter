@@ -74,6 +74,8 @@ MVP completo. Sprints 1–12 hechos.
 - **Per-style faces**: `body_font_italic`/`body_font_bold`/`body_font_bold_italic` en el tema apuntan a un filename stem específico para `<em>`/`<strong>` y combinaciones. Pisa el auto-pick por sufijo. Útil cuando la italic auto de la familia es muy sutil. Theme editor incluye preview real con FontFace API.
 - **Tema editorial**: `editorial_body_font` + `editorial_heading_font` aíslan la tipografía de las páginas no-autor (title page, copyright, dedicatoria, TOC, sobre el autor) de la prosa. Cascada idéntica al body (theme + saga + book). Cero regresión cuando no se setean — esas páginas heredan body/heading como antes. Página "Sobre el autor" generada al final del EPUB con foto + bio configurables desde Configurar Novela.
 - **Posición del título de capítulo**: `chapter_title_position` en `Theme` permite forzar `top` / `center` / `bottom` para el bloque título+prefijo de la chapter-title page. Default (campo vacío) centra vertical en readers EPUB3 estándar (Calibre/Thorium/Foliate) y suma un `@media amzn-kf8` fallback para que Kindle KF8/KFX también lo centre (sin el fallback caía a top porque Kindle ignora `vh` + `display: table` en body). Cascada theme → saga → book. Cero regresión visual fuera de Kindle.
+- **Variante regional per saga**: `saga.json::variante_es` / `variante_en` overridean la variante LT global (`settings.json`). Footer renderiza la variante resuelta (ej. `es-AR` en lugar de `ES` genérico). Click en el badge abre dropdown con `es-AR` / `es-ES` / `en-US` / `en-GB` y pickear escribe en saga.json (más en `.meta.json::idioma` si cambia el lang base). LT ya soporta voseo nativo vía `language=es-AR` (variante `SpanishVoseo` desactiva el rulegroup `VOSEO` upstream — sin tocar reglas custom). Cero regresión: saga sin override sigue usando el global.
+- **Auto-check de gramática auto-on**: cuando el modo es `local`/`custom` y LT responde al ping, el auto-check se activa solo. El toggle del usuario sirve para destrabarlo (queda persistido en `settings.json::grammarAutoDisabled`). En modo `public` queda apagado por ToS. Tras `dockerStart` el frontend re-pinguea para que el auto se prenda sin recargar.
 
 ## Roadmap
 
@@ -414,7 +416,6 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 
 #### Editor / UX
 
-- Chequear si podemos decirle al LT que voseamos (es-ar), sino tiene buscar alternativas o seguir así.
 - Implementar Markdown (Lectura y escritura, para las notas)
 - Más variantes de divisor de escena (más allá del `* * *`)
 - Divisor automático de partes (reglas confusas, lo hago a mano)
@@ -465,14 +466,11 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 - Diff/historial visual via git log
 - Stats: gráfico palabras/día
 - Pantalla de debug (logs Rust + estado de signals + stderr de git)
+- Preview pre-push: hoy el indicador del header dice "15 archivos para subir" pero sin detalle de cuáles. Sumar tooltip con la lista de paths (status: M/A/D) en el hover del indicador, y/o dialog "Ver cambios pendientes" antes del push manual con diff resumido por archivo (capítulos editados, libros nuevos, metadata tocada). Mismo dato que `git status --short` + opcionalmente `git diff --stat`. Útil para entender qué se va al remoto sin abrir terminal.
 
 #### Plataformas
 
 - Mobile (No sé si es importante, capaz un exportador a epub estaría bueno porque puedo ver los archivos en gh)
-
-#### Detalles
-
-- Si tenés el auto de LT debería estar siempre encendido.
 
 ## Gramática (LanguageTool)
 

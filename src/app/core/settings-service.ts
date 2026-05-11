@@ -17,6 +17,7 @@ interface Settings {
   grammarCustomUrl?: string | null;
   grammarVariantEs?: string | null;
   grammarVariantEn?: string | null;
+  grammarAutoDisabled?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -28,6 +29,8 @@ export class SettingsService {
   readonly grammarCustomUrl = signal<string | null>(null);
   readonly grammarVariantEs = signal<string>('es-AR');
   readonly grammarVariantEn = signal<string>('en-US');
+  /** Auto-check de gramática desactivado por el usuario. Persiste cross-session. */
+  readonly grammarAutoDisabled = signal<boolean>(false);
   readonly focusMode = signal<boolean>(false);
   readonly loaded = signal<boolean>(false);
 
@@ -41,6 +44,7 @@ export class SettingsService {
       this.grammarCustomUrl.set(s.grammarCustomUrl ?? null);
       this.grammarVariantEs.set(s.grammarVariantEs ?? 'es-AR');
       this.grammarVariantEn.set(s.grammarVariantEn ?? 'en-US');
+      this.grammarAutoDisabled.set(s.grammarAutoDisabled ?? false);
     } catch {
       this.root.set(null);
     } finally {
@@ -83,6 +87,11 @@ export class SettingsService {
     await this.persist();
   }
 
+  async setGrammarAutoDisabled(disabled: boolean): Promise<void> {
+    this.grammarAutoDisabled.set(disabled);
+    await this.persist();
+  }
+
   toggleFocusMode(): void {
     this.focusMode.update((v) => !v);
   }
@@ -96,6 +105,7 @@ export class SettingsService {
       grammarCustomUrl: this.grammarCustomUrl(),
       grammarVariantEs: this.grammarVariantEs(),
       grammarVariantEn: this.grammarVariantEn(),
+      grammarAutoDisabled: this.grammarAutoDisabled(),
     };
     await invoke('set_settings', { settings });
   }
