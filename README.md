@@ -68,6 +68,9 @@ Reglas:
 
 - Jerarquía Saga / Libro / Sección / Capítulo.
 - Context menu: crear, mover, renombrar, importar, exportar EPUB, configurar libro, excluir del EPUB.
+- Reorder de capítulos via context menu (↑ subir / ↓ bajar).
+- Archivos no-chapter visibles en el tree con íconos por tipo (🖼 imagen, 📄 documento, 📝 texto, 📦 otro).
+- Template inicial precargado (saga/libro/capítulo dummy) al crear sagas/libros nuevos.
 - Badge "excluido" para `.twriter-ignore`.
 - Selector de carpeta raíz persistido + auto-load del último capítulo abierto.
 
@@ -119,6 +122,10 @@ Reglas:
 - **Posición del título de capítulo**: `chapter_title_position` (`top`/`center`/`bottom`) con fallback `@media amzn-kf8` para que Kindle también centre.
 - Theme editor con preview real via `FontFace` API.
 - Cero regresión: sin tema configurado, CSS byte-idéntico al de pre-temas.
+
+### Debug / observabilidad
+
+- Panel 🐛 toggleable en header con log timestamped de errores capturados desde chapter/project/git services vía effects.
 
 ### Git auto-sync
 
@@ -248,7 +255,7 @@ paru -S twriter-bin
 - Markdown (lectura y escritura, para las notas).
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
-- Drag & drop reorder de capítulos.
+- Drag & drop reorder de capítulos (hoy solo via context menu ↑/↓).
 - Editor split (dos capítulos lado a lado).
 - Notas/research sidebar derecho.
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
@@ -256,15 +263,13 @@ paru -S twriter-bin
 
 ### Tree / Importer
 
-- Mostrar archivos no-chapter en el tree (PNG, txt, md — quedan en disco pero invisibles).
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
-- Editar diccionario per-saga desde UI (hoy solo se agrega desde el popover; borrar requiere editar `saga.json` a mano).
-- Template de saga/libro/cap precargado en instalación nueva (capítulo dummy con texto ES+EN, diálogos sin convertir, errores ortográficos a propósito, scene break, dropcap) para probar features sin importar nada.
+- Borrar entradas individuales del diccionario per-saga desde UI (hoy se editan en bloque vía textarea del modal de configuración; agregar funciona desde el popover de typos).
 - Importar notas de Joplin (o cualquier `.md`, depende de implementar markdown).
 
 ### EPUB
 
-- Contratapa y otros libros en EPUB.
+- Lista "Otros libros del mismo autor" en EPUB (contratapa ya está embebida).
 - Preview tipo Kindle (B/N, distintos tamaños — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
 - Pesos extra de fuente (300 Light, 600 SemiBold, 900 Black). Hoy solo Regular/Bold/Italic/BoldItalic; pesos custom requieren edit manual del `theme.json`.
 - Auto-migración de tema renombrado: hoy renombrar un tema deja sagas/libros con `base` dangling (warning). Implementar scan recursivo de `*.json` y rewrite del `base`.
@@ -292,7 +297,7 @@ paru -S twriter-bin
 
 - Diff/historial visual via `git log`.
 - Stats: gráfico palabras/día.
-- Pantalla de debug (logs Rust + estado de signals + stderr de git).
+- Ampliar pantalla de debug: hoy captura errores frontend de chapter/project/git services. Sumar logs Rust (stderr de tracing) y dump de estado de signals.
 - Preview pre-push: hoy el indicador del header dice "15 archivos para subir" sin detalle. Tooltip con lista de paths (M/A/D) en hover, y/o dialog "Ver cambios pendientes" con `git status --short` + `git diff --stat`.
 
 ### Plataformas
