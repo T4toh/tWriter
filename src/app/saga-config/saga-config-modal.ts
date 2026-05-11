@@ -1,15 +1,16 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { FontsService } from '../core/fonts-service';
+import { NativeDialogsService } from '../core/native-dialogs-service';
 import { SagaConfig, SagaConfigService } from '../core/saga-config-service';
 import { SettingsService } from '../core/settings-service';
 import { ThemesService } from '../core/themes-service';
 import { Theme, ThemeRef } from '../core/types';
+import { Select, SelectOption } from '../shared/select';
 
 @Component({
   selector: 'app-saga-config-modal',
-  imports: [FormsModule],
+  imports: [FormsModule, Select],
   templateUrl: './saga-config-modal.html',
   styleUrl: './saga-config-modal.scss',
 })
@@ -18,6 +19,7 @@ export class SagaConfigModal {
   protected themesSvc = inject(ThemesService);
   private fontsSvc = inject(FontsService);
   private settings = inject(SettingsService);
+  private dialogs = inject(NativeDialogsService);
 
   protected readonly globalVariantEs = this.settings.grammarVariantEs;
   protected readonly globalVariantEn = this.settings.grammarVariantEn;
@@ -71,6 +73,68 @@ export class SagaConfigModal {
       .map((f) => stripExt(f.name))
       .sort();
   });
+
+  protected readonly idiomaOptions: SelectOption[] = [
+    { value: 'es', label: 'Español' },
+    { value: 'en', label: 'Inglés' },
+  ];
+  protected readonly prefijoCapituloOptions: SelectOption[] = [
+    { value: 'none', label: 'Sin prefijo' },
+    { value: 'decimal', label: 'Número (1, 2, 3…)' },
+    { value: 'roman', label: 'Romano (I, II, III…)' },
+  ];
+  protected readonly formatoParteOptions: SelectOption[] = [
+    { value: 'raw', label: '1' },
+    { value: 'parte', label: 'Parte 1' },
+    { value: 'punto', label: '1.' },
+  ];
+  protected readonly templateOptions: SelectOption[] = [
+    { value: '6x9', label: '6 × 9 in (default)' },
+    { value: '5x8', label: '5 × 8 in' },
+    { value: 'a5', label: 'A5 (148 × 210 mm)' },
+  ];
+  protected readonly varianteEsOptions = computed<SelectOption[]>(() => [
+    { value: '', label: `Heredar global (${this.globalVariantEs()})` },
+    { value: 'es-AR', label: 'es-AR — Argentina (voseo)' },
+    { value: 'es-ES', label: 'es-ES — España' },
+  ]);
+  protected readonly varianteEnOptions = computed<SelectOption[]>(() => [
+    { value: '', label: `Heredar global (${this.globalVariantEn()})` },
+    { value: 'en-US', label: 'en-US — Inglés (US)' },
+    { value: 'en-GB', label: 'en-GB — Inglés (UK)' },
+  ]);
+  protected readonly themeBaseOptions = computed<SelectOption[]>(() => [
+    { value: '', label: 'Sin tema' },
+    ...this.availableThemes().map((t) => ({ value: t.id, label: t.nombre || t.id })),
+  ]);
+  private stemFaceOptions(inherited: string | null | undefined): SelectOption[] {
+    return [
+      { value: '', label: inherited || 'Heredar' },
+      ...this.availableStems().map((s) => ({ value: s, label: s })),
+    ];
+  }
+  protected readonly italicFaceOptions = computed<SelectOption[]>(() =>
+    this.stemFaceOptions(this.selectedBaseTheme()?.body_font_italic),
+  );
+  protected readonly boldFaceOptions = computed<SelectOption[]>(() =>
+    this.stemFaceOptions(this.selectedBaseTheme()?.body_font_bold),
+  );
+  protected readonly boldItalicFaceOptions = computed<SelectOption[]>(() =>
+    this.stemFaceOptions(this.selectedBaseTheme()?.body_font_bold_italic),
+  );
+  protected readonly chapterTitlePositionOptions = computed<SelectOption[]>(() => [
+    { value: '', label: this.selectedBaseTheme()?.chapter_title_position || 'Heredar (centrado)' },
+    { value: 'top', label: 'Arriba' },
+    { value: 'center', label: 'Centrado (explícito)' },
+    { value: 'bottom', label: 'Abajo' },
+  ]);
+
+  protected setVarianteEs(value: string): void {
+    this.update('variante_es', value === '' ? null : value);
+  }
+  protected setVarianteEn(value: string): void {
+    this.update('variante_en', value === '' ? null : value);
+  }
 
   constructor() {
     effect(() => {
@@ -173,14 +237,12 @@ export class SagaConfigModal {
   }
 
   protected async pickCover(): Promise<void> {
-    const result = await openDialog({
-      multiple: false,
-      directory: false,
+    const result = await this.dialogs.pickSingleFile({
       title: 'Seleccionar tapa de saga',
       filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
       defaultPath: this.sagaPath() ?? undefined,
     });
-    if (typeof result !== 'string') return;
+    if (!result) return;
     const cur = this.config();
     if (cur) this.config.set({ ...cur, tapa: result });
   }

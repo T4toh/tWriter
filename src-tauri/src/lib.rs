@@ -1,5 +1,6 @@
 mod book_config;
 mod create;
+mod dialogs;
 mod epub;
 mod extras;
 mod fonts;
@@ -19,6 +20,7 @@ mod util;
 use book_config::{get_book_config, mark_as_epilogo, set_book_config};
 use saga_config::{find_saga_dir, get_saga_config, set_saga_config};
 use create::{create_book, create_chapter, create_directory};
+use dialogs::{pick_file, pick_folder};
 use epub::{export_book, list_exports};
 use extras::{add_extra, has_extras, list_extras, remove_extra, rename_extra};
 use fonts::{add_font, has_fonts, list_fonts, remove_font, rename_font};
@@ -45,7 +47,6 @@ use themes::{
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
@@ -107,6 +108,8 @@ pub fn run() {
             add_theme_font,
             remove_theme_font,
             rename_theme_font,
+            pick_folder,
+            pick_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

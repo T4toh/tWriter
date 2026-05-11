@@ -1,11 +1,12 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
+import { NativeDialogsService } from '../core/native-dialogs-service';
 import { ThemesService } from '../core/themes-service';
 import { FontEntry, Theme } from '../core/types';
 import { ModalService } from '../shared/modal-service';
+import { Select, SelectOption } from '../shared/select';
 import { ToastService } from '../core/toast-service';
 
 interface EditableTheme {
@@ -32,7 +33,7 @@ function previewFamilyName(slot: string, idx: number): string {
 
 @Component({
   selector: 'app-theme-editor-modal',
-  imports: [FormsModule],
+  imports: [FormsModule, Select],
   templateUrl: './theme-editor-modal.html',
   styleUrl: './theme-editor-modal.scss',
 })
@@ -40,6 +41,7 @@ export class ThemeEditorModal {
   private svc = inject(ThemesService);
   private modal = inject(ModalService);
   private toast = inject(ToastService);
+  private dialogs = inject(NativeDialogsService);
 
   protected readonly editing = this.svc.editing;
   protected readonly form = signal<EditableTheme | null>(null);
@@ -71,6 +73,22 @@ export class ThemeEditorModal {
       }))
       .sort((a, b) => a.stem.localeCompare(b.stem));
   });
+
+  /** Opciones para los <app-select> de body_font_italic / bold / bold_italic. */
+  protected readonly stemSelectOptions = computed<SelectOption[]>(() => {
+    const stems = this.availableStems();
+    return [
+      { value: '', label: 'Auto (de body_font)' },
+      ...stems.map((s) => ({ value: s.stem, label: `${s.stem} — ${s.label}` })),
+    ];
+  });
+
+  protected readonly chapterTitlePositionOptions: SelectOption[] = [
+    { value: '', label: 'Centrado (default)' },
+    { value: 'top', label: 'Arriba' },
+    { value: 'center', label: 'Centrado (explícito)' },
+    { value: 'bottom', label: 'Abajo' },
+  ];
 
   /** Familias CSS que el preview tiene cargadas. Se rotan via previewGen. */
   protected readonly previewFamilies = computed(() => {
@@ -243,13 +261,11 @@ export class ThemeEditorModal {
   protected async pickFont(): Promise<void> {
     const id = this.editing();
     if (!id) return;
-    const result = await openDialog({
-      multiple: true,
-      directory: false,
+    const paths = await this.dialogs.pickFile({
       title: 'Agregar fuentes',
       filters: [{ name: 'Fuentes', extensions: ['ttf', 'otf', 'woff', 'woff2'] }],
+      multiple: true,
     });
-    const paths = Array.isArray(result) ? result : result ? [result] : [];
     if (paths.length === 0) return;
     for (const p of paths) {
       try {

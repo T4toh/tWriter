@@ -78,14 +78,11 @@
               </label>
               <label class="iw-field">
                 <span>Idioma default</span>
-                <select
+                <app-select
                   [ngModel]="wizard.sagaConfig().idioma ?? ''"
                   (ngModelChange)="updateSagaField('idioma', $event)"
-                >
-                  <option value="">(auto-detect por capítulo)</option>
-                  <option value="es">Español</option>
-                  <option value="en">Inglés</option>
-                </select>
+                  [options]="idiomaSagaOptions"
+                />
               </label>
             </div>
           </fieldset>
@@ -104,25 +101,19 @@
             <div class="iw-row">
               <label class="iw-field">
                 <span>Tamaño de página</span>
-                <select
+                <app-select
                   [ngModel]="wizard.sagaConfig().template ?? '6x9'"
                   (ngModelChange)="updateSagaSelect('template', $event)"
-                >
-                  <option value="6x9">6 × 9 in (default)</option>
-                  <option value="5x8">5 × 8 in</option>
-                  <option value="a5">A5 (148 × 210 mm)</option>
-                </select>
+                  [options]="templateOptions"
+                />
               </label>
               <label class="iw-field">
                 <span>Prefijo del capítulo</span>
-                <select
+                <app-select
                   [ngModel]="wizard.sagaConfig().prefijo_capitulo ?? 'none'"
                   (ngModelChange)="updateSagaSelect('prefijo_capitulo', $event)"
-                >
-                  <option value="none">Sin prefijo</option>
-                  <option value="decimal">Número (1, 2, 3…)</option>
-                  <option value="roman">Romano (I, II, III…)</option>
-                </select>
+                  [options]="prefijoCapituloOptions"
+                />
               </label>
             </div>
             <label class="iw-check">
@@ -152,15 +143,12 @@
               </label>
               <label class="iw-field">
                 <span>Formato de parte</span>
-                <select
+                <app-select
                   [ngModel]="wizard.sagaConfig().formato_parte ?? 'raw'"
                   (ngModelChange)="updateSagaSelect('formato_parte', $event)"
                   [disabled]="!(wizard.sagaConfig().mostrar_numero_parte ?? false)"
-                >
-                  <option value="raw">1</option>
-                  <option value="parte">Parte 1</option>
-                  <option value="punto">1.</option>
-                </select>
+                  [options]="formatoParteOptions"
+                />
               </label>
             </div>
           </fieldset>
@@ -422,14 +410,11 @@
                   </label>
                   <label class="iw-field narrow">
                     <span>Idioma</span>
-                    <select
+                    <app-select
                       [ngModel]="book.config.idioma ?? ''"
                       (ngModelChange)="updateBookField(book, 'idioma', $event)"
-                    >
-                      <option value="">(heredar saga / autodetect)</option>
-                      <option value="es">Español</option>
-                      <option value="en">Inglés</option>
-                    </select>
+                      [options]="idiomaBookOptions"
+                    />
                   </label>
                 </div>
                 <div class="iw-row">

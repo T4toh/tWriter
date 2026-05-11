@@ -6,15 +6,16 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { BookConfig, BookConfigService } from '../core/book-config-service';
 import { FontsService } from '../core/fonts-service';
+import { NativeDialogsService } from '../core/native-dialogs-service';
 import { ThemesService } from '../core/themes-service';
 import { Theme, ThemeRef } from '../core/types';
+import { Select, SelectOption } from '../shared/select';
 
 @Component({
   selector: 'app-book-config-modal',
-  imports: [FormsModule],
+  imports: [FormsModule, Select],
   templateUrl: './book-config-modal.html',
   styleUrl: './book-config-modal.scss',
 })
@@ -22,6 +23,7 @@ export class BookConfigModal {
   private svc = inject(BookConfigService);
   protected themesSvc = inject(ThemesService);
   private fontsSvc = inject(FontsService);
+  private dialogs = inject(NativeDialogsService);
 
   protected readonly editing = this.svc.editing;
   protected readonly config = signal<BookConfig | null>(null);
@@ -70,6 +72,53 @@ export class BookConfigModal {
       .map((f) => stripExt(f.name))
       .sort();
   });
+
+  protected readonly idiomaOptions: SelectOption[] = [
+    { value: 'es', label: 'Español' },
+    { value: 'en', label: 'Inglés' },
+  ];
+  protected readonly prefijoCapituloOptions: SelectOption[] = [
+    { value: 'none', label: 'Sin prefijo' },
+    { value: 'decimal', label: 'Número (1, 2, 3…)' },
+    { value: 'roman', label: 'Romano (I, II, III…)' },
+  ];
+  protected readonly formatoParteOptions: SelectOption[] = [
+    { value: 'raw', label: '1' },
+    { value: 'parte', label: 'Parte 1' },
+    { value: 'punto', label: '1.' },
+  ];
+  protected readonly templateOptions: SelectOption[] = [
+    { value: '6x9', label: '6 × 9 in (default)' },
+    { value: '5x8', label: '5 × 8 in' },
+    { value: 'a5', label: 'A5 (148 × 210 mm)' },
+  ];
+
+  protected readonly themeBaseOptions = computed<SelectOption[]>(() => [
+    { value: '', label: 'Heredar de saga' },
+    ...this.availableThemes().map((t) => ({ value: t.id, label: t.nombre || t.id })),
+  ]);
+
+  private stemFaceOptions(inherited: string | null | undefined): SelectOption[] {
+    return [
+      { value: '', label: inherited || 'Heredar' },
+      ...this.availableStems().map((s) => ({ value: s, label: s })),
+    ];
+  }
+  protected readonly italicFaceOptions = computed<SelectOption[]>(() =>
+    this.stemFaceOptions(this.selectedBaseTheme()?.body_font_italic),
+  );
+  protected readonly boldFaceOptions = computed<SelectOption[]>(() =>
+    this.stemFaceOptions(this.selectedBaseTheme()?.body_font_bold),
+  );
+  protected readonly boldItalicFaceOptions = computed<SelectOption[]>(() =>
+    this.stemFaceOptions(this.selectedBaseTheme()?.body_font_bold_italic),
+  );
+  protected readonly chapterTitlePositionOptions = computed<SelectOption[]>(() => [
+    { value: '', label: this.selectedBaseTheme()?.chapter_title_position || 'Heredar (centrado)' },
+    { value: 'top', label: 'Arriba' },
+    { value: 'center', label: 'Centrado (explícito)' },
+    { value: 'bottom', label: 'Abajo' },
+  ]);
 
   constructor() {
     effect(() => {
@@ -183,40 +232,34 @@ export class BookConfigModal {
   }
 
   protected async pickCover(): Promise<void> {
-    const result = await openDialog({
-      multiple: false,
-      directory: false,
+    const result = await this.dialogs.pickSingleFile({
       title: 'Seleccionar tapa',
       filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
       defaultPath: this.bookPath() ?? undefined,
     });
-    if (typeof result !== 'string') return;
+    if (!result) return;
     const cur = this.config();
     if (cur) this.config.set({ ...cur, tapa: result });
   }
 
   protected async pickBackCover(): Promise<void> {
-    const result = await openDialog({
-      multiple: false,
-      directory: false,
+    const result = await this.dialogs.pickSingleFile({
       title: 'Seleccionar contratapa',
       filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
       defaultPath: this.bookPath() ?? undefined,
     });
-    if (typeof result !== 'string') return;
+    if (!result) return;
     const cur = this.config();
     if (cur) this.config.set({ ...cur, contratapa: result });
   }
 
   protected async pickAuthorPhoto(): Promise<void> {
-    const result = await openDialog({
-      multiple: false,
-      directory: false,
+    const result = await this.dialogs.pickSingleFile({
       title: 'Seleccionar foto del autor',
       filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
       defaultPath: this.bookPath() ?? undefined,
     });
-    if (typeof result !== 'string') return;
+    if (!result) return;
     const cur = this.config();
     if (cur) this.config.set({ ...cur, foto_autor: result });
   }

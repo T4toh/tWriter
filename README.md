@@ -63,6 +63,8 @@ Reglas:
 - Modo focus (F11 / Esc): oculta tree, deja toolbar y footer.
 - Indicador de idioma en footer (badge color) + toggle ES/EN.
 - Diálogos custom (prompt/confirm/alert) coherentes con el resto de los modales — sin headers feos de WebKit.
+- `<app-select>` Angular standalone reemplaza los `<select>` nativos en todos los modales (no más widget del DE distinto por distro). Typeahead automático cuando hay >10 opciones.
+- File pickers nativos vía `rfd` 0.15 con feature `xdg-portal` — en KDE/Wayland abre el portal del sistema en vez del diálogo GTK 3 foreign del plugin-dialog.
 
 ### Tree explorer
 
@@ -278,13 +280,13 @@ paru -S twriter-bin
 - Revisiones de EPUB: hoy sobreescribe siempre `Exportados/<titulo>.epub`. Sumar "guardar últimas N revisiones" (default 5) — renombrar la actual a `<titulo>-revN.epub` antes de generar la nueva.
 - Diseño de la página "Sobre el autor": hoy funcional pero genérico (foto circular + bio justified). Pensar layout más editorial (dos columnas, variantes de retrato, epígrafe).
 - Bio + foto del autor a nivel saga (heredados a libros nuevos) y/o `settings.json` (defaults globales del repo). Hoy solo `book.json`.
+- Vista copada para diseñar temas (Con preview de todo. Título, copyright, capítulo y una página.)
 
 ### Bundle / Distribución (Linux nativo)
 
 > Todo toca `tauri.conf.json`, `Cargo.toml` o el AppRun hook de linuxdeploy. Atacar junto en un sprint de packaging.
 
-- File picker via xdg-desktop-portal (hoy GTK 3 vía `rfd`, se ve foreign en KDE/Wayland). Reemplazar `open()` por comandos Rust con `rfd { features = ["xdg-portal", "tokio"] }`. Fix unifica también el picker de tapas en wizard.
-- Metadata + branding del bundle: ícono propio en `.deb`/`.msi`/`.exe` (hoy fallback genérico), description real (hoy "A Tauri App"), `bundle.copyright`, `bundle.publisher`, `bundle.shortDescription`/`longDescription`, `bundle.category` ("Productivity"). Fixea el `.desktop` (Comment + Categories) que hoy queda vacío.
+- Metadata + branding del bundle: ícono propio en `.deb`/`.msi`/`.exe` (hoy fallback genérico), description real (hoy "A Tauri App"), `bundle.copyright`, `bundle.publisher`, `bundle.shortDescription`/`longDescription`, `bundle.category` ("Productivity"). Fixea el `.desktop` (Comment + Categories) que hoy queda vacío. Como side-effect, el título del file picker via xdg-portal en KDE deja de mostrar el ícono default de Plasma — Plasma resuelve el ícono via `StartupWMClass` del `.desktop` y `bundle.identifier`.
 - Sizes de ícono adicionales en `.deb` (hoy solo 32/128/256@2 — algunos launchers buscan 48/64).
 - Tema GTK del window decoration / dialogs respetando sistema (hoy AppRun fuerza `GTK_THEME=Adwaita:light/dark` leyendo gsettings de GNOME — en KDE queda Adwaita default). Workaround: env var `APPIMAGE_GTK_THEME=Breeze:dark` o patchear AppRun hook en CI.
 - Mejor UX de instalación de Docker para LT (barrita o spinner que muestre que está pulleando la imagen).

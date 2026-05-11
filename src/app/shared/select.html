@@ -1,0 +1,59 @@
+<button
+  type="button"
+  class="sel-trigger"
+  [class.is-empty]="!selectedLabel()"
+  [class.is-invalid]="invalid()"
+  [attr.aria-haspopup]="'listbox'"
+  [attr.aria-expanded]="open()"
+  [attr.aria-disabled]="isDisabled() ? 'true' : null"
+  [disabled]="isDisabled()"
+  (click)="toggle()"
+  (keydown)="onTriggerKeydown($event)"
+>
+  <span class="sel-label">{{ selectedLabel() || placeholder() }}</span>
+  <span class="sel-caret" aria-hidden="true">▾</span>
+</button>
+
+<div
+  #panel
+  class="sel-panel"
+  [class.is-open]="open()"
+  [class.flip-up]="panelFlipUp()"
+  [style.top.px]="panelTop()"
+  [style.left.px]="panelLeft()"
+  [style.minWidth.px]="panelWidth()"
+  (keydown)="onPanelKeydown($event)"
+>
+  @if (open()) {
+    @if (showFilter()) {
+      <div class="sel-filter">
+        <input
+          #filterInput
+          type="text"
+          [ngModel]="filter()"
+          (ngModelChange)="onFilterChange($event)"
+          placeholder="Buscar…"
+          aria-label="Filtrar opciones"
+        />
+      </div>
+    }
+    <ul class="sel-list" role="listbox" tabindex="-1">
+      @for (opt of visibleOptions(); track opt.value; let i = $index) {
+        <li
+          role="option"
+          [attr.aria-selected]="opt.value === value()"
+          [attr.data-idx]="i"
+          [class.is-highlighted]="i === highlightIdx()"
+          [class.is-selected]="opt.value === value()"
+          [class.is-disabled]="opt.disabled"
+          (mouseenter)="highlightIdx.set(i)"
+          (click)="pick(opt)"
+        >
+          {{ opt.label }}
+        </li>
+      } @empty {
+        <li class="sel-empty">Sin resultados</li>
+      }
+    </ul>
+  }
+</div>

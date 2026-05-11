@@ -125,24 +125,32 @@
       <div class="gs-row">
         <label class="gs-field">
           <span>Español</span>
-          <select [ngModel]="variantEs()" (ngModelChange)="variantEs.set($event)">
-            <option value="es-AR">es-AR — Argentina (voseo)</option>
-            <option value="es-MX">es-MX — México</option>
-            <option value="es-CL">es-CL — Chile</option>
-            <option value="es-CO">es-CO — Colombia</option>
-            <option value="es-PE">es-PE — Perú</option>
-            <option value="es-VE">es-VE — Venezuela</option>
-            <option value="es">es — genérico</option>
-          </select>
+          <app-select
+            [ngModel]="variantEs()"
+            (ngModelChange)="variantEs.set($event)"
+            [options]="[
+              { value: 'es-AR', label: 'es-AR — Argentina (voseo)' },
+              { value: 'es-MX', label: 'es-MX — México' },
+              { value: 'es-CL', label: 'es-CL — Chile' },
+              { value: 'es-CO', label: 'es-CO — Colombia' },
+              { value: 'es-PE', label: 'es-PE — Perú' },
+              { value: 'es-VE', label: 'es-VE — Venezuela' },
+              { value: 'es', label: 'es — genérico' }
+            ]"
+          />
         </label>
         <label class="gs-field">
           <span>Inglés</span>
-          <select [ngModel]="variantEn()" (ngModelChange)="variantEn.set($event)">
-            <option value="en-US">en-US — Estados Unidos</option>
-            <option value="en-GB">en-GB — Reino Unido</option>
-            <option value="en-CA">en-CA — Canadá</option>
-            <option value="en-AU">en-AU — Australia</option>
-          </select>
+          <app-select
+            [ngModel]="variantEn()"
+            (ngModelChange)="variantEn.set($event)"
+            [options]="[
+              { value: 'en-US', label: 'en-US — Estados Unidos' },
+              { value: 'en-GB', label: 'en-GB — Reino Unido' },
+              { value: 'en-CA', label: 'en-CA — Canadá' },
+              { value: 'en-AU', label: 'en-AU — Australia' }
+            ]"
+          />
         </label>
       </div>
     </div>

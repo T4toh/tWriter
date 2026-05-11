@@ -9,12 +9,13 @@ import { FormsModule } from '@angular/forms';
 import { invoke } from '@tauri-apps/api/core';
 import { GrammarService, LtDockerStatus } from '../core/grammar-service';
 import { SettingsService } from '../core/settings-service';
+import { Select } from '../shared/select';
 import { GrammarMode } from '../core/types';
 
 @Component({
   selector: 'app-grammar-settings',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, Select],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './grammar-settings.html',
   styleUrl: './grammar-settings.scss',
