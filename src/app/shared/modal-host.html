@@ -50,6 +50,35 @@
             <p class="message" [attr.data-variant]="a.variant ?? 'info'">{{ a.message }}</p>
           }
         }
+        @case ('select-prompt') {
+          @if (selectPromptState(); as sp) {
+            @if (sp.message) {
+              <p class="message">{{ sp.message }}</p>
+            }
+            <label class="field-label">{{ sp.inputLabel }}</label>
+            <input
+              #promptInput
+              type="text"
+              [ngModel]="value()"
+              (ngModelChange)="onValueChange($event)"
+              [placeholder]="sp.inputPlaceholder ?? ''"
+              (keydown)="onPromptKeydown($event)"
+              [attr.aria-invalid]="errorMsg() ? 'true' : null"
+            />
+            <label class="field-label">{{ sp.selectLabel }}</label>
+            <select
+              [ngModel]="selectedValue()"
+              (ngModelChange)="onSelectedChange($event)"
+            >
+              @for (opt of sp.selectOptions; track opt.value) {
+                <option [value]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+            @if (errorMsg(); as err) {
+              <p class="error">{{ err }}</p>
+            }
+          }
+        }
       }
     </div>
 
@@ -86,6 +115,21 @@
           @if (alertState(); as a) {
             <button #okButton type="button" class="btn btn-primary" (click)="confirmAlert()">
               {{ a.okLabel ?? 'OK' }}
+            </button>
+          }
+        }
+        @case ('select-prompt') {
+          @if (selectPromptState(); as sp) {
+            <button type="button" class="btn btn-secondary" (click)="cancel()">
+              {{ sp.cancelLabel ?? 'Cancelar' }}
+            </button>
+            <button
+              #okButton
+              type="button"
+              class="btn btn-primary"
+              (click)="confirmSelectPrompt()"
+            >
+              {{ sp.okLabel ?? 'Crear' }}
             </button>
           }
         }

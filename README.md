@@ -424,6 +424,7 @@ App instalada vía pacman. Para próximas updates, `./rebuild.sh <version>`.
 - Auto-abrir el modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Mover los controles de archivos (sync ⇅, pull ⤓, refresh ↻, file picker 📁) del header del tree a un footer del tree. El header arriba queda solo con título/path + acciones de creación/import. Los controles "de proyecto" abajo, separados del flujo de creación.
 - Buscar más alternativas para la gramática. (Futuro)
+- **Context menu centralizado**: hoy el click derecho dispara controles random según el componente — cada lugar maneja su propio `contextmenu` listener y abre menúes desconectados (a veces el del browser, a veces el custom, a veces nada). Capturar el evento `contextmenu` a nivel root y rutear a un único `ContextMenuService` que decida qué mostrar según el target (capítulo, libro, saga, tema, fuente, extra, etc.). Beneficios: zero menúes nativos sueltos, comportamiento uniforme, un solo lugar donde agregar/quitar acciones.
 
 #### Tree / Importer
 

@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 
-export type ModalKind = 'prompt' | 'confirm' | 'alert';
+export type ModalKind = 'prompt' | 'confirm' | 'alert' | 'select-prompt';
 export type AlertVariant = 'info' | 'error' | 'success';
 
 export interface PromptOptions {
@@ -29,6 +29,31 @@ export interface AlertOptions {
   okLabel?: string;
 }
 
+export interface SelectPromptOption {
+  value: string;
+  label: string;
+}
+
+export interface SelectPromptOptions {
+  title: string;
+  message?: string;
+  selectLabel: string;
+  selectOptions: SelectPromptOption[];
+  selectDefault?: string;
+  inputLabel: string;
+  inputDefault?: string;
+  inputPlaceholder?: string;
+  okLabel?: string;
+  cancelLabel?: string;
+  /** Devuelve null si OK, string con error si inválido. */
+  validate?: (r: { selected: string; value: string }) => string | null;
+}
+
+export interface SelectPromptResult {
+  selected: string;
+  value: string;
+}
+
 interface PromptState extends PromptOptions {
   kind: 'prompt';
 }
@@ -38,8 +63,11 @@ interface ConfirmState extends ConfirmOptions {
 interface AlertState extends AlertOptions {
   kind: 'alert';
 }
+interface SelectPromptState extends SelectPromptOptions {
+  kind: 'select-prompt';
+}
 
-export type ModalState = PromptState | ConfirmState | AlertState;
+export type ModalState = PromptState | ConfirmState | AlertState | SelectPromptState;
 
 const CLOSE_ANIMATION_MS = 120;
 
@@ -62,6 +90,13 @@ export class ModalService {
     return this.openModal<void>({ kind: 'alert', ...opts }, undefined);
   }
 
+  selectPrompt(opts: SelectPromptOptions): Promise<SelectPromptResult | null> {
+    return this.openModal<SelectPromptResult | null>(
+      { kind: 'select-prompt', ...opts },
+      null,
+    );
+  }
+
   /** Llamado por ModalHost al confirmar. */
   resolve(value: unknown): void {
     if (!this.resolver) return;
@@ -81,6 +116,7 @@ export class ModalService {
     if (!cur) return;
     if (cur.kind === 'prompt') this.resolve(null);
     else if (cur.kind === 'confirm') this.resolve(false);
+    else if (cur.kind === 'select-prompt') this.resolve(null);
     else this.resolve(undefined);
   }
 

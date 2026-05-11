@@ -230,21 +230,43 @@ export class Tree implements OnDestroy {
       this.toast.error('Elegí una carpeta primero');
       return;
     }
-    const id = await this.modal.prompt({
+    if (!this.themesSvc.hasLoaded()) {
+      await this.themesSvc.refresh();
+    }
+    const themes = this.themesSvc.list();
+    const opciones = [
+      { value: '', label: '(vacío)' },
+      ...themes.map((t) => ({
+        value: t.id,
+        label: t.nombre && t.nombre !== t.id ? `${t.id} — ${t.nombre}` : t.id,
+      })),
+    ];
+    const res = await this.modal.selectPrompt({
       title: 'Nuevo tema',
-      message: 'Identificador del tema (slug, sin espacios — ej: "reedsy-classic"):',
-      validate: (v) => {
-        const t = v.trim();
+      selectLabel: 'Plantilla',
+      selectOptions: opciones,
+      selectDefault: '',
+      inputLabel: 'ID del tema (slug, sin espacios — ej: "reedsy-classic")',
+      inputPlaceholder: 'reedsy-classic',
+      okLabel: 'Crear',
+      validate: ({ selected, value }) => {
+        const t = value.trim();
         if (!t) return 'ID vacío';
         if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
         if (t.includes(' ')) return 'Sin espacios; usá guiones';
+        if (t === selected) return 'Mismo ID que la plantilla';
+        if (themes.some((x) => x.id === t)) return 'Ya existe un tema con ese ID';
         return null;
       },
     });
-    if (!id?.trim()) return;
-    const slug = id.trim();
+    if (!res) return;
+    const slug = res.value.trim();
     try {
-      await this.themesSvc.create(slug, { id: slug, nombre: slug });
+      if (res.selected) {
+        await this.themesSvc.duplicate(res.selected, slug);
+      } else {
+        await this.themesSvc.create(slug, { id: slug, nombre: slug });
+      }
       this.themesExpanded.set(true);
       this.themesSvc.openEditor(slug);
     } catch (e) {

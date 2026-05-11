@@ -98,7 +98,8 @@
     }
   }
 
-  input[type='text'] {
+  input[type='text'],
+  select {
     background: var(--bg-soft);
     border: 1px solid var(--border);
     color: var(--fg);
@@ -118,6 +119,13 @@
     &[aria-invalid='true'] {
       border-color: #c14b4b;
     }
+  }
+
+  .field-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fg-muted, var(--fg));
+    margin-bottom: -0.25rem;
   }
 
   .error {
