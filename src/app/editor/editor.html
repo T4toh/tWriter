@@ -223,11 +223,11 @@
       <button
         type="button"
         class="lang-toggle"
-        [attr.data-lang]="chapter.meta().idioma ?? 'es'"
-        (click)="toggleLang()"
-        [title]="'Idioma del capítulo (click para alternar entre ES y EN). Afecta RAE y revisión gramatical.'"
+        [attr.data-variant]="resolvedVariant()"
+        (click)="openVariantPicker($event)"
+        [title]="'Variante regional del capítulo (click para elegir). Afecta RAE y revisión gramatical.'"
       >
-        {{ (chapter.meta().idioma ?? 'es').toUpperCase() }}
+        {{ resolvedVariant() }}
       </button>
     }
     <span class="counter">{{ wordCount() }} palabras</span>

@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { GrammarMatch, GrammarMode } from './types';
 import { SettingsService } from './settings-service';
+import { SagaContextService } from './saga-context-service';
 
 interface GrammarCfg {
   mode: GrammarMode;
@@ -20,22 +21,30 @@ export interface LtDockerStatus {
 @Injectable({ providedIn: 'root' })
 export class GrammarService {
   private settings = inject(SettingsService);
+  private sagaCtx = inject(SagaContextService);
 
   readonly available = signal<boolean>(false);
   readonly checking = signal<boolean>(false);
   readonly lastError = signal<string | null>(null);
   readonly mode = this.settings.grammarMode;
   readonly customUrl = this.settings.grammarCustomUrl;
-  readonly autoEnabled = signal<boolean>(false);
 
   readonly canAutoCheck = computed(() => this.mode() === 'local' || this.mode() === 'custom');
+  /**
+   * Auto-check activo. Se prende solo cuando LT responde (available) y el
+   * modo lo permite (local/custom). El usuario solo lo "destraba" desde el
+   * toggle (que persiste `grammarAutoDisabled`).
+   */
+  readonly autoEnabled = computed(
+    () => this.available() && this.canAutoCheck() && !this.settings.grammarAutoDisabled(),
+  );
 
   private buildCfg(): GrammarCfg {
     return {
       mode: this.mode(),
       customUrl: this.customUrl(),
-      variantEs: this.settings.grammarVariantEs(),
-      variantEn: this.settings.grammarVariantEn(),
+      variantEs: this.sagaCtx.varianteEs() ?? this.settings.grammarVariantEs(),
+      variantEn: this.sagaCtx.varianteEn() ?? this.settings.grammarVariantEn(),
     };
   }
 
@@ -70,18 +79,11 @@ export class GrammarService {
   }
 
   toggleAuto(): void {
-    if (!this.canAutoCheck()) {
-      this.autoEnabled.set(false);
-      return;
-    }
-    this.autoEnabled.update((v) => !v);
+    void this.settings.setGrammarAutoDisabled(!this.settings.grammarAutoDisabled());
   }
 
   async setMode(mode: GrammarMode, customUrl?: string | null): Promise<void> {
     await this.settings.setGrammarMode(mode, customUrl ?? null);
-    if (!this.canAutoCheck()) {
-      this.autoEnabled.set(false);
-    }
     await this.ping();
   }
 

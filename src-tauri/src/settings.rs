@@ -39,6 +39,14 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub grammar_variant_en: Option<String>,
+    /// Si true, el auto-check de gramática queda apagado aunque LT esté
+    /// disponible. Default false (auto se activa solo cuando LT responde).
+    #[serde(
+        default,
+        rename = "grammarAutoDisabled",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub grammar_auto_disabled: Option<bool>,
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {

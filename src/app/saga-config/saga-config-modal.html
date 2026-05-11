@@ -50,6 +50,30 @@
             </select>
           </label>
         </div>
+        <div class="row split">
+          <label>
+            <span>Variante ES (gramática)</span>
+            <select
+              [ngModel]="c.variante_es"
+              (ngModelChange)="update('variante_es', $event === '' ? null : $event)"
+            >
+              <option [ngValue]="null">Heredar global ({{ globalVariantEs() }})</option>
+              <option value="es-AR">es-AR — Argentina (voseo)</option>
+              <option value="es-ES">es-ES — España</option>
+            </select>
+          </label>
+          <label>
+            <span>Variante EN (gramática)</span>
+            <select
+              [ngModel]="c.variante_en"
+              (ngModelChange)="update('variante_en', $event === '' ? null : $event)"
+            >
+              <option [ngValue]="null">Heredar global ({{ globalVariantEn() }})</option>
+              <option value="en-US">en-US — Inglés (US)</option>
+              <option value="en-GB">en-GB — Inglés (UK)</option>
+            </select>
+          </label>
+        </div>
         <div class="row">
           <label>
             <span>Tapa de saga (imagen)</span>

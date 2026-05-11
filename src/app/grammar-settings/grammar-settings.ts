@@ -69,6 +69,7 @@ export class GrammarSettings {
     } finally {
       this.dockerBusy.set(null);
       await this.refreshDockerStatus();
+      await this.grammar.ping();
     }
   }
 
@@ -83,6 +84,7 @@ export class GrammarSettings {
     } finally {
       this.dockerBusy.set(null);
       await this.refreshDockerStatus();
+      await this.grammar.ping();
     }
   }
 

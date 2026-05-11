@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { FontsService } from '../core/fonts-service';
 import { SagaConfig, SagaConfigService } from '../core/saga-config-service';
+import { SettingsService } from '../core/settings-service';
 import { ThemesService } from '../core/themes-service';
 import { Theme, ThemeRef } from '../core/types';
 
@@ -16,6 +17,10 @@ export class SagaConfigModal {
   private svc = inject(SagaConfigService);
   protected themesSvc = inject(ThemesService);
   private fontsSvc = inject(FontsService);
+  private settings = inject(SettingsService);
+
+  protected readonly globalVariantEs = this.settings.grammarVariantEs;
+  protected readonly globalVariantEn = this.settings.grammarVariantEn;
 
   protected readonly editing = this.svc.editing;
   protected readonly config = signal<SagaConfig | null>(null);
@@ -147,6 +152,8 @@ export class SagaConfigModal {
         nombre: cfg.nombre ?? '',
         autor: cfg.autor ?? '',
         idioma: cfg.idioma ?? 'es',
+        variante_es: cfg.variante_es ?? null,
+        variante_en: cfg.variante_en ?? null,
         tapa: cfg.tapa ?? '',
         diccionario: cfg.diccionario ?? [],
         imprenta: cfg.imprenta ?? 'Independiente',
@@ -203,6 +210,8 @@ export class SagaConfigModal {
         nombre: cfg.nombre,
         autor: blank(cfg.autor),
         idioma: cfg.idioma,
+        variante_es: cfg.variante_es ?? null,
+        variante_en: cfg.variante_en ?? null,
         tapa: blank(cfg.tapa),
         diccionario: palabras.length > 0 ? palabras : null,
         imprenta: blank(cfg.imprenta),

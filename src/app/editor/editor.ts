@@ -129,6 +129,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private grammarHostListener: ((e: MouseEvent) => void) | null = null;
   private grammarDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private skipNextGrammarRemap = false;
+  private lastAutoEnabled = false;
 
   constructor() {
     effect(() => {
@@ -141,6 +142,17 @@ export class Editor implements AfterViewInit, OnDestroy {
       const html = untracked(() => this.chapter.content());
       const editable = !!node?.editable;
 
+      // Limpiar las marcas del capítulo anterior antes de cargar el nuevo
+      // para que no se vea "todo marcado" durante el round-trip a LT.
+      this.grammarMatches.set([]);
+      this.applyDecorations([]);
+      this.grammarPopover.set(null);
+      if (this.grammarDebounceHandle !== null) {
+        clearTimeout(this.grammarDebounceHandle);
+        this.grammarDebounceHandle = null;
+      }
+      this.skipNextGrammarRemap = true;
+
       if (!this.tiptap) {
         this.createEditor(editable ? html : '', editable);
       } else {
@@ -149,6 +161,34 @@ export class Editor implements AfterViewInit, OnDestroy {
       }
       this.lastLoadedAt = at;
       this.refreshState();
+
+      // Si el auto-check está prendido, lanzar el chequeo del nuevo capítulo
+      // de inmediato (sin debounce) para que las marcas reaparezcan rápido y
+      // el spinner del botón LT haga el "loading" desde el cambio de archivo.
+      if (
+        editable &&
+        this.grammar.autoEnabled() &&
+        this.canAutoGrammar() &&
+        this.canCheckGrammar()
+      ) {
+        void this.checkGrammar();
+      }
+    });
+
+    // Auto-check de gramática: cuando LT pasa a disponible (y el modo lo
+    // permite + el user no lo destrabó), arrancamos solos. Al apagarse,
+    // limpiamos las marcas.
+    effect(() => {
+      const on = this.grammar.autoEnabled();
+      if (on === this.lastAutoEnabled) return;
+      this.lastAutoEnabled = on;
+      if (!this.viewReady() || !this.tiptap) return;
+      if (on) {
+        if (this.canCheckGrammar()) void this.checkGrammar();
+      } else {
+        this.grammarMatches.set([]);
+        this.applyDecorations([]);
+      }
     });
   }
 
@@ -316,9 +356,43 @@ export class Editor implements AfterViewInit, OnDestroy {
     void this.chapter.importChapter(node);
   }
 
-  protected toggleLang(): void {
+  protected readonly resolvedVariant = computed<string>(() => {
+    const idioma = this.chapter.meta().idioma;
+    if (idioma === 'en') {
+      return this.sagaCtx.varianteEn() ?? this.settings.grammarVariantEn();
+    }
+    if (idioma === 'es') {
+      return this.sagaCtx.varianteEs() ?? this.settings.grammarVariantEs();
+    }
+    return this.sagaCtx.varianteEs() ?? this.settings.grammarVariantEs();
+  });
+
+  private static readonly VARIANT_PICKER_OPTIONS: ReadonlyArray<{ code: string; label: string }> = [
+    { code: 'es-AR', label: 'es-AR — Argentina (voseo)' },
+    { code: 'es-ES', label: 'es-ES — España' },
+    { code: 'en-US', label: 'en-US — Inglés (US)' },
+    { code: 'en-GB', label: 'en-GB — Inglés (UK)' },
+  ];
+
+  protected openVariantPicker(event: MouseEvent): void {
+    const current = this.resolvedVariant();
+    const entries: CtxMenuEntry[] = Editor.VARIANT_PICKER_OPTIONS.map((opt) => ({
+      label: opt.label + (opt.code === current ? '  ✓' : ''),
+      onClick: () => this.pickVariant(opt.code),
+    }));
+    this.ctxMenu.open(event, entries);
+  }
+
+  private async pickVariant(code: string): Promise<void> {
+    const base: 'es' | 'en' = code.startsWith('en') ? 'en' : 'es';
     const current = this.chapter.meta().idioma;
-    void this.chapter.setLanguage(current === 'en' ? 'es' : 'en');
+    if (current !== base) {
+      await this.chapter.setLanguage(base);
+    }
+    await this.sagaCtx.setVariante(base, code);
+    if (this.grammar.autoEnabled() && this.canAutoGrammar()) {
+      void this.checkGrammar();
+    }
   }
 
   protected async checkGrammar(): Promise<void> {
@@ -349,12 +423,8 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   protected toggleAutoGrammar(): void {
     this.grammar.toggleAuto();
-    if (!this.grammar.autoEnabled()) {
-      this.grammarMatches.set([]);
-      this.applyDecorations([]);
-    } else {
-      void this.checkGrammar();
-    }
+    // El effect en el constructor reacciona al cambio de `autoEnabled` y
+    // dispara checkGrammar() o limpia las marcas según corresponda.
   }
 
   protected dismissPrivacyBanner(): void {
@@ -469,8 +539,13 @@ export class Editor implements AfterViewInit, OnDestroy {
         this.refreshState();
         if (!transaction.docChanged) return;
         if (this.skipNextGrammarRemap) {
+          // Transacción inducida por el cambio de capítulo: no remapear,
+          // no agendar recheck (el effect ya disparó el check inmediato).
           this.skipNextGrammarRemap = false;
-        } else if (this.grammarMatches().length > 0) {
+          if (this.grammarPopover()) this.grammarPopover.set(null);
+          return;
+        }
+        if (this.grammarMatches().length > 0) {
           const docSize = transaction.doc.content.size;
           const remapped = this.grammarMatches()
             .map((m) => ({

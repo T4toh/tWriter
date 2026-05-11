@@ -8,6 +8,8 @@ export interface SagaConfig {
   nombre: string;
   autor?: string | null;
   idioma?: string | null;
+  variante_es?: string | null;
+  variante_en?: string | null;
   tapa?: string | null;
   diccionario?: string[] | null;
   imprenta?: string | null;

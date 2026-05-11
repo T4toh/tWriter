@@ -443,12 +443,12 @@
   letter-spacing: 0.05em;
   transition: filter 0.15s ease;
 
-  &[data-lang='es'] {
+  &[data-variant^='es'] {
     background: #c8102e;
     color: white;
   }
 
-  &[data-lang='en'] {
+  &[data-variant^='en'] {
     background: #1e3a8a;
     color: white;
   }
@@ -488,6 +488,7 @@
 .tb-btn.lt-btn {
   width: auto;
   padding: 0 6px;
+  position: relative;
 
   img {
     height: 16px;
@@ -496,13 +497,30 @@
   }
 
   &.checking {
-    animation: lt-pulse 1s ease-in-out infinite;
+    animation: lt-pulse 0.8s ease-in-out infinite;
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+
+    img {
+      animation: lt-img-pulse 0.8s ease-in-out infinite;
+    }
   }
 }
 
 @keyframes lt-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%, 100% {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  50% {
+    background: color-mix(in srgb, var(--accent) 55%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 90%, transparent);
+  }
+}
+
+@keyframes lt-img-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.9); }
 }
 
 /* ─── Grammar inline decorations ─── */
