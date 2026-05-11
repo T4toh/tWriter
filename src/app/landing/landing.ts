@@ -6,6 +6,8 @@ import { ProjectService } from '../core/project-service';
 import { SagaConfigService } from '../core/saga-config-service';
 import { TreeNode } from '../core/types';
 import { ModalService } from '../shared/modal-service';
+import { ContextMenuService } from '../shared/context-menu-service';
+import { NodeActionsService } from '../shared/node-actions-service';
 import { BookCard } from './book-card';
 import { CreateCard } from './create-card';
 import { SagaCard } from './saga-card';
@@ -29,6 +31,8 @@ export class Landing {
   private bookCfg = inject(BookConfigService);
   private sagaCfg = inject(SagaConfigService);
   private modal = inject(ModalService);
+  private ctxMenu = inject(ContextMenuService);
+  private actions = inject(NodeActionsService);
 
   protected readonly browsing = this.nav.browsingPath;
   protected readonly creating = signal<boolean>(false);
@@ -173,6 +177,19 @@ export class Landing {
 
   protected goCrumb(crumb: Crumb): void {
     this.nav.setBrowsing(crumb.node?.path ?? null);
+  }
+
+  protected onCardContextMenu(event: MouseEvent, node: TreeNode): void {
+    this.ctxMenu.open(event, this.actions.buildNodeMenu(node));
+  }
+
+  /** Click derecho en el área vacía (sin items y sin saga current) → ofrece crear saga. */
+  protected onEmptyContext(event: MouseEvent): void {
+    const node = this.currentNode();
+    if (node) return; // dejá burbujar; el menú del header del nodo aplica si quieren editar
+    const items = this.actions.buildEmptyMenu();
+    if (items.length === 0) return;
+    this.ctxMenu.open(event, items);
   }
 
   protected async createCapituloHere(): Promise<void> {

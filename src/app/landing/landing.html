@@ -16,33 +16,42 @@
 
 @if (currentNode(); as node) {
   @if (node.kind === 'book') {
-    <div class="book-header">
+    <div class="book-header" (contextmenu)="onCardContextMenu($event, node)">
       <app-book-card [node]="node" (select)="onItemClick(node)" />
     </div>
   } @else if (node.kind === 'saga') {
-    <div class="saga-header-wrap">
+    <div class="saga-header-wrap" (contextmenu)="onCardContextMenu($event, node)">
       <app-saga-header [node]="node" />
     </div>
   }
 }
 
 @if (items().length === 0 && !canCreateCapitulo() && !canCreateEpilogo() && !canCreateParte() && !canCreateBook()) {
-  <p class="empty">
-    Sin items todavía. Click derecho en el árbol para crear.
+  <p class="empty" (contextmenu)="onEmptyContext($event)">
+    Sin items todavía. Click derecho acá para crear una saga.
   </p>
 } @else {
   <div class="grid" [attr.data-mode]="items()[0]?.kind === 'book' ? 'books' : 'generic'">
     @for (item of items(); track item.path) {
       @if (item.kind === 'book') {
-        <app-book-card [node]="item" (select)="onBookSelect($event)" />
+        <app-book-card
+          [node]="item"
+          (select)="onBookSelect($event)"
+          (contextmenu)="onCardContextMenu($event, item)"
+        />
       } @else if (item.kind === 'saga') {
-        <app-saga-card [node]="item" (select)="onBookSelect($event)" />
+        <app-saga-card
+          [node]="item"
+          (select)="onBookSelect($event)"
+          (contextmenu)="onCardContextMenu($event, item)"
+        />
       } @else {
         <button
           type="button"
           class="card"
           [attr.data-kind]="item.kind"
           (click)="onItemClick(item)"
+          (contextmenu)="onCardContextMenu($event, item)"
         >
           <div class="card-head">
             <span class="kind">{{ kindLabel(item.kind) }}</span>
