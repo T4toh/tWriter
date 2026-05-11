@@ -1,37 +1,25 @@
 import { Component, HostListener, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import { invoke } from '@tauri-apps/api/core';
 import { openPath } from '@tauri-apps/plugin-opener';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { ExtraEntry, ExtrasService } from '../core/extras-service';
 import { ExportEntry, ExportsService } from '../core/exports-service';
 import { FontsService } from '../core/fonts-service';
-import { ImageViewerService } from '../core/image-viewer-service';
 import { NavigationService } from '../core/navigation-service';
-import { SagaConfigService } from '../core/saga-config-service';
 import { ProjectService } from '../core/project-service';
 import { SettingsService } from '../core/settings-service';
 import { ThemesService } from '../core/themes-service';
 import { ToastService } from '../core/toast-service';
 import { FontEntry, ThemeMeta, TreeNode } from '../core/types';
 import { ModalService } from '../shared/modal-service';
+import { ContextMenuService } from '../shared/context-menu-service';
+import { NodeActionsService } from '../shared/node-actions-service';
 
 const FONT_EXT_RE = /\.(ttf|otf|woff|woff2)$/i;
 type DropScope =
   | { kind: 'fs'; path: string }
   | { kind: 'theme'; id: string };
-
-interface ContextMenu {
-  x: number;
-  y: number;
-  node: TreeNode | null;
-  extra: { scopePath: string; entry: ExtraEntry } | null;
-  font: { scopePath: string; entry: FontEntry } | null;
-  theme: ThemeMeta | null;
-}
 
 @Component({
   selector: 'app-tree',
@@ -44,15 +32,14 @@ export class Tree implements OnDestroy {
   private chapter = inject(ChapterService);
   private settings = inject(SettingsService);
   private nav = inject(NavigationService);
-  private bookCfg = inject(BookConfigService);
-  private sagaCfg = inject(SagaConfigService);
   private extras = inject(ExtrasService);
   private exports = inject(ExportsService);
   private fonts = inject(FontsService);
   private themesSvc = inject(ThemesService);
-  private imageViewer = inject(ImageViewerService);
   private toast = inject(ToastService);
   private modal = inject(ModalService);
+  private ctxMenu = inject(ContextMenuService);
+  private actions = inject(NodeActionsService);
 
   /** Cache de fuentes per-saga/per-book (mismo patrón que extras). */
   private readonly fontsLoaded = signal<Set<string>>(new Set());
@@ -87,9 +74,15 @@ export class Tree implements OnDestroy {
     walk(root, []);
     return set;
   });
-  protected readonly menu = signal<ContextMenu | null>(null);
   /** Path del scope (saga/book) que está siendo target de drag&drop OS files. */
   protected readonly dragOverScope = signal<string | null>(null);
+
+  private readonly explicit = signal<Map<string, boolean>>(new Map());
+  private readonly forceState = signal<'collapsed' | 'expanded' | null>(null);
+  /** Estado expand/collapse de la sección Extras por scopePath. Default: collapsed. */
+  private readonly extrasExpanded = signal<Set<string>>(new Set());
+  /** Estado expand/collapse de la sección Exportados por bookPath. Default: collapsed. */
+  private readonly exportsExpanded = signal<Set<string>>(new Set());
 
   private dragUnlisten: (() => void) | null = null;
 
@@ -111,6 +104,8 @@ export class Tree implements OnDestroy {
     this.dragUnlisten?.();
   }
 
+  // ───── Extras / exports (left-click + UI state) ─────
+
   protected getExtras(scopePath: string): ExtraEntry[] {
     return this.extras.get(scopePath);
   }
@@ -125,410 +120,6 @@ export class Tree implements OnDestroy {
 
   protected hasLoadedExports(bookPath: string): boolean {
     return this.exports.hasLoaded(bookPath);
-  }
-
-  // ───── Fonts (per-saga/per-book) ─────
-
-  protected getFonts(scopePath: string): FontEntry[] {
-    return this.fonts.get(scopePath);
-  }
-
-  protected hasLoadedFonts(scopePath: string): boolean {
-    return this.fontsLoaded().has(scopePath);
-  }
-
-  protected isFontsExpanded(scopePath: string): boolean {
-    return this.fontsExpanded().has(scopePath);
-  }
-
-  protected toggleFonts(scopePath: string): void {
-    const expanded = this.fontsExpanded().has(scopePath);
-    this.fontsExpanded.update((s) => {
-      const next = new Set(s);
-      if (expanded) next.delete(scopePath);
-      else next.add(scopePath);
-      return next;
-    });
-    if (!expanded && !this.hasLoadedFonts(scopePath)) {
-      void this.refreshFonts(scopePath);
-    }
-  }
-
-  private async refreshFonts(scopePath: string): Promise<void> {
-    try {
-      await this.fonts.refresh(scopePath);
-      this.fontsLoaded.update((s) => new Set([...s, scopePath]));
-    } catch (e) {
-      this.toast.error(`No se pudieron cargar fuentes: ${e}`);
-    }
-  }
-
-  protected async openFont(_scopePath: string, entry: FontEntry): Promise<void> {
-    try {
-      await openPath(entry.path);
-    } catch (e) {
-      this.toast.error(`No se pudo abrir: ${e}`);
-    }
-  }
-
-  protected onFontContextMenu(event: MouseEvent, scopePath: string, entry: FontEntry): void {
-    event.preventDefault();
-    event.stopPropagation();
-    this.menu.set({
-      x: event.clientX,
-      y: event.clientY,
-      node: null,
-      extra: null,
-      font: { scopePath, entry },
-      theme: null,
-    });
-  }
-
-  // ───── Themes (root level) ─────
-
-  protected readonly themesList = computed(() => this.themesSvc.list());
-
-  protected isThemesExpanded(): boolean {
-    return this.themesExpanded();
-  }
-
-  protected toggleThemes(): void {
-    const expanded = this.themesExpanded();
-    this.themesExpanded.set(!expanded);
-    if (!expanded && !this.themesSvc.hasLoaded()) {
-      void this.refreshThemes();
-    }
-  }
-
-  private async refreshThemes(): Promise<void> {
-    try {
-      await this.themesSvc.refresh();
-    } catch (e) {
-      this.toast.error(`No se pudieron cargar temas: ${e}`);
-    }
-  }
-
-  protected openTheme(theme: ThemeMeta): void {
-    this.themesSvc.openEditor(theme.id);
-  }
-
-  protected onThemeContextMenu(event: MouseEvent, theme: ThemeMeta): void {
-    event.preventDefault();
-    event.stopPropagation();
-    this.menu.set({
-      x: event.clientX,
-      y: event.clientY,
-      node: null,
-      extra: null,
-      font: null,
-      theme,
-    });
-  }
-
-  protected async createTheme(): Promise<void> {
-    if (!this.settings.root()) {
-      this.toast.error('Elegí una carpeta primero');
-      return;
-    }
-    if (!this.themesSvc.hasLoaded()) {
-      await this.themesSvc.refresh();
-    }
-    const themes = this.themesSvc.list();
-    const opciones = [
-      { value: '', label: '(vacío)' },
-      ...themes.map((t) => ({
-        value: t.id,
-        label: t.nombre && t.nombre !== t.id ? `${t.id} — ${t.nombre}` : t.id,
-      })),
-    ];
-    const res = await this.modal.selectPrompt({
-      title: 'Nuevo tema',
-      selectLabel: 'Plantilla',
-      selectOptions: opciones,
-      selectDefault: '',
-      inputLabel: 'ID del tema (slug, sin espacios — ej: "reedsy-classic")',
-      inputPlaceholder: 'reedsy-classic',
-      okLabel: 'Crear',
-      validate: ({ selected, value }) => {
-        const t = value.trim();
-        if (!t) return 'ID vacío';
-        if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
-        if (t.includes(' ')) return 'Sin espacios; usá guiones';
-        if (t === selected) return 'Mismo ID que la plantilla';
-        if (themes.some((x) => x.id === t)) return 'Ya existe un tema con ese ID';
-        return null;
-      },
-    });
-    if (!res) return;
-    const slug = res.value.trim();
-    try {
-      if (res.selected) {
-        await this.themesSvc.duplicate(res.selected, slug);
-      } else {
-        await this.themesSvc.create(slug, { id: slug, nombre: slug });
-      }
-      this.themesExpanded.set(true);
-      this.themesSvc.openEditor(slug);
-    } catch (e) {
-      this.toast.error(`No se pudo crear: ${e}`);
-    }
-  }
-
-  protected async renameTheme(): Promise<void> {
-    const m = this.menu();
-    if (!m?.theme) return;
-    const old = m.theme.id;
-    this.closeMenu();
-    const newId = await this.modal.prompt({
-      title: 'Renombrar tema',
-      message: 'Nuevo ID. Las sagas y libros que apunten al ID viejo quedarán dangling.',
-      defaultValue: old,
-      validate: (v) => {
-        const t = v.trim();
-        if (!t) return 'ID vacío';
-        if (t === old) return 'Mismo ID';
-        if (t.includes('/') || t.includes('\\') || t.includes(' ')) return 'Inválido';
-        return null;
-      },
-    });
-    if (!newId?.trim() || newId.trim() === old) return;
-    try {
-      await this.themesSvc.rename(old, newId.trim());
-      this.toast.warn(
-        'Tema renombrado. Si alguna saga o novela apuntaba al ID viejo, ' +
-          'tenés que actualizarla a mano.',
-      );
-    } catch (e) {
-      this.toast.error(`No se pudo renombrar: ${e}`);
-    }
-  }
-
-  protected async duplicateTheme(): Promise<void> {
-    const m = this.menu();
-    if (!m?.theme) return;
-    const src = m.theme.id;
-    this.closeMenu();
-    const dst = await this.modal.prompt({
-      title: 'Duplicar tema',
-      message: `Crear copia de "${src}" con qué ID?`,
-      defaultValue: `${src}-copia`,
-      validate: (v) => {
-        const t = v.trim();
-        if (!t) return 'ID vacío';
-        if (t === src) return 'Mismo ID que el origen';
-        if (t.includes('/') || t.includes('\\') || t.includes(' ')) return 'Inválido';
-        return null;
-      },
-    });
-    if (!dst?.trim()) return;
-    try {
-      await this.themesSvc.duplicate(src, dst.trim());
-      this.toast.success(`Tema "${dst.trim()}" creado`);
-    } catch (e) {
-      this.toast.error(`No se pudo duplicar: ${e}`);
-    }
-  }
-
-  protected async deleteTheme(): Promise<void> {
-    const m = this.menu();
-    if (!m?.theme) return;
-    const id = m.theme.id;
-    this.closeMenu();
-    const ok = await this.modal.confirm({
-      title: 'Borrar tema',
-      message: `Borrar tema "${id}"? La carpeta themes/${id}/ y sus fuentes se eliminan del disco.`,
-      danger: true,
-    });
-    if (!ok) return;
-    try {
-      await this.themesSvc.delete(id);
-    } catch (e) {
-      this.toast.error(`No se pudo borrar: ${e}`);
-    }
-  }
-
-  // ───── Font context menu actions ─────
-
-  protected async renameFont(): Promise<void> {
-    const m = this.menu();
-    if (!m?.font) return;
-    const { scopePath, entry } = m.font;
-    this.closeMenu();
-    const newName = await this.modal.prompt({
-      title: 'Renombrar fuente',
-      defaultValue: entry.name,
-      validate: (v) => {
-        const t = v.trim();
-        if (!t) return 'Nombre vacío';
-        if (t === entry.name) return 'Mismo nombre';
-        if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
-        if (!FONT_EXT_RE.test(t)) return 'Extensión inválida (ttf/otf/woff/woff2)';
-        return null;
-      },
-    });
-    if (!newName?.trim() || newName.trim() === entry.name) return;
-    try {
-      await this.fonts.rename(scopePath, entry.relative_path, newName.trim());
-    } catch (e) {
-      this.toast.error(`No se pudo renombrar: ${e}`);
-    }
-  }
-
-  protected async removeFont(): Promise<void> {
-    const m = this.menu();
-    if (!m?.font) return;
-    const { scopePath, entry } = m.font;
-    this.closeMenu();
-    const ok = await this.modal.confirm({
-      title: 'Borrar fuente',
-      message: `Borrar "${entry.name}"? El archivo se elimina del disco.`,
-      danger: true,
-    });
-    if (!ok) return;
-    try {
-      await this.fonts.remove(scopePath, entry.relative_path);
-    } catch (e) {
-      this.toast.error(`No se pudo borrar: ${e}`);
-    }
-  }
-
-  /** Acciones disponibles para el nodo del menú. */
-  protected readonly menuActions = computed(() => {
-    const m = this.menu();
-    if (!m) return null;
-    if (m.extra) {
-      return {
-        importThis: false,
-        deleteOriginal: false,
-        deleteFile: false,
-        deleteDir: false,
-        importBulk: 0,
-        cleanupBulk: 0,
-        createChapter: false,
-        createSection: false,
-        createBook: false,
-        createSaga: false,
-        moveable: false,
-        exportEpub: false,
-        configBook: false,
-        configSaga: false,
-        excludable: false,
-        includable: false,
-        addExtra: false,
-        openExtra: true,
-        renameExtra: true,
-        removeExtra: true,
-        markAsEpilogo: false,
-        renameable: false,
-      };
-    }
-    const node = m.node;
-    if (!node) {
-      return {
-        importThis: false,
-        deleteOriginal: false,
-        deleteFile: false,
-        deleteDir: false,
-        importBulk: 0,
-        cleanupBulk: 0,
-        createChapter: false,
-        createSection: false,
-        createBook: false,
-        createSaga: !!this.settings.root(),
-        moveable: false,
-        exportEpub: false,
-        configBook: false,
-        configSaga: false,
-        excludable: false,
-        includable: false,
-        addExtra: false,
-        openExtra: false,
-        renameExtra: false,
-        removeExtra: false,
-        markAsEpilogo: false,
-        renameable: false,
-      };
-    }
-    if (node.kind === 'chapter') {
-      const isImportable = node.ext === 'odt' || node.ext === 'docx';
-      const hasHtml = isImportable && this.hasHtmlSibling(node);
-      return {
-        importThis: isImportable && !node.editable,
-        deleteOriginal: isImportable && hasHtml,
-        deleteFile: true,
-        deleteDir: false,
-        importBulk: 0,
-        cleanupBulk: 0,
-        createChapter: false,
-        createSection: false,
-        createBook: false,
-        createSaga: false,
-        moveable: this.isMoveable(node),
-        exportEpub: false,
-        configBook: false,
-        configSaga: false,
-        excludable: false,
-        includable: false,
-        addExtra: false,
-        openExtra: false,
-        renameExtra: false,
-        removeExtra: false,
-        markAsEpilogo: false,
-        renameable: true,
-      };
-    }
-    const importable = this.collectImportable(node);
-    const cleanable = this.collectCleanable(node);
-    const isExcluded = !!node.excluded;
-    const canAddExtra = !isExcluded && (node.kind === 'saga' || node.kind === 'book');
-    return {
-      importThis: false,
-      deleteOriginal: false,
-      deleteFile: false,
-      deleteDir: true,
-      importBulk: isExcluded ? 0 : importable.length,
-      cleanupBulk: isExcluded ? 0 : cleanable.length,
-      createChapter: !isExcluded && (node.kind === 'book' || node.kind === 'section'),
-      createSection: !isExcluded && node.kind === 'book',
-      createBook: !isExcluded && node.kind === 'saga',
-      createSaga: false,
-      moveable: !isExcluded && node.kind !== 'saga' && this.isMoveable(node),
-      exportEpub: !isExcluded && node.kind === 'book',
-      configBook: !isExcluded && node.kind === 'book',
-      configSaga: !isExcluded && node.kind === 'saga',
-      excludable: !isExcluded,
-      includable: isExcluded,
-      addExtra: canAddExtra,
-      openExtra: false,
-      renameExtra: false,
-      removeExtra: false,
-      markAsEpilogo: !isExcluded && node.kind === 'section' && isEpilogoName(node.name),
-      renameable: !isExcluded,
-    };
-  });
-
-  private isMoveable(node: TreeNode): boolean {
-    if (node.kind === 'chapter') {
-      return /^\d+$/.test(node.name);
-    }
-    return /^\d+\s*-/.test(node.name);
-  }
-
-  private readonly explicit = signal<Map<string, boolean>>(new Map());
-  private readonly forceState = signal<'collapsed' | 'expanded' | null>(null);
-  /** Estado expand/collapse de la sección Extras por scopePath. Default: collapsed. */
-  private readonly extrasExpanded = signal<Set<string>>(new Set());
-  /** Estado expand/collapse de la sección Exportados por bookPath. Default: collapsed. */
-  private readonly exportsExpanded = signal<Set<string>>(new Set());
-
-  protected isExpanded(node: TreeNode): boolean {
-    const force = this.forceState();
-    if (force === 'collapsed') return false;
-    if (force === 'expanded') return true;
-    const e = this.explicit().get(node.path);
-    if (e !== undefined) return e;
-    if (node.kind === 'saga' || node.kind === 'book') return true;
-    return this.ancestorPaths().has(node.path);
   }
 
   protected isExtrasExpanded(scopePath: string): boolean {
@@ -589,6 +180,144 @@ export class Tree implements OnDestroy {
     }
   }
 
+  protected openExtraEntry(scopePath: string, entry: ExtraEntry): void {
+    void this.actions.openExtra(scopePath, entry);
+  }
+
+  // ───── Fonts (per-saga/per-book) ─────
+
+  protected getFonts(scopePath: string): FontEntry[] {
+    return this.fonts.get(scopePath);
+  }
+
+  protected hasLoadedFonts(scopePath: string): boolean {
+    return this.fontsLoaded().has(scopePath);
+  }
+
+  protected isFontsExpanded(scopePath: string): boolean {
+    return this.fontsExpanded().has(scopePath);
+  }
+
+  protected toggleFonts(scopePath: string): void {
+    const expanded = this.fontsExpanded().has(scopePath);
+    this.fontsExpanded.update((s) => {
+      const next = new Set(s);
+      if (expanded) next.delete(scopePath);
+      else next.add(scopePath);
+      return next;
+    });
+    if (!expanded && !this.hasLoadedFonts(scopePath)) {
+      void this.refreshFonts(scopePath);
+    }
+  }
+
+  private async refreshFonts(scopePath: string): Promise<void> {
+    try {
+      await this.fonts.refresh(scopePath);
+      this.fontsLoaded.update((s) => new Set([...s, scopePath]));
+    } catch (e) {
+      this.toast.error(`No se pudieron cargar fuentes: ${e}`);
+    }
+  }
+
+  protected async openFont(_scopePath: string, entry: FontEntry): Promise<void> {
+    try {
+      await openPath(entry.path);
+    } catch (e) {
+      this.toast.error(`No se pudo abrir: ${e}`);
+    }
+  }
+
+  // ───── Themes (root level) ─────
+
+  protected readonly themesList = computed(() => this.themesSvc.list());
+
+  protected isThemesExpanded(): boolean {
+    return this.themesExpanded();
+  }
+
+  protected toggleThemes(): void {
+    const expanded = this.themesExpanded();
+    this.themesExpanded.set(!expanded);
+    if (!expanded && !this.themesSvc.hasLoaded()) {
+      void this.refreshThemes();
+    }
+  }
+
+  private async refreshThemes(): Promise<void> {
+    try {
+      await this.themesSvc.refresh();
+    } catch (e) {
+      this.toast.error(`No se pudieron cargar temas: ${e}`);
+    }
+  }
+
+  protected openTheme(theme: ThemeMeta): void {
+    this.themesSvc.openEditor(theme.id);
+  }
+
+  /** Crear tema desde plantilla. UI-specific por el auto-expand de la sección "Temas". */
+  protected async createTheme(): Promise<void> {
+    if (!this.settings.root()) {
+      this.toast.error('Elegí una carpeta primero');
+      return;
+    }
+    if (!this.themesSvc.hasLoaded()) {
+      await this.themesSvc.refresh();
+    }
+    const themes = this.themesSvc.list();
+    const opciones = [
+      { value: '', label: '(vacío)' },
+      ...themes.map((t) => ({
+        value: t.id,
+        label: t.nombre && t.nombre !== t.id ? `${t.id} — ${t.nombre}` : t.id,
+      })),
+    ];
+    const res = await this.modal.selectPrompt({
+      title: 'Nuevo tema',
+      selectLabel: 'Plantilla',
+      selectOptions: opciones,
+      selectDefault: '',
+      inputLabel: 'ID del tema (slug, sin espacios — ej: "reedsy-classic")',
+      inputPlaceholder: 'reedsy-classic',
+      okLabel: 'Crear',
+      validate: ({ selected, value }) => {
+        const t = value.trim();
+        if (!t) return 'ID vacío';
+        if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
+        if (t.includes(' ')) return 'Sin espacios; usá guiones';
+        if (t === selected) return 'Mismo ID que la plantilla';
+        if (themes.some((x) => x.id === t)) return 'Ya existe un tema con ese ID';
+        return null;
+      },
+    });
+    if (!res) return;
+    const slug = res.value.trim();
+    try {
+      if (res.selected) {
+        await this.themesSvc.duplicate(res.selected, slug);
+      } else {
+        await this.themesSvc.create(slug, { id: slug, nombre: slug });
+      }
+      this.themesExpanded.set(true);
+      this.themesSvc.openEditor(slug);
+    } catch (e) {
+      this.toast.error(`No se pudo crear: ${e}`);
+    }
+  }
+
+  // ───── Tree expansion / navigation ─────
+
+  protected isExpanded(node: TreeNode): boolean {
+    const force = this.forceState();
+    if (force === 'collapsed') return false;
+    if (force === 'expanded') return true;
+    const e = this.explicit().get(node.path);
+    if (e !== undefined) return e;
+    if (node.kind === 'saga' || node.kind === 'book') return true;
+    return this.ancestorPaths().has(node.path);
+  }
+
   protected toggle(node: TreeNode): void {
     this.nav.setBrowsing(node.path);
     this.chapter.close();
@@ -623,185 +352,28 @@ export class Tree implements OnDestroy {
     }
   }
 
+  // ───── Context menus (delegan al NodeActionsService) ─────
+
   protected onContextMenu(event: MouseEvent, node: TreeNode): void {
-    event.preventDefault();
-    event.stopPropagation();
-    this.menu.set({ x: event.clientX, y: event.clientY, node, extra: null, font: null, theme: null });
+    this.ctxMenu.open(event, this.actions.buildNodeMenu(node));
   }
 
   protected onExtraContextMenu(event: MouseEvent, scopePath: string, entry: ExtraEntry): void {
-    event.preventDefault();
-    event.stopPropagation();
-    this.menu.set({ x: event.clientX, y: event.clientY, node: null, extra: { scopePath, entry }, font: null, theme: null });
+    this.ctxMenu.open(event, this.actions.buildExtraMenu(scopePath, entry));
   }
 
   protected onEmptyContext(event: MouseEvent): void {
-    event.preventDefault();
-    this.menu.set({ x: event.clientX, y: event.clientY, node: null, extra: null, font: null, theme: null });
+    const items = this.actions.buildEmptyMenu();
+    if (items.length === 0) return; // dejá burbujar al handler global
+    this.ctxMenu.open(event, items);
   }
 
-  protected closeMenu(): void {
-    this.menu.set(null);
+  protected onThemeContextMenu(event: MouseEvent, theme: ThemeMeta): void {
+    this.ctxMenu.open(event, this.actions.buildThemeMenu(theme));
   }
 
-  protected async importThis(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    this.closeMenu();
-    await this.chapter.importChapter(m.node);
-  }
-
-  protected async deleteOriginal(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    this.closeMenu();
-    await this.chapter.deleteOriginal(m.node);
-  }
-
-  protected async importBulk(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    const nodes = this.collectImportable(m.node);
-    this.closeMenu();
-    if (nodes.length === 0) return;
-    await this.chapter.bulkImport(nodes);
-  }
-
-  protected async cleanupBulk(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    const nodes = this.collectCleanable(m.node);
-    this.closeMenu();
-    if (nodes.length === 0) return;
-    const ok = await this.modal.confirm({
-      title: 'Borrar originales',
-      message: `Borrar ${nodes.length} archivo${nodes.length === 1 ? '' : 's'} original${nodes.length === 1 ? '' : 'es'} (.odt/.docx)?\nSolo se borran los que ya tienen .html.`,
-      danger: true,
-    });
-    if (!ok) return;
-    await this.chapter.bulkCleanup(nodes);
-  }
-
-  protected async deleteFile(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    const node = m.node;
-    this.closeMenu();
-    const ok = await this.modal.confirm({
-      title: 'Borrar capítulo',
-      message: `Borrar ${node.name}.${node.ext}?\nSe borra el archivo y su .meta.json.`,
-      danger: true,
-    });
-    if (!ok) return;
-    await this.chapter.deleteChapterFile(node);
-  }
-
-  protected async deleteDir(): Promise<void> {
-    const m = this.menu();
-    const root = this.settings.root();
-    if (!m || !m.node || !root) return;
-    const node = m.node;
-    this.closeMenu();
-    const ok = await this.modal.confirm({
-      title: 'Borrar carpeta',
-      message: `BORRAR carpeta "${node.name}" y todo su contenido?\nEsto es irreversible. Si tenés sync git, podés recuperar haciendo git checkout.`,
-      danger: true,
-    });
-    if (!ok) return;
-    await this.chapter.deleteDirectory(node, root);
-  }
-
-  protected async createChapter(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    this.closeMenu();
-    await this.chapter.createChapter(m.node.path);
-  }
-
-  protected async createSection(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    const node = m.node;
-    this.closeMenu();
-    const name = await this.modal.prompt({
-      title: 'Nuevo capítulo',
-      message: 'Sin número, se prepende automático.',
-      placeholder: 'Nombre',
-      validate: (v) => (v.trim() ? null : 'Ingresá un nombre'),
-    });
-    if (!name?.trim()) return;
-    await this.chapter.createDirectory(node.path, name.trim(), true);
-  }
-
-  protected async createBook(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    const node = m.node;
-    this.closeMenu();
-    const name = await this.modal.prompt({
-      title: 'Nuevo libro',
-      message: 'Sin número, se prepende automático.',
-      placeholder: 'Nombre',
-      validate: (v) => (v.trim() ? null : 'Ingresá un nombre'),
-    });
-    if (!name?.trim()) return;
-    await this.chapter.createBook(node.path, name.trim());
-  }
-
-  protected async createSaga(): Promise<void> {
-    const root = this.settings.root();
-    if (!root) return;
-    this.closeMenu();
-    const name = await this.modal.prompt({
-      title: 'Nueva saga / novela',
-      placeholder: 'Nombre',
-      validate: (v) => (v.trim() ? null : 'Ingresá un nombre'),
-    });
-    if (!name?.trim()) return;
-    await this.chapter.createDirectory(root, name.trim(), false);
-  }
-
-  protected async moveUp(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    this.closeMenu();
-    await this.chapter.moveNode(m.node, 'up');
-  }
-
-  protected async moveDown(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    this.closeMenu();
-    await this.chapter.moveNode(m.node, 'down');
-  }
-
-  protected async exportEpub(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    this.closeMenu();
-    await this.chapter.exportEpub(m.node);
-  }
-
-  protected configBook(): void {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    this.closeMenu();
-    this.bookCfg.openFor(m.node);
-  }
-
-  protected configSaga(): void {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    this.closeMenu();
-    this.sagaCfg.openFor(m.node);
-  }
-
-  protected async renameNode(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    const node = m.node;
-    this.closeMenu();
-    await this.renameNodeFor(node);
+  protected onFontContextMenu(event: MouseEvent, scopePath: string, entry: FontEntry): void {
+    this.ctxMenu.open(event, this.actions.buildFontMenu(scopePath, entry));
   }
 
   @HostListener('window:keydown.F2', ['$event'])
@@ -810,213 +382,14 @@ export class Tree implements OnDestroy {
     if (target && target.matches('input, textarea, [contenteditable="true"]')) {
       return;
     }
-    const m = this.menu();
-    const node = m?.node ?? this.chapter.active() ?? this.findNodeByPath(this.root(), this.browsingPath() ?? '');
+    const node = this.chapter.active() ?? findNodeByPath(this.root(), this.browsingPath() ?? '');
     if (!node) return;
     event.preventDefault();
-    if (m) this.closeMenu();
-    void this.renameNodeFor(node);
+    this.ctxMenu.close();
+    void this.actions.renameNode(node);
   }
 
-  private async renameNodeFor(node: TreeNode): Promise<void> {
-    const current = node.kind === 'chapter' && node.ext
-      ? `${node.name}.${node.ext}`
-      : node.name;
-    const input = await this.modal.prompt({
-      title: 'Renombrar',
-      defaultValue: current,
-      validate: (v) => {
-        const t = v.trim();
-        if (!t) return 'Nombre vacío';
-        if (t === current) return 'Mismo nombre que el actual';
-        if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
-        return null;
-      },
-    });
-    if (!input) return;
-    const trimmed = input.trim();
-    if (!trimmed || trimmed === current) return;
-    const wasActive = this.chapter.active()?.path === node.path;
-    try {
-      const newPath = await invoke<string>('rename_node', {
-        path: node.path,
-        newName: trimmed,
-      });
-      await this.project.loadTree();
-      if (wasActive) {
-        const newNode = this.findNodeByPath(this.root(), newPath);
-        if (newNode) await this.chapter.open(newNode);
-      }
-      this.toast.success(`Renombrado a "${trimmed}"`);
-    } catch (err) {
-      this.toast.error(`Renombrar: ${err}`);
-    }
-  }
-
-  private findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
-    if (!root) return null;
-    if (root.path === path) return root;
-    for (const c of root.children) {
-      const found = this.findNodeByPath(c, path);
-      if (found) return found;
-    }
-    return null;
-  }
-
-  protected async markAsEpilogo(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node || m.node.kind !== 'section') return;
-    const section = m.node;
-    this.closeMenu();
-    try {
-      await invoke<string>('mark_as_epilogo', { sectionPath: section.path });
-      await this.project.loadTree();
-      this.toast.success(`"${section.name}" marcado como epílogo`);
-    } catch (err) {
-      this.toast.error(`Marcar epílogo: ${err}`);
-    }
-  }
-
-  protected async excludeFolder(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    const node = m.node;
-    this.closeMenu();
-    const ok = await this.modal.confirm({
-      title: 'Excluir del EPUB',
-      message: `Excluir "${node.name}" del export EPUB?\nSigue visible en el árbol pero no se incluye al armar el libro.`,
-    });
-    if (!ok) return;
-    try {
-      await invoke('set_directory_excluded', { path: node.path, excluded: true });
-      await this.project.loadTree();
-    } catch (e) {
-      this.toast.error(`No se pudo excluir: ${e}`);
-    }
-  }
-
-  protected async includeFolder(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    const node = m.node;
-    this.closeMenu();
-    try {
-      await invoke('set_directory_excluded', { path: node.path, excluded: false });
-      await this.project.loadTree();
-    } catch (e) {
-      this.toast.error(`No se pudo incluir: ${e}`);
-    }
-  }
-
-  protected async addExtraFromMenu(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.node) return;
-    const scopePath = m.node.path;
-    this.closeMenu();
-    await this.pickAndAddExtras(scopePath);
-  }
-
-  private async pickAndAddExtras(scopePath: string): Promise<void> {
-    const result = await openDialog({
-      multiple: true,
-      directory: false,
-      title: 'Agregar extra(s)',
-    });
-    if (!result) return;
-    const paths = Array.isArray(result) ? result : [result];
-    await this.addExtraFiles(scopePath, paths);
-  }
-
-  private async addExtraFiles(scopePath: string, paths: string[]): Promise<void> {
-    let added = 0;
-    let failed = 0;
-    for (const p of paths) {
-      try {
-        await this.extras.addFromPath(scopePath, p);
-        added++;
-      } catch (e) {
-        failed++;
-        this.toast.error(`Falló agregar ${p}: ${e}`);
-      }
-    }
-    if (added > 0) {
-      this.extrasExpanded.update((s) => new Set([...s, scopePath]));
-      this.toast.info(`Agregado${added === 1 ? '' : 's'} ${added} extra${added === 1 ? '' : 's'}.`);
-    }
-    if (failed > 0 && added === 0) {
-      this.toast.error(`No se pudo agregar ningún extra.`);
-    }
-  }
-
-  protected async openExtra(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.extra) return;
-    const entry = m.extra.entry;
-    this.closeMenu();
-    if (entry.kind === 'image') {
-      void this.imageViewer.open(entry);
-      return;
-    }
-    try {
-      await openPath(entry.path);
-    } catch (e) {
-      this.toast.error(`No se pudo abrir: ${e}`);
-    }
-  }
-
-  protected async renameExtra(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.extra) return;
-    const { scopePath, entry } = m.extra;
-    this.closeMenu();
-    const newName = await this.modal.prompt({
-      title: 'Renombrar archivo',
-      defaultValue: entry.name,
-      validate: (v) => {
-        const t = v.trim();
-        if (!t) return 'Nombre vacío';
-        if (t === entry.name) return 'Mismo nombre que el actual';
-        if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
-        return null;
-      },
-    });
-    if (!newName?.trim() || newName.trim() === entry.name) return;
-    try {
-      await this.extras.rename(scopePath, entry.relative_path, newName.trim());
-    } catch (e) {
-      this.toast.error(`No se pudo renombrar: ${e}`);
-    }
-  }
-
-  protected async removeExtra(): Promise<void> {
-    const m = this.menu();
-    if (!m || !m.extra) return;
-    const { scopePath, entry } = m.extra;
-    this.closeMenu();
-    const ok = await this.modal.confirm({
-      title: 'Borrar extra',
-      message: `Borrar extra "${entry.name}"?\nEl archivo se borra de disco.`,
-      danger: true,
-    });
-    if (!ok) return;
-    try {
-      await this.extras.remove(scopePath, entry.relative_path);
-    } catch (e) {
-      this.toast.error(`No se pudo borrar: ${e}`);
-    }
-  }
-
-  protected async openExtraEntry(_scopePath: string, entry: ExtraEntry): Promise<void> {
-    if (entry.kind === 'image') {
-      void this.imageViewer.open(entry);
-      return;
-    }
-    try {
-      await openPath(entry.path);
-    } catch (e) {
-      this.toast.error(`No se pudo abrir: ${e}`);
-    }
-  }
+  // ───── Drag & drop OS files (tree-specific UI integration) ─────
 
   private async bindDragDrop(): Promise<void> {
     try {
@@ -1087,7 +460,10 @@ export class Tree implements OnDestroy {
       await this.addFontFiles(scope.path, fontPaths);
     }
     if (extraPaths.length > 0) {
-      await this.addExtraFiles(scope.path, extraPaths);
+      const added = await this.actions.addExtraFiles(scope.path, extraPaths);
+      if (added > 0) {
+        this.extrasExpanded.update((s) => new Set([...s, scope.path]));
+      }
     }
   }
 
@@ -1138,62 +514,14 @@ export class Tree implements OnDestroy {
       this.toast.error('No se pudo agregar ninguna fuente al tema.');
     }
   }
-
-  private collectImportable(root: TreeNode): TreeNode[] {
-    const out: TreeNode[] = [];
-    this.walk(root, (n) => {
-      if (
-        n.kind === 'chapter' &&
-        (n.ext === 'odt' || n.ext === 'docx') &&
-        !this.hasHtmlSibling(n, root)
-      ) {
-        out.push(n);
-      }
-    });
-    return out;
-  }
-
-  private collectCleanable(root: TreeNode): TreeNode[] {
-    const out: TreeNode[] = [];
-    this.walk(root, (n) => {
-      if (
-        n.kind === 'chapter' &&
-        (n.ext === 'odt' || n.ext === 'docx') &&
-        this.hasHtmlSibling(n, root)
-      ) {
-        out.push(n);
-      }
-    });
-    return out;
-  }
-
-  private hasHtmlSibling(node: TreeNode, root: TreeNode | null = this.root()): boolean {
-    if (!root) return false;
-    const parent = this.findParent(root, node);
-    if (!parent) return false;
-    const stem = node.name;
-    return parent.children.some(
-      (c) => c.kind === 'chapter' && c.ext === 'html' && c.name === stem,
-    );
-  }
-
-  private findParent(node: TreeNode, target: TreeNode): TreeNode | null {
-    for (const c of node.children) {
-      if (c.path === target.path) return node;
-      const found = this.findParent(c, target);
-      if (found) return found;
-    }
-    return null;
-  }
-
-  private walk(node: TreeNode, fn: (n: TreeNode) => void): void {
-    fn(node);
-    for (const c of node.children) this.walk(c, fn);
-  }
 }
 
-function isEpilogoName(name: string): boolean {
-  const stripped = name.replace(/^\d+\s*-\s*/, '').trim().toLowerCase();
-  const flat = stripped.normalize('NFD').replace(/\p{M}/gu, '');
-  return flat === 'epilogo' || flat === 'epilogue';
+function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
+  if (!root) return null;
+  if (root.path === path) return root;
+  for (const c of root.children) {
+    const found = findNodeByPath(c, path);
+    if (found) return found;
+  }
+  return null;
 }

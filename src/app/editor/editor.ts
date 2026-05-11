@@ -22,6 +22,10 @@ import { GrammarMatch } from '../core/types';
 import { convert as convertRae } from '../dialogos/converter';
 import { Landing } from '../landing/landing';
 import {
+  ContextMenuService,
+  CtxMenuEntry,
+} from '../shared/context-menu-service';
+import {
   Grammar,
   GrammarMatchPos,
   extractPlainText,
@@ -65,6 +69,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected settings = inject(SettingsService);
   protected grammar = inject(GrammarService);
   protected sagaCtx = inject(SagaContextService);
+  private ctxMenu = inject(ContextMenuService);
 
   @ViewChild('host', { static: true })
   hostRef!: ElementRef<HTMLDivElement>;
@@ -75,7 +80,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly dirty = this.chapter.dirty;
   protected readonly chapterError = this.chapter.error;
   protected readonly state = signal<ToolbarState>(EMPTY_STATE);
-  protected readonly menu = signal<{ x: number; y: number } | null>(null);
   protected readonly rae = signal<{ original: string; converted: string } | null>(null);
   protected readonly importing = this.chapter.importing;
   protected readonly canApplyRae = computed(() => {
@@ -168,61 +172,74 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   protected onContextMenu(event: MouseEvent): void {
     if (!this.canEdit() || !this.tiptap) {
-      return;
+      return; // dejá burbujar al handler global de App
     }
-    event.preventDefault();
     this.refreshState();
-    this.menu.set({ x: event.clientX, y: event.clientY });
+    this.ctxMenu.open(event, this.buildEditorItems());
   }
 
-  protected closeMenu(): void {
-    this.menu.set(null);
+  private buildEditorItems(): CtxMenuEntry[] {
+    const s = this.state();
+    const entries: CtxMenuEntry[] = [
+      { label: 'Deshacer', kbd: 'Ctrl+Z', disabled: !s.canUndo, onClick: () => this.undo() },
+      { label: 'Rehacer', kbd: 'Ctrl+Shift+Z', disabled: !s.canRedo, onClick: () => this.redo() },
+      { kind: 'separator' },
+      { label: 'Cortar', kbd: 'Ctrl+X', disabled: !s.hasSelection, onClick: () => this.cut() },
+      { label: 'Copiar', kbd: 'Ctrl+C', disabled: !s.hasSelection, onClick: () => this.copy() },
+      { label: 'Pegar', kbd: 'Ctrl+V', onClick: () => this.paste() },
+      { label: 'Pegar como texto plano', kbd: 'Ctrl+Shift+V', onClick: () => this.pastePlain() },
+      { label: 'Seleccionar todo', kbd: 'Ctrl+A', onClick: () => this.selectAll() },
+    ];
+    if (s.hasSelection) {
+      entries.push(
+        { kind: 'separator' },
+        { label: 'Negrita', kbd: 'Ctrl+B', onClick: () => this.toggleBold() },
+        { label: 'Itálica', kbd: 'Ctrl+I', onClick: () => this.toggleItalic() },
+        { label: 'Subrayado', kbd: 'Ctrl+U', onClick: () => this.toggleUnderline() },
+      );
+    }
+    entries.push(
+      { kind: 'separator' },
+      { label: 'Salto de escena', kbd: '— —', onClick: () => this.insertSceneBreak() },
+    );
+    return entries;
   }
 
   protected toggleBold(): void {
     this.tiptap?.chain().focus().toggleBold().run();
-    this.closeMenu();
   }
 
   protected toggleItalic(): void {
     this.tiptap?.chain().focus().toggleItalic().run();
-    this.closeMenu();
   }
 
   protected toggleUnderline(): void {
     this.tiptap?.chain().focus().toggleUnderline().run();
-    this.closeMenu();
   }
 
   protected setAlign(align: 'left' | 'center' | 'right'): void {
     this.tiptap?.chain().focus().setTextAlign(align).run();
-    this.closeMenu();
   }
 
   protected insertSceneBreak(): void {
     this.tiptap?.chain().focus().setHorizontalRule().run();
-    this.closeMenu();
   }
 
   protected undo(): void {
     this.tiptap?.chain().focus().undo().run();
-    this.closeMenu();
   }
 
   protected redo(): void {
     this.tiptap?.chain().focus().redo().run();
-    this.closeMenu();
   }
 
   protected async cut(): Promise<void> {
     await this.copySelection();
     this.tiptap?.chain().focus().deleteSelection().run();
-    this.closeMenu();
   }
 
   protected async copy(): Promise<void> {
     await this.copySelection();
-    this.closeMenu();
   }
 
   protected async paste(): Promise<void> {
@@ -233,7 +250,6 @@ export class Editor implements AfterViewInit, OnDestroy {
     } catch {
       // permisos denegados o sin texto en clipboard
     }
-    this.closeMenu();
   }
 
   private async copySelection(): Promise<void> {
@@ -262,12 +278,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     } catch {
       // ignorar
     }
-    this.closeMenu();
   }
 
   protected selectAll(): void {
     this.tiptap?.chain().focus().selectAll().run();
-    this.closeMenu();
   }
 
   protected cycleWidth(): void {
