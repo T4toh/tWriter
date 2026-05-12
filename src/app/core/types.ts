@@ -54,6 +54,18 @@ export interface Theme {
   /** Posición vertical del bloque título+prefix en la página de chapter-title.
    *  `top` | `center` | `bottom`. null o ausente = `center` (default). */
   chapter_title_position?: string | null;
+  /** Prefijo del capítulo: `none` | `decimal` | `roman`. Default: `none`. */
+  prefijo_capitulo?: string | null;
+  /** Mostrar el título del capítulo en chapter title page. Default: true. */
+  mostrar_titulo_capitulo?: boolean | null;
+  /** Letrina (dropcap) en primera letra de cada capítulo. Default: false. */
+  dropcap?: boolean | null;
+  /** Mostrar número/título de la parte arriba de su contenido. Default: false. */
+  mostrar_numero_parte?: boolean | null;
+  /** Formato de etiqueta de parte: `raw` | `parte` | `punto`. Default: `raw`. */
+  formato_parte?: string | null;
+  /** Tamaño de página EPUB: `6x9` | `5x8` | `a5`. Default: `6x9`. */
+  template?: string | null;
 }
 
 export interface ThemeRef {

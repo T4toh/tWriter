@@ -88,21 +88,6 @@ export class BookConfigModal {
     { value: 'es', label: 'Español' },
     { value: 'en', label: 'Inglés' },
   ];
-  protected readonly prefijoCapituloOptions: SelectOption[] = [
-    { value: 'none', label: 'Sin prefijo' },
-    { value: 'decimal', label: 'Número (1, 2, 3…)' },
-    { value: 'roman', label: 'Romano (I, II, III…)' },
-  ];
-  protected readonly formatoParteOptions: SelectOption[] = [
-    { value: 'raw', label: '1' },
-    { value: 'parte', label: 'Parte 1' },
-    { value: 'punto', label: '1.' },
-  ];
-  protected readonly templateOptions: SelectOption[] = [
-    { value: '6x9', label: '6 × 9 in (default)' },
-    { value: '5x8', label: '5 × 8 in' },
-    { value: 'a5', label: 'A5 (148 × 210 mm)' },
-  ];
 
   protected readonly themeBaseOptions = computed<SelectOption[]>(() => {
     const sagaLabel = this.sagaThemeLabel();
@@ -245,12 +230,15 @@ export class BookConfigModal {
         imprenta: cfg.imprenta ?? 'Independiente',
         serie: cfg.serie ?? '',
         numero_en_serie: cfg.numero_en_serie ?? null,
-        mostrar_titulo_capitulo: cfg.mostrar_titulo_capitulo ?? true,
-        prefijo_capitulo: cfg.prefijo_capitulo ?? 'none',
-        dropcap: cfg.dropcap ?? false,
-        mostrar_numero_parte: cfg.mostrar_numero_parte ?? false,
-        formato_parte: cfg.formato_parte ?? 'raw',
-        template: cfg.template ?? '6x9',
+        // Campos de "Estilo de capítulos" preservados desde book.json
+        // legacy. Nuevos UIs los editan en el theme editor; acá solo se
+        // preservan en memoria para no perderlos en el round-trip.
+        mostrar_titulo_capitulo: cfg.mostrar_titulo_capitulo ?? null,
+        prefijo_capitulo: cfg.prefijo_capitulo ?? null,
+        dropcap: cfg.dropcap ?? null,
+        mostrar_numero_parte: cfg.mostrar_numero_parte ?? null,
+        formato_parte: cfg.formato_parte ?? null,
+        template: cfg.template ?? null,
         finalizada: cfg.finalizada ?? false,
         epilogo: cfg.epilogo ?? null,
         sobre_el_autor: cfg.sobre_el_autor ?? '',

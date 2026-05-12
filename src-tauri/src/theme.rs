@@ -62,6 +62,26 @@ pub struct Theme {
     /// vía @media amzn-kf8 en epub_style.css).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chapter_title_position: Option<String>,
+    /// Prefijo del capítulo: `none` | `decimal` | `roman`. Default: `none`.
+    /// Antes vivía en book.json/saga.json; ahora pertenece al tema para que
+    /// múltiples libros que comparten tema tengan el mismo formato.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prefijo_capitulo: Option<String>,
+    /// Mostrar el título del capítulo en la chapter title page. Default: true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mostrar_titulo_capitulo: Option<bool>,
+    /// Letrina (dropcap) en la primera letra del primer párrafo de cada capítulo. Default: false.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropcap: Option<bool>,
+    /// Mostrar número/título de la parte arriba de su contenido. Default: false.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mostrar_numero_parte: Option<bool>,
+    /// Formato de etiqueta de parte: `raw` (1) | `parte` (Parte 1) | `punto` (1.). Default: `raw`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formato_parte: Option<String>,
+    /// Tamaño de página EPUB: `6x9` | `5x8` | `a5`. Default: `6x9`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
 }
 
 /// Referencia a un tema en saga.json/book.json. `base` es el id del tema,
@@ -99,6 +119,18 @@ pub struct ResolvedTheme {
     /// Posición vertical del bloque título+prefix en la página de chapter-title.
     /// `top` | `bottom`. None = default (center vía CSS base).
     pub chapter_title_position: Option<String>,
+    /// Estilo de capítulos: prefijo (`none`/`decimal`/`roman`). None = `none`.
+    pub prefijo_capitulo: Option<String>,
+    /// Mostrar el título del capítulo en chapter title page. None = true.
+    pub mostrar_titulo_capitulo: Option<bool>,
+    /// Letrina (dropcap) en primera letra de cada capítulo. None = false.
+    pub dropcap: Option<bool>,
+    /// Mostrar header de parte. None = false.
+    pub mostrar_numero_parte: Option<bool>,
+    /// Formato de etiqueta de parte (`raw`/`parte`/`punto`). None = `raw`.
+    pub formato_parte: Option<String>,
+    /// Tamaño de página EPUB (`6x9`/`5x8`/`a5`). None = `6x9`.
+    pub template: Option<String>,
 }
 
 impl ResolvedTheme {
@@ -344,15 +376,95 @@ fn merge_overrides(base: &mut Theme, ov: &Theme) {
     if ov.chapter_title_position.is_some() {
         base.chapter_title_position = ov.chapter_title_position.clone();
     }
+    if ov.prefijo_capitulo.is_some() {
+        base.prefijo_capitulo = ov.prefijo_capitulo.clone();
+    }
+    if ov.mostrar_titulo_capitulo.is_some() {
+        base.mostrar_titulo_capitulo = ov.mostrar_titulo_capitulo;
+    }
+    if ov.dropcap.is_some() {
+        base.dropcap = ov.dropcap;
+    }
+    if ov.mostrar_numero_parte.is_some() {
+        base.mostrar_numero_parte = ov.mostrar_numero_parte;
+    }
+    if ov.formato_parte.is_some() {
+        base.formato_parte = ov.formato_parte.clone();
+    }
+    if ov.template.is_some() {
+        base.template = ov.template.clone();
+    }
+}
+
+/// Lee los campos de "estilo de capítulos" en el root de un book.json o
+/// saga.json legacy (sin envolver en `theme.overrides`). Devuelve un Theme
+/// con sólo esos campos populados; el resto queda None. Sirve para back-compat
+/// — repos viejos siguen funcionando sin reescribir los JSON.
+fn read_legacy_chapter_style(json_path: &Path) -> Theme {
+    let Ok(raw) = fs::read_to_string(json_path) else {
+        return Theme::default();
+    };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return Theme::default();
+    };
+    Theme {
+        prefijo_capitulo: v
+            .get("prefijo_capitulo")
+            .and_then(|x| x.as_str())
+            .map(String::from),
+        mostrar_titulo_capitulo: v.get("mostrar_titulo_capitulo").and_then(|x| x.as_bool()),
+        dropcap: v.get("dropcap").and_then(|x| x.as_bool()),
+        mostrar_numero_parte: v.get("mostrar_numero_parte").and_then(|x| x.as_bool()),
+        formato_parte: v
+            .get("formato_parte")
+            .and_then(|x| x.as_str())
+            .map(String::from),
+        template: v
+            .get("template")
+            .and_then(|x| x.as_str())
+            .map(String::from),
+        ..Default::default()
+    }
+}
+
+/// Aplica fallback de los campos de "estilo de capítulos" desde book.json y
+/// saga.json legacy. Estos campos antes vivían en el root de esos JSON; ahora
+/// pertenecen al tema. Esta función completa los campos que el tema no definió
+/// con los valores legacy, para mantener back-compat con repos viejos.
+fn apply_legacy_chapter_style_fallback(theme: &mut Theme, book: &Theme, saga: &Theme) {
+    if theme.prefijo_capitulo.is_none() {
+        theme.prefijo_capitulo = book
+            .prefijo_capitulo
+            .clone()
+            .or_else(|| saga.prefijo_capitulo.clone());
+    }
+    if theme.mostrar_titulo_capitulo.is_none() {
+        theme.mostrar_titulo_capitulo = book.mostrar_titulo_capitulo.or(saga.mostrar_titulo_capitulo);
+    }
+    if theme.dropcap.is_none() {
+        theme.dropcap = book.dropcap.or(saga.dropcap);
+    }
+    if theme.mostrar_numero_parte.is_none() {
+        theme.mostrar_numero_parte = book.mostrar_numero_parte.or(saga.mostrar_numero_parte);
+    }
+    if theme.formato_parte.is_none() {
+        theme.formato_parte = book
+            .formato_parte
+            .clone()
+            .or_else(|| saga.formato_parte.clone());
+    }
+    if theme.template.is_none() {
+        theme.template = book.template.clone().or_else(|| saga.template.clone());
+    }
 }
 
 /// Resuelve el tema efectivo para un libro:
-/// 1. Si ni saga ni book tienen `theme.base` → tema vacío (genéricos).
-/// 2. `effective_base = book.theme.base or saga.theme.base`.
-/// 3. Carga `<root>/themes/<base>/theme.json` como source de defaults.
-/// 4. Aplica `saga.theme.overrides`, después `book.theme.overrides`.
+/// 1. `effective_base = book.theme.base or saga.theme.base`.
+/// 2. Si hay base, carga `<root>/themes/<base>/theme.json` como source de defaults.
+/// 3. Aplica `saga.theme.overrides`, después `book.theme.overrides`.
+/// 4. Aplica legacy fallback de chapter-style (book.json / saga.json root level).
 /// 5. Resuelve archivos de fuentes con search order:
-///    `<book>/fonts/` → `<saga>/fonts/` → `<root>/themes/<base>/fonts/`.
+///    `<book>/fonts/` → `<saga>/fonts/` → `<root>/fonts/` → `<root>/themes/<base>/fonts/`.
 pub fn resolve_theme(
     book_dir: &Path,
     saga_dir: Option<&Path>,
@@ -360,6 +472,11 @@ pub fn resolve_theme(
 ) -> ResolvedTheme {
     let book_ref = read_theme_ref(&book_dir.join("book.json"));
     let saga_ref = saga_dir.and_then(|d| read_theme_ref(&d.join("saga.json")));
+
+    let saga_legacy = saga_dir
+        .map(|d| read_legacy_chapter_style(&d.join("saga.json")))
+        .unwrap_or_default();
+    let book_legacy = read_legacy_chapter_style(&book_dir.join("book.json"));
 
     let effective_base = book_ref
         .as_ref()
@@ -372,16 +489,15 @@ pub fn resolve_theme(
                 .filter(|s| !s.trim().is_empty())
         });
 
-    let Some(base_id) = effective_base else {
-        return ResolvedTheme::default();
-    };
-
-    let mut theme = match load_base_theme(root_dir, &base_id) {
-        Some(t) => t,
-        None => {
-            tracing::warn!(target: "theme", base = %base_id, "tema base dangling — no existe en root/themes/, usando default");
-            Theme::default()
-        }
+    let mut theme = match effective_base.as_ref() {
+        Some(base_id) => match load_base_theme(root_dir, base_id) {
+            Some(t) => t,
+            None => {
+                tracing::warn!(target: "theme", base = %base_id, "tema base dangling — no existe en root/themes/, usando default");
+                Theme::default()
+            }
+        },
+        None => Theme::default(),
     };
 
     if let Some(sr) = saga_ref.as_ref() {
@@ -395,7 +511,26 @@ pub fn resolve_theme(
         }
     }
 
-    let theme_fonts_dir = root_dir.join("themes").join(&base_id).join("fonts");
+    apply_legacy_chapter_style_fallback(&mut theme, &book_legacy, &saga_legacy);
+
+    // Sin tema base ni body_font/heading_font heredado, no hay fuentes que
+    // resolver. Devolvemos un ResolvedTheme con los chapter-style fields
+    // populados (sirven al EPUB aunque no haya tema configurado).
+    if effective_base.is_none() && theme.body_font.is_none() && theme.heading_font.is_none() {
+        return ResolvedTheme {
+            chapter_title_position: theme.chapter_title_position,
+            prefijo_capitulo: theme.prefijo_capitulo,
+            mostrar_titulo_capitulo: theme.mostrar_titulo_capitulo,
+            dropcap: theme.dropcap,
+            mostrar_numero_parte: theme.mostrar_numero_parte,
+            formato_parte: theme.formato_parte,
+            template: theme.template,
+            ..ResolvedTheme::default()
+        };
+    }
+
+    let base_id_for_fonts = effective_base.clone().unwrap_or_default();
+    let theme_fonts_dir = root_dir.join("themes").join(&base_id_for_fonts).join("fonts");
     let book_fonts_dir = book_dir.join("fonts");
     let saga_fonts_dir = saga_dir.map(|d| d.join("fonts"));
     let root_fonts_dir = root_dir.join("fonts");
@@ -408,7 +543,9 @@ pub fn resolve_theme(
         search_dirs.push(d);
     }
     search_dirs.push(root_fonts_dir);
-    search_dirs.push(theme_fonts_dir);
+    if !base_id_for_fonts.is_empty() {
+        search_dirs.push(theme_fonts_dir);
+    }
 
     let dir_refs: Vec<&Path> = search_dirs.iter().map(|p| p.as_path()).collect();
 
@@ -510,6 +647,12 @@ pub fn resolve_theme(
         editorial_body_font: theme.editorial_body_font,
         editorial_heading_font: theme.editorial_heading_font,
         chapter_title_position: theme.chapter_title_position,
+        prefijo_capitulo: theme.prefijo_capitulo,
+        mostrar_titulo_capitulo: theme.mostrar_titulo_capitulo,
+        dropcap: theme.dropcap,
+        mostrar_numero_parte: theme.mostrar_numero_parte,
+        formato_parte: theme.formato_parte,
+        template: theme.template,
     }
 }
 

@@ -124,17 +124,71 @@
         </div>
 
         <div class="row section-divider">
-          <span class="section-label">Página de título de capítulo</span>
+          <span class="section-label">Estilo de capítulos</span>
         </div>
         <p class="hint-soft">
-          Posición vertical del bloque título + prefijo (I, II…) en la página
-          de chapter-title. Default (vacío) centra vertical con fallback para
-          Kindle. Useá <em>arriba</em> o <em>abajo</em> si querés forzar otra
-          posición.
+          Reglas que se aplican a todos los libros que usen este tema (o lo
+          hereden). Antes vivían en cada novela; ahora son del tema para
+          mantener consistencia entre libros.
         </p>
-        <div class="row">
+        <div class="row split">
           <label>
-            <span>Posición del título</span>
+            <span>Prefijo del capítulo</span>
+            <app-select
+              [ngModel]="f.prefijo_capitulo"
+              (ngModelChange)="update('prefijo_capitulo', $event)"
+              [options]="prefijoCapituloOptions"
+            />
+          </label>
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="f.mostrar_titulo_capitulo"
+              (ngModelChange)="update('mostrar_titulo_capitulo', $event)"
+            />
+            <span>Mostrar título del capítulo</span>
+          </label>
+        </div>
+        <div class="row">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="f.dropcap"
+              (ngModelChange)="update('dropcap', $event)"
+            />
+            <span>Letrina (dropcap) en primer párrafo</span>
+          </label>
+        </div>
+        <div class="row split">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="f.mostrar_numero_parte"
+              (ngModelChange)="update('mostrar_numero_parte', $event)"
+            />
+            <span>Mostrar header de parte</span>
+          </label>
+          <label>
+            <span>Formato de parte</span>
+            <app-select
+              [ngModel]="f.formato_parte"
+              (ngModelChange)="update('formato_parte', $event)"
+              [disabled]="!f.mostrar_numero_parte"
+              [options]="formatoParteOptions"
+            />
+          </label>
+        </div>
+        <div class="row split">
+          <label>
+            <span>Tamaño de página (EPUB)</span>
+            <app-select
+              [ngModel]="f.template"
+              (ngModelChange)="update('template', $event)"
+              [options]="templateOptions"
+            />
+          </label>
+          <label>
+            <span>Posición del título de capítulo</span>
             <app-select
               [ngModel]="f.chapter_title_position"
               (ngModelChange)="update('chapter_title_position', $event)"

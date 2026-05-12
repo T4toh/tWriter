@@ -21,6 +21,12 @@ interface EditableTheme {
   editorial_body_font: string;
   editorial_heading_font: string;
   chapter_title_position: string;
+  prefijo_capitulo: string;
+  mostrar_titulo_capitulo: boolean;
+  dropcap: boolean;
+  mostrar_numero_parte: boolean;
+  formato_parte: string;
+  template: string;
 }
 
 /** Genera nombre CSS único per-modal-instance para no chocar con otras
@@ -89,6 +95,24 @@ export class ThemeEditorModal {
     { value: 'top', label: 'Arriba' },
     { value: 'center', label: 'Centrado (explícito)' },
     { value: 'bottom', label: 'Abajo' },
+  ];
+  protected readonly prefijoCapituloOptions: SelectOption[] = [
+    { value: '', label: 'Sin prefijo (default)' },
+    { value: 'none', label: 'Sin prefijo (explícito)' },
+    { value: 'decimal', label: 'Número (1, 2, 3…)' },
+    { value: 'roman', label: 'Romano (I, II, III…)' },
+  ];
+  protected readonly formatoParteOptions: SelectOption[] = [
+    { value: '', label: '1 (default)' },
+    { value: 'raw', label: '1 (explícito)' },
+    { value: 'parte', label: 'Parte 1' },
+    { value: 'punto', label: '1.' },
+  ];
+  protected readonly templateOptions: SelectOption[] = [
+    { value: '', label: '6 × 9 in (default)' },
+    { value: '6x9', label: '6 × 9 in (explícito)' },
+    { value: '5x8', label: '5 × 8 in' },
+    { value: 'a5', label: 'A5 (148 × 210 mm)' },
   ];
 
   /** Familias CSS que el preview tiene cargadas. Se rotan via previewGen. */
@@ -189,6 +213,12 @@ export class ThemeEditorModal {
         editorial_body_font: t.editorial_body_font ?? '',
         editorial_heading_font: t.editorial_heading_font ?? '',
         chapter_title_position: t.chapter_title_position ?? '',
+        prefijo_capitulo: t.prefijo_capitulo ?? '',
+        mostrar_titulo_capitulo: t.mostrar_titulo_capitulo ?? true,
+        dropcap: t.dropcap ?? false,
+        mostrar_numero_parte: t.mostrar_numero_parte ?? false,
+        formato_parte: t.formato_parte ?? '',
+        template: t.template ?? '',
       });
     } catch (err) {
       this.error.set(String(err));
@@ -280,6 +310,12 @@ export class ThemeEditorModal {
         editorial_body_font: blank(cur.editorial_body_font),
         editorial_heading_font: blank(cur.editorial_heading_font),
         chapter_title_position: blank(cur.chapter_title_position),
+        prefijo_capitulo: blank(cur.prefijo_capitulo),
+        mostrar_titulo_capitulo: cur.mostrar_titulo_capitulo,
+        dropcap: cur.dropcap,
+        mostrar_numero_parte: cur.mostrar_numero_parte,
+        formato_parte: blank(cur.formato_parte),
+        template: blank(cur.template),
       };
       await this.svc.save(id, theme);
       this.svc.closeEditor();
