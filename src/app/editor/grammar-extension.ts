@@ -115,6 +115,12 @@ export function extractPlainText(doc: PmNode): { plain: string; ranges: TextRang
           const text = child.text ?? '';
           plain += text;
           ranges.push({ plainStart: start, plainEnd: plain.length, pmPos: cursor });
+        } else if (child.type.name === 'hardBreak') {
+          // <br> dentro de un <p> = salto de párrafo visual (legacy del importer
+          // Pandoc cuando el .docx usa saltos blandos). Tratamos como `\n\n`
+          // para que LT vea el boundary entre oraciones y no pida "espacio tras
+          // el punto".
+          plain += '\n\n';
         }
         cursor += child.nodeSize;
       });

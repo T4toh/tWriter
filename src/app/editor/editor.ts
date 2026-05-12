@@ -130,6 +130,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private grammarDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private skipNextGrammarRemap = false;
   private lastAutoEnabled = false;
+  private lastCheckedPlain: string | null = null;
 
   constructor() {
     effect(() => {
@@ -147,6 +148,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.grammarMatches.set([]);
       this.applyDecorations([]);
       this.grammarPopover.set(null);
+      this.lastCheckedPlain = null;
       if (this.grammarDebounceHandle !== null) {
         clearTimeout(this.grammarDebounceHandle);
         this.grammarDebounceHandle = null;
@@ -395,7 +397,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     }
   }
 
-  protected async checkGrammar(): Promise<void> {
+  protected async checkGrammar(force = false): Promise<void> {
     if (!this.tiptap || !this.canCheckGrammar()) return;
     const meta = this.chapter.meta().idioma;
     const lang: 'es' | 'en' | 'auto' = meta === 'es' || meta === 'en' ? meta : 'auto';
@@ -403,6 +405,13 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!plain.trim()) {
       this.grammarMatches.set([]);
       this.applyDecorations([]);
+      this.lastCheckedPlain = '';
+      return;
+    }
+    // Skip si el texto plano no cambió desde el último check (cursor moves,
+    // ediciones que no tocan texto, etc). Evita round-trips innecesarios a LT
+    // y el costo de re-aplicar decorations.
+    if (!force && plain === this.lastCheckedPlain) {
       return;
     }
     this.grammarUsed.set(true);
@@ -416,6 +425,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       });
       this.grammarMatches.set(filtered);
       this.applyDecorations(filtered);
+      this.lastCheckedPlain = plain;
     } catch {
       // grammar.lastError ya tiene el mensaje
     }

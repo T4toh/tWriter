@@ -56,15 +56,20 @@ fn import_impl(input_path: &str) -> Result<ImportResult, String> {
         .arg(&input)
         .args(["--to=html5", "--no-highlight", "--wrap=none"])
         .output()
-        .map_err(|e| format!("pandoc no encontrado: {} — instalá pandoc primero", e))?;
+        .map_err(|e| {
+            tracing::error!(target: "import", error = %e, "pandoc no encontrado");
+            format!("pandoc no encontrado: {} — instalá pandoc primero", e)
+        })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(if stderr.is_empty() {
+        let msg = if stderr.is_empty() {
             format!("pandoc falló (exit {})", output.status)
         } else {
             stderr
-        });
+        };
+        tracing::error!(target: "import", path = %input_path, error = %msg, "pandoc falló");
+        return Err(msg);
     }
 
     let raw_html = String::from_utf8_lossy(&output.stdout).into_owned();
@@ -91,6 +96,7 @@ fn import_impl(input_path: &str) -> Result<ImportResult, String> {
             .map_err(|e| e.to_string())?;
     }
 
+    tracing::info!(target: "import", from = %input_path, to = %html_out.display(), "capítulo importado");
     Ok(ImportResult {
         html_path: html_out.to_string_lossy().into_owned(),
         created: true,
@@ -98,21 +104,22 @@ fn import_impl(input_path: &str) -> Result<ImportResult, String> {
 }
 
 /// Limpia el HTML crudo de pandoc para dejar solo el subset que usa el editor.
+///
+/// Los `<br>` adentro de un `<p>` se convierten en `</p><p>` porque Pandoc emite
+/// `<br>` cuando el `.docx` usa saltos blandos en vez de párrafos nuevos. Si los
+/// dejamos como `<br>`, el extractor de texto para LanguageTool concatena todo
+/// y LT pide "espacio tras el punto" entre líneas de diálogo.
 pub(crate) fn clean_html(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     let mut chars = raw.chars().peekable();
+    let mut inside_p = false;
 
-    // Remueve tags no permitidos transformándolos a sus equivalentes,
-    // o eliminándolos preservando contenido.
-    // Conservamos: p, em, strong, i, b, u, blockquote, hr, h1-h3, br
-    // Eliminamos: div, span (preservando texto), header, section, etc.
     let allowed_tags = [
         "p", "em", "strong", "i", "b", "u", "blockquote", "hr", "h1", "h2", "h3", "br",
     ];
 
     while let Some(c) = chars.next() {
         if c == '<' {
-            // Lee hasta '>'
             let mut tag = String::new();
             while let Some(&next) = chars.peek() {
                 tag.push(next);
@@ -121,7 +128,6 @@ pub(crate) fn clean_html(raw: &str) -> String {
                     break;
                 }
             }
-            // Parse tag
             let inner = tag.trim_end_matches('>').trim_start_matches('/');
             let tag_name = inner
                 .split_whitespace()
@@ -130,31 +136,93 @@ pub(crate) fn clean_html(raw: &str) -> String {
                 .to_lowercase();
 
             if allowed_tags.contains(&tag_name.as_str()) {
-                // Reemitimos el tag pero sin atributos (excepto hr y br)
-                // tag aquí ya viene sin '<' inicial (consumido por outer loop)
                 let is_close = tag.starts_with('/');
                 if is_close {
+                    if tag_name == "p" {
+                        inside_p = false;
+                    }
                     out.push_str(&format!("</{}>", tag_name));
                 } else if tag_name == "hr" {
                     out.push_str(r#"<hr class="scene-break"/>"#);
                 } else if tag_name == "br" {
-                    out.push_str("<br/>");
+                    if inside_p {
+                        out.push_str("</p><p>");
+                    }
                 } else {
+                    if tag_name == "p" {
+                        inside_p = true;
+                    }
                     out.push_str(&format!("<{}>", tag_name));
                 }
             }
-            // Tags no permitidos: descartar (preservando contenido al no emitirlos)
         } else {
             out.push(c);
         }
     }
 
-    // Normaliza saltos de línea / espacios
+    while out.contains("<p></p>") {
+        out = out.replace("<p></p>", "");
+    }
+
     out.split('\n')
         .map(|l| l.trim())
         .filter(|l| !l.is_empty())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clean_html;
+
+    #[test]
+    fn br_inside_p_becomes_paragraph_break() {
+        let input = "<p>—Foo<br>—Bar<br>—Baz</p>";
+        let out = clean_html(input);
+        assert_eq!(out, "<p>—Foo</p><p>—Bar</p><p>—Baz</p>");
+    }
+
+    #[test]
+    fn double_br_collapses_to_single_paragraph_break() {
+        let input = "<p>Foo<br><br>Bar</p>";
+        let out = clean_html(input);
+        assert_eq!(out, "<p>Foo</p><p>Bar</p>");
+    }
+
+    #[test]
+    fn br_at_start_or_end_of_p_drops_empty() {
+        let input = "<p><br>Foo<br></p>";
+        let out = clean_html(input);
+        assert_eq!(out, "<p>Foo</p>");
+    }
+
+    #[test]
+    fn br_outside_p_is_dropped() {
+        let input = "<p>Foo</p><br><p>Bar</p>";
+        let out = clean_html(input);
+        assert_eq!(out, "<p>Foo</p><p>Bar</p>");
+    }
+
+    #[test]
+    fn regular_paragraphs_passthrough() {
+        let input = "<p>Hola</p>\n<p>Chau</p>";
+        let out = clean_html(input);
+        assert_eq!(out, "<p>Hola</p>\n<p>Chau</p>");
+    }
+
+    #[test]
+    fn em_strong_preserved() {
+        let input = "<p>Hola <em>mundo</em> y <strong>chau</strong></p>";
+        let out = clean_html(input);
+        assert_eq!(out, "<p>Hola <em>mundo</em> y <strong>chau</strong></p>");
+    }
+
+    #[test]
+    fn hr_becomes_scene_break() {
+        let input = "<p>Foo</p><hr><p>Bar</p>";
+        let out = clean_html(input);
+        assert_eq!(out, "<p>Foo</p><hr class=\"scene-break\"/><p>Bar</p>");
+    }
 }
 
 /// Camina hacia arriba buscando book.json (preferido) o saga.json para heredar idioma.
