@@ -1,0 +1,36 @@
+<header class="mr-header">
+  <span class="mr-icon">📖</span>
+  <span class="mr-title" [title]="viewing()?.path">{{ viewing()?.name }}</span>
+  <button
+    type="button"
+    class="mr-btn"
+    (click)="cycleWidth()"
+    [title]="'Ancho: ' + widthLabel()"
+  >
+    <span class="ico">{{ widthIcon() }}</span>
+  </button>
+  <button
+    type="button"
+    class="mr-btn"
+    (click)="promote()"
+    title="Editar nota (abrir en el editor)"
+  >
+    <span class="ico">✏️</span>
+  </button>
+  <button
+    type="button"
+    class="mr-close"
+    (click)="close()"
+    title="Cerrar (Esc)"
+  >
+    ×
+  </button>
+</header>
+<div class="mr-body">
+  @if (loading()) {
+    <p class="mr-status">Cargando…</p>
+  } @else if (error(); as err) {
+    <p class="mr-status mr-error">{{ err }}</p>
+  }
+  <div class="mr-host" #host></div>
+</div>

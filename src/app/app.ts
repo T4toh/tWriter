@@ -2,6 +2,7 @@ import { Component, ViewChild, computed, effect, HostListener, inject } from '@a
 import { ChapterService } from './core/chapter-service';
 import { DebugService } from './core/debug-service';
 import { FontPreviewService } from './core/font-preview-service';
+import { MarkdownReaderService } from './core/markdown-reader-service';
 import { NoteService } from './core/note-service';
 import { GitService } from './core/git-service';
 import { GrammarService } from './core/grammar-service';
@@ -20,6 +21,7 @@ import { SagaConfigModal } from './saga-config/saga-config-modal';
 import { ThemeEditorModal } from './theme-editor/theme-editor-modal';
 import { ImageViewer } from './image-viewer/image-viewer';
 import { FontPreview } from './font-preview/font-preview';
+import { MarkdownReader } from './markdown-reader/markdown-reader';
 import { ToastContainer } from './toast/toast-container';
 import { GrammarSettings } from './grammar-settings/grammar-settings';
 import { ImportWizard } from './import-wizard/import-wizard';
@@ -33,7 +35,7 @@ import { TreeNode } from './core/types';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, ThemeEditorModal, ImageViewer, FontPreview, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner, Spinner, ModalHost, ContextMenuHost],
+  imports: [Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner, Spinner, ModalHost, ContextMenuHost],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -42,6 +44,7 @@ export class App {
   protected importWizard = inject(ImportWizardService);
   protected imageViewer = inject(ImageViewerService);
   protected fontPreview = inject(FontPreviewService);
+  protected markdownReader = inject(MarkdownReaderService);
 
   private project = inject(ProjectService);
   protected settings = inject(SettingsService);
@@ -96,12 +99,25 @@ export class App {
         this.note.close();
       }
     });
-    // Mutex del panel derecho: image viewer y font preview no conviven.
+    // Mutex del panel derecho tri-direccional: image / font preview / md reader
+    // no conviven; quien abre, cierra a los otros.
     effect(() => {
-      if (this.imageViewer.viewing()) this.fontPreview.close();
+      if (this.imageViewer.viewing()) {
+        this.fontPreview.close();
+        this.markdownReader.close();
+      }
     });
     effect(() => {
-      if (this.fontPreview.viewing()) this.imageViewer.close();
+      if (this.fontPreview.viewing()) {
+        this.imageViewer.close();
+        this.markdownReader.close();
+      }
+    });
+    effect(() => {
+      if (this.markdownReader.viewing()) {
+        this.imageViewer.close();
+        this.fontPreview.close();
+      }
     });
     effect(() => {
       const e = this.project.error();
