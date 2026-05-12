@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::theme::{is_font_ext, Theme};
+use crate::theme::{is_font_ext, Theme, ThemeRef};
 use crate::util::{sanitize_name, unique_path};
 
 const THEMES_DIR: &str = "themes";
@@ -400,6 +400,136 @@ fn entry_for_theme_font(base: &Path, file: &Path) -> Result<ThemeFontEntry, Stri
         weight,
         style: style.to_string(),
     })
+}
+
+/// Set de familias + stems referenciados por algún tema, saga o libro del repo.
+/// Sirve para marcar qué fuentes del pool global están en uso vs. cuáles son
+/// candidatas a borrar.
+#[derive(Serialize, Debug, Default)]
+pub struct FontUsage {
+    /// Familias referenciadas en `body_font` / `heading_font` / `editorial_*`.
+    /// Comparación case-insensitive contra `FontEntry.family`.
+    pub families: Vec<String>,
+    /// Stems referenciados en `body_font_italic` / `body_font_bold` / `body_font_bold_italic`.
+    /// Comparación case-insensitive contra el filename stem.
+    pub stems: Vec<String>,
+}
+
+/// Walka temas + saga/book overrides para juntar todas las familias y stems
+/// referenciados. Read-only, no toca disco.
+#[tauri::command]
+pub fn list_font_usage(root_path: String) -> Result<FontUsage, String> {
+    let root = PathBuf::from(&root_path);
+    if !root.is_dir() {
+        return Err(format!("root no es directorio: {}", root_path));
+    }
+    let mut families: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut stems: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+
+    // 1. Temas en <root>/themes/<id>/theme.json
+    let themes_dir = root.join("themes");
+    if themes_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(&themes_dir) {
+            for e in entries.flatten() {
+                let p = e.path().join("theme.json");
+                if !p.is_file() {
+                    continue;
+                }
+                if let Some(t) = read_theme_json(&p) {
+                    collect_from_theme(&t, &mut families, &mut stems);
+                }
+            }
+        }
+    }
+
+    // 2. saga.json + book.json (overrides) en root + subdirs (depth 2).
+    walk_configs(&root, 2, &mut families, &mut stems);
+
+    Ok(FontUsage {
+        families: families.into_iter().collect(),
+        stems: stems.into_iter().collect(),
+    })
+}
+
+fn read_theme_json(path: &Path) -> Option<Theme> {
+    let raw = fs::read_to_string(path).ok()?;
+    serde_json::from_str::<Theme>(&raw).ok()
+}
+
+fn read_theme_ref_from(path: &Path) -> Option<ThemeRef> {
+    let raw = fs::read_to_string(path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let theme = v.get("theme")?;
+    serde_json::from_value::<ThemeRef>(theme.clone()).ok()
+}
+
+fn collect_from_theme(
+    t: &Theme,
+    families: &mut std::collections::BTreeSet<String>,
+    stems: &mut std::collections::BTreeSet<String>,
+) {
+    for fam in [
+        &t.body_font,
+        &t.heading_font,
+        &t.editorial_body_font,
+        &t.editorial_heading_font,
+    ] {
+        if let Some(s) = fam.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            families.insert(s.to_ascii_lowercase());
+        }
+    }
+    for stem in [
+        &t.body_font_italic,
+        &t.body_font_bold,
+        &t.body_font_bold_italic,
+    ] {
+        if let Some(s) = stem.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            stems.insert(s.to_ascii_lowercase());
+        }
+    }
+}
+
+fn walk_configs(
+    dir: &Path,
+    depth: u32,
+    families: &mut std::collections::BTreeSet<String>,
+    stems: &mut std::collections::BTreeSet<String>,
+) {
+    for cfg in ["saga.json", "book.json"] {
+        let p = dir.join(cfg);
+        if !p.is_file() {
+            continue;
+        }
+        if let Some(tref) = read_theme_ref_from(&p) {
+            if let Some(t) = tref.overrides.as_ref() {
+                collect_from_theme(t, families, stems);
+            }
+        }
+    }
+    if depth == 0 {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let p = e.path();
+        if !p.is_dir() {
+            continue;
+        }
+        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if name.starts_with('.') {
+            continue;
+        }
+        match name {
+            "themes" | "fonts" | "extras" | "notas" | "exports" | "Exportados"
+            | "convertidos" | "Revisiones" | "zTapas" => continue,
+            _ => {}
+        }
+        walk_configs(&p, depth - 1, families, stems);
+    }
 }
 
 fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {

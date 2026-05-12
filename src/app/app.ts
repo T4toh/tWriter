@@ -1,6 +1,8 @@
 import { Component, ViewChild, computed, effect, HostListener, inject } from '@angular/core';
 import { ChapterService } from './core/chapter-service';
 import { DebugService } from './core/debug-service';
+import { FontPreviewService } from './core/font-preview-service';
+import { NoteService } from './core/note-service';
 import { GitService } from './core/git-service';
 import { GrammarService } from './core/grammar-service';
 import { ImageViewerService } from './core/image-viewer-service';
@@ -11,11 +13,13 @@ import { SettingsService } from './core/settings-service';
 import { UpdaterService } from './core/updater-service';
 import { Tree } from './tree/tree';
 import { Editor } from './editor/editor';
+import { NotesEditor } from './notes-editor/notes-editor';
 import { DebugPanel } from './debug/debug-panel';
 import { BookConfigModal } from './book-config/book-config-modal';
 import { SagaConfigModal } from './saga-config/saga-config-modal';
 import { ThemeEditorModal } from './theme-editor/theme-editor-modal';
 import { ImageViewer } from './image-viewer/image-viewer';
+import { FontPreview } from './font-preview/font-preview';
 import { ToastContainer } from './toast/toast-container';
 import { GrammarSettings } from './grammar-settings/grammar-settings';
 import { ImportWizard } from './import-wizard/import-wizard';
@@ -29,7 +33,7 @@ import { TreeNode } from './core/types';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, DebugPanel, BookConfigModal, SagaConfigModal, ThemeEditorModal, ImageViewer, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner, Spinner, ModalHost, ContextMenuHost],
+  imports: [Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, ThemeEditorModal, ImageViewer, FontPreview, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner, Spinner, ModalHost, ContextMenuHost],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -37,10 +41,12 @@ export class App {
   @ViewChild(GrammarSettings) private grammarSettings?: GrammarSettings;
   protected importWizard = inject(ImportWizardService);
   protected imageViewer = inject(ImageViewerService);
+  protected fontPreview = inject(FontPreviewService);
 
   private project = inject(ProjectService);
   protected settings = inject(SettingsService);
   protected chapter = inject(ChapterService);
+  protected note = inject(NoteService);
   protected git = inject(GitService);
   protected debug = inject(DebugService);
   private grammar = inject(GrammarService);
@@ -48,10 +54,11 @@ export class App {
   private modal = inject(ModalService);
   private ctxMenu = inject(ContextMenuService);
 
-  protected readonly saving = this.chapter.saving;
+  protected readonly saving = computed(() => this.chapter.saving() || this.note.saving());
   protected readonly bulkProgress = this.chapter.bulkProgress;
 
   private lastChapterErr: string | null = null;
+  private lastNoteErr: string | null = null;
   private lastProjectErr: string | null = null;
   private lastGitErr: string | null = null;
 
@@ -77,6 +84,24 @@ export class App {
       const e = this.chapter.error();
       if (e && e !== this.lastChapterErr) this.debug.error('chapter', e);
       this.lastChapterErr = e;
+    });
+    effect(() => {
+      const e = this.note.error();
+      if (e && e !== this.lastNoteErr) this.debug.error('note', e);
+      this.lastNoteErr = e;
+    });
+    // Mutex inverso: cuando se abre un capítulo, la nota se cierra.
+    effect(() => {
+      if (this.chapter.active()) {
+        this.note.close();
+      }
+    });
+    // Mutex del panel derecho: image viewer y font preview no conviven.
+    effect(() => {
+      if (this.imageViewer.viewing()) this.fontPreview.close();
+    });
+    effect(() => {
+      if (this.fontPreview.viewing()) this.imageViewer.close();
     });
     effect(() => {
       const e = this.project.error();

@@ -1,4 +1,4 @@
-<div class="shell" [class.focus]="settings.focusMode()" [class.with-viewer]="imageViewer.viewing() !== null">
+<div class="shell" [class.focus]="settings.focusMode()" [class.with-viewer]="imageViewer.viewing() !== null || fontPreview.viewing() !== null">
   <aside class="panel panel-left">
     <header>
       <div class="title-row">
@@ -122,12 +122,20 @@
   </aside>
 
   <main class="panel panel-center">
-    <app-editor />
+    @if (note.active()) {
+      <app-notes-editor />
+    } @else {
+      <app-editor />
+    }
   </main>
 
   @if (imageViewer.viewing() !== null) {
     <aside class="panel panel-right">
       <app-image-viewer />
+    </aside>
+  } @else if (fontPreview.viewing() !== null) {
+    <aside class="panel panel-right">
+      <app-font-preview />
     </aside>
   }
 </div>

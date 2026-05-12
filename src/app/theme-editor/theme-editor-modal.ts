@@ -1,13 +1,13 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { openPath } from '@tauri-apps/plugin-opener';
+import { FontsService } from '../core/fonts-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
+import { SettingsService } from '../core/settings-service';
 import { ThemesService } from '../core/themes-service';
-import { FontEntry, Theme } from '../core/types';
-import { ModalService } from '../shared/modal-service';
-import { Select, SelectOption } from '../shared/select';
 import { ToastService } from '../core/toast-service';
+import { FontEntry, Theme } from '../core/types';
+import { Select, SelectOption } from '../shared/select';
 
 interface EditableTheme {
   nombre: string;
@@ -23,6 +23,12 @@ interface EditableTheme {
   editorial_body_font: string;
   editorial_heading_font: string;
   chapter_title_position: string;
+  prefijo_capitulo: string;
+  mostrar_titulo_capitulo: boolean;
+  dropcap: boolean;
+  mostrar_numero_parte: boolean;
+  formato_parte: string;
+  template: string;
 }
 
 /** Genera nombre CSS único per-modal-instance para no chocar con otras
@@ -39,13 +45,18 @@ function previewFamilyName(slot: string, idx: number): string {
 })
 export class ThemeEditorModal {
   private svc = inject(ThemesService);
-  private modal = inject(ModalService);
-  private toast = inject(ToastService);
+  private fontsSvc = inject(FontsService);
+  private settings = inject(SettingsService);
   private dialogs = inject(NativeDialogsService);
+  private toast = inject(ToastService);
 
   protected readonly editing = this.svc.editing;
   protected readonly form = signal<EditableTheme | null>(null);
-  protected readonly fonts = signal<FontEntry[]>([]);
+  /** Fuentes del pool global. Las lee del FontsService cuando hay root y modal abierto. */
+  protected readonly fonts = computed<FontEntry[]>(() => {
+    const root = this.settings.root();
+    return root ? this.fontsSvc.get(root) : [];
+  });
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
 
@@ -88,6 +99,24 @@ export class ThemeEditorModal {
     { value: 'top', label: 'Arriba' },
     { value: 'center', label: 'Centrado (explícito)' },
     { value: 'bottom', label: 'Abajo' },
+  ];
+  protected readonly prefijoCapituloOptions: SelectOption[] = [
+    { value: '', label: 'Sin prefijo (default)' },
+    { value: 'none', label: 'Sin prefijo (explícito)' },
+    { value: 'decimal', label: 'Número (1, 2, 3…)' },
+    { value: 'roman', label: 'Romano (I, II, III…)' },
+  ];
+  protected readonly formatoParteOptions: SelectOption[] = [
+    { value: '', label: '1 (default)' },
+    { value: 'raw', label: '1 (explícito)' },
+    { value: 'parte', label: 'Parte 1' },
+    { value: 'punto', label: '1.' },
+  ];
+  protected readonly templateOptions: SelectOption[] = [
+    { value: '', label: '6 × 9 in (default)' },
+    { value: '6x9', label: '6 × 9 in (explícito)' },
+    { value: '5x8', label: '5 × 8 in' },
+    { value: 'a5', label: 'A5 (148 × 210 mm)' },
   ];
 
   /** Familias CSS que el preview tiene cargadas. Se rotan via previewGen. */
@@ -149,10 +178,11 @@ export class ThemeEditorModal {
       const id = this.editing();
       if (!id) {
         this.form.set(null);
-        this.fonts.set([]);
         return;
       }
       void this.load(id);
+      const root = this.settings.root();
+      if (root) void this.fontsSvc.refresh(root);
     });
 
     // Re-load preview FontFaces cuando cambian los slots o el body_font.
@@ -187,9 +217,13 @@ export class ThemeEditorModal {
         editorial_body_font: t.editorial_body_font ?? '',
         editorial_heading_font: t.editorial_heading_font ?? '',
         chapter_title_position: t.chapter_title_position ?? '',
+        prefijo_capitulo: t.prefijo_capitulo ?? '',
+        mostrar_titulo_capitulo: t.mostrar_titulo_capitulo ?? true,
+        dropcap: t.dropcap ?? false,
+        mostrar_numero_parte: t.mostrar_numero_parte ?? false,
+        formato_parte: t.formato_parte ?? '',
+        template: t.template ?? '',
       });
-      const fonts = await this.svc.listFonts(id);
-      this.fonts.set(fonts);
     } catch (err) {
       this.error.set(String(err));
     }
@@ -252,79 +286,45 @@ export class ThemeEditorModal {
     }
   }
 
-  protected update<K extends keyof EditableTheme>(key: K, value: EditableTheme[K]): void {
-    const cur = this.form();
-    if (!cur) return;
-    this.form.set({ ...cur, [key]: value });
-  }
-
+  /** Abre el file picker, sube fuentes al pool global `<root>/fonts/` y refresca.
+   *  Mismo flujo que arrastrar al árbol — atajo desde el editor de temas. */
   protected async pickFont(): Promise<void> {
-    const id = this.editing();
-    if (!id) return;
+    const root = this.settings.root();
+    if (!root) {
+      this.toast.error('Elegí una carpeta raíz primero.');
+      return;
+    }
     const paths = await this.dialogs.pickFile({
-      title: 'Agregar fuentes',
+      title: 'Agregar fuentes al pool global',
       filters: [{ name: 'Fuentes', extensions: ['ttf', 'otf', 'woff', 'woff2'] }],
       multiple: true,
     });
     if (paths.length === 0) return;
+    let added = 0;
+    let failed = 0;
     for (const p of paths) {
       try {
-        await this.svc.addFont(id, p);
+        await this.fontsSvc.addFromPath(root, p);
+        added++;
       } catch (err) {
+        failed++;
         this.toast.error(`No pude agregar ${p}: ${err}`);
       }
     }
-    this.fonts.set(await this.svc.listFonts(id));
-  }
-
-  protected async openFontFile(font: FontEntry): Promise<void> {
-    try {
-      await openPath(font.path);
-    } catch (err) {
-      this.toast.error(`No pude abrir: ${err}`);
+    if (added > 0) {
+      this.toast.success(
+        `Agregada${added === 1 ? '' : 's'} ${added} fuente${added === 1 ? '' : 's'} al pool global.`,
+      );
+    }
+    if (failed > 0 && added === 0) {
+      this.toast.error('No se pudo agregar ninguna fuente.');
     }
   }
 
-  protected async renameFont(font: FontEntry): Promise<void> {
-    const id = this.editing();
-    if (!id) return;
-    const newName = await this.modal.prompt({
-      title: 'Renombrar fuente',
-      message: 'Nuevo nombre del archivo (mantener extensión .ttf/.otf/.woff/.woff2):',
-      defaultValue: font.name,
-      validate: (v) => {
-        const t = v.trim();
-        if (!t) return 'Nombre vacío';
-        if (t.includes('/') || t.includes('\\')) return 'Sin separadores';
-        if (!/\.(ttf|otf|woff|woff2)$/i.test(t)) return 'Extensión inválida';
-        return null;
-      },
-    });
-    if (!newName) return;
-    try {
-      await this.svc.renameFont(id, font.relative_path, newName);
-      this.fonts.set(await this.svc.listFonts(id));
-    } catch (err) {
-      this.toast.error(`No pude renombrar: ${err}`);
-    }
-  }
-
-  protected async removeFont(font: FontEntry): Promise<void> {
-    const id = this.editing();
-    if (!id) return;
-    const ok = await this.modal.confirm({
-      title: 'Borrar fuente',
-      message: `¿Borrar ${font.name} del tema? El archivo se elimina del disco.`,
-      okLabel: 'Borrar',
-      danger: true,
-    });
-    if (!ok) return;
-    try {
-      await this.svc.removeFont(id, font.relative_path);
-      this.fonts.set(await this.svc.listFonts(id));
-    } catch (err) {
-      this.toast.error(`No pude borrar: ${err}`);
-    }
+  protected update<K extends keyof EditableTheme>(key: K, value: EditableTheme[K]): void {
+    const cur = this.form();
+    if (!cur) return;
+    this.form.set({ ...cur, [key]: value });
   }
 
   protected async save(): Promise<void> {
@@ -349,6 +349,12 @@ export class ThemeEditorModal {
         editorial_body_font: blank(cur.editorial_body_font),
         editorial_heading_font: blank(cur.editorial_heading_font),
         chapter_title_position: blank(cur.chapter_title_position),
+        prefijo_capitulo: blank(cur.prefijo_capitulo),
+        mostrar_titulo_capitulo: cur.mostrar_titulo_capitulo,
+        dropcap: cur.dropcap,
+        mostrar_numero_parte: cur.mostrar_numero_parte,
+        formato_parte: blank(cur.formato_parte),
+        template: blank(cur.template),
       };
       await this.svc.save(id, theme);
       this.svc.closeEditor();

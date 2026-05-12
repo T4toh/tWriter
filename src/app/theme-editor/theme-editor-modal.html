@@ -124,17 +124,71 @@
         </div>
 
         <div class="row section-divider">
-          <span class="section-label">Página de título de capítulo</span>
+          <span class="section-label">Estilo de capítulos</span>
         </div>
         <p class="hint-soft">
-          Posición vertical del bloque título + prefijo (I, II…) en la página
-          de chapter-title. Default (vacío) centra vertical con fallback para
-          Kindle. Useá <em>arriba</em> o <em>abajo</em> si querés forzar otra
-          posición.
+          Reglas que se aplican a todos los libros que usen este tema (o lo
+          hereden). Antes vivían en cada novela; ahora son del tema para
+          mantener consistencia entre libros.
         </p>
-        <div class="row">
+        <div class="row split">
           <label>
-            <span>Posición del título</span>
+            <span>Prefijo del capítulo</span>
+            <app-select
+              [ngModel]="f.prefijo_capitulo"
+              (ngModelChange)="update('prefijo_capitulo', $event)"
+              [options]="prefijoCapituloOptions"
+            />
+          </label>
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="f.mostrar_titulo_capitulo"
+              (ngModelChange)="update('mostrar_titulo_capitulo', $event)"
+            />
+            <span>Mostrar título del capítulo</span>
+          </label>
+        </div>
+        <div class="row">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="f.dropcap"
+              (ngModelChange)="update('dropcap', $event)"
+            />
+            <span>Letrina (dropcap) en primer párrafo</span>
+          </label>
+        </div>
+        <div class="row split">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              [ngModel]="f.mostrar_numero_parte"
+              (ngModelChange)="update('mostrar_numero_parte', $event)"
+            />
+            <span>Mostrar header de parte</span>
+          </label>
+          <label>
+            <span>Formato de parte</span>
+            <app-select
+              [ngModel]="f.formato_parte"
+              (ngModelChange)="update('formato_parte', $event)"
+              [disabled]="!f.mostrar_numero_parte"
+              [options]="formatoParteOptions"
+            />
+          </label>
+        </div>
+        <div class="row split">
+          <label>
+            <span>Tamaño de página (EPUB)</span>
+            <app-select
+              [ngModel]="f.template"
+              (ngModelChange)="update('template', $event)"
+              [options]="templateOptions"
+            />
+          </label>
+          <label>
+            <span>Posición del título de capítulo</span>
             <app-select
               [ngModel]="f.chapter_title_position"
               (ngModelChange)="update('chapter_title_position', $event)"
@@ -197,49 +251,26 @@
         </div>
 
         <div class="row section-divider">
-          <span class="section-label">Fuentes del tema</span>
+          <span class="section-label">Fuentes disponibles ({{ fonts().length }})</span>
           <button type="button" class="add-btn" (click)="pickFont()">
-            + Agregar fuente…
+            + Agregar fuente al pool…
           </button>
         </div>
-
-        @if (fonts().length === 0) {
-          <p class="hint">
-            Aún no hay fuentes en este tema. Agregá archivos
-            <code>.ttf</code>, <code>.otf</code>, <code>.woff</code> o
-            <code>.woff2</code>. Para que <code>&lt;strong&gt;</code> y
-            <code>&lt;em&gt;</code> tengan face propio, usá nombres como
-            <code>Merriweather-Bold.ttf</code>,
-            <code>Merriweather-Italic.ttf</code>,
-            <code>Merriweather-BoldItalic.ttf</code>.
-          </p>
-        } @else {
-          <ul class="fonts-list">
+        <p class="hint">
+          El tema toma sus fuentes del pool global del repo. Podés agregar
+          desde acá o arrastrar al árbol → sección <strong>Fuentes</strong>.
+          Para que <code>&lt;strong&gt;</code> y <code>&lt;em&gt;</code>
+          tengan face propio, usá nombres como
+          <code>Merriweather-Bold.ttf</code>,
+          <code>Merriweather-Italic.ttf</code>,
+          <code>Merriweather-BoldItalic.ttf</code>.
+        </p>
+        @if (fonts().length > 0) {
+          <ul class="fonts-list compact">
             @for (font of fonts(); track font.relative_path) {
               <li>
-                <div class="font-row">
-                  <button
-                    type="button"
-                    class="link"
-                    (click)="openFontFile(font)"
-                    [title]="font.path"
-                  >
-                    {{ font.name }}
-                  </button>
-                  <span class="meta">{{ formatStyle(font) }}</span>
-                </div>
-                <div class="font-actions">
-                  <button type="button" class="icon-btn" (click)="renameFont(font)">
-                    Renombrar
-                  </button>
-                  <button
-                    type="button"
-                    class="icon-btn danger"
-                    (click)="removeFont(font)"
-                  >
-                    Borrar
-                  </button>
-                </div>
+                <span class="font-name" [title]="font.path">{{ font.name }}</span>
+                <span class="meta">{{ formatStyle(font) }}</span>
               </li>
             }
           </ul>

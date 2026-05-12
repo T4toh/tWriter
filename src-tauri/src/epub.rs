@@ -366,7 +366,13 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     let resolved_theme = resolve_theme(&book_dir, saga_dir.as_deref(), &root_dir);
 
     // OEBPS/style.css
-    let template = cfg.template.as_deref().unwrap_or("6x9");
+    // El template (tamaño de página) ahora vive en el tema. Legacy fallback
+    // a cfg.template lo cubre resolve_theme.
+    let template = resolved_theme
+        .template
+        .as_deref()
+        .or(cfg.template.as_deref())
+        .unwrap_or("6x9");
     let css = build_css(template, &resolved_theme);
     zip.start_file("OEBPS/style.css", opts).map_err(|e| e.to_string())?;
     zip.write_all(css.as_bytes()).map_err(|e| e.to_string())?;
@@ -479,11 +485,16 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     }
 
     // 5) Chapters: title page + parts (collect TOC entries en paralelo)
-    let show_chapter_title = cfg.mostrar_titulo_capitulo.unwrap_or(true);
-    let prefix_style = cfg.prefijo_capitulo.as_deref().unwrap_or("none");
-    let use_dropcap = cfg.dropcap.unwrap_or(false);
-    let show_part_num = cfg.mostrar_numero_parte.unwrap_or(false);
-    let part_format = cfg.formato_parte.as_deref().unwrap_or("raw");
+    // Estilo de capítulos viene del tema (con legacy fallback a cfg.* aplicado
+    // dentro de resolve_theme para repos sin tema configurado).
+    let show_chapter_title = resolved_theme.mostrar_titulo_capitulo.unwrap_or(true);
+    let prefix_style = resolved_theme
+        .prefijo_capitulo
+        .as_deref()
+        .unwrap_or("none");
+    let use_dropcap = resolved_theme.dropcap.unwrap_or(false);
+    let show_part_num = resolved_theme.mostrar_numero_parte.unwrap_or(false);
+    let part_format = resolved_theme.formato_parte.as_deref().unwrap_or("raw");
 
     let lang_str = cfg.idioma.as_deref().unwrap_or("es").to_string();
     let is_en = lang_str == "en";
@@ -1437,9 +1448,12 @@ fn build_opf(cfg: &BookConfig, items: &[Item], book_uuid: &str) -> String {
     // Si hay fuentes embebidas, declarar `ibooks:specified-fonts` para que
     // Apple Books / Kindle KFX activen "Publisher Font" en vez de pisar la
     // tipografía con la del lector.
-    let has_fonts = items
-        .iter()
-        .any(|i| i.media_type.starts_with("font/"));
+    let has_fonts = items.iter().any(|i| {
+        let mt = &i.media_type;
+        mt.starts_with("font/")
+            || mt == "application/vnd.ms-opentype"
+            || mt == "application/font-woff"
+    });
     let (package_prefix, fonts_meta) = if has_fonts {
         (
             r#" prefix="ibooks: http://vocabulary.itunes.apple.com/rdf/ibooks/vocabulary-extensions-1.0/""#,
@@ -1648,6 +1662,12 @@ mod tests {
             editorial_body_font: None,
             editorial_heading_font: None,
             chapter_title_position: None,
+            prefijo_capitulo: None,
+            mostrar_titulo_capitulo: None,
+            dropcap: None,
+            mostrar_numero_parte: None,
+            formato_parte: None,
+            template: None,
             fonts: vec![
                 FontEmbed {
                     family: "Merriweather".into(),
@@ -1813,9 +1833,10 @@ mod tests {
         let css = String::from_utf8(entries.get("OEBPS/style.css").unwrap().clone()).unwrap();
         assert!(!css.contains("@font-face"), "CSS no debería tener @font-face sin tema");
         assert!(css.contains("font-family: serif;"), "CSS base intacto");
-        // OPF no menciona font/ttf.
+        // OPF no menciona ningún media-type de fuentes.
         let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
-        assert!(!opf.contains("font/ttf"));
+        assert!(!opf.contains("application/vnd.ms-opentype"));
+        assert!(!opf.contains("font/woff2"));
     }
 
     #[test]
@@ -1851,9 +1872,11 @@ mod tests {
         assert!(css.contains("@font-face"));
         assert!(css.contains("font-family: \"Merriweather\""));
         assert!(css.contains("font-size: 11pt"));
-        // OPF manifest tiene los items con media-type correcto.
+        // OPF manifest tiene los items con media-type legacy
+        // (`application/vnd.ms-opentype` para TTF/OTF — compat con Okular y
+        // lectores Qt sin perder Kindle/Calibre/Apple Books).
         let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
-        assert!(opf.contains("font/ttf"));
+        assert!(opf.contains("application/vnd.ms-opentype"));
         assert!(opf.contains("fonts/Merriweather-Regular.ttf"));
         assert!(opf.contains("fonts/Merriweather-Bold.ttf"));
         // Activa "Publisher Font" en Apple Books / Kindle KFX.

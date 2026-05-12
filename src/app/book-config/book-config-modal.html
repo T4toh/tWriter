@@ -157,66 +157,6 @@
           </label>
         </div>
 
-        <div class="row section-divider">
-          <span class="section-label">Estilo de capítulos en el EPUB</span>
-        </div>
-        <div class="row split">
-          <label>
-            <span>Prefijo del capítulo</span>
-            <app-select
-              [ngModel]="c.prefijo_capitulo"
-              (ngModelChange)="update('prefijo_capitulo', $event)"
-              [options]="prefijoCapituloOptions"
-            />
-          </label>
-          <label class="checkbox">
-            <input
-              type="checkbox"
-              [ngModel]="c.mostrar_titulo_capitulo"
-              (ngModelChange)="update('mostrar_titulo_capitulo', $event)"
-            />
-            <span>Mostrar título del capítulo</span>
-          </label>
-        </div>
-        <div class="row">
-          <label class="checkbox">
-            <input
-              type="checkbox"
-              [ngModel]="c.dropcap"
-              (ngModelChange)="update('dropcap', $event)"
-            />
-            <span>Letrina (dropcap) en primer párrafo de cada capítulo</span>
-          </label>
-        </div>
-        <div class="row split">
-          <label class="checkbox">
-            <input
-              type="checkbox"
-              [ngModel]="c.mostrar_numero_parte"
-              (ngModelChange)="update('mostrar_numero_parte', $event)"
-            />
-            <span>Mostrar header de parte (número o título)</span>
-          </label>
-          <label>
-            <span>Formato de parte</span>
-            <app-select
-              [ngModel]="c.formato_parte"
-              (ngModelChange)="update('formato_parte', $event)"
-              [disabled]="!c.mostrar_numero_parte"
-              [options]="formatoParteOptions"
-            />
-          </label>
-        </div>
-        <div class="row split">
-          <label>
-            <span>Tamaño de página (EPUB)</span>
-            <app-select
-              [ngModel]="c.template ?? '6x9'"
-              (ngModelChange)="update('template', $event)"
-              [options]="templateOptions"
-            />
-          </label>
-        </div>
 
         <div class="row section-divider">
           <span class="section-label">Tema (tipografía + márgenes)</span>

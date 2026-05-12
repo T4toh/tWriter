@@ -66,12 +66,22 @@ Reglas:
 - `<app-select>` Angular standalone reemplaza los `<select>` nativos en todos los modales (no más widget del DE distinto por distro). Typeahead automático cuando hay >10 opciones.
 - File pickers nativos vía `rfd` 0.15 con feature `xdg-portal` — en KDE/Wayland abre el portal del sistema en vez del diálogo GTK 3 foreign del plugin-dialog.
 
+### Notas (Markdown)
+
+- Editor separado para `.md` con TipTap + `tiptap-markdown` (no toca el flow de capítulos HTML).
+- Toolbar: B/I/S/code inline + H1/H2/H3 + listas bullet/numerada + blockquote + code block + hr. Sin RAE, LT ni idioma.
+- Convivencia con capítulos: mutex de un solo editor a la vez. El icono y footer marcan claramente "Nota".
+- `.md` aparecen en cualquier ubicación del árbol (saga, libro, sección, root); las carpetas `<saga>/notas/` y `<book>/notas/` se renderizan como 📒 expandibles.
+- `notas/` y los `.md` quedan auto-excluidos del export EPUB y de la vista de tarjetas (la vista de tarjetas es para contenido del libro).
+- "Nueva nota…" desde context menu de saga/libro/carpeta `notas/` (autocrea el dir si no existe).
+- `.md` que viven en `extras/` también abren en este editor (no en `xdg-open`).
+
 ### Tree explorer
 
-- Jerarquía Saga / Libro / Sección / Capítulo.
-- Context menu: crear, mover, renombrar, importar, exportar EPUB, configurar libro, excluir del EPUB.
+- Jerarquía Saga / Libro / Sección / Capítulo + Notas + carpetas `notas/`.
+- Context menu: crear, mover, renombrar, importar, exportar EPUB, configurar libro, excluir del EPUB. Para notas: abrir, renombrar, borrar.
 - Reorder de capítulos via context menu (↑ subir / ↓ bajar).
-- Archivos no-chapter visibles en el tree con íconos por tipo (🖼 imagen, 📄 documento, 📝 texto, 📦 otro).
+- Archivos no-chapter visibles en el tree con íconos por tipo (🖼 imagen, 📄 documento, 📝 texto, 📦 otro). Notas con 📝 y badge `.md`.
 - Template inicial precargado (saga/libro/capítulo dummy) al crear sagas/libros nuevos.
 - Badge "excluido" para `.twriter-ignore`.
 - Selector de carpeta raíz persistido + auto-load del último capítulo abierto.
@@ -117,12 +127,19 @@ Reglas:
 ### Temas + fuentes embebidas
 
 - Temas reutilizables a nivel root (`<root>/themes/<id>/`) con tipografía + márgenes.
-- Override per-saga y per-libro: `saga.json::theme = { base, overrides }`, mismo shape en `book.json`. Fonts override per-saga/per-libro via `<saga>/fonts/`, `<book>/fonts/`.
+- **Pool global de fuentes** en `<root>/fonts/`. Sección "Fuentes" en el árbol al nivel root — un solo lugar para subir y mantener todas las fuentes del repo. Los temas resuelven por nombre de familia; no hay copias per-tema ni per-saga.
+- **Marca de uso**: cada fuente del pool tiene flag visual — 🔤 si algún tema/saga/libro la referencia, 🔇 + itálica desaturada si no la usa nadie. Tooltip indica el estado.
+- **Botones de mantenimiento** en el header de Fuentes:
+  - **⇲ Consolidar**: mueve fuentes dispersas (legacy `<theme>/fonts/`, `<saga>/fonts/`, `<book>/fonts/`) al pool global. Dedupa por nombre+tamaño (borra dupes), avisa colisiones de nombre con tamaño distinto, limpia carpetas `fonts/` vacías.
+  - **🧹 Limpiar no usadas**: borra del disco las fuentes sin uso conocido (confirm modal con count).
+- Override per-saga/per-libro: `saga.json::theme = { base, overrides }`, mismo shape en `book.json`. Fonts overrides locales aún se pueden poner en `<saga>/fonts/` o `<book>/fonts/` y tienen prioridad sobre el pool global (search order: book → saga → root → legacy `<theme>/fonts/`).
 - Detección automática de bold/italic via sufijos en filename (`-Regular`, `-Bold`, `-Italic`, `-BoldItalic`, case-insensitive).
 - **Per-style faces explícitas**: `body_font_italic`/`body_font_bold`/`body_font_bold_italic` apuntan a un filename stem específico para `<em>`/`<strong>`. Pisa el auto-pick. Útil cuando la italic auto es muy sutil.
 - **Tema editorial**: `editorial_body_font` + `editorial_heading_font` aíslan tipografía de páginas no-autor (title page, copyright, dedicatoria, TOC, sobre el autor) de la prosa.
 - **Posición del título de capítulo**: `chapter_title_position` (`top`/`center`/`bottom`) con fallback `@media amzn-kf8` para que Kindle también centre.
-- Theme editor con preview real via `FontFace` API.
+- **Preview de fuente en panel derecho**: click en una fuente del pool abre el viewer (FontFace API): hero `Aa Bb Cc` a 96px + alfabeto + signos ES + escala 14/20/32/48 + párrafo Lorem ipsum. Mutex con el image viewer (un panel a la vez). Esc o × cierra.
+- Theme editor con preview real via `FontFace` API; lee fuentes del pool global (no tiene UI propia de upload).
+- Modal de config de novela: el option "Heredar de saga" muestra el id/nombre del tema que la saga tiene actualmente seteado (carga `saga.json` del padre via `find_saga_dir`).
 - Cero regresión: sin tema configurado, CSS byte-idéntico al de pre-temas.
 
 ### Debug / observabilidad
@@ -262,12 +279,11 @@ paru -S twriter-bin
 
 ### Editor / UX
 
-- Markdown (lectura y escritura, para las notas).
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
 - Drag & drop reorder de capítulos (hoy solo via context menu ↑/↓).
 - Editor split (dos capítulos lado a lado).
-- Notas/research sidebar derecho.
+- Sidebar derecho de research / vista global de notas con búsqueda (hoy el editor de `.md` ya existe; falta el panel agregador).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
 
@@ -275,7 +291,7 @@ paru -S twriter-bin
 
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Borrar entradas individuales del diccionario per-saga desde UI (hoy se editan en bloque vía textarea del modal de configuración; agregar funciona desde el popover de typos).
-- Importar notas de Joplin (o cualquier `.md`, depende de implementar markdown).
+- Importer dedicado de Joplin (parsea metadata propia + adjuntos). Para `.md` simples sin metadata, copialos directo a `<saga>/notas/` o `<book>/notas/` y aparecen en el árbol.
 
 ### EPUB
 
