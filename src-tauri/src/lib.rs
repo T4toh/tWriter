@@ -11,6 +11,7 @@ mod grammar;
 mod image;
 mod import;
 mod import_wizard;
+mod notes;
 mod reorder;
 mod saga_config;
 mod settings;
@@ -24,7 +25,7 @@ use create::{create_book, create_chapter, create_directory};
 use dialogs::{pick_file, pick_folder};
 use epub::{export_book, list_exports};
 use extras::{add_extra, has_extras, list_extras, remove_extra, rename_extra};
-use fonts::{add_font, has_fonts, list_fonts, remove_font, rename_font};
+use fonts::{add_font, consolidate_fonts, has_fonts, list_fonts, remove_font, rename_font};
 use fs::{
     get_tree, is_directory_excluded, read_chapter, read_meta, rename_node, set_directory_excluded,
     write_chapter, write_meta,
@@ -37,11 +38,12 @@ use grammar::{
 use image::read_image;
 use import::{delete_chapter_file, delete_directory, import_chapter};
 use import_wizard::{import_wizard_apply, scan_import_source};
+use notes::{create_note, delete_note, read_note, write_note};
 use reorder::move_node;
 use settings::{get_settings, set_settings};
 use themes::{
-    add_theme_font, create_theme, delete_theme, duplicate_theme, get_theme, list_theme_fonts,
-    list_themes, remove_theme_font, rename_theme, rename_theme_font, set_theme,
+    add_theme_font, create_theme, delete_theme, duplicate_theme, get_theme, list_font_usage,
+    list_theme_fonts, list_themes, remove_theme_font, rename_theme, rename_theme_font, set_theme,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -75,6 +77,10 @@ pub fn run() {
             create_chapter,
             create_directory,
             create_book,
+            read_note,
+            write_note,
+            create_note,
+            delete_note,
             move_node,
             export_book,
             list_exports,
@@ -104,6 +110,7 @@ pub fn run() {
             add_font,
             remove_font,
             rename_font,
+            consolidate_fonts,
             list_themes,
             get_theme,
             set_theme,
@@ -115,6 +122,7 @@ pub fn run() {
             add_theme_font,
             remove_theme_font,
             rename_theme_font,
+            list_font_usage,
             pick_folder,
             pick_file,
         ])

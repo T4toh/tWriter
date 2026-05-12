@@ -1,13 +1,11 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { openPath } from '@tauri-apps/plugin-opener';
-import { NativeDialogsService } from '../core/native-dialogs-service';
+import { FontsService } from '../core/fonts-service';
+import { SettingsService } from '../core/settings-service';
 import { ThemesService } from '../core/themes-service';
 import { FontEntry, Theme } from '../core/types';
-import { ModalService } from '../shared/modal-service';
 import { Select, SelectOption } from '../shared/select';
-import { ToastService } from '../core/toast-service';
 
 interface EditableTheme {
   nombre: string;
@@ -39,13 +37,16 @@ function previewFamilyName(slot: string, idx: number): string {
 })
 export class ThemeEditorModal {
   private svc = inject(ThemesService);
-  private modal = inject(ModalService);
-  private toast = inject(ToastService);
-  private dialogs = inject(NativeDialogsService);
+  private fontsSvc = inject(FontsService);
+  private settings = inject(SettingsService);
 
   protected readonly editing = this.svc.editing;
   protected readonly form = signal<EditableTheme | null>(null);
-  protected readonly fonts = signal<FontEntry[]>([]);
+  /** Fuentes del pool global. Las lee del FontsService cuando hay root y modal abierto. */
+  protected readonly fonts = computed<FontEntry[]>(() => {
+    const root = this.settings.root();
+    return root ? this.fontsSvc.get(root) : [];
+  });
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
 
@@ -149,10 +150,11 @@ export class ThemeEditorModal {
       const id = this.editing();
       if (!id) {
         this.form.set(null);
-        this.fonts.set([]);
         return;
       }
       void this.load(id);
+      const root = this.settings.root();
+      if (root) void this.fontsSvc.refresh(root);
     });
 
     // Re-load preview FontFaces cuando cambian los slots o el body_font.
@@ -188,8 +190,6 @@ export class ThemeEditorModal {
         editorial_heading_font: t.editorial_heading_font ?? '',
         chapter_title_position: t.chapter_title_position ?? '',
       });
-      const fonts = await this.svc.listFonts(id);
-      this.fonts.set(fonts);
     } catch (err) {
       this.error.set(String(err));
     }
@@ -256,75 +256,6 @@ export class ThemeEditorModal {
     const cur = this.form();
     if (!cur) return;
     this.form.set({ ...cur, [key]: value });
-  }
-
-  protected async pickFont(): Promise<void> {
-    const id = this.editing();
-    if (!id) return;
-    const paths = await this.dialogs.pickFile({
-      title: 'Agregar fuentes',
-      filters: [{ name: 'Fuentes', extensions: ['ttf', 'otf', 'woff', 'woff2'] }],
-      multiple: true,
-    });
-    if (paths.length === 0) return;
-    for (const p of paths) {
-      try {
-        await this.svc.addFont(id, p);
-      } catch (err) {
-        this.toast.error(`No pude agregar ${p}: ${err}`);
-      }
-    }
-    this.fonts.set(await this.svc.listFonts(id));
-  }
-
-  protected async openFontFile(font: FontEntry): Promise<void> {
-    try {
-      await openPath(font.path);
-    } catch (err) {
-      this.toast.error(`No pude abrir: ${err}`);
-    }
-  }
-
-  protected async renameFont(font: FontEntry): Promise<void> {
-    const id = this.editing();
-    if (!id) return;
-    const newName = await this.modal.prompt({
-      title: 'Renombrar fuente',
-      message: 'Nuevo nombre del archivo (mantener extensión .ttf/.otf/.woff/.woff2):',
-      defaultValue: font.name,
-      validate: (v) => {
-        const t = v.trim();
-        if (!t) return 'Nombre vacío';
-        if (t.includes('/') || t.includes('\\')) return 'Sin separadores';
-        if (!/\.(ttf|otf|woff|woff2)$/i.test(t)) return 'Extensión inválida';
-        return null;
-      },
-    });
-    if (!newName) return;
-    try {
-      await this.svc.renameFont(id, font.relative_path, newName);
-      this.fonts.set(await this.svc.listFonts(id));
-    } catch (err) {
-      this.toast.error(`No pude renombrar: ${err}`);
-    }
-  }
-
-  protected async removeFont(font: FontEntry): Promise<void> {
-    const id = this.editing();
-    if (!id) return;
-    const ok = await this.modal.confirm({
-      title: 'Borrar fuente',
-      message: `¿Borrar ${font.name} del tema? El archivo se elimina del disco.`,
-      okLabel: 'Borrar',
-      danger: true,
-    });
-    if (!ok) return;
-    try {
-      await this.svc.removeFont(id, font.relative_path);
-      this.fonts.set(await this.svc.listFonts(id));
-    } catch (err) {
-      this.toast.error(`No pude borrar: ${err}`);
-    }
   }
 
   protected async save(): Promise<void> {

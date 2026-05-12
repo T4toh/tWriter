@@ -126,6 +126,30 @@
   flex-shrink: 0;
 }
 
+.consolidate-btn {
+  opacity: 0.5;
+  font-size: 0.85em;
+  padding: 0 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:first-of-type {
+    margin-left: auto;
+  }
+
+  &:hover {
+    opacity: 1;
+    background: var(--border);
+  }
+}
+
+.row.font.font-unused {
+  opacity: 0.45;
+  font-style: italic;
+}
+
+
 .icon {
   font-size: 0.75em;
   opacity: 0.6;

@@ -38,7 +38,9 @@ export class SagaCard {
 
   protected readonly thumbs = signal<BookThumb[]>([]);
 
-  protected readonly bookCount = computed(() => this.node().children.length);
+  protected readonly bookCount = computed(
+    () => this.node().children.filter((c) => c.kind === 'book').length,
+  );
   protected readonly extra = computed(() =>
     Math.max(0, this.bookCount() - MAX_THUMBS),
   );

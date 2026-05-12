@@ -197,49 +197,24 @@
         </div>
 
         <div class="row section-divider">
-          <span class="section-label">Fuentes del tema</span>
-          <button type="button" class="add-btn" (click)="pickFont()">
-            + Agregar fuente…
-          </button>
+          <span class="section-label">Fuentes disponibles ({{ fonts().length }})</span>
         </div>
-
-        @if (fonts().length === 0) {
-          <p class="hint">
-            Aún no hay fuentes en este tema. Agregá archivos
-            <code>.ttf</code>, <code>.otf</code>, <code>.woff</code> o
-            <code>.woff2</code>. Para que <code>&lt;strong&gt;</code> y
-            <code>&lt;em&gt;</code> tengan face propio, usá nombres como
-            <code>Merriweather-Bold.ttf</code>,
-            <code>Merriweather-Italic.ttf</code>,
-            <code>Merriweather-BoldItalic.ttf</code>.
-          </p>
-        } @else {
-          <ul class="fonts-list">
+        <p class="hint">
+          El tema toma sus fuentes del pool global del repo. Agregá archivos
+          <code>.ttf</code> / <code>.otf</code> / <code>.woff</code> /
+          <code>.woff2</code> arrastrándolos a la sección
+          <strong>Fuentes</strong> del árbol. Para que
+          <code>&lt;strong&gt;</code> y <code>&lt;em&gt;</code> tengan face
+          propio, usá nombres como <code>Merriweather-Bold.ttf</code>,
+          <code>Merriweather-Italic.ttf</code>,
+          <code>Merriweather-BoldItalic.ttf</code>.
+        </p>
+        @if (fonts().length > 0) {
+          <ul class="fonts-list compact">
             @for (font of fonts(); track font.relative_path) {
               <li>
-                <div class="font-row">
-                  <button
-                    type="button"
-                    class="link"
-                    (click)="openFontFile(font)"
-                    [title]="font.path"
-                  >
-                    {{ font.name }}
-                  </button>
-                  <span class="meta">{{ formatStyle(font) }}</span>
-                </div>
-                <div class="font-actions">
-                  <button type="button" class="icon-btn" (click)="renameFont(font)">
-                    Renombrar
-                  </button>
-                  <button
-                    type="button"
-                    class="icon-btn danger"
-                    (click)="removeFont(font)"
-                  >
-                    Borrar
-                  </button>
-                </div>
+                <span class="font-name" [title]="font.path">{{ font.name }}</span>
+                <span class="meta">{{ formatStyle(font) }}</span>
               </li>
             }
           </ul>

@@ -394,12 +394,16 @@ pub fn resolve_theme(
     let theme_fonts_dir = root_dir.join("themes").join(&base_id).join("fonts");
     let book_fonts_dir = book_dir.join("fonts");
     let saga_fonts_dir = saga_dir.map(|d| d.join("fonts"));
+    let root_fonts_dir = root_dir.join("fonts");
 
+    // Orden de resolución: book/saga (overrides locales) → root (pool global,
+    // canónico) → theme/X/fonts (legacy back-compat).
     let mut search_dirs: Vec<PathBuf> = Vec::new();
     search_dirs.push(book_fonts_dir);
     if let Some(d) = saga_fonts_dir {
         search_dirs.push(d);
     }
+    search_dirs.push(root_fonts_dir);
     search_dirs.push(theme_fonts_dir);
 
     let dir_refs: Vec<&Path> = search_dirs.iter().map(|p| p.as_path()).collect();
@@ -426,7 +430,7 @@ pub fn resolve_theme(
         }
         let faces = collect_faces(&fam, &dir_refs);
         if faces.is_empty() {
-            tracing::warn!(target: "theme", family = %fam, "fuente no encontrada en book/saga/theme fonts/");
+            tracing::warn!(target: "theme", family = %fam, "fuente no encontrada en book/saga/root/theme fonts/");
             continue;
         }
         for face in faces {
@@ -456,7 +460,7 @@ pub fn resolve_theme(
             continue;
         };
         let Some((abs_path, ext)) = locate_face_by_stem(stem, &dir_refs) else {
-            tracing::warn!(target: "theme", face = %stem, "face per-style no encontrada en book/saga/theme fonts/");
+            tracing::warn!(target: "theme", face = %stem, "face per-style no encontrada en book/saga/root/theme fonts/");
             continue;
         };
         let Some(media_type) = font_media_type(&ext).map(|s| s.to_string()) else {

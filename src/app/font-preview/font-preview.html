@@ -1,0 +1,41 @@
+@if (viewing(); as entry) {
+  <header class="fp-header">
+    <div class="fp-titles">
+      <h2 class="fp-name">{{ title() }}</h2>
+      <p class="fp-subtitle">{{ subtitle() }}</p>
+    </div>
+    <button type="button" class="fp-close" (click)="close()" title="Cerrar (Esc)">
+      ×
+    </button>
+  </header>
+
+  <div class="fp-body" [attr.style]="fontStyle()">
+    @if (loadError(); as err) {
+      <p class="fp-error">No pude cargar la fuente: {{ err }}</p>
+    }
+
+    <section class="fp-sample fp-sample-hero">
+      <p>Aa Bb Cc</p>
+    </section>
+
+    <section class="fp-sample">
+      <h3 class="fp-sample-label">Alfabeto + números</h3>
+      <pre class="fp-alpha">{{ alphaNum }}</pre>
+    </section>
+
+    <section class="fp-sample">
+      <h3 class="fp-sample-label">Tamaños</h3>
+      @for (s of sizes; track s.px) {
+        <p class="fp-size-row" [style.font-size.px]="s.px">
+          <span class="fp-size-label">{{ s.label }}</span>
+          The quick brown fox jumps over the lazy dog.
+        </p>
+      }
+    </section>
+
+    <section class="fp-sample">
+      <h3 class="fp-sample-label">Lorem ipsum</h3>
+      <p class="fp-lorem">{{ lorem }}</p>
+    </section>
+  </div>
+}

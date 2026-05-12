@@ -6,9 +6,11 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { invoke } from '@tauri-apps/api/core';
 import { BookConfig, BookConfigService } from '../core/book-config-service';
 import { FontsService } from '../core/fonts-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
+import { SagaConfigService } from '../core/saga-config-service';
 import { ThemesService } from '../core/themes-service';
 import { Theme, ThemeRef } from '../core/types';
 import { Select, SelectOption } from '../shared/select';
@@ -22,6 +24,7 @@ import { Select, SelectOption } from '../shared/select';
 export class BookConfigModal {
   private svc = inject(BookConfigService);
   protected themesSvc = inject(ThemesService);
+  private sagaCfg = inject(SagaConfigService);
   private fontsSvc = inject(FontsService);
   private dialogs = inject(NativeDialogsService);
 
@@ -50,6 +53,14 @@ export class BookConfigModal {
     const id = this.themeBase();
     if (!id) return null;
     return this.availableThemes().find((t) => t.id === id) ?? null;
+  });
+  /** Tema base que la saga padre tiene configurado (lo que se hereda si dejás vacío). */
+  protected readonly sagaThemeBase = signal<string | null>(null);
+  protected readonly sagaThemeLabel = computed(() => {
+    const id = this.sagaThemeBase();
+    if (!id) return null;
+    const meta = this.availableThemes().find((t) => t.id === id);
+    return meta?.nombre || meta?.id || id;
   });
   protected readonly availableFamilies = computed(() => {
     const set = new Set<string>();
@@ -93,10 +104,14 @@ export class BookConfigModal {
     { value: 'a5', label: 'A5 (148 × 210 mm)' },
   ];
 
-  protected readonly themeBaseOptions = computed<SelectOption[]>(() => [
-    { value: '', label: 'Heredar de saga' },
-    ...this.availableThemes().map((t) => ({ value: t.id, label: t.nombre || t.id })),
-  ]);
+  protected readonly themeBaseOptions = computed<SelectOption[]>(() => {
+    const sagaLabel = this.sagaThemeLabel();
+    const inheritLabel = sagaLabel ? `Heredar de saga (${sagaLabel})` : 'Heredar de saga';
+    return [
+      { value: '', label: inheritLabel },
+      ...this.availableThemes().map((t) => ({ value: t.id, label: t.nombre || t.id })),
+    ];
+  });
 
   private stemFaceOptions(inherited: string | null | undefined): SelectOption[] {
     return [
@@ -125,13 +140,29 @@ export class BookConfigModal {
       const node = this.editing();
       if (!node) {
         this.config.set(null);
+        this.sagaThemeBase.set(null);
         this.resetTheme();
         return;
       }
       void this.load(node.path);
       void this.themesSvc.refresh();
       void this.fontsSvc.refresh(node.path);
+      void this.loadSagaTheme(node.path);
     });
+  }
+
+  private async loadSagaTheme(bookPath: string): Promise<void> {
+    try {
+      const sagaPath = await invoke<string | null>('find_saga_dir', { path: bookPath });
+      if (!sagaPath || sagaPath === bookPath) {
+        this.sagaThemeBase.set(null);
+        return;
+      }
+      const cfg = await this.sagaCfg.load(sagaPath);
+      this.sagaThemeBase.set(cfg.theme?.base ?? null);
+    } catch {
+      this.sagaThemeBase.set(null);
+    }
   }
 
   private resetTheme(): void {

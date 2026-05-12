@@ -23,6 +23,7 @@
   }
   @if (root(); as r) {
     <ng-container *ngTemplateOutlet="themesSectionTpl" />
+    <ng-container *ngTemplateOutlet="rootFontsSectionTpl" />
     @for (child of r.children; track child.path) {
       <ng-container
         *ngTemplateOutlet="nodeTpl; context: { $implicit: child, depth: 0 }"
@@ -54,6 +55,49 @@
         <span class="ext">.{{ node.ext }}</span>
       }
     </button>
+  } @else if (node.kind === 'note') {
+    <button
+      type="button"
+      class="row note"
+      [class.active]="node.path === activePath()"
+      [title]="node.path"
+      [style.padding-left.px]="8 + depth * 14"
+      (click)="select(node)"
+      (contextmenu)="onContextMenu($event, node)"
+    >
+      <span class="icon">📝</span>
+      <span class="name">{{ node.name }}</span>
+      <span class="ext">.{{ node.ext || 'md' }}</span>
+    </button>
+  } @else if (node.kind === 'notes') {
+    <button
+      type="button"
+      class="row group notes-folder"
+      [class.current]="node.path === currentPath()"
+      [class.ancestor]="ancestorPaths().has(node.path)"
+      [attr.data-kind]="node.kind"
+      [style.padding-left.px]="8 + depth * 14"
+      (click)="toggle(node)"
+      (contextmenu)="onContextMenu($event, node)"
+      [title]="'Notas (excluidas del EPUB)'"
+    >
+      <span class="chevron">{{ isExpanded(node) ? '▾' : '▸' }}</span>
+      <span class="icon">📒</span>
+      <span class="name">{{ node.name }}</span>
+      @if (node.children.length > 0) {
+        <span class="ext">{{ node.children.length }}</span>
+      }
+    </button>
+    @if (isExpanded(node)) {
+      @for (child of node.children; track child.path) {
+        <ng-container
+          *ngTemplateOutlet="
+            nodeTpl;
+            context: { $implicit: child, depth: depth + 1 }
+          "
+        />
+      }
+    }
   } @else {
     <button
       type="button"
@@ -86,11 +130,6 @@
       @if ((node.kind === 'saga' || node.kind === 'book') && !node.excluded) {
         <ng-container
           *ngTemplateOutlet="extrasSectionTpl; context: { scopePath: node.path, depth: depth + 1 }"
-        />
-      }
-      @if ((node.kind === 'saga' || (node.kind === 'book' && depth === 0)) && !node.excluded) {
-        <ng-container
-          *ngTemplateOutlet="fontsSectionTpl; context: { scopePath: node.path, depth: depth + 1 }"
         />
       }
       @if (node.kind === 'book' && !node.excluded) {
@@ -229,44 +268,64 @@
   }
 </ng-template>
 
-<ng-template #fontsSectionTpl let-scopePath="scopePath" let-depth="depth">
-  <button
-    type="button"
-    class="row fonts-header"
-    [class.drag-target]="dragOverScope() === scopePath"
-    [attr.data-extra-scope]="scopePath"
-    [style.padding-left.px]="8 + depth * 14"
-    (click)="toggleFonts(scopePath)"
-  >
-    <span class="chevron">{{ isFontsExpanded(scopePath) ? '▾' : '▸' }}</span>
-    <span class="icon">🔤</span>
-    <span class="name">Fuentes</span>
-    @if (hasLoadedFonts(scopePath) && getFonts(scopePath).length > 0) {
-      <span class="ext">{{ getFonts(scopePath).length }}</span>
-    }
-  </button>
-  @if (isFontsExpanded(scopePath)) {
-    @if (!hasLoadedFonts(scopePath)) {
-      <p class="status" [style.padding-left.px]="8 + (depth + 1) * 14">Cargando…</p>
-    } @else if (getFonts(scopePath).length === 0) {
-      <p class="status" [style.padding-left.px]="8 + (depth + 1) * 14">
-        Sin fuentes. Arrastrá .ttf/.otf/.woff/.woff2 acá.
-      </p>
-    } @else {
-      @for (entry of getFonts(scopePath); track entry.relative_path) {
-        <button
-          type="button"
-          class="row font"
-          [attr.data-extra-scope]="scopePath"
-          [style.padding-left.px]="8 + (depth + 1) * 14"
-          (click)="openFont(scopePath, entry)"
-          (contextmenu)="onFontContextMenu($event, scopePath, entry)"
-          [title]="entry.relative_path"
-        >
-          <span class="icon">🔤</span>
-          <span class="name">{{ entry.name }}</span>
-          <span class="font-badge">{{ entry.family }}{{ entry.weight === 700 ? ' B' : '' }}{{ entry.style === 'italic' ? ' I' : '' }}</span>
-        </button>
+<ng-template #rootFontsSectionTpl>
+  @if (rootFontsPath(); as rootPath) {
+    <button
+      type="button"
+      class="row fonts-header"
+      [class.drag-target]="dragOverScope() === rootPath"
+      [attr.data-extra-scope]="rootPath"
+      (click)="toggleRootFonts()"
+    >
+      <span class="chevron">{{ isRootFontsExpanded() ? '▾' : '▸' }}</span>
+      <span class="icon">🔤</span>
+      <span class="name">Fuentes</span>
+      @if (hasLoadedRootFonts() && getRootFonts().length > 0) {
+        <span class="ext">{{ getRootFonts().length }}</span>
+      }
+      @if (unusedRootFontsCount() > 0) {
+        <span
+          class="consolidate-btn"
+          role="button"
+          tabindex="0"
+          (click)="cleanupUnusedFonts($event)"
+          (keydown.enter)="cleanupUnusedFonts($event)"
+          [title]="'Borrar ' + unusedRootFontsCount() + ' fuente(s) que ningún tema/saga/libro usa'"
+        >🧹</span>
+      }
+      <span
+        class="consolidate-btn"
+        role="button"
+        tabindex="0"
+        (click)="consolidateFonts($event)"
+        (keydown.enter)="consolidateFonts($event)"
+        title="Consolidar: mueve fuentes de temas/sagas/libros al pool global"
+      >⇲</span>
+    </button>
+    @if (isRootFontsExpanded()) {
+      @if (!hasLoadedRootFonts()) {
+        <p class="status" style="padding-left: 22px">Cargando…</p>
+      } @else if (getRootFonts().length === 0) {
+        <p class="status" style="padding-left: 22px">
+          Sin fuentes. Arrastrá .ttf/.otf/.woff/.woff2 acá.
+        </p>
+      } @else {
+        @for (entry of getRootFonts(); track entry.relative_path) {
+          <button
+            type="button"
+            class="row font"
+            [class.font-unused]="!isFontUsed(entry)"
+            [attr.data-extra-scope]="rootPath"
+            style="padding-left: 22px"
+            (click)="openFont(entry)"
+            (contextmenu)="onFontContextMenu($event, rootPath, entry)"
+            [title]="isFontUsed(entry) ? entry.relative_path + ' — en uso' : entry.relative_path + ' — sin uso (ningún tema/saga/libro la referencia)'"
+          >
+            <span class="icon">{{ isFontUsed(entry) ? '🔤' : '🔇' }}</span>
+            <span class="name">{{ entry.name }}</span>
+            <span class="font-badge">{{ entry.family }}{{ entry.weight === 700 ? ' B' : '' }}{{ entry.style === 'italic' ? ' I' : '' }}</span>
+          </button>
+        }
       }
     }
   }

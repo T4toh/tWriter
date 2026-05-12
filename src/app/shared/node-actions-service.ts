@@ -7,6 +7,7 @@ import { ExtraEntry, ExtrasService } from '../core/extras-service';
 import { FontsService } from '../core/fonts-service';
 import { ImageViewerService } from '../core/image-viewer-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
+import { NoteService } from '../core/note-service';
 import { ProjectService } from '../core/project-service';
 import { SagaConfigService } from '../core/saga-config-service';
 import { SettingsService } from '../core/settings-service';
@@ -26,6 +27,7 @@ import { CtxMenuEntry } from './context-menu-service';
 export class NodeActionsService {
   private project = inject(ProjectService);
   private chapter = inject(ChapterService);
+  private note = inject(NoteService);
   private settings = inject(SettingsService);
   private bookCfg = inject(BookConfigService);
   private sagaCfg = inject(SagaConfigService);
@@ -40,6 +42,27 @@ export class NodeActionsService {
   // ───── Builders ─────
 
   buildNodeMenu(node: TreeNode): CtxMenuEntry[] {
+    if (node.kind === 'note') {
+      return [
+        { label: 'Abrir', onClick: () => this.openNote(node) },
+        { label: 'Renombrar…', kbd: 'F2', onClick: () => this.renameNode(node) },
+        { kind: 'separator' },
+        {
+          label: 'Borrar nota',
+          danger: true,
+          onClick: () => this.deleteNoteNode(node),
+        },
+      ];
+    }
+    if (node.kind === 'notes') {
+      return [
+        {
+          label: 'Nueva nota…',
+          kbd: '.md',
+          onClick: () => this.createNoteIn(node.path),
+        },
+      ];
+    }
     if (node.kind === 'chapter') {
       const isImportable = node.ext === 'odt' || node.ext === 'docx';
       const hasHtml = isImportable && this.hasHtmlSibling(node);
@@ -84,6 +107,7 @@ export class NodeActionsService {
     const importable = isExcluded ? [] : this.collectImportable(node);
     const cleanable = isExcluded ? [] : this.collectCleanable(node);
     const canAddExtra = !isExcluded && (node.kind === 'saga' || node.kind === 'book');
+    const canCreateNote = !isExcluded && (node.kind === 'saga' || node.kind === 'book');
     const canCreateChapter = !isExcluded && (node.kind === 'book' || node.kind === 'section');
     const canCreateSection = !isExcluded && node.kind === 'book';
     const canCreateBook = !isExcluded && node.kind === 'saga';
@@ -105,10 +129,17 @@ export class NodeActionsService {
     if (canCreateBook) {
       entries.push({ label: 'Crear libro', onClick: () => this.createBook(node) });
     }
+    if (canCreateNote) {
+      entries.push({
+        label: 'Nueva nota…',
+        kbd: 'notas/',
+        onClick: () => this.createNoteIn(`${node.path}/notas`),
+      });
+    }
 
     const hasImports = importable.length > 0 || cleanable.length > 0;
     const hasOps = canAddExtra || hasImports;
-    if ((canCreateChapter || canCreateSection || canCreateBook) && hasOps) {
+    if ((canCreateChapter || canCreateSection || canCreateBook || canCreateNote) && hasOps) {
       entries.push({ kind: 'separator' });
     }
 
@@ -237,10 +268,19 @@ export class NodeActionsService {
 
   buildFontMenu(scopePath: string, entry: FontEntry): CtxMenuEntry[] {
     return [
+      { label: 'Abrir con sistema', onClick: () => this.openFontWithSystem(entry) },
       { label: 'Renombrar fuente…', onClick: () => this.renameFont(scopePath, entry) },
       { kind: 'separator' },
       { label: 'Borrar fuente', danger: true, onClick: () => this.removeFont(scopePath, entry) },
     ];
+  }
+
+  async openFontWithSystem(entry: FontEntry): Promise<void> {
+    try {
+      await openPath(entry.path);
+    } catch (e) {
+      this.toast.error(`No se pudo abrir: ${e}`);
+    }
   }
 
   // ───── Node actions ─────
@@ -463,11 +503,49 @@ export class NodeActionsService {
       void this.imageViewer.open(entry);
       return;
     }
+    if (isMarkdownExt(entry.ext)) {
+      await this.note.open({ path: entry.path, name: entry.name });
+      return;
+    }
     try {
       await openPath(entry.path);
     } catch (e) {
       this.toast.error(`No se pudo abrir: ${e}`);
     }
+  }
+
+  // ───── Note actions ─────
+
+  async openNote(node: TreeNode): Promise<void> {
+    if (node.kind !== 'note') return;
+    await this.note.open({ path: node.path, name: node.name });
+  }
+
+  async deleteNoteNode(node: TreeNode): Promise<void> {
+    if (node.kind !== 'note') return;
+    const ok = await this.modal.confirm({
+      title: 'Borrar nota',
+      message: `Borrar ${node.name}.${node.ext || 'md'}?\nEl archivo se borra de disco.`,
+      danger: true,
+    });
+    if (!ok) return;
+    await this.note.deleteNote({ path: node.path, name: node.name });
+  }
+
+  async createNoteIn(parentDir: string): Promise<void> {
+    const name = await this.modal.prompt({
+      title: 'Nueva nota',
+      message: 'Sin extensión, .md se prepende automático.',
+      placeholder: 'nombre',
+      validate: (v) => {
+        const t = v.trim();
+        if (!t) return 'Nombre vacío';
+        if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
+        return null;
+      },
+    });
+    if (!name?.trim()) return;
+    await this.note.createNote(parentDir, name.trim());
   }
 
   async renameExtra(scopePath: string, entry: ExtraEntry): Promise<void> {
@@ -681,6 +759,12 @@ function findParent(node: TreeNode, target: TreeNode): TreeNode | null {
 function walk(node: TreeNode, fn: (n: TreeNode) => void): void {
   fn(node);
   for (const c of node.children) walk(c, fn);
+}
+
+function isMarkdownExt(ext: string | null | undefined): boolean {
+  if (!ext) return false;
+  const e = ext.toLowerCase();
+  return e === 'md' || e === 'markdown';
 }
 
 export function isEpilogoName(name: string): boolean {

@@ -1,0 +1,182 @@
+@if (active()) {
+  <div class="toolbar">
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().bold"
+      (click)="toggleBold()"
+      title="Negrita (Ctrl+B)"
+    >
+      <span class="ico bold">B</span>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().italic"
+      (click)="toggleItalic()"
+      title="Itálica (Ctrl+I)"
+    >
+      <span class="ico italic">I</span>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().strike"
+      (click)="toggleStrike()"
+      title="Tachado"
+    >
+      <span class="ico strike">S</span>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().code"
+      (click)="toggleCode()"
+      title="Código inline (Ctrl+E)"
+    >
+      <span class="ico">&#96;</span>
+    </button>
+
+    <span class="sep"></span>
+
+    <button
+      type="button"
+      class="tb-btn tb-text"
+      [class.active]="state().h1"
+      (click)="setHeading(1)"
+      title="Heading 1"
+    >
+      H1
+    </button>
+    <button
+      type="button"
+      class="tb-btn tb-text"
+      [class.active]="state().h2"
+      (click)="setHeading(2)"
+      title="Heading 2"
+    >
+      H2
+    </button>
+    <button
+      type="button"
+      class="tb-btn tb-text"
+      [class.active]="state().h3"
+      (click)="setHeading(3)"
+      title="Heading 3"
+    >
+      H3
+    </button>
+
+    <span class="sep"></span>
+
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().bulletList"
+      (click)="toggleBulletList()"
+      title="Lista bullet"
+    >
+      <span class="ico">•</span>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().orderedList"
+      (click)="toggleOrderedList()"
+      title="Lista numerada"
+    >
+      <span class="ico">1.</span>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().blockquote"
+      (click)="toggleBlockquote()"
+      title="Cita"
+    >
+      <span class="ico">&ldquo;</span>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().codeBlock"
+      (click)="toggleCodeBlock()"
+      title="Bloque de código"
+    >
+      <span class="ico">&lt;/&gt;</span>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      (click)="insertHr()"
+      title="Separador horizontal"
+    >
+      <span class="ico">—</span>
+    </button>
+
+    <span class="spacer"></span>
+
+    <button
+      type="button"
+      class="tb-btn"
+      (click)="fontBump(-1)"
+      title="Achicar fuente"
+    >
+      <span class="ico">A−</span>
+    </button>
+    <span class="font-size-label">{{ fontSize() }}</span>
+    <button
+      type="button"
+      class="tb-btn"
+      (click)="fontBump(1)"
+      title="Agrandar fuente"
+    >
+      <span class="ico">A+</span>
+    </button>
+
+    <span class="sep"></span>
+
+    <button
+      type="button"
+      class="tb-btn width-toggle"
+      (click)="cycleWidth()"
+      [title]="'Ancho: ' + widthLabel()"
+    >
+      <span class="ico">{{ widthIcon() }}</span>
+    </button>
+  </div>
+}
+
+<div
+  class="editor-stack"
+  [attr.data-width]="width()"
+  [style.--editor-font-size.px]="fontSize()"
+  [style.--editor-para-spacing.em]="paragraphSpacingEm()"
+>
+  <div
+    class="editor-host"
+    #host
+    (contextmenu)="onContextMenu($event)"
+  ></div>
+
+  @if (!active()) {
+    <div class="overlay">
+      <p>Sin nota abierta.</p>
+    </div>
+  }
+</div>
+
+<footer class="status-bar">
+  @if (active(); as a) {
+    <span class="title">📝 {{ a.name }}</span>
+    <span class="badge">Nota</span>
+    @if (dirty()) {
+      <span class="indicator dirty">sin guardar</span>
+    } @else {
+      <span class="indicator saved">guardado</span>
+    }
+    @if (noteError(); as err) {
+      <span class="indicator error">{{ err }}</span>
+    }
+  }
+</footer>

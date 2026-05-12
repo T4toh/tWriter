@@ -1,9 +1,13 @@
 import { Component, HostListener, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
+import { invoke } from '@tauri-apps/api/core';
 import { openPath } from '@tauri-apps/plugin-opener';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { ChapterService } from '../core/chapter-service';
+import { DebugService } from '../core/debug-service';
 import { ExtraEntry, ExtrasService } from '../core/extras-service';
+import { FontPreviewService } from '../core/font-preview-service';
+import { NoteService } from '../core/note-service';
 import { ExportEntry, ExportsService } from '../core/exports-service';
 import { FontsService } from '../core/fonts-service';
 import { NavigationService } from '../core/navigation-service';
@@ -30,20 +34,32 @@ type DropScope =
 export class Tree implements OnDestroy {
   private project = inject(ProjectService);
   private chapter = inject(ChapterService);
+  private note = inject(NoteService);
   private settings = inject(SettingsService);
   private nav = inject(NavigationService);
   private extras = inject(ExtrasService);
   private exports = inject(ExportsService);
   private fonts = inject(FontsService);
+  private fontPreview = inject(FontPreviewService);
   private themesSvc = inject(ThemesService);
   private toast = inject(ToastService);
   private modal = inject(ModalService);
   private ctxMenu = inject(ContextMenuService);
   private actions = inject(NodeActionsService);
+  private debug = inject(DebugService);
 
-  /** Cache de fuentes per-saga/per-book (mismo patrón que extras). */
+  /** Cache de fuentes per-scope (back-compat: el modal de novela todavía lee saga/book/fonts). */
   private readonly fontsLoaded = signal<Set<string>>(new Set());
-  protected readonly fontsExpanded = signal<Set<string>>(new Set());
+  /** Estado expand/collapse del Fuentes global (single root pool). */
+  protected readonly rootFontsExpanded = signal<boolean>(false);
+  /** Familias en uso por algún tema/saga/libro (lowercase). */
+  private readonly usedFamilies = signal<Set<string>>(new Set());
+  /** Stems en uso (lowercase). */
+  private readonly usedStems = signal<Set<string>>(new Set());
+  /** Cantidad de fuentes del root pool sin uso conocido. */
+  protected readonly unusedRootFontsCount = computed(() => {
+    return this.getRootFonts().filter((f) => !this.isFontUsed(f)).length;
+  });
   protected readonly themesExpanded = signal<boolean>(false);
   /** Path/id que está siendo target de drag&drop OS para themes. null = no theme target. */
   protected readonly dragOverTheme = signal<string | null>(null);
@@ -51,7 +67,9 @@ export class Tree implements OnDestroy {
   protected readonly root = this.project.tree;
   protected readonly loading = this.project.loading;
   protected readonly error = this.project.error;
-  protected readonly activePath = computed(() => this.chapter.active()?.path ?? null);
+  protected readonly activePath = computed(
+    () => this.note.active()?.path ?? this.chapter.active()?.path ?? null,
+  );
   protected readonly browsingPath = this.nav.browsingPath;
   protected readonly currentPath = computed(
     () => this.activePath() ?? this.browsingPath(),
@@ -95,7 +113,7 @@ export class Tree implements OnDestroy {
       this.exports.clear();
       this.fonts.clear();
       this.fontsLoaded.set(new Set());
-      this.fontsExpanded.set(new Set());
+      this.rootFontsExpanded.set(false);
       this.themesExpanded.set(false);
     });
   }
@@ -184,48 +202,102 @@ export class Tree implements OnDestroy {
     void this.actions.openExtra(scopePath, entry);
   }
 
-  // ───── Fonts (per-saga/per-book) ─────
+  // ───── Fonts (single root pool) ─────
 
-  protected getFonts(scopePath: string): FontEntry[] {
-    return this.fonts.get(scopePath);
+  /** Path del pool global de fuentes (<root>). null si no hay root elegido. */
+  protected readonly rootFontsPath = computed(() => this.settings.root());
+
+  protected getRootFonts(): FontEntry[] {
+    const path = this.rootFontsPath();
+    if (!path) return [];
+    return this.fonts.get(path);
   }
 
-  protected hasLoadedFonts(scopePath: string): boolean {
-    return this.fontsLoaded().has(scopePath);
+  protected hasLoadedRootFonts(): boolean {
+    const path = this.rootFontsPath();
+    if (!path) return false;
+    return this.fontsLoaded().has(path);
   }
 
-  protected isFontsExpanded(scopePath: string): boolean {
-    return this.fontsExpanded().has(scopePath);
+  protected isRootFontsExpanded(): boolean {
+    return this.rootFontsExpanded();
   }
 
-  protected toggleFonts(scopePath: string): void {
-    const expanded = this.fontsExpanded().has(scopePath);
-    this.fontsExpanded.update((s) => {
-      const next = new Set(s);
-      if (expanded) next.delete(scopePath);
-      else next.add(scopePath);
-      return next;
-    });
-    if (!expanded && !this.hasLoadedFonts(scopePath)) {
-      void this.refreshFonts(scopePath);
+  protected toggleRootFonts(): void {
+    const expanded = this.rootFontsExpanded();
+    this.rootFontsExpanded.set(!expanded);
+    const path = this.rootFontsPath();
+    if (!expanded && path && !this.hasLoadedRootFonts()) {
+      void this.refreshRootFonts();
     }
   }
 
-  private async refreshFonts(scopePath: string): Promise<void> {
+  private async refreshRootFonts(): Promise<void> {
+    const path = this.rootFontsPath();
+    if (!path) return;
     try {
-      await this.fonts.refresh(scopePath);
-      this.fontsLoaded.update((s) => new Set([...s, scopePath]));
+      const [, usage] = await Promise.all([
+        this.fonts.refresh(path),
+        invoke<{ families: string[]; stems: string[] }>('list_font_usage', {
+          rootPath: path,
+        }),
+      ]);
+      this.usedFamilies.set(new Set(usage.families.map((s) => s.toLowerCase())));
+      this.usedStems.set(new Set(usage.stems.map((s) => s.toLowerCase())));
+      this.fontsLoaded.update((s) => new Set([...s, path]));
     } catch (e) {
       this.toast.error(`No se pudieron cargar fuentes: ${e}`);
     }
   }
 
-  protected async openFont(_scopePath: string, entry: FontEntry): Promise<void> {
-    try {
-      await openPath(entry.path);
-    } catch (e) {
-      this.toast.error(`No se pudo abrir: ${e}`);
+  protected isFontUsed(entry: FontEntry): boolean {
+    const fams = this.usedFamilies();
+    const stems = this.usedStems();
+    if (fams.has(entry.family.toLowerCase())) return true;
+    const stem = entry.name.replace(/\.[^.]+$/, '').toLowerCase();
+    return stems.has(stem);
+  }
+
+  protected async cleanupUnusedFonts(event: Event): Promise<void> {
+    event.stopPropagation();
+    const root = this.rootFontsPath();
+    if (!root) {
+      this.toast.error('Elegí una carpeta raíz primero.');
+      return;
     }
+    const unused = this.getRootFonts().filter((f) => !this.isFontUsed(f));
+    if (unused.length === 0) {
+      this.toast.info('No hay fuentes sin uso para borrar.');
+      return;
+    }
+    const ok = await this.modal.confirm({
+      title: 'Borrar fuentes sin uso',
+      message: `Borrar ${unused.length} fuente${unused.length === 1 ? '' : 's'} que ningún tema, saga ni novela usa?\nSe eliminan del disco — operación irreversible.`,
+      okLabel: 'Borrar',
+      danger: true,
+    });
+    if (!ok) return;
+    let done = 0;
+    let failed = 0;
+    for (const f of unused) {
+      try {
+        await this.fonts.remove(root, f.relative_path);
+        done++;
+      } catch (e) {
+        failed++;
+        this.debug.error('fonts', `cleanup ${f.name}: ${e}`);
+      }
+    }
+    await this.refreshRootFonts();
+    if (failed === 0) {
+      this.toast.success(`${done} fuente${done === 1 ? '' : 's'} sin uso borrada${done === 1 ? '' : 's'}.`);
+    } else {
+      this.toast.warn(`${done} borradas, ${failed} fallaron — ver panel debug.`);
+    }
+  }
+
+  protected openFont(entry: FontEntry): void {
+    this.fontPreview.open(entry);
   }
 
   // ───── Themes (root level) ─────
@@ -321,6 +393,7 @@ export class Tree implements OnDestroy {
   protected toggle(node: TreeNode): void {
     this.nav.setBrowsing(node.path);
     this.chapter.close();
+    this.note.close();
     const wasExpanded = this.isExpanded(node);
     if (this.forceState() !== null) {
       this.forceState.set(null);
@@ -348,7 +421,12 @@ export class Tree implements OnDestroy {
     if (node.kind === 'chapter') {
       const parentPath = node.path.replace(/\/[^/]+$/, '');
       this.nav.setBrowsing(parentPath);
+      this.note.close();
       await this.chapter.open(node);
+    } else if (node.kind === 'note') {
+      const parentPath = node.path.replace(/\/[^/]+$/, '');
+      this.nav.setBrowsing(parentPath);
+      await this.note.open({ path: node.path, name: node.name });
     }
   }
 
@@ -444,10 +522,18 @@ export class Tree implements OnDestroy {
     return null;
   }
 
-  /** Rutea archivos arrastrados según scope y extensión. Fonts → fonts service; resto → extras. */
+  /** Rutea archivos arrastrados según scope y extensión.
+   *  Fonts → pool global `<root>/fonts/` (independiente del scope, incluso si el
+   *  drop fue sobre un tema). Resto → extras del scope. */
   private async routeDroppedFiles(scope: DropScope, paths: string[]): Promise<void> {
     if (scope.kind === 'theme') {
-      await this.addThemeFonts(scope.id, paths);
+      const fontPaths = paths.filter((p) => FONT_EXT_RE.test(p));
+      if (fontPaths.length !== paths.length) {
+        this.toast.warn('Solo fuentes .ttf/.otf/.woff/.woff2 al pool global');
+      }
+      if (fontPaths.length > 0) {
+        await this.addRootFontFiles(fontPaths);
+      }
       return;
     }
     const fontPaths: string[] = [];
@@ -457,7 +543,7 @@ export class Tree implements OnDestroy {
       else extraPaths.push(p);
     }
     if (fontPaths.length > 0) {
-      await this.addFontFiles(scope.path, fontPaths);
+      await this.addRootFontFiles(fontPaths);
     }
     if (extraPaths.length > 0) {
       const added = await this.actions.addExtraFiles(scope.path, extraPaths);
@@ -467,12 +553,17 @@ export class Tree implements OnDestroy {
     }
   }
 
-  private async addFontFiles(scopePath: string, paths: string[]): Promise<void> {
+  private async addRootFontFiles(paths: string[]): Promise<void> {
+    const root = this.rootFontsPath();
+    if (!root) {
+      this.toast.error('Elegí una carpeta raíz primero.');
+      return;
+    }
     let added = 0;
     let failed = 0;
     for (const p of paths) {
       try {
-        await this.fonts.addFromPath(scopePath, p);
+        await this.fonts.addFromPath(root, p);
         added++;
       } catch (e) {
         failed++;
@@ -480,8 +571,8 @@ export class Tree implements OnDestroy {
       }
     }
     if (added > 0) {
-      this.fontsLoaded.update((s) => new Set([...s, scopePath]));
-      this.fontsExpanded.update((s) => new Set([...s, scopePath]));
+      this.fontsLoaded.update((s) => new Set([...s, root]));
+      this.rootFontsExpanded.set(true);
       this.toast.info(`Agregada${added === 1 ? '' : 's'} ${added} fuente${added === 1 ? '' : 's'}.`);
     }
     if (failed > 0 && added === 0) {
@@ -489,29 +580,43 @@ export class Tree implements OnDestroy {
     }
   }
 
-  private async addThemeFonts(themeId: string, paths: string[]): Promise<void> {
-    const fontPaths = paths.filter((p) => FONT_EXT_RE.test(p));
-    if (fontPaths.length === 0) {
-      this.toast.warn('Solo se aceptan fuentes .ttf/.otf/.woff/.woff2 en temas');
+  protected async consolidateFonts(event: Event): Promise<void> {
+    event.stopPropagation();
+    const root = this.rootFontsPath();
+    if (!root) {
+      this.toast.error('Elegí una carpeta raíz primero.');
       return;
     }
-    let added = 0;
-    let failed = 0;
-    for (const p of fontPaths) {
-      try {
-        await this.themesSvc.addFont(themeId, p);
-        added++;
-      } catch (e) {
-        failed++;
-        this.toast.error(`Falló agregar ${p}: ${e}`);
+    try {
+      const res = await invoke<{
+        moved: number;
+        deduped: number;
+        kept: number;
+        removed_dirs: number;
+      }>('consolidate_fonts', { rootPath: root });
+      this.fontsLoaded.update((s) => {
+        const next = new Set(s);
+        next.delete(root);
+        return next;
+      });
+      await this.refreshRootFonts();
+      this.rootFontsExpanded.set(true);
+      const parts: string[] = [];
+      if (res.moved > 0) parts.push(`${res.moved} movida${res.moved === 1 ? '' : 's'}`);
+      if (res.deduped > 0) parts.push(`${res.deduped} dupe${res.deduped === 1 ? '' : 's'} borrada${res.deduped === 1 ? '' : 's'}`);
+      if (res.removed_dirs > 0) parts.push(`${res.removed_dirs} carpeta${res.removed_dirs === 1 ? '' : 's'} vacía${res.removed_dirs === 1 ? '' : 's'} limpiada${res.removed_dirs === 1 ? '' : 's'}`);
+      if (parts.length === 0) {
+        this.toast.info('Nada que consolidar.');
+      } else {
+        this.toast.success(`Pool global actualizado: ${parts.join(', ')}.`);
       }
-    }
-    if (added > 0) {
-      await this.themesSvc.refresh();
-      this.toast.info(`Agregada${added === 1 ? '' : 's'} ${added} fuente${added === 1 ? '' : 's'} al tema ${themeId}.`);
-    }
-    if (failed > 0 && added === 0) {
-      this.toast.error('No se pudo agregar ninguna fuente al tema.');
+      if (res.kept > 0) {
+        this.toast.warn(
+          `${res.kept} fuente${res.kept === 1 ? '' : 's'} con colisión de nombre (tamaño distinto) — quedaron donde estaban. Revisalas a mano.`,
+        );
+      }
+    } catch (e) {
+      this.toast.error(`No se pudo consolidar: ${e}`);
     }
   }
 }

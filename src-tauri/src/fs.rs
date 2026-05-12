@@ -12,11 +12,12 @@ const SKIP_DIRS: &[&str] = &[
     ".git",
     "zTapas",
     "extras",
-    "notas",
     "fonts",
     "themes",
 ];
 const CHAPTER_EXTS: &[&str] = &["html", "odt", "docx"];
+const NOTE_EXTS: &[&str] = &["md", "markdown"];
+const NOTES_DIR_NAME: &str = "notas";
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -25,6 +26,9 @@ pub enum NodeKind {
     Book,
     Section,
     Chapter,
+    Note,
+    /// Carpeta `notas/` (o sub-carpeta dentro). Tiene Notes y/o NotesFolders como children.
+    Notes,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -242,10 +246,28 @@ fn meta_path_for(chapter_path: &str) -> PathBuf {
 
 fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
     let mut out = Vec::new();
-    for entry in read_sorted_dirs(root)? {
+    let mut loose_notes = Vec::new();
+    for entry in read_sorted_entries(root)? {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
+        let ft = match entry.file_type() {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        if ft.is_file() {
+            if let Some(node) = note_node(&path) {
+                loose_notes.push(node);
+            }
+            continue;
+        }
+        if !ft.is_dir() {
+            continue;
+        }
         if should_skip_dir(&name) {
+            continue;
+        }
+        if name == NOTES_DIR_NAME {
+            out.push(notes_folder_node(&path, name)?);
             continue;
         }
         let excluded = is_excluded_dir(&path);
@@ -300,15 +322,34 @@ fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
             _ => {}
         }
     }
+    out.append(&mut loose_notes);
     Ok(out)
 }
 
 fn list_books(saga_dir: &Path) -> Result<Vec<TreeNode>, String> {
     let mut out = Vec::new();
-    for entry in read_sorted_dirs(saga_dir)? {
+    let mut loose_notes = Vec::new();
+    for entry in read_sorted_entries(saga_dir)? {
         let name = entry.file_name().to_string_lossy().into_owned();
         let path = entry.path();
+        let ft = match entry.file_type() {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        if ft.is_file() {
+            if let Some(node) = note_node(&path) {
+                loose_notes.push(node);
+            }
+            continue;
+        }
+        if !ft.is_dir() {
+            continue;
+        }
         if should_skip_dir(&name) {
+            continue;
+        }
+        if name == NOTES_DIR_NAME {
+            out.push(notes_folder_node(&path, name)?);
             continue;
         }
         let excluded = is_excluded_dir(&path);
@@ -341,6 +382,7 @@ fn list_books(saga_dir: &Path) -> Result<Vec<TreeNode>, String> {
             children,
         });
     }
+    out.append(&mut loose_notes);
     Ok(out)
 }
 
@@ -353,6 +395,10 @@ fn list_sections_or_chapters(book_dir: &Path) -> Result<Vec<TreeNode>, String> {
         let ft = entry.file_type().map_err(|e| e.to_string())?;
         if ft.is_dir() {
             if should_skip_dir(&name) {
+                continue;
+            }
+            if name == NOTES_DIR_NAME {
+                sections.push(notes_folder_node(&path, name)?);
                 continue;
             }
             let excluded = is_excluded_dir(&path);
@@ -387,6 +433,8 @@ fn list_sections_or_chapters(book_dir: &Path) -> Result<Vec<TreeNode>, String> {
         } else if ft.is_file() {
             if let Some(node) = chapter_node(&path) {
                 direct_chapters.push(node);
+            } else if let Some(node) = note_node(&path) {
+                direct_chapters.push(node);
             }
         }
     }
@@ -402,10 +450,84 @@ fn list_chapters(section_dir: &Path) -> Result<Vec<TreeNode>, String> {
         if ft.is_file() {
             if let Some(node) = chapter_node(&path) {
                 out.push(node);
+            } else if let Some(node) = note_node(&path) {
+                out.push(node);
             }
         }
     }
     Ok(out)
+}
+
+/// Devuelve un nodo `Notes` (carpeta) con sus `.md` y sub-carpetas como children.
+/// Llamado al encontrar un dir llamado `notas` o dentro de uno.
+fn notes_folder_node(path: &Path, name: String) -> Result<TreeNode, String> {
+    let children = list_notes_dir(path)?;
+    let modified_ms = max_child_mtime(&children);
+    Ok(TreeNode {
+        name,
+        path: path.to_string_lossy().into_owned(),
+        kind: NodeKind::Notes,
+        ext: None,
+        editable: None,
+        modified_ms,
+        word_count: None,
+        excluded: None,
+        children,
+    })
+}
+
+/// Walk recursivo dentro de una carpeta `notas/`. Devuelve Notes (sub-dirs) y Notes hojas (`.md`).
+fn list_notes_dir(dir: &Path) -> Result<Vec<TreeNode>, String> {
+    let mut subdirs = Vec::new();
+    let mut files = Vec::new();
+    for entry in read_sorted_entries(dir)? {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let ft = match entry.file_type() {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        if ft.is_dir() {
+            if name.starts_with('.') {
+                continue;
+            }
+            subdirs.push(notes_folder_node(&path, name)?);
+        } else if ft.is_file() {
+            if let Some(node) = note_node(&path) {
+                files.push(node);
+            }
+        }
+    }
+    subdirs.append(&mut files);
+    Ok(subdirs)
+}
+
+/// Construye un nodo Note si el archivo es `.md`/`.markdown`. Devuelve None si no.
+fn note_node(path: &Path) -> Option<TreeNode> {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())?;
+    if !NOTE_EXTS.contains(&ext.as_str()) {
+        return None;
+    }
+    let name = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("?")
+        .to_string();
+    let modified_ms = mtime_ms(path);
+    Some(TreeNode {
+        name,
+        path: path.to_string_lossy().into_owned(),
+        kind: NodeKind::Note,
+        ext: Some(ext),
+        editable: Some(true),
+        modified_ms,
+        word_count: None,
+        excluded: None,
+        children: Vec::new(),
+    })
 }
 
 fn chapter_node(path: &Path) -> Option<TreeNode> {
@@ -579,16 +701,6 @@ pub fn set_directory_excluded(path: String, excluded: bool) -> Result<(), String
         fs::remove_file(&marker).map_err(|e| e.to_string())?;
     }
     Ok(())
-}
-
-fn read_sorted_dirs(p: &Path) -> Result<Vec<fs::DirEntry>, String> {
-    let mut entries: Vec<_> = fs::read_dir(p)
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
-        .collect();
-    entries.sort_by(|a, b| compare_names(&a.file_name().to_string_lossy(), &b.file_name().to_string_lossy()));
-    Ok(entries)
 }
 
 fn read_sorted_entries(p: &Path) -> Result<Vec<fs::DirEntry>, String> {

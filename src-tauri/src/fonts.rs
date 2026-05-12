@@ -181,6 +181,179 @@ pub fn rename_font(
     entry_for(&dir, &dest)
 }
 
+/// Resultado de consolidar fuentes al pool global.
+#[derive(Serialize, Debug)]
+pub struct ConsolidateResult {
+    /// Fuentes nuevas movidas a `<root>/fonts/`.
+    pub moved: u32,
+    /// Fuentes que ya estaban en root (mismo nombre y tamaño); originales borrados.
+    pub deduped: u32,
+    /// Colisiones: archivos con mismo nombre pero distinto tamaño que el del root.
+    /// Se dejan intactos para que el usuario decida; no se borra nada.
+    pub kept: u32,
+    /// Carpetas `fonts/` que quedaron vacías y fueron eliminadas.
+    pub removed_dirs: u32,
+}
+
+/// Walka todas las carpetas `fonts/` dispersas (themes/*, saga, book) y mueve las
+/// fuentes al pool global `<root>/fonts/`. Si una fuente ya existe en root con
+/// mismo nombre y mismo tamaño, borra el original (asume dupe). Si existe con
+/// tamaño distinto, deja el original (colisión a resolver a mano).
+#[tauri::command]
+pub fn consolidate_fonts(root_path: String) -> Result<ConsolidateResult, String> {
+    let root = PathBuf::from(&root_path);
+    if !root.is_dir() {
+        return Err(format!("root no es directorio: {}", root_path));
+    }
+    let dest_dir = root.join("fonts");
+    fs::create_dir_all(&dest_dir).map_err(|e| format!("mkdir <root>/fonts: {}", e))?;
+
+    let mut moved: u32 = 0;
+    let mut deduped: u32 = 0;
+    let mut kept: u32 = 0;
+
+    let mut source_dirs: Vec<PathBuf> = Vec::new();
+    collect_font_dirs(&root, &dest_dir, &mut source_dirs);
+
+    for src_dir in &source_dirs {
+        let entries = match fs::read_dir(src_dir) {
+            Ok(e) => e,
+            Err(e) => {
+                tracing::warn!(target: "fonts", dir = %src_dir.display(), error = %e, "consolidate: no pude leer dir");
+                continue;
+            }
+        };
+        for entry in entries {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let Some(ext) = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|s| s.to_lowercase())
+            else {
+                continue;
+            };
+            if !is_font_ext(&ext) {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let dest = dest_dir.join(name);
+            if dest.exists() {
+                let src_size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                let dst_size = fs::metadata(&dest).map(|m| m.len()).unwrap_or(u64::MAX);
+                if src_size == dst_size {
+                    match fs::remove_file(&path) {
+                        Ok(_) => {
+                            deduped += 1;
+                            tracing::info!(target: "fonts", path = %path.display(), "consolidate: dupe borrada");
+                        }
+                        Err(e) => {
+                            tracing::warn!(target: "fonts", path = %path.display(), error = %e, "consolidate: no pude borrar dupe");
+                            kept += 1;
+                        }
+                    }
+                } else {
+                    kept += 1;
+                    tracing::warn!(
+                        target: "fonts",
+                        path = %path.display(),
+                        src_size, dst_size,
+                        "consolidate: colisión de nombre con tamaño distinto, queda intacta"
+                    );
+                }
+                continue;
+            }
+            // Intentar rename (atómico same-filesystem); si falla por cross-device, copy+remove.
+            match fs::rename(&path, &dest) {
+                Ok(_) => {
+                    moved += 1;
+                    tracing::info!(target: "fonts", from = %path.display(), to = %dest.display(), "consolidate: fuente movida");
+                }
+                Err(_) => match fs::copy(&path, &dest) {
+                    Ok(_) => match fs::remove_file(&path) {
+                        Ok(_) => {
+                            moved += 1;
+                            tracing::info!(target: "fonts", from = %path.display(), to = %dest.display(), "consolidate: fuente movida (copy+rm)");
+                        }
+                        Err(e) => {
+                            kept += 1;
+                            tracing::warn!(target: "fonts", from = %path.display(), error = %e, "consolidate: copy ok pero no pude borrar original");
+                        }
+                    },
+                    Err(e) => {
+                        kept += 1;
+                        tracing::warn!(target: "fonts", from = %path.display(), error = %e, "consolidate: copy falló");
+                    }
+                },
+            }
+        }
+    }
+
+    // Cleanup: borrar las carpetas `fonts/` que quedaron vacías.
+    let mut removed_dirs: u32 = 0;
+    for src_dir in &source_dirs {
+        if !src_dir.exists() {
+            continue;
+        }
+        let is_empty = fs::read_dir(src_dir)
+            .map(|mut it| it.next().is_none())
+            .unwrap_or(false);
+        if !is_empty {
+            continue;
+        }
+        match fs::remove_dir(src_dir) {
+            Ok(_) => {
+                removed_dirs += 1;
+                tracing::info!(target: "fonts", dir = %src_dir.display(), "consolidate: dir vacío borrado");
+            }
+            Err(e) => {
+                tracing::warn!(target: "fonts", dir = %src_dir.display(), error = %e, "consolidate: no pude borrar dir vacío");
+            }
+        }
+    }
+
+    tracing::info!(target: "fonts", moved, deduped, kept, removed_dirs, "consolidate_fonts terminó");
+    Ok(ConsolidateResult {
+        moved,
+        deduped,
+        kept,
+        removed_dirs,
+    })
+}
+
+/// Recursive scan que junta todas las carpetas llamadas `fonts/` debajo de `root`,
+/// excepto `<root>/fonts/` mismo (que es el destino).
+fn collect_font_dirs(dir: &Path, exclude: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if name.starts_with('.') {
+            continue;
+        }
+        if name == "fonts" && path != exclude {
+            out.push(path.clone());
+            continue;
+        }
+        collect_font_dirs(&path, exclude, out);
+    }
+}
+
 fn entry_for(base: &Path, file: &Path) -> Result<FontEntry, String> {
     let name = file
         .file_name()

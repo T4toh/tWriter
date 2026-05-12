@@ -49,14 +49,19 @@ export class Landing {
     if (!root) return [];
     const node = this.currentNode();
     const target = node ?? root;
+    // Notas (.md y carpetas notas/) viven solo en el árbol, no en la vista
+    // de tarjetas — son metadata de la novela, no contenido del EPUB.
+    const filtered = target.children.filter(
+      (c) => c.kind !== 'note' && c.kind !== 'notes',
+    );
     if (!node) {
-      return [...target.children].sort((a, b) => {
+      return [...filtered].sort((a, b) => {
         const am = a.modifiedMs ?? 0;
         const bm = b.modifiedMs ?? 0;
         return bm - am;
       });
     }
-    return target.children;
+    return filtered;
   });
 
   protected readonly crumbs = computed<Crumb[]>(() => {
