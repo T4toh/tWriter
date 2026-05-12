@@ -252,14 +252,16 @@
 
         <div class="row section-divider">
           <span class="section-label">Fuentes disponibles ({{ fonts().length }})</span>
+          <button type="button" class="add-btn" (click)="pickFont()">
+            + Agregar fuente al pool…
+          </button>
         </div>
         <p class="hint">
-          El tema toma sus fuentes del pool global del repo. Agregá archivos
-          <code>.ttf</code> / <code>.otf</code> / <code>.woff</code> /
-          <code>.woff2</code> arrastrándolos a la sección
-          <strong>Fuentes</strong> del árbol. Para que
-          <code>&lt;strong&gt;</code> y <code>&lt;em&gt;</code> tengan face
-          propio, usá nombres como <code>Merriweather-Bold.ttf</code>,
+          El tema toma sus fuentes del pool global del repo. Podés agregar
+          desde acá o arrastrar al árbol → sección <strong>Fuentes</strong>.
+          Para que <code>&lt;strong&gt;</code> y <code>&lt;em&gt;</code>
+          tengan face propio, usá nombres como
+          <code>Merriweather-Bold.ttf</code>,
           <code>Merriweather-Italic.ttf</code>,
           <code>Merriweather-BoldItalic.ttf</code>.
         </p>

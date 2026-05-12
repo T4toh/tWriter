@@ -2,8 +2,10 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { FontsService } from '../core/fonts-service';
+import { NativeDialogsService } from '../core/native-dialogs-service';
 import { SettingsService } from '../core/settings-service';
 import { ThemesService } from '../core/themes-service';
+import { ToastService } from '../core/toast-service';
 import { FontEntry, Theme } from '../core/types';
 import { Select, SelectOption } from '../shared/select';
 
@@ -45,6 +47,8 @@ export class ThemeEditorModal {
   private svc = inject(ThemesService);
   private fontsSvc = inject(FontsService);
   private settings = inject(SettingsService);
+  private dialogs = inject(NativeDialogsService);
+  private toast = inject(ToastService);
 
   protected readonly editing = this.svc.editing;
   protected readonly form = signal<EditableTheme | null>(null);
@@ -279,6 +283,41 @@ export class ThemeEditorModal {
       } catch {
         // Preview falla silencioso — no rompe el modal.
       }
+    }
+  }
+
+  /** Abre el file picker, sube fuentes al pool global `<root>/fonts/` y refresca.
+   *  Mismo flujo que arrastrar al árbol — atajo desde el editor de temas. */
+  protected async pickFont(): Promise<void> {
+    const root = this.settings.root();
+    if (!root) {
+      this.toast.error('Elegí una carpeta raíz primero.');
+      return;
+    }
+    const paths = await this.dialogs.pickFile({
+      title: 'Agregar fuentes al pool global',
+      filters: [{ name: 'Fuentes', extensions: ['ttf', 'otf', 'woff', 'woff2'] }],
+      multiple: true,
+    });
+    if (paths.length === 0) return;
+    let added = 0;
+    let failed = 0;
+    for (const p of paths) {
+      try {
+        await this.fontsSvc.addFromPath(root, p);
+        added++;
+      } catch (err) {
+        failed++;
+        this.toast.error(`No pude agregar ${p}: ${err}`);
+      }
+    }
+    if (added > 0) {
+      this.toast.success(
+        `Agregada${added === 1 ? '' : 's'} ${added} fuente${added === 1 ? '' : 's'} al pool global.`,
+      );
+    }
+    if (failed > 0 && added === 0) {
+      this.toast.error('No se pudo agregar ninguna fuente.');
     }
   }
 
