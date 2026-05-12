@@ -1437,9 +1437,12 @@ fn build_opf(cfg: &BookConfig, items: &[Item], book_uuid: &str) -> String {
     // Si hay fuentes embebidas, declarar `ibooks:specified-fonts` para que
     // Apple Books / Kindle KFX activen "Publisher Font" en vez de pisar la
     // tipografía con la del lector.
-    let has_fonts = items
-        .iter()
-        .any(|i| i.media_type.starts_with("font/"));
+    let has_fonts = items.iter().any(|i| {
+        let mt = &i.media_type;
+        mt.starts_with("font/")
+            || mt == "application/vnd.ms-opentype"
+            || mt == "application/font-woff"
+    });
     let (package_prefix, fonts_meta) = if has_fonts {
         (
             r#" prefix="ibooks: http://vocabulary.itunes.apple.com/rdf/ibooks/vocabulary-extensions-1.0/""#,
@@ -1813,9 +1816,10 @@ mod tests {
         let css = String::from_utf8(entries.get("OEBPS/style.css").unwrap().clone()).unwrap();
         assert!(!css.contains("@font-face"), "CSS no debería tener @font-face sin tema");
         assert!(css.contains("font-family: serif;"), "CSS base intacto");
-        // OPF no menciona font/ttf.
+        // OPF no menciona ningún media-type de fuentes.
         let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
-        assert!(!opf.contains("font/ttf"));
+        assert!(!opf.contains("application/vnd.ms-opentype"));
+        assert!(!opf.contains("font/woff2"));
     }
 
     #[test]
@@ -1851,9 +1855,11 @@ mod tests {
         assert!(css.contains("@font-face"));
         assert!(css.contains("font-family: \"Merriweather\""));
         assert!(css.contains("font-size: 11pt"));
-        // OPF manifest tiene los items con media-type correcto.
+        // OPF manifest tiene los items con media-type legacy
+        // (`application/vnd.ms-opentype` para TTF/OTF — compat con Okular y
+        // lectores Qt sin perder Kindle/Calibre/Apple Books).
         let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
-        assert!(opf.contains("font/ttf"));
+        assert!(opf.contains("application/vnd.ms-opentype"));
         assert!(opf.contains("fonts/Merriweather-Regular.ttf"));
         assert!(opf.contains("fonts/Merriweather-Bold.ttf"));
         // Activa "Publisher Font" en Apple Books / Kindle KFX.

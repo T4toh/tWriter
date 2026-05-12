@@ -138,11 +138,15 @@ pub struct FontEmbed {
     pub media_type: String,
 }
 
+/// Media type a declarar en el OPF manifest para un archivo de fuente.
+/// Usamos los nombres legacy (`application/vnd.ms-opentype`, `application/font-woff`)
+/// porque varios lectores (Okular, lectores Qt-basados, lectores Android viejos)
+/// no reconocen los mimes nuevos `font/*` de EPUB 3.1. Kindle + Calibre +
+/// Apple Books aceptan ambos sin problema.
 pub fn font_media_type(ext: &str) -> Option<&'static str> {
     match ext.to_ascii_lowercase().as_str() {
-        "ttf" => Some("font/ttf"),
-        "otf" => Some("font/otf"),
-        "woff" => Some("font/woff"),
+        "ttf" | "otf" => Some("application/vnd.ms-opentype"),
+        "woff" => Some("application/font-woff"),
         "woff2" => Some("font/woff2"),
         _ => None,
     }
@@ -598,9 +602,9 @@ mod tests {
 
     #[test]
     fn font_media_type_known_exts() {
-        assert_eq!(font_media_type("ttf"), Some("font/ttf"));
-        assert_eq!(font_media_type("OTF"), Some("font/otf"));
-        assert_eq!(font_media_type("woff"), Some("font/woff"));
+        assert_eq!(font_media_type("ttf"), Some("application/vnd.ms-opentype"));
+        assert_eq!(font_media_type("OTF"), Some("application/vnd.ms-opentype"));
+        assert_eq!(font_media_type("woff"), Some("application/font-woff"));
         assert_eq!(font_media_type("woff2"), Some("font/woff2"));
         assert_eq!(font_media_type("png"), None);
     }
