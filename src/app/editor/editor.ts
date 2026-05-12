@@ -7,6 +7,7 @@ import {
   computed,
   effect,
   inject,
+  input,
   signal,
   untracked,
 } from '@angular/core';
@@ -14,7 +15,7 @@ import { Editor as TipTapEditor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
 import TextAlign from '@tiptap/extension-text-align';
-import { ChapterService } from '../core/chapter-service';
+import { ChapterService, PaneId } from '../core/chapter-service';
 import { SagaContextService } from '../core/saga-context-service';
 import { GrammarService } from '../core/grammar-service';
 import { PARAGRAPH_SPACING_EM, SettingsService } from '../core/settings-service';
@@ -71,26 +72,32 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected sagaCtx = inject(SagaContextService);
   private ctxMenu = inject(ContextMenuService);
 
+  /** Pane que renderiza este editor. Default 0 = principal. 1 = secundario (split). */
+  readonly paneId = input<PaneId>(0);
+
   @ViewChild('host', { static: true })
   hostRef!: ElementRef<HTMLDivElement>;
 
-  protected readonly active = this.chapter.active;
-  protected readonly canEdit = this.chapter.canEdit;
-  protected readonly wordCount = this.chapter.wordCount;
-  protected readonly dirty = this.chapter.dirty;
-  protected readonly chapterError = this.chapter.error;
+  /** Estado del pane que renderiza este editor. */
+  private readonly pane = computed(() => this.chapter.panes[this.paneId()]);
+  protected readonly active = computed(() => this.pane().active());
+  protected readonly canEdit = computed(() => this.pane().canEdit());
+  protected readonly wordCount = computed(() => this.pane().wordCount());
+  protected readonly dirty = computed(() => this.pane().dirty());
+  protected readonly chapterError = computed(() => this.pane().error());
+  protected readonly meta = computed(() => this.pane().meta());
   protected readonly state = signal<ToolbarState>(EMPTY_STATE);
   protected readonly rae = signal<{ original: string; converted: string } | null>(null);
   protected readonly importing = this.chapter.importing;
   protected readonly canApplyRae = computed(() => {
     if (!this.canEdit()) return false;
-    const lang = this.chapter.meta().idioma;
+    const lang = this.meta().idioma;
     return lang === null || lang === 'es' || lang === undefined;
   });
   protected readonly canCheckGrammar = computed(() => {
     if (!this.canEdit()) return false;
     if (!this.grammar.available()) return false;
-    const lang = this.chapter.meta().idioma;
+    const lang = this.meta().idioma;
     return lang === 'es' || lang === 'en' || lang === null || lang === undefined;
   });
   protected readonly grammarChecking = this.grammar.checking;
@@ -150,13 +157,13 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   constructor() {
     effect(() => {
-      const at = this.chapter.loadedAt();
+      const at = this.pane().loadedAt();
       const ready = this.viewReady();
       if (!ready || at === this.lastLoadedAt) {
         return;
       }
-      const node = untracked(() => this.chapter.active());
-      const html = untracked(() => this.chapter.content());
+      const node = untracked(() => this.pane().active());
+      const html = untracked(() => this.pane().content());
       const editable = !!node?.editable;
 
       // Limpiar las marcas del capítulo anterior antes de cargar el nuevo
@@ -379,7 +386,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   protected readonly resolvedVariant = computed<string>(() => {
-    const idioma = this.chapter.meta().idioma;
+    const idioma = this.meta().idioma;
     if (idioma === 'en') {
       return this.sagaCtx.varianteEn() ?? this.settings.grammarVariantEn();
     }
@@ -407,9 +414,9 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   private async pickVariant(code: string): Promise<void> {
     const base: 'es' | 'en' = code.startsWith('en') ? 'en' : 'es';
-    const current = this.chapter.meta().idioma;
+    const current = this.meta().idioma;
     if (current !== base) {
-      await this.chapter.setLanguage(base);
+      await this.chapter.setLanguageInPane(base, this.paneId());
     }
     await this.sagaCtx.setVariante(base, code);
     if (this.grammar.autoEnabled() && this.canAutoGrammar()) {
@@ -419,7 +426,7 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   protected async checkGrammar(force = false): Promise<void> {
     if (!this.tiptap || !this.canCheckGrammar()) return;
-    const meta = this.chapter.meta().idioma;
+    const meta = this.meta().idioma;
     const lang: 'es' | 'en' | 'auto' = meta === 'es' || meta === 'en' ? meta : 'auto';
     const { plain, ranges } = extractPlainText(this.tiptap.state.doc);
     if (!plain.trim()) {
@@ -562,7 +569,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       editable,
       autofocus: editable ? 'end' : false,
       onUpdate: ({ editor }) => {
-        this.chapter.updateContent(editor.getHTML());
+        this.chapter.updateContentInPane(editor.getHTML(), this.paneId());
       },
       onSelectionUpdate: () => this.refreshState(),
       onTransaction: ({ transaction }) => {

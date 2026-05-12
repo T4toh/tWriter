@@ -44,10 +44,13 @@
       class="row chapter"
       [class.active]="node.path === activePath()"
       [class.disabled]="!node.editable"
-      [title]="node.editable ? '' : 'Importar antes de editar (.' + node.ext + ')'"
+      [title]="node.editable ? 'Arrastrá al centro para abrir en split' : 'Importar antes de editar (.' + node.ext + ')'"
       [style.padding-left.px]="8 + depth * 14"
+      [attr.draggable]="node.editable ? 'true' : null"
       (click)="select(node, $event)"
       (contextmenu)="onContextMenu($event, node)"
+      (dragstart)="onNodeDragStart($event, node)"
+      (dragend)="onNodeDragEnd()"
     >
       <span class="icon">{{ node.editable ? '◆' : '◇' }}</span>
       <span class="name">{{ node.name }}</span>
@@ -60,10 +63,13 @@
       type="button"
       class="row note"
       [class.active]="node.path === activePath()"
-      [title]="node.path + ' — Shift+click para editar'"
+      [title]="node.path + ' — Shift+click para editar, arrastrá al centro para split'"
       [style.padding-left.px]="8 + depth * 14"
+      draggable="true"
       (click)="select(node, $event)"
       (contextmenu)="onContextMenu($event, node)"
+      (dragstart)="onNodeDragStart($event, node)"
+      (dragend)="onNodeDragEnd()"
     >
       <span class="icon">📝</span>
       <span class="name">{{ node.name }}</span>

@@ -7,6 +7,7 @@ import {
   computed,
   effect,
   inject,
+  input,
   signal,
   untracked,
 } from '@angular/core';
@@ -14,6 +15,7 @@ import { Editor as TipTapEditor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
 import { Markdown } from 'tiptap-markdown';
+import { PaneId } from '../core/chapter-service';
 import { NoteService } from '../core/note-service';
 import { PARAGRAPH_SPACING_EM, SettingsService } from '../core/settings-service';
 import {
@@ -65,12 +67,15 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
   protected settings = inject(SettingsService);
   private ctxMenu = inject(ContextMenuService);
 
+  readonly paneId = input<PaneId>(0);
+
   @ViewChild('host', { static: true })
   hostRef!: ElementRef<HTMLDivElement>;
 
-  protected readonly active = this.note.active;
-  protected readonly dirty = this.note.dirty;
-  protected readonly noteError = this.note.error;
+  private readonly pane = computed(() => this.note.panes[this.paneId()]);
+  protected readonly active = computed(() => this.pane().active());
+  protected readonly dirty = computed(() => this.pane().dirty());
+  protected readonly noteError = computed(() => this.pane().error());
   protected readonly state = signal<ToolbarState>(EMPTY_STATE);
   protected readonly width = this.settings.editorWidth;
   protected readonly fontSize = this.settings.editorFontSize;
@@ -105,13 +110,13 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
 
   constructor() {
     effect(() => {
-      const at = this.note.loadedAt();
+      const at = this.pane().loadedAt();
       const ready = this.viewReady();
       if (!ready || at === this.lastLoadedAt) {
         return;
       }
-      const md = untracked(() => this.note.content());
-      const target = untracked(() => this.note.active());
+      const md = untracked(() => this.pane().content());
+      const target = untracked(() => this.pane().active());
       const editable = !!target;
       if (!this.tiptap) {
         this.createEditor(md, editable);
@@ -262,7 +267,7 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
       onUpdate: ({ editor }) => {
         const storage = (editor.storage as { markdown?: { getMarkdown: () => string } }).markdown;
         const md = storage ? storage.getMarkdown() : '';
-        this.note.updateContent(md);
+        this.note.updateContentInPane(md, this.paneId());
       },
       onSelectionUpdate: () => this.refreshState(),
       onTransaction: () => this.refreshState(),

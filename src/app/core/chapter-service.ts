@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { detectLang } from '../dialogos/detect';
 import { DebugService } from './debug-service';
@@ -10,6 +10,42 @@ import { ChapterMeta, EMPTY_META, TreeNode } from './types';
 
 const AUTOSAVE_MS = 1500;
 
+export type PaneId = 0 | 1;
+const PANE_IDS: readonly PaneId[] = [0, 1] as const;
+
+export interface ChapterPane {
+  active: WritableSignal<TreeNode | null>;
+  content: WritableSignal<string>;
+  meta: WritableSignal<ChapterMeta>;
+  dirty: WritableSignal<boolean>;
+  saving: WritableSignal<boolean>;
+  lastSavedAt: WritableSignal<number | null>;
+  error: WritableSignal<string | null>;
+  loadedAt: WritableSignal<number>;
+  wordCount: Signal<number>;
+  canEdit: Signal<boolean>;
+  autosaveTimer: ReturnType<typeof setTimeout> | null;
+}
+
+function makeChapterPane(): ChapterPane {
+  const active = signal<TreeNode | null>(null);
+  const content = signal<string>('');
+  const meta = signal<ChapterMeta>(EMPTY_META);
+  return {
+    active,
+    content,
+    meta,
+    dirty: signal<boolean>(false),
+    saving: signal<boolean>(false),
+    lastSavedAt: signal<number | null>(null),
+    error: signal<string | null>(null),
+    loadedAt: signal<number>(0),
+    wordCount: computed(() => countWords(content())),
+    canEdit: computed(() => !!active()?.editable),
+    autosaveTimer: null,
+  };
+}
+
 @Injectable({ providedIn: 'root' })
 export class ChapterService {
   private project = inject(ProjectService);
@@ -18,36 +54,61 @@ export class ChapterService {
   private toast = inject(ToastService);
   private exports = inject(ExportsService);
 
-  readonly active = signal<TreeNode | null>(null);
+  /** Dos panes. pane 0 = principal (siempre activo). pane 1 = secundario (split). */
+  readonly panes: readonly [ChapterPane, ChapterPane] = [makeChapterPane(), makeChapterPane()];
+
+  // Backward-compat aliases a pane 0.
+  readonly active = this.panes[0].active;
+  readonly content = this.panes[0].content;
+  readonly meta = this.panes[0].meta;
+  readonly dirty = this.panes[0].dirty;
+  readonly saving = this.panes[0].saving;
+  readonly lastSavedAt = this.panes[0].lastSavedAt;
+  readonly error = this.panes[0].error;
+  readonly loadedAt = this.panes[0].loadedAt;
+  readonly wordCount = this.panes[0].wordCount;
+  readonly canEdit = this.panes[0].canEdit;
+
+  // Globales (no per-pane).
   readonly importing = signal<boolean>(false);
   readonly bulkProgress = signal<{ done: number; total: number; current: string } | null>(null);
-  readonly content = signal<string>('');
-  readonly meta = signal<ChapterMeta>(EMPTY_META);
-  readonly dirty = signal<boolean>(false);
-  readonly saving = signal<boolean>(false);
-  readonly lastSavedAt = signal<number | null>(null);
-  readonly error = signal<string | null>(null);
-  /** Bumpea cada vez que se abre o cierra un capítulo. El editor lo observa para resincronizar. */
-  readonly loadedAt = signal<number>(0);
 
-  readonly wordCount = computed(() => countWords(this.content()));
-  readonly canEdit = computed(() => !!this.active()?.editable);
-
-  private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+  // ──────── API legacy (pane 0) ────────
 
   async open(node: TreeNode): Promise<void> {
-    if (node.kind !== 'chapter') {
-      return;
-    }
-    await this.flushPending();
-    this.error.set(null);
+    return this.openInPane(node, 0);
+  }
+
+  close(): void {
+    this.closeInPane(0);
+  }
+
+  updateContent(html: string): void {
+    this.updateContentInPane(html, 0);
+  }
+
+  async save(): Promise<void> {
+    return this.saveInPane(0);
+  }
+
+  async setLanguage(lang: 'es' | 'en'): Promise<void> {
+    return this.setLanguageInPane(lang, 0);
+  }
+
+  // ──────── API pane-aware ────────
+
+  async openInPane(node: TreeNode, paneId: PaneId): Promise<void> {
+    if (node.kind !== 'chapter') return;
+    const pane = this.panes[paneId];
+    await this.flushPendingInPane(paneId);
+    pane.error.set(null);
 
     if (!node.editable) {
-      this.content.set('');
-      this.meta.set(EMPTY_META);
-      this.dirty.set(false);
-      this.active.set(node);
-      this.loadedAt.set(Date.now());
+      pane.content.set('');
+      pane.meta.set(EMPTY_META);
+      pane.dirty.set(false);
+      pane.active.set(node);
+      pane.loadedAt.set(Date.now());
       return;
     }
 
@@ -57,7 +118,6 @@ export class ChapterService {
         invoke<ChapterMeta>('read_meta', { chapterPath: node.path }),
       ]);
       let meta = metaRaw ?? EMPTY_META;
-      // Auto-detect idioma si está vacío
       if (!meta.idioma && html.trim()) {
         meta = { ...meta, idioma: detectLang(html) };
         try {
@@ -66,76 +126,84 @@ export class ChapterService {
           // logged via meta error signal si falla
         }
       }
-      this.content.set(html);
-      this.meta.set(meta);
-      this.dirty.set(false);
-      this.active.set(node);
-      this.loadedAt.set(Date.now());
+      pane.content.set(html);
+      pane.meta.set(meta);
+      pane.dirty.set(false);
+      pane.active.set(node);
+      pane.loadedAt.set(Date.now());
     } catch (err) {
-      this.error.set(String(err));
-      this.active.set(node);
-      this.loadedAt.set(Date.now());
+      pane.error.set(String(err));
+      pane.active.set(node);
+      pane.loadedAt.set(Date.now());
     }
   }
 
-  close(): void {
-    this.cancelAutosave();
-    this.active.set(null);
-    this.content.set('');
-    this.meta.set(EMPTY_META);
-    this.dirty.set(false);
-    this.error.set(null);
-    this.loadedAt.set(Date.now());
+  closeInPane(paneId: PaneId): void {
+    const pane = this.panes[paneId];
+    this.cancelAutosaveInPane(paneId);
+    pane.active.set(null);
+    pane.content.set('');
+    pane.meta.set(EMPTY_META);
+    pane.dirty.set(false);
+    pane.error.set(null);
+    pane.loadedAt.set(Date.now());
   }
 
-  updateContent(html: string): void {
-    if (!this.canEdit()) {
-      return;
-    }
-    if (this.content() === html) {
-      return;
-    }
-    this.content.set(html);
-    this.dirty.set(true);
-    this.scheduleAutosave();
+  updateContentInPane(html: string, paneId: PaneId): void {
+    const pane = this.panes[paneId];
+    if (!pane.canEdit()) return;
+    if (pane.content() === html) return;
+    pane.content.set(html);
+    pane.dirty.set(true);
+    this.scheduleAutosaveInPane(paneId);
   }
 
-  async save(): Promise<void> {
-    const node = this.active();
-    if (!node || !node.editable || !this.dirty()) {
-      return;
-    }
-    this.cancelAutosave();
-    this.saving.set(true);
+  async saveInPane(paneId: PaneId): Promise<void> {
+    const pane = this.panes[paneId];
+    const node = pane.active();
+    if (!node || !node.editable || !pane.dirty()) return;
+    this.cancelAutosaveInPane(paneId);
+    pane.saving.set(true);
     try {
-      await invoke('write_chapter', { path: node.path, html: this.content() });
+      await invoke('write_chapter', { path: node.path, html: pane.content() });
       const updated: ChapterMeta = {
-        ...this.meta(),
-        palabras: countWords(this.content()),
+        ...pane.meta(),
+        palabras: countWords(pane.content()),
         ultima_edicion: new Date().toISOString(),
       };
       await invoke('write_meta', { chapterPath: node.path, meta: updated });
-      this.meta.set(updated);
-      this.dirty.set(false);
-      this.lastSavedAt.set(Date.now());
+      pane.meta.set(updated);
+      pane.dirty.set(false);
+      pane.lastSavedAt.set(Date.now());
     } catch (err) {
-      this.error.set(String(err));
+      pane.error.set(String(err));
     } finally {
-      this.saving.set(false);
+      pane.saving.set(false);
     }
   }
 
-  async setLanguage(lang: 'es' | 'en'): Promise<void> {
-    const node = this.active();
+  async setLanguageInPane(lang: 'es' | 'en', paneId: PaneId): Promise<void> {
+    const pane = this.panes[paneId];
+    const node = pane.active();
     if (!node || !node.editable) return;
-    const updated: ChapterMeta = { ...this.meta(), idioma: lang };
-    this.meta.set(updated);
+    const updated: ChapterMeta = { ...pane.meta(), idioma: lang };
+    pane.meta.set(updated);
     try {
       await invoke('write_meta', { chapterPath: node.path, meta: updated });
     } catch (err) {
-      this.error.set(String(err));
+      pane.error.set(String(err));
     }
   }
+
+  /** Devuelve el primer paneId que tiene ese path activo, o null. */
+  findPaneByPath(path: string): PaneId | null {
+    for (const i of PANE_IDS) {
+      if (this.panes[i].active()?.path === path) return i;
+    }
+    return null;
+  }
+
+  // ──────── Operaciones globales (sin pane) ────────
 
   /** Importa varios capítulos secuencialmente. Reporta progreso al debug panel. */
   async bulkImport(nodes: TreeNode[]): Promise<{ ok: number; failed: number }> {
@@ -170,15 +238,15 @@ export class ChapterService {
         path: node.path,
       });
       this.debug.info('cleanup', `Borré ${result.deleted.length} archivo(s) de ${node.name}.${node.ext}`);
-      if (this.active()?.path === node.path) {
-        this.close();
+      for (const i of PANE_IDS) {
+        if (this.panes[i].active()?.path === node.path) this.closeInPane(i);
       }
       await this.project.loadTree();
       void this.git.refreshStatus();
       return true;
     } catch (err) {
       this.debug.error('cleanup', `${node.name}: ${err}`);
-      this.error.set(String(err));
+      this.panes[0].error.set(String(err));
       return false;
     }
   }
@@ -194,15 +262,15 @@ export class ChapterService {
     try {
       await invoke('delete_directory', { root, target: node.path });
       this.debug.info('cleanup', `Borré carpeta ${node.name}`);
-      if (this.active()?.path.startsWith(node.path)) {
-        this.close();
+      for (const i of PANE_IDS) {
+        if (this.panes[i].active()?.path.startsWith(node.path)) this.closeInPane(i);
       }
       await this.project.loadTree();
       void this.git.refreshStatus();
       return true;
     } catch (err) {
       this.debug.error('cleanup', `${node.name}: ${err}`);
-      this.error.set(String(err));
+      this.panes[0].error.set(String(err));
       return false;
     }
   }
@@ -222,7 +290,7 @@ export class ChapterService {
       this.debug.info('create', `Capítulo creado: ${result.path}`);
       await this.project.loadTree();
       void this.git.refreshStatus();
-      // Abrir el capítulo nuevo
+      // Abrir el capítulo nuevo en pane 0 (default).
       const newNode = this.findNode(this.project.tree(), result.path);
       if (newNode) {
         await this.open(newNode);
@@ -230,7 +298,7 @@ export class ChapterService {
       return result.path;
     } catch (err) {
       this.debug.error('create', String(err));
-      this.error.set(String(err));
+      this.panes[0].error.set(String(err));
       return null;
     }
   }
@@ -257,7 +325,7 @@ export class ChapterService {
     } catch (err) {
       this.debug.error('epub', `${node.name}: ${err}`);
       this.toast.error(`Export falló: ${err}`);
-      this.error.set(String(err));
+      this.panes[0].error.set(String(err));
       return null;
     }
   }
@@ -270,28 +338,36 @@ export class ChapterService {
         direction,
       });
       this.debug.info('reorder', `${node.name} → ${direction}`);
-      const activePath = this.active()?.path ?? null;
-      const wasActive = activePath === node.path;
-      const wasInsideMoved =
-        activePath !== null && activePath.startsWith(result.from + '/');
+
+      // Capturar paths activos por pane antes de recargar.
+      const beforeByPane: Array<string | null> = PANE_IDS.map(
+        (i) => this.panes[i].active()?.path ?? null,
+      );
+
       await this.project.loadTree();
       void this.git.refreshStatus();
-      // Re-foco: si era el archivo movido, abrirlo en su nueva ubicación.
-      // Si era un capítulo dentro de un dir movido, mapear el path y reabrir.
-      if (wasActive) {
-        const newNode = this.findNode(this.project.tree(), result.to);
-        if (newNode) await this.open(newNode);
-        else this.close();
-      } else if (wasInsideMoved && activePath) {
-        const remapped = result.to + activePath.slice(result.from.length);
-        const newNode = this.findNode(this.project.tree(), remapped);
-        if (newNode) await this.open(newNode);
-        else this.close();
+
+      // Re-foco por pane: si era el archivo movido, abrirlo en su nueva ubicación.
+      for (const i of PANE_IDS) {
+        const activePath = beforeByPane[i];
+        if (activePath === null) continue;
+        const wasActive = activePath === node.path;
+        const wasInsideMoved = activePath.startsWith(result.from + '/');
+        if (wasActive) {
+          const newNode = this.findNode(this.project.tree(), result.to);
+          if (newNode) await this.openInPane(newNode, i);
+          else this.closeInPane(i);
+        } else if (wasInsideMoved) {
+          const remapped = result.to + activePath.slice(result.from.length);
+          const newNode = this.findNode(this.project.tree(), remapped);
+          if (newNode) await this.openInPane(newNode, i);
+          else this.closeInPane(i);
+        }
       }
       return true;
     } catch (err) {
       this.debug.error('reorder', `${node.name}: ${err}`);
-      this.error.set(String(err));
+      this.panes[0].error.set(String(err));
       return false;
     }
   }
@@ -314,7 +390,7 @@ export class ChapterService {
       return result.path;
     } catch (err) {
       this.debug.error('create', String(err));
-      this.error.set(String(err));
+      this.panes[0].error.set(String(err));
       return null;
     }
   }
@@ -332,7 +408,7 @@ export class ChapterService {
       return result.path;
     } catch (err) {
       this.debug.error('create', String(err));
-      this.error.set(String(err));
+      this.panes[0].error.set(String(err));
       return null;
     }
   }
@@ -366,19 +442,19 @@ export class ChapterService {
     if (node.kind !== 'chapter' || node.editable) return;
     if (node.ext !== 'docx' && node.ext !== 'odt') return;
     this.importing.set(true);
-    this.error.set(null);
+    this.panes[0].error.set(null);
     try {
       const result = await invoke<{ html_path: string }>('import_chapter', {
         path: node.path,
       });
       await this.project.loadTree();
-      // Reabrir como el nuevo .html
+      // Reabrir como el nuevo .html en pane 0.
       const newNode = this.findNode(this.project.tree(), result.html_path);
       if (newNode) {
         await this.open(newNode);
       }
     } catch (err) {
-      this.error.set(String(err));
+      this.panes[0].error.set(String(err));
     } finally {
       this.importing.set(false);
     }
@@ -394,23 +470,29 @@ export class ChapterService {
     return null;
   }
 
-  private scheduleAutosave(): void {
-    this.cancelAutosave();
-    this.autosaveTimer = setTimeout(() => void this.save(), AUTOSAVE_MS);
+  // ──────── Autosave per-pane ────────
+
+  private scheduleAutosaveInPane(paneId: PaneId): void {
+    this.cancelAutosaveInPane(paneId);
+    this.panes[paneId].autosaveTimer = setTimeout(
+      () => void this.saveInPane(paneId),
+      AUTOSAVE_MS,
+    );
   }
 
-  private cancelAutosave(): void {
-    if (this.autosaveTimer != null) {
-      clearTimeout(this.autosaveTimer);
-      this.autosaveTimer = null;
+  private cancelAutosaveInPane(paneId: PaneId): void {
+    const pane = this.panes[paneId];
+    if (pane.autosaveTimer != null) {
+      clearTimeout(pane.autosaveTimer);
+      pane.autosaveTimer = null;
     }
   }
 
-  private async flushPending(): Promise<void> {
-    if (this.dirty()) {
-      await this.save();
+  private async flushPendingInPane(paneId: PaneId): Promise<void> {
+    if (this.panes[paneId].dirty()) {
+      await this.saveInPane(paneId);
     } else {
-      this.cancelAutosave();
+      this.cancelAutosaveInPane(paneId);
     }
   }
 }

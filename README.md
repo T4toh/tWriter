@@ -65,6 +65,7 @@ Reglas:
 - Diálogos custom (prompt/confirm/alert) coherentes con el resto de los modales — sin headers feos de WebKit.
 - `<app-select>` Angular standalone reemplaza los `<select>` nativos en todos los modales (no más widget del DE distinto por distro). Typeahead automático cuando hay >10 opciones.
 - File pickers nativos vía `rfd` 0.15 con feature `xdg-portal` — en KDE/Wayland abre el portal del sistema en vez del diálogo GTK 3 foreign del plugin-dialog.
+- **Split view**: arrastrá un capítulo o nota del árbol al panel central para abrir un segundo editor. Combos: chapter+chapter (comparar/escribir en paralelo) o chapter+note (nota como referencia mientras escribís). Cada pane tiene su propio autosave, idioma, gramática y RAE. Botón ⬍/⬌ cambia entre split horizontal (lado a lado) y vertical (apilado). Botón × cierra el pane secundario y vuelve a single-pane. Estado no persistido entre sesiones (cada vez arranca single).
 
 ### Notas (Markdown)
 
@@ -284,7 +285,6 @@ paru -S twriter-bin
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
 - Drag & drop reorder de capítulos (hoy solo via context menu ↑/↓).
-- Editor split (dos capítulos lado a lado, o capítulo + nota). Disparador previsto: arrastrar archivo del tree al panel central.
 - Sidebar derecho de research / vista global de notas con búsqueda (el reader de `.md` en el panel derecho ya existe; falta el panel agregador con búsqueda full-text).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.

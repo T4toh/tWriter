@@ -1,4 +1,4 @@
-import { Component, ViewChild, computed, effect, HostListener, inject } from '@angular/core';
+import { Component, ViewChild, computed, effect, HostListener, inject, signal } from '@angular/core';
 import { ChapterService } from './core/chapter-service';
 import { DebugService } from './core/debug-service';
 import { FontPreviewService } from './core/font-preview-service';
@@ -8,9 +8,11 @@ import { GitService } from './core/git-service';
 import { GrammarService } from './core/grammar-service';
 import { ImageViewerService } from './core/image-viewer-service';
 import { ImportWizardService } from './core/import-wizard-service';
+import { PaneSplitService } from './core/pane-split-service';
 import { ProjectService } from './core/project-service';
 import { RustLogBridge } from './core/rust-log-bridge';
 import { SettingsService } from './core/settings-service';
+import { ToastService } from './core/toast-service';
 import { UpdaterService } from './core/updater-service';
 import { Tree } from './tree/tree';
 import { Editor } from './editor/editor';
@@ -52,12 +54,22 @@ export class App {
   protected note = inject(NoteService);
   protected git = inject(GitService);
   protected debug = inject(DebugService);
+  protected paneSplit = inject(PaneSplitService);
   private grammar = inject(GrammarService);
   private updater = inject(UpdaterService);
   private modal = inject(ModalService);
   private ctxMenu = inject(ContextMenuService);
+  private toast = inject(ToastService);
 
-  protected readonly saving = computed(() => this.chapter.saving() || this.note.saving());
+  protected readonly dragOverCenter = signal<boolean>(false);
+
+  protected readonly saving = computed(
+    () =>
+      this.chapter.panes[0].saving() ||
+      this.chapter.panes[1].saving() ||
+      this.note.panes[0].saving() ||
+      this.note.panes[1].saving(),
+  );
   protected readonly bulkProgress = this.chapter.bulkProgress;
 
   private lastChapterErr: string | null = null;
@@ -84,20 +96,21 @@ export class App {
     inject(RustLogBridge);
     void this.bootstrap();
     effect(() => {
-      const e = this.chapter.error();
+      const e = this.chapter.panes[0].error() ?? this.chapter.panes[1].error();
       if (e && e !== this.lastChapterErr) this.debug.error('chapter', e);
       this.lastChapterErr = e;
     });
     effect(() => {
-      const e = this.note.error();
+      const e = this.note.panes[0].error() ?? this.note.panes[1].error();
       if (e && e !== this.lastNoteErr) this.debug.error('note', e);
       this.lastNoteErr = e;
     });
-    // Mutex inverso: cuando se abre un capítulo, la nota se cierra.
+    // Mutex per-pane: cuando se abre un capítulo en un pane, la nota del MISMO pane se cierra.
     effect(() => {
-      if (this.chapter.active()) {
-        this.note.close();
-      }
+      if (this.chapter.panes[0].active()) this.note.closeInPane(0);
+    });
+    effect(() => {
+      if (this.chapter.panes[1].active()) this.note.closeInPane(1);
     });
     // Mutex del panel derecho tri-direccional: image / font preview / md reader
     // no conviven; quien abre, cierra a los otros.
@@ -222,6 +235,77 @@ export class App {
     }
   }
 
+  // ──────── Drop zone center (split) ────────
+
+  protected onCenterDragEnter(event: DragEvent): void {
+    if (!this.paneSplit.draggingNode()) return;
+    event.preventDefault();
+    this.dragOverCenter.set(true);
+  }
+
+  protected onCenterDragOver(event: DragEvent): void {
+    if (!this.paneSplit.draggingNode()) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+  }
+
+  protected onCenterDragLeave(event: DragEvent): void {
+    // dragleave dispara para hijos también; sólo limpiar si salimos del shell.
+    const related = event.relatedTarget as Node | null;
+    const main = event.currentTarget as HTMLElement | null;
+    if (main && related && main.contains(related)) return;
+    this.dragOverCenter.set(false);
+  }
+
+  protected async onCenterDrop(event: DragEvent): Promise<void> {
+    event.preventDefault();
+    this.dragOverCenter.set(false);
+    const dragging = this.paneSplit.draggingNode();
+    this.paneSplit.endDrag();
+    if (!dragging) return;
+
+    const tree = this.project.tree();
+    if (!tree) return;
+    const node = findNodeByPath(tree, dragging.path);
+    if (!node) {
+      this.toast.error('No se encontró el archivo en el árbol.');
+      return;
+    }
+
+    if (node.kind === 'chapter') {
+      if (!node.editable) {
+        this.toast.warn('Importá el archivo antes de abrirlo en split.');
+        return;
+      }
+      // Validar que no esté ya en pane 0.
+      if (this.chapter.panes[0].active()?.path === node.path) {
+        this.toast.info('Ya está abierto en el pane izquierdo.');
+        return;
+      }
+      // Importante: abrir en pane 1 ANTES de enableSplit() para evitar la
+      // race con el effect "auto-disable si pane 1 vacío".
+      await this.chapter.openInPane(node, 1);
+      this.paneSplit.enableSplit();
+      return;
+    }
+
+    if (node.kind === 'note') {
+      if (this.note.panes[0].active()?.path === node.path) {
+        this.toast.info('Ya está abierto en el pane izquierdo.');
+        return;
+      }
+      await this.note.openInPane({ path: node.path, name: node.name }, 1);
+      this.paneSplit.enableSplit();
+      return;
+    }
+
+    this.toast.warn('Solo capítulos o notas se pueden abrir en split.');
+  }
+
+  protected closeSecondaryPane(): void {
+    this.paneSplit.closeSecondary();
+  }
+
   protected async createSaga(): Promise<void> {
     const root = this.settings.root();
     if (!root) return;
@@ -233,6 +317,16 @@ export class App {
     if (!name?.trim()) return;
     await this.chapter.createDirectory(root, name.trim(), false);
   }
+}
+
+function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
+  if (!root) return null;
+  if (root.path === path) return root;
+  for (const c of root.children ?? []) {
+    const found = findNodeByPath(c, path);
+    if (found) return found;
+  }
+  return null;
 }
 
 function countByKind(n: TreeNode): { sagas: number; books: number; sections: number; chapters: number } {
