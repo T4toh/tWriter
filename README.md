@@ -75,6 +75,8 @@ Reglas:
 - `notas/` y los `.md` quedan auto-excluidos del export EPUB y de la vista de tarjetas (la vista de tarjetas es para contenido del libro).
 - "Nueva nota…" desde context menu de saga/libro/carpeta `notas/` (autocrea el dir si no existe).
 - `.md` que viven en `extras/` también abren en este editor (no en `xdg-open`).
+- **Reader en panel derecho**: Shift+click sobre `.md` (en `notas/` o `extras/`) o context menu "Abrir en panel derecho" abre la nota como render read-only al costado, sin desplazar al capítulo del centro. Botón ✏️ promueve la nota al editor del centro para editar; 🗙 cierra. Mutex con image viewer y font preview.
+- **Ancho del panel derecho**: botón en el header del reader cicla 4 presets (compacto 280px / normal 380px / ancho 560px / pantalla — oculta el centro). Persiste en `settings.json::rightPanelWidth`.
 
 ### Tree explorer
 
@@ -282,8 +284,8 @@ paru -S twriter-bin
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
 - Drag & drop reorder de capítulos (hoy solo via context menu ↑/↓).
-- Editor split (dos capítulos lado a lado).
-- Sidebar derecho de research / vista global de notas con búsqueda (hoy el editor de `.md` ya existe; falta el panel agregador).
+- Editor split (dos capítulos lado a lado, o capítulo + nota). Disparador previsto: arrastrar archivo del tree al panel central.
+- Sidebar derecho de research / vista global de notas con búsqueda (el reader de `.md` en el panel derecho ya existe; falta el panel agregador con búsqueda full-text).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
 

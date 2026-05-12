@@ -46,7 +46,7 @@
       [class.disabled]="!node.editable"
       [title]="node.editable ? '' : 'Importar antes de editar (.' + node.ext + ')'"
       [style.padding-left.px]="8 + depth * 14"
-      (click)="select(node)"
+      (click)="select(node, $event)"
       (contextmenu)="onContextMenu($event, node)"
     >
       <span class="icon">{{ node.editable ? '◆' : '◇' }}</span>
@@ -60,9 +60,9 @@
       type="button"
       class="row note"
       [class.active]="node.path === activePath()"
-      [title]="node.path"
+      [title]="node.path + ' — Shift+click para editar'"
       [style.padding-left.px]="8 + depth * 14"
-      (click)="select(node)"
+      (click)="select(node, $event)"
       (contextmenu)="onContextMenu($event, node)"
     >
       <span class="icon">📝</span>
@@ -212,7 +212,7 @@
           class="row extra"
           [attr.data-extra-scope]="scopePath"
           [style.padding-left.px]="8 + (depth + 1) * 14"
-          (click)="openExtraEntry(scopePath, entry)"
+          (click)="openExtraEntry(scopePath, entry, $event)"
           (contextmenu)="onExtraContextMenu($event, scopePath, entry)"
           [title]="entry.relative_path"
         >

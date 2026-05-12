@@ -198,7 +198,11 @@ export class Tree implements OnDestroy {
     }
   }
 
-  protected openExtraEntry(scopePath: string, entry: ExtraEntry): void {
+  protected openExtraEntry(scopePath: string, entry: ExtraEntry, event?: MouseEvent): void {
+    if (isMarkdownExt(entry.ext) && !event?.shiftKey) {
+      void this.actions.openMdInReader({ path: entry.path, name: entry.name });
+      return;
+    }
     void this.actions.openExtra(scopePath, entry);
   }
 
@@ -417,16 +421,21 @@ export class Tree implements OnDestroy {
     this.forceState.set('expanded');
   }
 
-  protected async select(node: TreeNode): Promise<void> {
+  protected async select(node: TreeNode, event?: MouseEvent): Promise<void> {
     if (node.kind === 'chapter') {
       const parentPath = node.path.replace(/\/[^/]+$/, '');
       this.nav.setBrowsing(parentPath);
       this.note.close();
       await this.chapter.open(node);
     } else if (node.kind === 'note') {
-      const parentPath = node.path.replace(/\/[^/]+$/, '');
-      this.nav.setBrowsing(parentPath);
-      await this.note.open({ path: node.path, name: node.name });
+      if (event?.shiftKey) {
+        const parentPath = node.path.replace(/\/[^/]+$/, '');
+        this.nav.setBrowsing(parentPath);
+        await this.note.open({ path: node.path, name: node.name });
+        return;
+      }
+      // Reader en panel derecho — no toca el centro ni la navegación.
+      await this.actions.openMdInReader({ path: node.path, name: node.name });
     }
   }
 
@@ -629,4 +638,10 @@ function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
     if (found) return found;
   }
   return null;
+}
+
+function isMarkdownExt(ext: string | null | undefined): boolean {
+  if (!ext) return false;
+  const e = ext.toLowerCase();
+  return e === 'md' || e === 'markdown';
 }

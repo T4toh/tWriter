@@ -5,11 +5,13 @@ import { GrammarMode } from './types';
 
 export type EditorWidth = 'narrow' | 'wide' | 'full';
 export type ParagraphSpacing = 'tight' | 'normal' | 'loose';
+export type RightPanelWidth = 'compact' | 'normal' | 'wide' | 'full';
 
 const FONT_MIN = 12;
 const FONT_MAX = 28;
 const FONT_DEFAULT = 17;
 const SPACING_DEFAULT: ParagraphSpacing = 'tight';
+const RIGHT_PANEL_DEFAULT: RightPanelWidth = 'normal';
 
 /** em entre `<p>` en el editor por nivel. EPUB no se ve afectado — usa su propio CSS. */
 export const PARAGRAPH_SPACING_EM: Record<ParagraphSpacing, number> = {
@@ -28,6 +30,7 @@ interface Settings {
   grammarVariantEs?: string | null;
   grammarVariantEn?: string | null;
   grammarAutoDisabled?: boolean;
+  rightPanelWidth?: RightPanelWidth;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -43,6 +46,7 @@ export class SettingsService {
   readonly grammarVariantEn = signal<string>('en-US');
   /** Auto-check de gramática desactivado por el usuario. Persiste cross-session. */
   readonly grammarAutoDisabled = signal<boolean>(false);
+  readonly rightPanelWidth = signal<RightPanelWidth>(RIGHT_PANEL_DEFAULT);
   readonly focusMode = signal<boolean>(false);
   readonly loaded = signal<boolean>(false);
 
@@ -58,6 +62,7 @@ export class SettingsService {
       this.grammarVariantEs.set(s.grammarVariantEs ?? 'es-AR');
       this.grammarVariantEn.set(s.grammarVariantEn ?? 'en-US');
       this.grammarAutoDisabled.set(s.grammarAutoDisabled ?? false);
+      this.rightPanelWidth.set(s.rightPanelWidth ?? RIGHT_PANEL_DEFAULT);
     } catch {
       this.root.set(null);
     } finally {
@@ -112,6 +117,17 @@ export class SettingsService {
     await this.persist();
   }
 
+  async setRightPanelWidth(width: RightPanelWidth): Promise<void> {
+    this.rightPanelWidth.set(width);
+    await this.persist();
+  }
+
+  cycleRightPanelWidth(): void {
+    const order: RightPanelWidth[] = ['compact', 'normal', 'wide', 'full'];
+    const next = order[(order.indexOf(this.rightPanelWidth()) + 1) % order.length];
+    void this.setRightPanelWidth(next);
+  }
+
   toggleFocusMode(): void {
     this.focusMode.update((v) => !v);
   }
@@ -127,6 +143,7 @@ export class SettingsService {
       grammarVariantEs: this.grammarVariantEs(),
       grammarVariantEn: this.grammarVariantEn(),
       grammarAutoDisabled: this.grammarAutoDisabled(),
+      rightPanelWidth: this.rightPanelWidth(),
     };
     await invoke('set_settings', { settings });
   }

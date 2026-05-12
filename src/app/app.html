@@ -1,4 +1,9 @@
-<div class="shell" [class.focus]="settings.focusMode()" [class.with-viewer]="imageViewer.viewing() !== null || fontPreview.viewing() !== null">
+<div
+  class="shell"
+  [class.focus]="settings.focusMode()"
+  [class.with-viewer]="imageViewer.viewing() !== null || fontPreview.viewing() !== null || markdownReader.viewing() !== null"
+  [attr.data-rpw]="settings.rightPanelWidth()"
+>
   <aside class="panel panel-left">
     <header>
       <div class="title-row">
@@ -136,6 +141,10 @@
   } @else if (fontPreview.viewing() !== null) {
     <aside class="panel panel-right">
       <app-font-preview />
+    </aside>
+  } @else if (markdownReader.viewing() !== null) {
+    <aside class="panel panel-right">
+      <app-markdown-reader />
     </aside>
   }
 </div>

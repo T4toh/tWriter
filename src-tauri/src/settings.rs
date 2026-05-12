@@ -53,6 +53,13 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub grammar_auto_disabled: Option<bool>,
+    /// Ancho del panel derecho ("compact" | "normal" | "wide" | "full").
+    #[serde(
+        default,
+        rename = "rightPanelWidth",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub right_panel_width: Option<String>,
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {

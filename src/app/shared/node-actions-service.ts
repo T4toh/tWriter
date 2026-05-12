@@ -6,8 +6,9 @@ import { ChapterService } from '../core/chapter-service';
 import { ExtraEntry, ExtrasService } from '../core/extras-service';
 import { FontsService } from '../core/fonts-service';
 import { ImageViewerService } from '../core/image-viewer-service';
+import { MarkdownReaderService } from '../core/markdown-reader-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
-import { NoteService } from '../core/note-service';
+import { NoteService, NoteTarget } from '../core/note-service';
 import { ProjectService } from '../core/project-service';
 import { SagaConfigService } from '../core/saga-config-service';
 import { SettingsService } from '../core/settings-service';
@@ -35,6 +36,7 @@ export class NodeActionsService {
   private fonts = inject(FontsService);
   private themesSvc = inject(ThemesService);
   private imageViewer = inject(ImageViewerService);
+  private mdReader = inject(MarkdownReaderService);
   private toast = inject(ToastService);
   private modal = inject(ModalService);
   private dialogs = inject(NativeDialogsService);
@@ -44,7 +46,16 @@ export class NodeActionsService {
   buildNodeMenu(node: TreeNode): CtxMenuEntry[] {
     if (node.kind === 'note') {
       return [
-        { label: 'Abrir', onClick: () => this.openNote(node) },
+        {
+          label: 'Abrir',
+          kbd: '👁',
+          onClick: () => this.openMdInReader({ path: node.path, name: node.name }),
+        },
+        {
+          label: 'Editar nota',
+          kbd: '✏️',
+          onClick: () => this.openNote(node),
+        },
         { label: 'Renombrar…', kbd: 'F2', onClick: () => this.renameNode(node) },
         { kind: 'separator' },
         {
@@ -243,12 +254,29 @@ export class NodeActionsService {
   }
 
   buildExtraMenu(scopePath: string, entry: ExtraEntry): CtxMenuEntry[] {
-    return [
-      { label: 'Abrir con sistema', onClick: () => this.openExtra(scopePath, entry) },
+    const entries: CtxMenuEntry[] = [];
+    if (isMarkdownExt(entry.ext)) {
+      entries.push(
+        {
+          label: 'Abrir',
+          kbd: '👁',
+          onClick: () => this.openMdInReader({ path: entry.path, name: entry.name }),
+        },
+        {
+          label: 'Editar nota',
+          kbd: '✏️',
+          onClick: () => this.openExtra(scopePath, entry),
+        },
+      );
+    } else {
+      entries.push({ label: 'Abrir', onClick: () => this.openExtra(scopePath, entry) });
+    }
+    entries.push(
       { label: 'Renombrar…', onClick: () => this.renameExtra(scopePath, entry) },
       { kind: 'separator' },
       { label: 'Borrar extra', danger: true, onClick: () => this.removeExtra(scopePath, entry) },
-    ];
+    );
+    return entries;
   }
 
   buildEmptyMenu(): CtxMenuEntry[] {
@@ -519,6 +547,11 @@ export class NodeActionsService {
   async openNote(node: TreeNode): Promise<void> {
     if (node.kind !== 'note') return;
     await this.note.open({ path: node.path, name: node.name });
+  }
+
+  /** Abre el .md como render read-only en el panel derecho. No toca el centro. */
+  async openMdInReader(target: NoteTarget): Promise<void> {
+    await this.mdReader.open(target);
   }
 
   async deleteNoteNode(node: TreeNode): Promise<void> {
