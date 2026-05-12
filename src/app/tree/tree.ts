@@ -11,6 +11,7 @@ import { NoteService } from '../core/note-service';
 import { ExportEntry, ExportsService } from '../core/exports-service';
 import { FontsService } from '../core/fonts-service';
 import { NavigationService } from '../core/navigation-service';
+import { PaneSplitService } from '../core/pane-split-service';
 import { ProjectService } from '../core/project-service';
 import { SettingsService } from '../core/settings-service';
 import { ThemesService } from '../core/themes-service';
@@ -47,6 +48,7 @@ export class Tree implements OnDestroy {
   private ctxMenu = inject(ContextMenuService);
   private actions = inject(NodeActionsService);
   private debug = inject(DebugService);
+  private paneSplit = inject(PaneSplitService);
 
   /** Cache de fuentes per-scope (back-compat: el modal de novela todavía lee saga/book/fonts). */
   private readonly fontsLoaded = signal<Set<string>>(new Set());
@@ -196,6 +198,23 @@ export class Tree implements OnDestroy {
     } catch (e) {
       this.toast.error(`No se pudo abrir: ${e}`);
     }
+  }
+
+  // ───── Drag interno (tree → center) para split ─────
+
+  protected onNodeDragStart(event: DragEvent, node: TreeNode): void {
+    if (node.kind !== 'chapter' && node.kind !== 'note') return;
+    if (node.kind === 'chapter' && !node.editable) return;
+    const payload = { path: node.path, kind: node.kind };
+    if (event.dataTransfer) {
+      event.dataTransfer.setData('application/x-twriter-node', JSON.stringify(payload));
+      event.dataTransfer.effectAllowed = 'copy';
+    }
+    this.paneSplit.beginDrag(payload);
+  }
+
+  protected onNodeDragEnd(): void {
+    this.paneSplit.endDrag();
   }
 
   protected openExtraEntry(scopePath: string, entry: ExtraEntry, event?: MouseEvent): void {

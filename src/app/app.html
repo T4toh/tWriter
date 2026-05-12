@@ -126,11 +126,60 @@
     </footer>
   </aside>
 
-  <main class="panel panel-center">
-    @if (note.active()) {
-      <app-notes-editor />
-    } @else {
-      <app-editor />
+  <main
+    class="panel panel-center"
+    [class.split]="paneSplit.splitEnabled()"
+    [class.vertical]="paneSplit.splitEnabled() && paneSplit.orientation() === 'vertical'"
+    [class.drag-over]="dragOverCenter()"
+    (dragenter)="onCenterDragEnter($event)"
+    (dragover)="onCenterDragOver($event)"
+    (dragleave)="onCenterDragLeave($event)"
+    (drop)="onCenterDrop($event)"
+  >
+    <section class="pane pane-primary">
+      @if (note.panes[0].active()) {
+        <app-notes-editor [paneId]="0" />
+      } @else {
+        <app-editor [paneId]="0" />
+      }
+    </section>
+    @if (paneSplit.splitEnabled()) {
+      <section class="pane pane-secondary">
+        @if (note.panes[1].active()) {
+          <app-notes-editor [paneId]="1" />
+        } @else if (chapter.panes[1].active()) {
+          <app-editor [paneId]="1" />
+        } @else {
+          <div class="pane-placeholder">
+            <p>Arrastrá un capítulo o nota acá para abrir en split.</p>
+          </div>
+        }
+        <div class="pane-secondary-controls">
+          <button
+            type="button"
+            class="pane-btn"
+            (click)="paneSplit.toggleOrientation()"
+            [title]="paneSplit.orientation() === 'horizontal' ? 'Cambiar a split vertical' : 'Cambiar a split horizontal'"
+          >
+            {{ paneSplit.orientation() === 'horizontal' ? '⬍' : '⬌' }}
+          </button>
+          <button
+            type="button"
+            class="pane-btn pane-close"
+            (click)="closeSecondaryPane()"
+            title="Cerrar pane secundario"
+          >
+            ×
+          </button>
+        </div>
+      </section>
+    }
+    @if (paneSplit.draggingNode() !== null && !paneSplit.splitEnabled()) {
+      <div class="drop-zone-hint">
+        <span class="drop-zone-text">
+          Soltar acá para abrir en split
+        </span>
+      </div>
     }
   </main>
 

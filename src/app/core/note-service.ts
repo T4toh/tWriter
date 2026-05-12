@@ -1,15 +1,40 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, WritableSignal, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
-import { ChapterService } from './chapter-service';
+import { ChapterService, PaneId } from './chapter-service';
 import { DebugService } from './debug-service';
 import { GitService } from './git-service';
 import { ProjectService } from './project-service';
 
 const AUTOSAVE_MS = 1500;
+const PANE_IDS: readonly PaneId[] = [0, 1] as const;
 
 export interface NoteTarget {
   path: string;
   name: string;
+}
+
+interface NotePane {
+  active: WritableSignal<NoteTarget | null>;
+  content: WritableSignal<string>;
+  dirty: WritableSignal<boolean>;
+  saving: WritableSignal<boolean>;
+  error: WritableSignal<string | null>;
+  lastSavedAt: WritableSignal<number | null>;
+  loadedAt: WritableSignal<number>;
+  autosaveTimer: ReturnType<typeof setTimeout> | null;
+}
+
+function makeNotePane(): NotePane {
+  return {
+    active: signal<NoteTarget | null>(null),
+    content: signal<string>(''),
+    dirty: signal<boolean>(false),
+    saving: signal<boolean>(false),
+    error: signal<string | null>(null),
+    lastSavedAt: signal<number | null>(null),
+    loadedAt: signal<number>(0),
+    autosaveTimer: null,
+  };
 }
 
 @Injectable({ providedIn: 'root' })
@@ -19,69 +44,104 @@ export class NoteService {
   private project = inject(ProjectService);
   private git = inject(GitService);
 
-  readonly active = signal<NoteTarget | null>(null);
-  readonly content = signal<string>('');
-  readonly dirty = signal<boolean>(false);
-  readonly saving = signal<boolean>(false);
-  readonly error = signal<string | null>(null);
-  readonly lastSavedAt = signal<number | null>(null);
-  /** Bumpea cada vez que se abre o cierra una nota. El editor lo observa para resincronizar. */
-  readonly loadedAt = signal<number>(0);
+  /** Dos panes. pane 0 = principal. pane 1 = secundario (split). */
+  readonly panes: readonly [NotePane, NotePane] = [makeNotePane(), makeNotePane()];
 
-  private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+  // Backward-compat aliases a pane 0.
+  readonly active = this.panes[0].active;
+  readonly content = this.panes[0].content;
+  readonly dirty = this.panes[0].dirty;
+  readonly saving = this.panes[0].saving;
+  readonly error = this.panes[0].error;
+  readonly lastSavedAt = this.panes[0].lastSavedAt;
+  readonly loadedAt = this.panes[0].loadedAt;
+
+  // ──────── API legacy (pane 0) ────────
 
   async open(target: NoteTarget): Promise<void> {
-    await this.flushPending();
-    this.chapter.close();
-    this.error.set(null);
-    try {
-      const md = await invoke<string>('read_note', { path: target.path });
-      this.content.set(md);
-      this.dirty.set(false);
-      this.active.set(target);
-      this.loadedAt.set(Date.now());
-    } catch (err) {
-      this.error.set(String(err));
-      this.content.set('');
-      this.dirty.set(false);
-      this.active.set(target);
-      this.loadedAt.set(Date.now());
-    }
+    return this.openInPane(target, 0);
   }
 
   close(): void {
-    this.cancelAutosave();
-    this.active.set(null);
-    this.content.set('');
-    this.dirty.set(false);
-    this.error.set(null);
-    this.loadedAt.set(Date.now());
+    this.closeInPane(0);
   }
 
   updateContent(md: string): void {
-    if (!this.active()) return;
-    if (this.content() === md) return;
-    this.content.set(md);
-    this.dirty.set(true);
-    this.scheduleAutosave();
+    this.updateContentInPane(md, 0);
   }
 
   async save(): Promise<void> {
-    const target = this.active();
-    if (!target || !this.dirty()) return;
-    this.cancelAutosave();
-    this.saving.set(true);
+    return this.saveInPane(0);
+  }
+
+  // ──────── API pane-aware ────────
+
+  async openInPane(target: NoteTarget, paneId: PaneId): Promise<void> {
+    const pane = this.panes[paneId];
+    await this.flushPendingInPane(paneId);
+    this.chapter.closeInPane(paneId);
+    pane.error.set(null);
     try {
-      await invoke('write_note', { path: target.path, content: this.content() });
-      this.dirty.set(false);
-      this.lastSavedAt.set(Date.now());
+      const md = await invoke<string>('read_note', { path: target.path });
+      pane.content.set(md);
+      pane.dirty.set(false);
+      pane.active.set(target);
+      pane.loadedAt.set(Date.now());
     } catch (err) {
-      this.error.set(String(err));
-      this.debug.error('note', String(err));
-    } finally {
-      this.saving.set(false);
+      pane.error.set(String(err));
+      pane.content.set('');
+      pane.dirty.set(false);
+      pane.active.set(target);
+      pane.loadedAt.set(Date.now());
     }
   }
+
+  closeInPane(paneId: PaneId): void {
+    const pane = this.panes[paneId];
+    this.cancelAutosaveInPane(paneId);
+    pane.active.set(null);
+    pane.content.set('');
+    pane.dirty.set(false);
+    pane.error.set(null);
+    pane.loadedAt.set(Date.now());
+  }
+
+  updateContentInPane(md: string, paneId: PaneId): void {
+    const pane = this.panes[paneId];
+    if (!pane.active()) return;
+    if (pane.content() === md) return;
+    pane.content.set(md);
+    pane.dirty.set(true);
+    this.scheduleAutosaveInPane(paneId);
+  }
+
+  async saveInPane(paneId: PaneId): Promise<void> {
+    const pane = this.panes[paneId];
+    const target = pane.active();
+    if (!target || !pane.dirty()) return;
+    this.cancelAutosaveInPane(paneId);
+    pane.saving.set(true);
+    try {
+      await invoke('write_note', { path: target.path, content: pane.content() });
+      pane.dirty.set(false);
+      pane.lastSavedAt.set(Date.now());
+    } catch (err) {
+      pane.error.set(String(err));
+      this.debug.error('note', String(err));
+    } finally {
+      pane.saving.set(false);
+    }
+  }
+
+  /** Devuelve el primer paneId que tiene ese path activo, o null. */
+  findPaneByPath(path: string): PaneId | null {
+    for (const i of PANE_IDS) {
+      if (this.panes[i].active()?.path === path) return i;
+    }
+    return null;
+  }
+
+  // ──────── Operaciones globales ────────
 
   /** Crea `<parentDir>/<name>.md` (creando `notas/` si hace falta) y abre la nota. */
   async createNote(parentDir: string, name: string): Promise<string | null> {
@@ -97,7 +157,7 @@ export class NoteService {
       return result.path;
     } catch (err) {
       this.debug.error('note', String(err));
-      this.error.set(String(err));
+      this.panes[0].error.set(String(err));
       return null;
     }
   }
@@ -106,36 +166,42 @@ export class NoteService {
     try {
       await invoke('delete_note', { path: target.path });
       this.debug.info('note', `Nota borrada: ${target.path}`);
-      if (this.active()?.path === target.path) {
-        this.close();
+      for (const i of PANE_IDS) {
+        if (this.panes[i].active()?.path === target.path) this.closeInPane(i);
       }
       await this.project.loadTree();
       void this.git.refreshStatus();
       return true;
     } catch (err) {
       this.debug.error('note', `${target.name}: ${err}`);
-      this.error.set(String(err));
+      this.panes[0].error.set(String(err));
       return false;
     }
   }
 
-  private scheduleAutosave(): void {
-    this.cancelAutosave();
-    this.autosaveTimer = setTimeout(() => void this.save(), AUTOSAVE_MS);
+  // ──────── Autosave per-pane ────────
+
+  private scheduleAutosaveInPane(paneId: PaneId): void {
+    this.cancelAutosaveInPane(paneId);
+    this.panes[paneId].autosaveTimer = setTimeout(
+      () => void this.saveInPane(paneId),
+      AUTOSAVE_MS,
+    );
   }
 
-  private cancelAutosave(): void {
-    if (this.autosaveTimer != null) {
-      clearTimeout(this.autosaveTimer);
-      this.autosaveTimer = null;
+  private cancelAutosaveInPane(paneId: PaneId): void {
+    const pane = this.panes[paneId];
+    if (pane.autosaveTimer != null) {
+      clearTimeout(pane.autosaveTimer);
+      pane.autosaveTimer = null;
     }
   }
 
-  private async flushPending(): Promise<void> {
-    if (this.dirty()) {
-      await this.save();
+  private async flushPendingInPane(paneId: PaneId): Promise<void> {
+    if (this.panes[paneId].dirty()) {
+      await this.saveInPane(paneId);
     } else {
-      this.cancelAutosave();
+      this.cancelAutosaveInPane(paneId);
     }
   }
 }
