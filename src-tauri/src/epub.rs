@@ -329,14 +329,18 @@ pub async fn export_book(book_path: String) -> Result<ExportResult, String> {
 fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     let book_dir = PathBuf::from(book_path);
     if !book_dir.is_dir() {
+        tracing::error!(target: "epub", path = %book_path, "export_book: no es directorio");
         return Err(format!("no es directorio: {}", book_path));
     }
     let cfg = read_or_default_config(&book_dir);
+    tracing::info!(target: "epub", titulo = %cfg.titulo, "iniciando export");
 
     let (chapters, epilogo) = collect_chapters(&book_dir, cfg.epilogo.as_deref())?;
     if chapters.is_empty() && epilogo.is_none() {
+        tracing::error!(target: "epub", titulo = %cfg.titulo, "libro sin capítulos .html");
         return Err("libro sin capítulos .html".to_string());
     }
+    tracing::info!(target: "epub", titulo = %cfg.titulo, capitulos = chapters.len(), epilogo = epilogo.is_some(), "capítulos recolectados");
 
     let exports_dir = book_dir.join("Exportados");
     fs::create_dir_all(&exports_dir).map_err(|e| e.to_string())?;
@@ -383,7 +387,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         let bytes = match fs::read(&font.abs_path) {
             Ok(b) => b,
             Err(e) => {
-                eprintln!("[theme] no pude leer {}: {}", font.abs_path.display(), e);
+                tracing::warn!(target: "theme", font = %font.abs_path.display(), error = %e, "no pude leer fuente, salteo");
                 continue;
             }
         };
@@ -764,8 +768,12 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     zip.start_file("OEBPS/content.opf", opts).map_err(|e| e.to_string())?;
     zip.write_all(opf.as_bytes()).map_err(|e| e.to_string())?;
 
-    zip.finish().map_err(|e| e.to_string())?;
+    zip.finish().map_err(|e| {
+        tracing::error!(target: "epub", error = %e, "zip finish falló");
+        e.to_string()
+    })?;
 
+    tracing::info!(target: "epub", path = %epub_path.display(), capitulos = total_chapter_files, "export listo");
     Ok(ExportResult {
         epub_path: epub_path.to_string_lossy().into_owned(),
         chapters: total_chapter_files,

@@ -2,12 +2,39 @@
   <aside class="debug-panel">
     <header>
       <span class="title">Debug</span>
-      <span class="count">{{ entries().length }} entrada{{ entries().length === 1 ? '' : 's' }}</span>
+      <span class="count">{{ filtered().length }} / {{ entries().length }}</span>
+
+      <div class="filters">
+        @for (lvl of levels; track lvl) {
+          <button
+            type="button"
+            class="lvl"
+            [class.on]="isLevelOn(lvl)"
+            [attr.data-level]="lvl"
+            (click)="toggleLevel(lvl)"
+            [title]="'mostrar ' + lvl"
+          >
+            {{ lvl }}
+          </button>
+        }
+        <input
+          type="text"
+          class="src-filter"
+          placeholder="filtrar source…"
+          [value]="sourceFilter()"
+          (input)="onSourceInput($event)"
+        />
+      </div>
+
+      <button type="button" class="link" (click)="requestSnapshot()" title="Snapshot del estado actual">📸</button>
+      <button type="button" class="link" (click)="copy()" title="Copiar entradas filtradas">
+        {{ copyOk ? '✓' : 'Copiar' }}
+      </button>
       <button type="button" class="link" (click)="clear()">Limpiar</button>
       <button type="button" class="link" (click)="close()" title="Cerrar">×</button>
     </header>
     <ul class="log">
-      @for (entry of entries(); track trackEntry($index, entry)) {
+      @for (entry of filtered(); track trackEntry($index, entry)) {
         <li class="entry" [attr.data-level]="entry.level">
           <span class="ts">{{ formatTime(entry.ts) }}</span>
           <span class="src">[{{ entry.source }}]</span>
@@ -17,7 +44,13 @@
           }
         </li>
       } @empty {
-        <li class="empty">Sin eventos. Abrí un capítulo, sincronizá, importá — los errores y eventos aparecen acá.</li>
+        <li class="empty">
+          @if (entries().length === 0) {
+            Sin eventos. Abrí un capítulo, sincronizá, importá — los errores y eventos aparecen acá.
+          } @else {
+            Sin coincidencias para el filtro actual.
+          }
+        </li>
       }
     </ul>
   </aside>

@@ -29,10 +29,15 @@ pub async fn pick_folder(
     default_path: Option<String>,
 ) -> Option<String> {
     let dialog = apply_common(AsyncFileDialog::new(), title.as_deref(), default_path.as_deref());
-    dialog
+    let picked = dialog
         .pick_folder()
         .await
-        .map(|h| h.path().to_string_lossy().into_owned())
+        .map(|h| h.path().to_string_lossy().into_owned());
+    match &picked {
+        Some(p) => tracing::info!(target: "dialog", path = %p, "pick_folder elegido"),
+        None => tracing::info!(target: "dialog", "pick_folder cancelado"),
+    }
+    picked
 }
 
 #[tauri::command]
@@ -49,7 +54,7 @@ pub async fn pick_file(
             dialog = dialog.add_filter(&f.name, &exts);
         }
     }
-    if multiple.unwrap_or(false) {
+    let picked: Vec<String> = if multiple.unwrap_or(false) {
         dialog
             .pick_files()
             .await
@@ -61,5 +66,11 @@ pub async fn pick_file(
             .await
             .map(|h| vec![h.path().to_string_lossy().into_owned()])
             .unwrap_or_default()
+    };
+    if picked.is_empty() {
+        tracing::info!(target: "dialog", "pick_file cancelado");
+    } else {
+        tracing::info!(target: "dialog", count = picked.len(), "pick_file elegido");
     }
+    picked
 }

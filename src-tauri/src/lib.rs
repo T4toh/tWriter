@@ -1,5 +1,6 @@
 mod book_config;
 mod create;
+mod debug_bridge;
 mod dialogs;
 mod epub;
 mod extras;
@@ -45,7 +46,13 @@ use themes::{
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    debug_bridge::init_tracing();
     tauri::Builder::default()
+        .setup(|app| {
+            debug_bridge::set_app_handle(app.handle().clone());
+            tracing::info!(target: "boot", "tWriter listo");
+            Ok(())
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())

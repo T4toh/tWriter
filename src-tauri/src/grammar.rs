@@ -178,10 +178,17 @@ pub async fn check_grammar(
     let base = resolve_base(&cfg)?;
     let lang_code = map_lang(&lang, &cfg);
     let chunks = split_chunks(&text);
+    if chunks.len() > 1 {
+        tracing::info!(target: "grammar", bytes = text.len(), partes = chunks.len(), "texto >20KB, chunking aplicado");
+    }
+    tracing::info!(target: "grammar", mode = %cfg.mode, lang = %lang_code, partes = chunks.len(), "check_grammar inicio");
     let client = reqwest::Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .build()
-        .map_err(|e| format!("HTTP client: {}", e))?;
+        .map_err(|e| {
+            tracing::error!(target: "grammar", error = %e, "no se pudo construir HTTP client");
+            format!("HTTP client: {}", e)
+        })?;
 
     let mut all_matches: Vec<GrammarMatch> = Vec::new();
     for (i, chunk) in chunks.iter().enumerate() {
@@ -241,6 +248,7 @@ async fn post_check(
             .and_then(|v| v.to_str().ok())
             .map(|s| format!(" (retry-after: {}s)", s))
             .unwrap_or_default();
+        tracing::warn!(target: "grammar", retry = %retry, "LanguageTool rate-limit servidor");
         return Err(format!(
             "LanguageTool rate-limit{}. Esperá un minuto o cambiá a modo local.",
             retry
@@ -248,6 +256,7 @@ async fn post_check(
     }
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
+        tracing::error!(target: "grammar", status = %status, body = %body, "LanguageTool HTTP error");
         return Err(format!("LanguageTool {}: {}", status, body));
     }
     let parsed: LtResponse = resp
@@ -426,10 +435,12 @@ pub async fn languagetool_docker_start() -> Result<String, String> {
 
     for _ in 0..40 {
         if ping_local_lt().await {
+            tracing::info!(target: "grammar", "LanguageTool Docker listo en localhost:8081");
             return Ok("LanguageTool listo en localhost:8081".into());
         }
         sleep(Duration::from_millis(1000)).await;
     }
+    tracing::error!(target: "grammar", "container levantado pero LT no responde tras 40s");
     Err("Container levantado pero no responde después de 40s. Revisá `docker logs twriter-languagetool`.".into())
 }
 
@@ -444,8 +455,10 @@ pub async fn languagetool_docker_stop() -> Result<(), String> {
         if err.contains("No such container") || err.contains("no such container") {
             return Ok(());
         }
+        tracing::error!(target: "grammar", error = %err, "docker stop LanguageTool falló");
         return Err(format!("docker stop falló: {}", err));
     }
+    tracing::info!(target: "grammar", "LanguageTool Docker detenido");
     Ok(())
 }
 

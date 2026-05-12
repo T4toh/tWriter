@@ -91,11 +91,17 @@ fn git_commit_all_impl(repo_path: &str, message: &str) -> Result<GitCommitResult
 
     let oid = repo
         .commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            tracing::error!(target: "git", error = %e, "commit falló");
+            e.to_string()
+        })?;
 
+    let oid_str = oid.to_string();
+    let short: String = oid_str.chars().take(7).collect();
+    tracing::info!(target: "git", files = st.changed, oid = %short, "commit creado");
     Ok(GitCommitResult {
         committed: true,
-        oid: Some(oid.to_string()),
+        oid: Some(oid_str),
         files: st.changed,
     })
 }
@@ -107,15 +113,21 @@ fn git_push_impl(repo_path: &str) -> Result<(), String> {
         .current_dir(repo_path)
         .args(["push"])
         .output()
-        .map_err(|e| format!("no se pudo ejecutar git: {}", e))?;
+        .map_err(|e| {
+            tracing::error!(target: "git", error = %e, "no se pudo lanzar git push");
+            format!("no se pudo ejecutar git: {}", e)
+        })?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(if stderr.is_empty() {
+        let msg = if stderr.is_empty() {
             format!("push falló (exit {})", output.status)
         } else {
             stderr
-        });
+        };
+        tracing::error!(target: "git", error = %msg, "push falló");
+        return Err(msg);
     }
+    tracing::info!(target: "git", "push ok");
     Ok(())
 }
 
@@ -124,15 +136,21 @@ fn git_pull_impl(repo_path: &str) -> Result<(), String> {
         .current_dir(repo_path)
         .args(["pull", "--ff-only"])
         .output()
-        .map_err(|e| format!("no se pudo ejecutar git: {}", e))?;
+        .map_err(|e| {
+            tracing::error!(target: "git", error = %e, "no se pudo lanzar git pull");
+            format!("no se pudo ejecutar git: {}", e)
+        })?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(if stderr.is_empty() {
+        let msg = if stderr.is_empty() {
             format!("pull falló (exit {})", output.status)
         } else {
             stderr
-        });
+        };
+        tracing::error!(target: "git", error = %msg, "pull falló");
+        return Err(msg);
     }
+    tracing::info!(target: "git", "pull --ff-only ok");
     Ok(())
 }
 

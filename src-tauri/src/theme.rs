@@ -372,7 +372,13 @@ pub fn resolve_theme(
         return ResolvedTheme::default();
     };
 
-    let mut theme = load_base_theme(root_dir, &base_id).unwrap_or_default();
+    let mut theme = match load_base_theme(root_dir, &base_id) {
+        Some(t) => t,
+        None => {
+            tracing::warn!(target: "theme", base = %base_id, "tema base dangling — no existe en root/themes/, usando default");
+            Theme::default()
+        }
+    };
 
     if let Some(sr) = saga_ref.as_ref() {
         if let Some(ov) = sr.overrides.as_ref() {
@@ -420,10 +426,7 @@ pub fn resolve_theme(
         }
         let faces = collect_faces(&fam, &dir_refs);
         if faces.is_empty() {
-            eprintln!(
-                "[theme] fuente '{}' no encontrada en book/saga/theme fonts/",
-                fam
-            );
+            tracing::warn!(target: "theme", family = %fam, "fuente no encontrada en book/saga/theme fonts/");
             continue;
         }
         for face in faces {
@@ -453,10 +456,7 @@ pub fn resolve_theme(
             continue;
         };
         let Some((abs_path, ext)) = locate_face_by_stem(stem, &dir_refs) else {
-            eprintln!(
-                "[theme] face per-style '{}' no encontrada en book/saga/theme fonts/",
-                stem
-            );
+            tracing::warn!(target: "theme", face = %stem, "face per-style no encontrada en book/saga/theme fonts/");
             continue;
         };
         let Some(media_type) = font_media_type(&ext).map(|s| s.to_string()) else {

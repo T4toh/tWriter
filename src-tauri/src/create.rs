@@ -56,6 +56,7 @@ fn create_chapter_impl(
     });
     fs::write(&meta, serde_json::to_string_pretty(&meta_json).unwrap_or_default())
         .map_err(|e| e.to_string())?;
+    tracing::info!(target: "create", path = %html.display(), idioma = %lang, "capítulo creado");
     Ok(CreateResult {
         path: html.to_string_lossy().into_owned(),
     })
@@ -96,6 +97,7 @@ fn create_dir_impl(parent: &str, name: &str, numbered: bool) -> Result<CreateRes
         return Err(format!("ya existe: {}", path.display()));
     }
     fs::create_dir(&path).map_err(|e| e.to_string())?;
+    tracing::info!(target: "create", path = %path.display(), "directorio creado");
     Ok(CreateResult {
         path: path.to_string_lossy().into_owned(),
     })
@@ -136,6 +138,7 @@ fn create_book_impl(parent: &str, name: &str) -> Result<CreateResult, String> {
     json.push('\n');
     fs::write(&book_json, json).map_err(|e| e.to_string())?;
 
+    tracing::info!(target: "create", path = %book_dir.display(), titulo = trimmed, "libro creado");
     Ok(CreateResult {
         path: book_dir.to_string_lossy().into_owned(),
     })

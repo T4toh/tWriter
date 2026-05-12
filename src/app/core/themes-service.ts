@@ -2,10 +2,12 @@ import { effect, inject, Injectable, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { SettingsService } from './settings-service';
 import { FontEntry, Theme, ThemeMeta } from './types';
+import { DebugService } from './debug-service';
 
 @Injectable({ providedIn: 'root' })
 export class ThemesService {
   private settings = inject(SettingsService);
+  private debug = inject(DebugService);
 
   /** Cache de la lista de temas del root actual. null = sin cargar. */
   private readonly cache = signal<ThemeMeta[] | null>(null);
@@ -53,6 +55,7 @@ export class ThemesService {
   async save(id: string, theme: Theme): Promise<void> {
     const root = this.requireRoot();
     await invoke('set_theme', { rootPath: root, id, theme });
+    this.debug.info('theme', `tema "${id}" guardado`);
     await this.refresh();
     this.savedAt.set(Date.now());
   }
@@ -60,6 +63,7 @@ export class ThemesService {
   async create(id: string, theme: Theme): Promise<void> {
     const root = this.requireRoot();
     await invoke('create_theme', { rootPath: root, id, theme });
+    this.debug.info('theme', `tema "${id}" creado`);
     await this.refresh();
     this.savedAt.set(Date.now());
   }
@@ -67,6 +71,7 @@ export class ThemesService {
   async rename(oldId: string, newId: string): Promise<void> {
     const root = this.requireRoot();
     await invoke('rename_theme', { rootPath: root, oldId, newId });
+    this.debug.info('theme', `tema "${oldId}" renombrado a "${newId}"`);
     await this.refresh();
     this.savedAt.set(Date.now());
   }
@@ -74,6 +79,7 @@ export class ThemesService {
   async duplicate(srcId: string, dstId: string): Promise<void> {
     const root = this.requireRoot();
     await invoke('duplicate_theme', { rootPath: root, srcId, dstId });
+    this.debug.info('theme', `tema "${srcId}" duplicado como "${dstId}"`);
     await this.refresh();
     this.savedAt.set(Date.now());
   }
@@ -81,6 +87,7 @@ export class ThemesService {
   async delete(id: string): Promise<void> {
     const root = this.requireRoot();
     await invoke('delete_theme', { rootPath: root, id });
+    this.debug.warn('theme', `tema "${id}" borrado — sagas/libros con base="${id}" quedan dangling`);
     await this.refresh();
     this.savedAt.set(Date.now());
   }

@@ -114,6 +114,7 @@ pub fn write_chapter(path: String, html: String) -> Result<(), String> {
     let p = PathBuf::from(&path);
     if let Some(parent) = p.parent() {
         if !parent.exists() {
+            tracing::error!(target: "fs", path = %path, "write_chapter: carpeta padre no existe");
             return Err(format!("Carpeta padre no existe: {}", parent.display()));
         }
     }
@@ -121,7 +122,13 @@ pub fn write_chapter(path: String, html: String) -> Result<(), String> {
     if !content.ends_with('\n') {
         content.push('\n');
     }
-    fs::write(&p, content).map_err(|e| e.to_string())
+    let bytes = content.len();
+    fs::write(&p, content).map_err(|e| {
+        tracing::error!(target: "fs", path = %path, error = %e, "write_chapter falló");
+        e.to_string()
+    })?;
+    tracing::info!(target: "fs", path = %path, bytes, "capítulo guardado");
+    Ok(())
 }
 
 /// Lee `<chapter>.meta.json`. Devuelve default si no existe.
@@ -158,7 +165,11 @@ pub fn rename_node(path: String, new_name: String) -> Result<String, String> {
         if target.exists() {
             return Err(format!("ya existe: {}", target.display()));
         }
-        fs::rename(&p, &target).map_err(|e| e.to_string())?;
+        fs::rename(&p, &target).map_err(|e| {
+            tracing::error!(target: "fs", from = %path, to = %target.display(), error = %e, "rename_node dir falló");
+            e.to_string()
+        })?;
+        tracing::info!(target: "fs", from = %path, to = %target.display(), "directorio renombrado");
         return Ok(target.to_string_lossy().into_owned());
     }
     if !p.is_file() {
@@ -185,7 +196,11 @@ pub fn rename_node(path: String, new_name: String) -> Result<String, String> {
     if target.exists() {
         return Err(format!("ya existe: {}", target.display()));
     }
-    fs::rename(&p, &target).map_err(|e| e.to_string())?;
+    fs::rename(&p, &target).map_err(|e| {
+        tracing::error!(target: "fs", from = %path, to = %target.display(), error = %e, "rename_node archivo falló");
+        e.to_string()
+    })?;
+    tracing::info!(target: "fs", from = %path, to = %target.display(), "archivo renombrado");
     let old_meta = parent.join(format!("{}.meta.json", old_stem));
     if old_meta.is_file() {
         let new_stem = PathBuf::from(&new_filename)
@@ -205,8 +220,14 @@ pub fn rename_node(path: String, new_name: String) -> Result<String, String> {
 #[tauri::command]
 pub fn write_meta(chapter_path: String, meta: ChapterMeta) -> Result<(), String> {
     let meta_path = meta_path_for(&chapter_path);
-    let raw = serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?;
-    fs::write(&meta_path, raw).map_err(|e| e.to_string())
+    let raw = serde_json::to_string_pretty(&meta).map_err(|e| {
+        tracing::error!(target: "fs", chapter = %chapter_path, error = %e, "write_meta: serializar JSON falló");
+        e.to_string()
+    })?;
+    fs::write(&meta_path, raw).map_err(|e| {
+        tracing::error!(target: "fs", path = %meta_path.display(), error = %e, "write_meta falló");
+        e.to_string()
+    })
 }
 
 fn meta_path_for(chapter_path: &str) -> PathBuf {
