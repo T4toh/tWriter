@@ -4,15 +4,25 @@ import { NativeDialogsService } from './native-dialogs-service';
 import { GrammarMode } from './types';
 
 export type EditorWidth = 'narrow' | 'wide' | 'full';
+export type ParagraphSpacing = 'tight' | 'normal' | 'loose';
 
 const FONT_MIN = 12;
 const FONT_MAX = 28;
 const FONT_DEFAULT = 17;
+const SPACING_DEFAULT: ParagraphSpacing = 'tight';
+
+/** em entre `<p>` en el editor por nivel. EPUB no se ve afectado — usa su propio CSS. */
+export const PARAGRAPH_SPACING_EM: Record<ParagraphSpacing, number> = {
+  tight: 0,
+  normal: 0.3,
+  loose: 0.6,
+};
 
 interface Settings {
   root: string | null;
   editorWidth?: EditorWidth;
   editorFontSize?: number;
+  editorParagraphSpacing?: ParagraphSpacing;
   grammarMode?: GrammarMode;
   grammarCustomUrl?: string | null;
   grammarVariantEs?: string | null;
@@ -26,6 +36,7 @@ export class SettingsService {
   readonly root = signal<string | null>(null);
   readonly editorWidth = signal<EditorWidth>('narrow');
   readonly editorFontSize = signal<number>(FONT_DEFAULT);
+  readonly editorParagraphSpacing = signal<ParagraphSpacing>(SPACING_DEFAULT);
   readonly grammarMode = signal<GrammarMode>('public');
   readonly grammarCustomUrl = signal<string | null>(null);
   readonly grammarVariantEs = signal<string>('es-AR');
@@ -41,6 +52,7 @@ export class SettingsService {
       this.root.set(s.root ?? null);
       this.editorWidth.set(s.editorWidth ?? 'narrow');
       this.editorFontSize.set(clampFont(s.editorFontSize ?? FONT_DEFAULT));
+      this.editorParagraphSpacing.set(s.editorParagraphSpacing ?? SPACING_DEFAULT);
       this.grammarMode.set((s.grammarMode as GrammarMode) ?? 'public');
       this.grammarCustomUrl.set(s.grammarCustomUrl ?? null);
       this.grammarVariantEs.set(s.grammarVariantEs ?? 'es-AR');
@@ -76,6 +88,13 @@ export class SettingsService {
     void this.persist();
   }
 
+  cycleParagraphSpacing(): void {
+    const order: ParagraphSpacing[] = ['tight', 'normal', 'loose'];
+    const next = order[(order.indexOf(this.editorParagraphSpacing()) + 1) % order.length];
+    this.editorParagraphSpacing.set(next);
+    void this.persist();
+  }
+
   async setGrammarMode(mode: GrammarMode, customUrl: string | null): Promise<void> {
     this.grammarMode.set(mode);
     this.grammarCustomUrl.set(customUrl);
@@ -102,6 +121,7 @@ export class SettingsService {
       root: this.root(),
       editorWidth: this.editorWidth(),
       editorFontSize: this.editorFontSize(),
+      editorParagraphSpacing: this.editorParagraphSpacing(),
       grammarMode: this.grammarMode(),
       grammarCustomUrl: this.grammarCustomUrl(),
       grammarVariantEs: this.grammarVariantEs(),

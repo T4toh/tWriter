@@ -121,7 +121,7 @@
     line-height: 1.5;
 
     p {
-      margin: 0 0 0.6em 0;
+      margin: 0 0 var(--editor-para-spacing, 0) 0;
       text-indent: 1.5em;
       text-align: justify;
     }

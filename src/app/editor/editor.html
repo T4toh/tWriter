@@ -145,6 +145,15 @@
 
     <button
       type="button"
+      class="tb-btn spacing-toggle"
+      (click)="cycleParagraphSpacing()"
+      [title]="'Espaciado entre párrafos: ' + paragraphSpacingLabel()"
+    >
+      <span class="ico" [attr.data-spacing]="paragraphSpacing()">{{ paragraphSpacingIcon() }}</span>
+    </button>
+
+    <button
+      type="button"
       class="tb-btn width-toggle"
       (click)="cycleWidth()"
       [title]="'Ancho: ' + widthLabel()"
@@ -158,6 +167,7 @@
   class="editor-stack"
   [attr.data-width]="width()"
   [style.--editor-font-size.px]="fontSize()"
+  [style.--editor-para-spacing.em]="paragraphSpacingEm()"
 >
   <div
     class="editor-host"

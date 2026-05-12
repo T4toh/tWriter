@@ -17,7 +17,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import { ChapterService } from '../core/chapter-service';
 import { SagaContextService } from '../core/saga-context-service';
 import { GrammarService } from '../core/grammar-service';
-import { SettingsService } from '../core/settings-service';
+import { PARAGRAPH_SPACING_EM, SettingsService } from '../core/settings-service';
 import { GrammarMatch } from '../core/types';
 import { convert as convertRae } from '../dialogos/converter';
 import { Landing } from '../landing/landing';
@@ -108,6 +108,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly canAutoGrammar = this.grammar.canAutoCheck;
   protected readonly width = this.settings.editorWidth;
   protected readonly fontSize = this.settings.editorFontSize;
+  protected readonly paragraphSpacing = this.settings.editorParagraphSpacing;
+  protected readonly paragraphSpacingEm = computed(() => PARAGRAPH_SPACING_EM[this.paragraphSpacing()]);
   protected readonly widthLabel = computed(() => {
     switch (this.width()) {
       case 'narrow': return 'página';
@@ -120,6 +122,20 @@ export class Editor implements AfterViewInit, OnDestroy {
       case 'narrow': return '▯';
       case 'wide': return '▭';
       case 'full': return '▬';
+    }
+  });
+  protected readonly paragraphSpacingLabel = computed(() => {
+    switch (this.paragraphSpacing()) {
+      case 'tight': return 'apretado';
+      case 'normal': return 'normal';
+      case 'loose': return 'amplio';
+    }
+  });
+  protected readonly paragraphSpacingIcon = computed(() => {
+    switch (this.paragraphSpacing()) {
+      case 'tight': return '≣';
+      case 'normal': return '≡';
+      case 'loose': return '☰';
     }
   });
 
@@ -328,6 +344,10 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   protected cycleWidth(): void {
     this.settings.cycleEditorWidth();
+  }
+
+  protected cycleParagraphSpacing(): void {
+    this.settings.cycleParagraphSpacing();
   }
 
   protected fontBump(delta: number): void {
