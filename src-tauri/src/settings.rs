@@ -17,6 +17,12 @@ pub struct Settings {
     pub editor_font_size: Option<u32>,
     #[serde(
         default,
+        rename = "editorParagraphSpacing",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub editor_paragraph_spacing: Option<String>,
+    #[serde(
+        default,
         rename = "grammarMode",
         skip_serializing_if = "Option::is_none"
     )]

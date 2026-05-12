@@ -429,11 +429,13 @@ fn count_total_files(plan: &WizardPlan) -> u32 {
 fn apply_impl(app: AppHandle, plan: WizardPlan) -> Result<ImportSummary, String> {
     let target_root = PathBuf::from(&plan.target_root);
     if !target_root.is_dir() {
+        tracing::error!(target: "import-wizard", target_root = %plan.target_root, "target no existe");
         return Err(format!("target no existe: {}", plan.target_root));
     }
     let total = count_total_files(&plan);
     let mut done = 0u32;
     let mut summary = ImportSummary::default();
+    tracing::info!(target: "import-wizard", total, libros = plan.books.len(), saga = plan.saga.is_some(), "iniciando wizard apply");
 
     let saga_dir = if let Some(saga) = &plan.saga {
         let dir = target_root.join(&saga.dir_name);
@@ -524,6 +526,14 @@ fn apply_impl(app: AppHandle, plan: WizardPlan) -> Result<ImportSummary, String>
             }
         }
     }
+    tracing::info!(
+        target: "import-wizard",
+        convertidos = summary.converted_chapters,
+        copiados = summary.copied_chapters,
+        extras = summary.copied_extras,
+        fallos = summary.failed.len(),
+        "wizard apply listo"
+    );
     Ok(summary)
 }
 

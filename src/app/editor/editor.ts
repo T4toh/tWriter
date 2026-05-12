@@ -17,7 +17,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import { ChapterService } from '../core/chapter-service';
 import { SagaContextService } from '../core/saga-context-service';
 import { GrammarService } from '../core/grammar-service';
-import { SettingsService } from '../core/settings-service';
+import { PARAGRAPH_SPACING_EM, SettingsService } from '../core/settings-service';
 import { GrammarMatch } from '../core/types';
 import { convert as convertRae } from '../dialogos/converter';
 import { Landing } from '../landing/landing';
@@ -108,6 +108,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly canAutoGrammar = this.grammar.canAutoCheck;
   protected readonly width = this.settings.editorWidth;
   protected readonly fontSize = this.settings.editorFontSize;
+  protected readonly paragraphSpacing = this.settings.editorParagraphSpacing;
+  protected readonly paragraphSpacingEm = computed(() => PARAGRAPH_SPACING_EM[this.paragraphSpacing()]);
   protected readonly widthLabel = computed(() => {
     switch (this.width()) {
       case 'narrow': return 'página';
@@ -122,6 +124,20 @@ export class Editor implements AfterViewInit, OnDestroy {
       case 'full': return '▬';
     }
   });
+  protected readonly paragraphSpacingLabel = computed(() => {
+    switch (this.paragraphSpacing()) {
+      case 'tight': return 'apretado';
+      case 'normal': return 'normal';
+      case 'loose': return 'amplio';
+    }
+  });
+  protected readonly paragraphSpacingIcon = computed(() => {
+    switch (this.paragraphSpacing()) {
+      case 'tight': return '≣';
+      case 'normal': return '≡';
+      case 'loose': return '☰';
+    }
+  });
 
   private viewReady = signal(false);
   private tiptap: TipTapEditor | null = null;
@@ -130,6 +146,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private grammarDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private skipNextGrammarRemap = false;
   private lastAutoEnabled = false;
+  private lastCheckedPlain: string | null = null;
 
   constructor() {
     effect(() => {
@@ -147,6 +164,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.grammarMatches.set([]);
       this.applyDecorations([]);
       this.grammarPopover.set(null);
+      this.lastCheckedPlain = null;
       if (this.grammarDebounceHandle !== null) {
         clearTimeout(this.grammarDebounceHandle);
         this.grammarDebounceHandle = null;
@@ -328,6 +346,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.settings.cycleEditorWidth();
   }
 
+  protected cycleParagraphSpacing(): void {
+    this.settings.cycleParagraphSpacing();
+  }
+
   protected fontBump(delta: number): void {
     this.settings.bumpFontSize(delta);
   }
@@ -395,7 +417,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     }
   }
 
-  protected async checkGrammar(): Promise<void> {
+  protected async checkGrammar(force = false): Promise<void> {
     if (!this.tiptap || !this.canCheckGrammar()) return;
     const meta = this.chapter.meta().idioma;
     const lang: 'es' | 'en' | 'auto' = meta === 'es' || meta === 'en' ? meta : 'auto';
@@ -403,6 +425,13 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!plain.trim()) {
       this.grammarMatches.set([]);
       this.applyDecorations([]);
+      this.lastCheckedPlain = '';
+      return;
+    }
+    // Skip si el texto plano no cambió desde el último check (cursor moves,
+    // ediciones que no tocan texto, etc). Evita round-trips innecesarios a LT
+    // y el costo de re-aplicar decorations.
+    if (!force && plain === this.lastCheckedPlain) {
       return;
     }
     this.grammarUsed.set(true);
@@ -416,6 +445,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       });
       this.grammarMatches.set(filtered);
       this.applyDecorations(filtered);
+      this.lastCheckedPlain = plain;
     } catch {
       // grammar.lastError ya tiene el mensaje
     }

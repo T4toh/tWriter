@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { GrammarMatch, GrammarMode } from './types';
 import { SettingsService } from './settings-service';
 import { SagaContextService } from './saga-context-service';
+import { DebugService } from './debug-service';
 
 interface GrammarCfg {
   mode: GrammarMode;
@@ -22,6 +23,7 @@ export interface LtDockerStatus {
 export class GrammarService {
   private settings = inject(SettingsService);
   private sagaCtx = inject(SagaContextService);
+  private debug = inject(DebugService);
 
   readonly available = signal<boolean>(false);
   readonly checking = signal<boolean>(false);
@@ -52,9 +54,11 @@ export class GrammarService {
     try {
       const ok = await invoke<boolean>('check_grammar_available', { cfg: this.buildCfg() });
       this.available.set(ok);
+      if (!ok) this.debug.warn('grammar', `ping LanguageTool falló (modo ${this.mode()})`);
       return ok;
-    } catch {
+    } catch (e) {
       this.available.set(false);
+      this.debug.error('grammar', `ping LanguageTool excepción (modo ${this.mode()})`, String(e));
       return false;
     }
   }
@@ -68,10 +72,15 @@ export class GrammarService {
         lang,
         cfg: this.buildCfg(),
       });
+      this.debug.info(
+        'grammar',
+        `check ok (${lang}, ${text.length} bytes, ${matches.length} matches)`,
+      );
       return matches;
     } catch (e) {
       const msg = String(e ?? 'Error desconocido');
       this.lastError.set(msg);
+      this.debug.error('grammar', `check falló (${lang}, ${text.length} bytes)`, msg);
       throw new Error(msg);
     } finally {
       this.checking.set(false);
@@ -84,6 +93,7 @@ export class GrammarService {
 
   async setMode(mode: GrammarMode, customUrl?: string | null): Promise<void> {
     await this.settings.setGrammarMode(mode, customUrl ?? null);
+    this.debug.info('grammar', `modo cambiado a "${mode}"`, customUrl ?? undefined);
     await this.ping();
   }
 
@@ -92,10 +102,23 @@ export class GrammarService {
   }
 
   async dockerStart(): Promise<string> {
-    return invoke<string>('languagetool_docker_start');
+    try {
+      const msg = await invoke<string>('languagetool_docker_start');
+      this.debug.info('grammar', `LanguageTool Docker arrancado`, msg);
+      return msg;
+    } catch (e) {
+      this.debug.error('grammar', `falló arrancar Docker LanguageTool`, String(e));
+      throw e;
+    }
   }
 
   async dockerStop(): Promise<void> {
-    await invoke('languagetool_docker_stop');
+    try {
+      await invoke('languagetool_docker_stop');
+      this.debug.info('grammar', `LanguageTool Docker detenido`);
+    } catch (e) {
+      this.debug.error('grammar', `falló detener Docker LanguageTool`, String(e));
+      throw e;
+    }
   }
 }

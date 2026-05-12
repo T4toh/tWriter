@@ -127,7 +127,15 @@ Reglas:
 
 ### Debug / observabilidad
 
-- Panel 🐛 toggleable en header con log timestamped de errores capturados desde chapter/project/git services vía effects.
+- Panel 🐛 toggleable en header (35vh fixed bottom, monospace).
+- Log timestamped (HH:MM:SS.mmm) con niveles info / warn / error, source y mensaje + details opcionales.
+- **Bridge Rust → frontend** vía `tracing` crate. `EmitLayer` custom forwardea cada `tracing::info!/warn!/error!` al evento Tauri `debug-log`. El listener Angular (`RustLogBridge`) lo empuja al mismo `DebugService`. Targets cubiertos: `fs`, `git`, `epub`, `import`, `import-wizard`, `grammar`, `theme`, `create`, `reorder`, `dialog`, `boot`. Filtro por env: `RUST_LOG=twriter_lib=info,warn,error` por default.
+- Services frontend instrumentados: `ChapterService`, `UpdaterService`, `GrammarService`, `ThemesService`, `ProjectService`, `ImportWizardService`. App component captura `chapter/project/git.error()` vía effects.
+- **Filtros**: 3 toggles de nivel (info/warn/error) + input de búsqueda por source.
+- **Copiar**: botón en header serializa entradas filtradas a clipboard como texto plano (útil para bug reports).
+- **Snapshot**: botón 📸 dumpea el estado actual (settings, project tree counts, capítulo activo, git status, grammar mode) como entrada `[snapshot]` con JSON pretty.
+- **Persistencia sessionStorage**: log + visible + filtros sobreviven F5 (no entre sesiones).
+- Max 200 entries (drop oldest).
 
 ### Git auto-sync
 
@@ -299,7 +307,6 @@ paru -S twriter-bin
 
 - Diff/historial visual via `git log`.
 - Stats: gráfico palabras/día.
-- Ampliar pantalla de debug: hoy captura errores frontend de chapter/project/git services. Sumar logs Rust (stderr de tracing) y dump de estado de signals.
 - Preview pre-push: hoy el indicador del header dice "15 archivos para subir" sin detalle. Tooltip con lista de paths (M/A/D) en hover, y/o dialog "Ver cambios pendientes" con `git status --short` + `git diff --stat`.
 
 ### Plataformas

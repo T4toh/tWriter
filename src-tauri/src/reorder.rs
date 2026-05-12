@@ -31,13 +31,19 @@ fn move_impl(path: &str, direction: Direction) -> Result<MoveResult, String> {
     }
     let parent = p.parent().ok_or_else(|| "sin padre".to_string())?;
 
-    if p.is_file() {
-        return move_file(&p, parent, direction);
+    let result = if p.is_file() {
+        move_file(&p, parent, direction)
+    } else if p.is_dir() {
+        move_dir(&p, parent, direction)
+    } else {
+        return Err("no es archivo ni directorio".to_string());
+    };
+
+    match &result {
+        Ok(mv) => tracing::info!(target: "reorder", from = %mv.from, to = %mv.to, dir = ?direction, "movido"),
+        Err(e) => tracing::error!(target: "reorder", path = %path, dir = ?direction, error = %e, "move falló"),
     }
-    if p.is_dir() {
-        return move_dir(&p, parent, direction);
-    }
-    Err("no es archivo ni directorio".to_string())
+    result
 }
 
 // ─────────── Files (capítulos) ───────────

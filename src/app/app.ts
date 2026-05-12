@@ -2,9 +2,11 @@ import { Component, ViewChild, computed, effect, HostListener, inject } from '@a
 import { ChapterService } from './core/chapter-service';
 import { DebugService } from './core/debug-service';
 import { GitService } from './core/git-service';
+import { GrammarService } from './core/grammar-service';
 import { ImageViewerService } from './core/image-viewer-service';
 import { ImportWizardService } from './core/import-wizard-service';
 import { ProjectService } from './core/project-service';
+import { RustLogBridge } from './core/rust-log-bridge';
 import { SettingsService } from './core/settings-service';
 import { UpdaterService } from './core/updater-service';
 import { Tree } from './tree/tree';
@@ -23,6 +25,7 @@ import { ModalHost } from './shared/modal-host';
 import { ModalService } from './shared/modal-service';
 import { ContextMenuHost } from './shared/context-menu-host';
 import { ContextMenuService } from './shared/context-menu-service';
+import { TreeNode } from './core/types';
 
 @Component({
   selector: 'app-root',
@@ -40,6 +43,7 @@ export class App {
   protected chapter = inject(ChapterService);
   protected git = inject(GitService);
   protected debug = inject(DebugService);
+  private grammar = inject(GrammarService);
   private updater = inject(UpdaterService);
   private modal = inject(ModalService);
   private ctxMenu = inject(ContextMenuService);
@@ -67,6 +71,7 @@ export class App {
   });
 
   constructor() {
+    inject(RustLogBridge);
     void this.bootstrap();
     effect(() => {
       const e = this.chapter.error();
@@ -113,6 +118,42 @@ export class App {
     this.debug.toggle();
   }
 
+  protected captureSnapshot(): void {
+    const tree = this.project.tree();
+    const counts = tree ? countByKind(tree) : { sagas: 0, books: 0, sections: 0, chapters: 0 };
+    this.debug.snapshot('Estado app', {
+      settings: {
+        root: this.settings.root(),
+        focusMode: this.settings.focusMode(),
+        editorWidth: this.settings.editorWidth(),
+        editorFontSize: this.settings.editorFontSize(),
+      },
+      project: {
+        loaded: tree !== null,
+        loading: this.project.loading(),
+        error: this.project.error(),
+        ...counts,
+      },
+      chapter: {
+        active: this.chapter.active()?.path ?? null,
+        saving: this.chapter.saving(),
+        error: this.chapter.error(),
+      },
+      git: {
+        state: this.git.state(),
+        summary: this.git.summary(),
+        error: this.git.error(),
+      },
+      grammar: {
+        mode: this.grammar.mode(),
+        available: this.grammar.available(),
+        autoEnabled: this.grammar.autoEnabled(),
+        lastError: this.grammar.lastError(),
+      },
+      ua: navigator.userAgent,
+    });
+  }
+
   protected openGrammarSettings(): void {
     this.grammarSettings?.show();
   }
@@ -151,4 +192,19 @@ export class App {
     if (!name?.trim()) return;
     await this.chapter.createDirectory(root, name.trim(), false);
   }
+}
+
+function countByKind(n: TreeNode): { sagas: number; books: number; sections: number; chapters: number } {
+  const counts = { sagas: 0, books: 0, sections: 0, chapters: 0 };
+  const walk = (node: TreeNode): void => {
+    switch (node.kind) {
+      case 'saga': counts.sagas++; break;
+      case 'book': counts.books++; break;
+      case 'section': counts.sections++; break;
+      case 'chapter': counts.chapters++; break;
+    }
+    for (const c of node.children ?? []) walk(c);
+  };
+  walk(n);
+  return counts;
 }

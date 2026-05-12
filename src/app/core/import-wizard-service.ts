@@ -4,6 +4,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { BookConfig } from './book-config-service';
 import { SagaConfig } from './saga-config-service';
 import { SettingsService } from './settings-service';
+import { DebugService } from './debug-service';
 
 export type WizardStep =
   | 'tipo'
@@ -144,6 +145,8 @@ export interface EditableExtra {
 @Injectable({ providedIn: 'root' })
 export class ImportWizardService {
   private settings = inject(SettingsService);
+  private debug = inject(DebugService);
+  private lastProgressLogMs = 0;
 
   readonly open = signal<boolean>(false);
   readonly step = signal<WizardStep>('tipo');
@@ -203,14 +206,16 @@ export class ImportWizardService {
     this.sourcePath.set(path);
     this.scanning.set(true);
     this.error.set(null);
+    this.debug.info('import-wizard', `scan iniciado (${this.tipo() ?? '?'})`, path);
     try {
       const tree = await invoke<SourceTree>('scan_import_source', { path });
       this.tree.set(tree);
       this.hydrateEditableFromTree(tree);
-      // Saga: pasar a saga-config primero. Novela: directo a estructura.
       this.step.set(this.tipo() === 'saga' ? 'saga-config' : 'estructura');
+      this.debug.info('import-wizard', `scan completo (${tree.children.length} children)`);
     } catch (e) {
       this.error.set(String(e));
+      this.debug.error('import-wizard', `scan falló`, String(e));
     } finally {
       this.scanning.set(false);
     }
@@ -389,13 +394,19 @@ export class ImportWizardService {
     this.progress.set({ done: 0, total: 0, current: '' });
     this.step.set('progreso');
     await this.attachProgress();
+    this.debug.info('import-wizard', `apply iniciado (${plan.books.length} libros)`);
     try {
       const summary = await invoke<ImportSummary>('import_wizard_apply', { plan });
       this.summary.set(summary);
       this.step.set('completo');
+      this.debug.info(
+        'import-wizard',
+        `apply listo (conv:${summary.converted_chapters} copia:${summary.copied_chapters} extras:${summary.copied_extras} fail:${summary.failed.length})`,
+      );
     } catch (e) {
       this.error.set(String(e));
       this.step.set('estructura');
+      this.debug.error('import-wizard', `apply falló`, String(e));
     } finally {
       this.applying.set(false);
       this.detachProgress();
@@ -406,6 +417,15 @@ export class ImportWizardService {
     this.detachProgress();
     this.unlisten = await listen<ProgressPayload>('import-progress', (event) => {
       this.progress.set(event.payload);
+      const now = Date.now();
+      if (now - this.lastProgressLogMs >= 1000 || event.payload.done === event.payload.total) {
+        this.lastProgressLogMs = now;
+        this.debug.info(
+          'import-wizard',
+          `progreso ${event.payload.done}/${event.payload.total}`,
+          event.payload.current,
+        );
+      }
     });
   }
 
