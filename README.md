@@ -121,6 +121,22 @@ Reglas:
 - Port TS de reglas D1–D5 desde [`dialogos_a_esp`](https://github.com/T4toh/dialogos_a_esp).
 - Botón "RAE" en toolbar (solo cuando `idioma === 'es'`).
 - Preview side-by-side antes de aplicar.
+- **Procesamiento per-paragraph**: el converter detecta el HTML del editor y
+  corre las reglas independiente por cada `<p>…</p>` y por cada chunk separado
+  por `<br>` adentro. Sin esto, el HTML del editor (sin newlines reales) hace
+  que D1 sólo dispare en el primer diálogo. Plain text (sin `<p>`) sigue
+  procesándose línea por línea como en el CLI Python.
+- **Verbos dicendi acentuados (`preguntó`, `murmuró`, `exclamó`…)**: usamos
+  `(?!\p{L})` con flag `u` en vez de `\b`. El `\b` de JavaScript es ASCII-only
+  y nunca matchea después de `ó` — la mitad de la lista de verbos dicendi
+  estaba inactiva en la port TS (el Python original no tiene este problema
+  porque `\b` ahí es Unicode-aware).
+- **Reglas RAE 3 y 5 (inciso con continuación)**: el diálogo `"texto1" verbo
+  inciso. "texto2"` ahora cierra la raya antes del punto y deja el texto2 sin
+  raya de apertura — `—texto1 —verbo inciso—. texto2`. Aplica tanto a inciso
+  con verbo dicendi (D3) como a inciso de acción sin verbo (D4). El punto
+  del primer diálogo se preserva en D4 (acción) y se absorbe en D3 (verbo
+  dicendi), siguiendo la distinción de [DPD raya](https://www.rae.es/dpd/raya).
 
 ### Gramática + ortografía (LanguageTool)
 
@@ -137,6 +153,7 @@ Reglas:
 ### Importer
 
 - Pandoc CLI shell-out (`.docx`/`.odt` → HTML subset). Single chapter o bulk.
+- Wizard de importación de saga/novela (📥 en header): trae carpeta externa al repo con detección heurística de estructura, decisión per-carpeta sobre conversión, metadata de saga + libros, normalización de tapas y extras, progress bar con eventos.
 - **Generar demo** (mismo wizard 📥, tercer tipo): crea una saga de ejemplo con
   1 libro, 5 capítulos × 3 partes (15 archivos `.html`) con prosa fantasy
   hardcoded en ES o EN. Incluye diálogos en estilo RAE, `<em>`, `<strong>`,
@@ -145,7 +162,6 @@ Reglas:
   viven en `src-tauri/src/demo_template.rs` + `src-tauri/src/demo_content/`.
   Los archivos generados son normales — el usuario los puede editar, renombrar
   o borrar como cualquier otro.
-- Wizard de importación de saga/novela (📥 en header): trae carpeta externa al repo con detección heurística de estructura, decisión per-carpeta sobre conversión, metadata de saga + libros, normalización de tapas y extras, progress bar con eventos.
 
 #### Notas externas
 
