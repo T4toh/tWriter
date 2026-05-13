@@ -10,7 +10,7 @@ Las novelas viven en un repo privado aparte (HTML + JSON). Esta app es solo el e
 
 Cada saga/libro en el repo de novelas sigue una convención canónica para
 distinguir capítulos (lo que va al EPUB) de extras (manuscritos viejos, mapas,
-glosarios, tapas alternativas) y notas (research — feature futura).
+glosarios, tapas alternativas) y notas (research / worldbuilding).
 
 ```
 <root>/
@@ -328,9 +328,9 @@ paru -S twriter-bin
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
 - Drag & drop reorder de capítulos (hoy solo via context menu ↑/↓).
-- Sidebar derecho de research / vista global de notas con búsqueda (el reader de `.md` en el panel derecho ya existe; falta el panel agregador con búsqueda full-text).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
+- Operadores en la búsqueda (AND, OR, "frase exacta" entre comillas, filtros por kind). Hoy parsea como query libre con BM25.
 
 ### Tree / Importer
 
