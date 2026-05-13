@@ -16,13 +16,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Frontend (Angular 21)        Backend (Rust / Tauri 2)
 ─────────────────────        ────────────────────────
 src/app/                     src-tauri/src/
-  editor/  TipTap wrapper      main.rs   entry
-  tree/    project explorer    lib.rs    commands registry
-  dialogos/  port TS D1-D5     fs.rs     tree, read/write capítulos
-  grammar/   LanguageTool      git.rs    auto-commit + push (git2)
-  export/    EPUB UI           epub.rs   builder XHTML zip
-  core/      services          pandoc.rs sidecar import .docx/.odt
+  editor/  TipTap wrapper      main.rs    entry
+  tree/    project explorer    lib.rs     commands registry
+  dialogos/  port TS D1-D5     fs.rs      tree, read/write capítulos
+  grammar/   LanguageTool      git.rs     auto-commit + status (git2)
+  export/    EPUB UI           epub.rs    builder XHTML zip
+  core/      services          pandoc.rs  sidecar import .docx/.odt
+                               storage.rs detección git/cloud/local
+                               secrets.rs apiKey al keyring del OS
 ```
+
+**Detección de storage backend** (`storage.rs`): al elegir/cargar root,
+`detect_storage_backend` clasifica como `Git` (vía `Repository::discover`),
+`Dropbox`/`PCloud`/`Nextcloud`/`OneDrive`/`GoogleDrive`/`ICloud`/`Sync`/`Mega`
+(match por componente del path), o `Local`. La UI esconde los controles
+git cuando no aplican y muestra un badge identificando el servicio.
+
+**Secretos sensibles** (`secrets.rs`): el apiKey de LT Premium va al
+keyring del OS vía el crate `keyring` (Secret Service en Linux, Keychain
+en macOS, Credential Manager en Windows). Fallback a `secrets-fallback.json`
+en `app_config_dir` con permisos `0600` si ningún backend responde. El
+valor **nunca cruza el bridge JS → Rust** — el backend lo carga server-side
+cuando arma el POST a LanguageTool. `GrammarConfig::Debug` enmascara el
+campo con `***`.
 
 **Regla de división**: cualquier operación que toque muchos archivos a la vez (búsqueda, EPUB build, git, walk del árbol) vive en Rust. Angular solo renderiza el capítulo activo y la metadata. Esto da performance nativa donde importa.
 

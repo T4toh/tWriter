@@ -34,65 +34,142 @@
         <div class="gs-option-text">
           <strong>Local (Docker)</strong>
           <span class="muted">
-            localhost:8081 · privado, sin límites de uso. Requisitos del sistema:
+            localhost:8081 · privado, sin límites de uso, auto-check on.
           </span>
-          <ul class="gs-reqs">
-            <li>
-              <strong>Docker Engine</strong> instalado y corriendo
-              (<a href="https://docs.docker.com/get-docker/" target="_blank">docker.com</a>).
-            </li>
-            <li>
-              <strong>Linux:</strong> usuario en el grupo <code>docker</code>
-              (<code>sudo usermod -aG docker $USER</code> + relogin), si no los comandos piden sudo y tWriter no los puede ejecutar.
-            </li>
-            <li>
-              <strong>macOS / Windows:</strong> Docker Desktop abierto.
-            </li>
-            <li>
-              ~2GB RAM disponibles. La primera vez baja la imagen (~300MB) y tarda ~30s en cargar modelos.
-            </li>
-          </ul>
-          @if (mode() === 'local' && dockerStatus(); as ds) {
-            <div class="docker-panel">
-              @if (!ds.docker_installed) {
-                <div class="docker-status err">
-                  Docker no detectado.
-                  <a href="https://docs.docker.com/get-docker/" target="_blank">Instalalo desde docker.com</a>
-                  y volvé a abrir esta ventana.
-                </div>
-              } @else if (ds.container_running && ds.api_responding) {
-                <div class="docker-status ok">
-                  ● LanguageTool corriendo en localhost:8081
-                </div>
-                <button
-                  type="button"
-                  class="btn btn-secondary docker-btn"
-                  [disabled]="dockerBusy() !== null"
-                  (click)="stopDocker()"
-                >
-                  {{ dockerBusy() === 'stopping' ? 'Deteniendo…' : 'Detener LanguageTool' }}
-                </button>
-              } @else if (ds.container_running) {
-                <div class="docker-status warn">
-                  Container corriendo pero el API todavía no responde (cargando modelos).
-                </div>
-              } @else {
-                <div class="docker-status">
-                  Container detenido{{ ds.container_exists ? ' (existe pero apagado)' : ' (no existe todavía)' }}.
-                </div>
-                <button
-                  type="button"
-                  class="btn btn-primary docker-btn"
-                  [disabled]="dockerBusy() !== null"
-                  (click)="startDocker()"
-                >
-                  {{ dockerBusy() === 'starting' ? 'Levantando…' : 'Levantar LanguageTool' }}
-                </button>
-              }
-              @if (dockerMessage(); as msg) {
-                <div class="docker-msg">{{ msg }}</div>
-              }
+
+          @if (mode() === 'local') {
+            <div class="gs-why">
+              <strong>Por qué Docker:</strong> LanguageTool es un servidor Java que
+              necesita ~2GB de RAM y trae sus propios diccionarios hunspell + modelos
+              n-gram. Empaquetarlo dentro de tWriter haría el bundle pesar 300MB+ y
+              forzaría una JVM. Docker te deja correr la
+              <a href="https://hub.docker.com/r/erikvl87/languagetool" target="_blank" rel="noopener">
+                imagen oficial mantenida (erikvl87/languagetool)
+              </a>
+              en un proceso aparte, on-demand, sin tocar tu sistema. Detenida no consume
+              recursos.
             </div>
+
+            <details class="gs-details">
+              <summary>Requisitos del sistema</summary>
+              <ul class="gs-reqs">
+                <li>
+                  <strong>Docker Engine</strong> instalado y corriendo
+                  (<a href="https://docs.docker.com/get-docker/" target="_blank" rel="noopener">docker.com/get-docker</a>).
+                </li>
+                <li>
+                  <strong>Linux:</strong> usuario en el grupo <code>docker</code>
+                  (<code>sudo usermod -aG docker $USER</code> + relogin), si no los comandos piden sudo y tWriter no los puede ejecutar.
+                </li>
+                <li>
+                  <strong>macOS / Windows:</strong> Docker Desktop abierto.
+                </li>
+                <li>
+                  ~2GB RAM disponibles. La primera vez baja ~300MB y tarda ~30s en cargar modelos.
+                </li>
+              </ul>
+            </details>
+
+            <details class="gs-details">
+              <summary>Qué pasa cuando levantamos el container</summary>
+              <ol class="gs-steps-explained">
+                <li>
+                  <strong>Chequeo Docker:</strong>
+                  <code>docker --version</code> + <code>docker info</code> para confirmar
+                  que el daemon responde.
+                </li>
+                <li>
+                  <strong>Pull de la imagen:</strong> <code>docker pull erikvl87/languagetool:latest</code>
+                  (solo la primera vez — después queda cacheada local).
+                </li>
+                <li>
+                  <strong>Run del container:</strong>
+                  <code>docker run -d --name twriter-languagetool -p 8081:8010 -e Java_Xmx=2g …</code>
+                  → escucha en localhost:8081, restart automático.
+                </li>
+                <li>
+                  <strong>Carga de modelos:</strong> esperamos a que el API responda en
+                  <code>/v2/languages</code> (~30s, una sola vez por arranque).
+                </li>
+              </ol>
+              <p class="gs-muted-note">
+                Fuentes:
+                <a href="https://languagetool.org/" target="_blank" rel="noopener">languagetool.org</a>
+                ·
+                <a href="https://github.com/languagetool-org/languagetool" target="_blank" rel="noopener">repo oficial</a>
+                ·
+                <a href="https://github.com/Erikvl87/docker-languagetool" target="_blank" rel="noopener">imagen Docker que usamos</a>.
+              </p>
+            </details>
+
+            @if (dockerStatus(); as ds) {
+              <div class="docker-panel">
+                @if (!ds.docker_installed) {
+                  <div class="docker-status err">
+                    Docker no detectado.
+                    <a href="https://docs.docker.com/get-docker/" target="_blank" rel="noopener">Instalalo desde docker.com</a>
+                    y volvé a abrir esta ventana.
+                  </div>
+                } @else if (ds.container_running && ds.api_responding) {
+                  <div class="docker-status ok">
+                    ● LanguageTool corriendo en localhost:8081
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary docker-btn"
+                    [disabled]="dockerBusy() !== null"
+                    (click)="stopDocker()"
+                  >
+                    {{ dockerBusy() === 'stopping' ? 'Deteniendo…' : 'Detener LanguageTool' }}
+                  </button>
+                } @else if (ds.container_running) {
+                  <div class="docker-status warn">
+                    Container corriendo pero el API todavía no responde (cargando modelos).
+                  </div>
+                } @else {
+                  <div class="docker-status">
+                    Container detenido{{ ds.container_exists ? ' (existe pero apagado)' : ' (no existe todavía)' }}.
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-primary docker-btn"
+                    [disabled]="dockerBusy() !== null"
+                    (click)="startDocker()"
+                  >
+                    {{ dockerBusy() === 'starting' ? 'Levantando…' : 'Levantar LanguageTool' }}
+                  </button>
+                }
+
+                @if (dockerBusy() === 'starting' || dockerPhase() === 'error') {
+                  <ol class="docker-stepper" [attr.data-phase]="dockerPhase()">
+                    <li [class.active]="dockerPhase() === 'checking'"
+                        [class.done]="phaseDone('checking')">
+                      <span class="step-icon">①</span>
+                      <span class="step-label">Chequeando Docker</span>
+                    </li>
+                    <li [class.active]="dockerPhase() === 'pulling'"
+                        [class.done]="phaseDone('pulling')">
+                      <span class="step-icon">②</span>
+                      <span class="step-label">Bajando imagen (~300MB)</span>
+                    </li>
+                    <li [class.active]="dockerPhase() === 'starting'"
+                        [class.done]="phaseDone('starting')">
+                      <span class="step-icon">③</span>
+                      <span class="step-label">Creando container</span>
+                    </li>
+                    <li [class.active]="dockerPhase() === 'loading'"
+                        [class.done]="phaseDone('loading')">
+                      <span class="step-icon">④</span>
+                      <span class="step-label">Cargando modelos (~30s)</span>
+                    </li>
+                  </ol>
+                }
+
+                @if (dockerMessage(); as msg) {
+                  <div class="docker-msg" [class.err]="dockerPhase() === 'error'">{{ msg }}</div>
+                }
+              </div>
+            }
           }
         </div>
       </label>
@@ -107,15 +184,112 @@
         />
         <div class="gs-option-text">
           <strong>URL custom</strong>
-          <span class="muted">Endpoint propio (ej: API premium con apiKey).</span>
+          <span class="muted">
+            Endpoint propio (self-hosted) o
+            <a href="https://languagetool.org/premium-api" target="_blank" rel="noopener">
+              LanguageTool Premium
+            </a>
+            con username + apiKey.
+          </span>
           @if (mode() === 'custom') {
             <input
               type="text"
               class="gs-url"
-              placeholder="https://my-lt.example.com"
+              placeholder="https://api.languagetoolplus.com  ·  https://mi-lt.example.com"
               [ngModel]="customUrl()"
               (ngModelChange)="customUrl.set($event)"
             />
+
+            <div class="gs-auth">
+              <label class="gs-auth-field">
+                <span>Username (opcional)</span>
+                <input
+                  type="text"
+                  class="gs-url"
+                  placeholder="email registrado en LT Premium"
+                  autocomplete="off"
+                  [ngModel]="ltUsername()"
+                  (ngModelChange)="ltUsername.set($event)"
+                />
+              </label>
+
+              <label class="gs-auth-field">
+                <span>
+                  API key (opcional)
+                  @if (apiKeyStatus(); as st) {
+                    @if (st.present && !clearKeyOnSave()) {
+                      <span class="gs-key-badge ok">
+                        @if (st.backend === 'keyring') {
+                          🔐 Guardada en keyring del sistema
+                        } @else {
+                          ⚠ Guardada en plaintext (sin keyring disponible)
+                        }
+                      </span>
+                    } @else if (clearKeyOnSave()) {
+                      <span class="gs-key-badge warn">⊘ se borra al aplicar</span>
+                    }
+                  }
+                </span>
+                <div class="gs-key-wrap">
+                  <input
+                    [type]="showApiKey() ? 'text' : 'password'"
+                    class="gs-url"
+                    [placeholder]="apiKeyStatus()?.present && !clearKeyOnSave()
+                      ? '•••••••• (tipear para reemplazar)'
+                      : 'pegá tu API key acá'"
+                    autocomplete="off"
+                    spellcheck="false"
+                    [ngModel]="ltApiKey()"
+                    (ngModelChange)="ltApiKey.set($event)"
+                  />
+                  <button
+                    type="button"
+                    class="gs-key-eye"
+                    (click)="toggleApiKeyVisibility()"
+                    [title]="showApiKey() ? 'Ocultar API key' : 'Mostrar API key'"
+                  >
+                    {{ showApiKey() ? '🙈' : '👁' }}
+                  </button>
+                </div>
+
+                @if (apiKeyStatus()?.present && !clearKeyOnSave()) {
+                  <button
+                    type="button"
+                    class="gs-key-delete"
+                    (click)="markKeyForDeletion()"
+                  >
+                    Borrar API key guardada
+                  </button>
+                } @else if (clearKeyOnSave()) {
+                  <button
+                    type="button"
+                    class="gs-key-delete"
+                    (click)="undoKeyDeletion()"
+                  >
+                    Cancelar borrado
+                  </button>
+                }
+              </label>
+
+              <p class="gs-muted-note">
+                @if (apiKeyStatus()?.keyring_available) {
+                  <strong>🔐 Keyring del sistema disponible</strong> —
+                  el API key se guarda encriptado en libsecret / KWallet /
+                  Keychain / Credential Manager, no en disco.
+                } @else {
+                  <strong>⚠ Sin keyring del sistema</strong> — caemos a
+                  fallback plaintext en <code>secrets-fallback.json</code>
+                  (carpeta de config de Tauri, permisos 0600, fuera de git).
+                  Si querés cifrado real, activá <code>gnome-keyring-daemon</code>
+                  o <code>kwalletd6</code>.
+                }
+                <br />
+                El username queda en <code>settings.json</code> (no es sensible).
+                <a href="https://languagetool.org/proofreading-api" target="_blank" rel="noopener">
+                  Sacar API key →
+                </a>
+              </p>
+            </div>
           }
         </div>
       </label>

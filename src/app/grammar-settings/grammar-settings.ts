@@ -7,10 +7,18 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { invoke } from '@tauri-apps/api/core';
-import { GrammarService, LtDockerStatus } from '../core/grammar-service';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { GrammarService, LtDockerStatus, SecretStatus } from '../core/grammar-service';
 import { SettingsService } from '../core/settings-service';
 import { Select } from '../shared/select';
 import { GrammarMode } from '../core/types';
+
+export type DockerPhase = 'checking' | 'pulling' | 'starting' | 'loading' | 'ready' | 'error';
+
+interface LtProgressEvent {
+  phase: DockerPhase;
+  message: string;
+}
 
 @Component({
   selector: 'app-grammar-settings',
@@ -27,6 +35,12 @@ export class GrammarSettings {
   protected readonly open = signal<boolean>(false);
   protected readonly mode = signal<GrammarMode>('public');
   protected readonly customUrl = signal<string>('');
+  protected readonly ltUsername = signal<string>('');
+  /** Buffer del input. Cuando hay key guardada en el keyring, queda vacío hasta que el usuario tipea para reemplazar. */
+  protected readonly ltApiKey = signal<string>('');
+  protected readonly showApiKey = signal<boolean>(false);
+  protected readonly apiKeyStatus = signal<SecretStatus | null>(null);
+  protected readonly clearKeyOnSave = signal<boolean>(false);
   protected readonly variantEs = signal<string>('es-AR');
   protected readonly variantEn = signal<string>('en-US');
   protected readonly testing = signal<boolean>(false);
@@ -35,19 +49,46 @@ export class GrammarSettings {
   protected readonly dockerStatus = signal<LtDockerStatus | null>(null);
   protected readonly dockerBusy = signal<'starting' | 'stopping' | null>(null);
   protected readonly dockerMessage = signal<string | null>(null);
+  protected readonly dockerPhase = signal<DockerPhase | null>(null);
+  private unlistenProgress: UnlistenFn | null = null;
 
   constructor() {
     effect(() => {
       if (this.open()) {
         this.mode.set(this.grammar.mode());
         this.customUrl.set(this.grammar.customUrl() ?? '');
+        this.ltUsername.set(this.grammar.ltUsername() ?? '');
+        this.ltApiKey.set('');
+        this.showApiKey.set(false);
+        this.clearKeyOnSave.set(false);
+        void this.refreshApiKeyStatus();
         this.variantEs.set(this.settings.grammarVariantEs());
         this.variantEn.set(this.settings.grammarVariantEn());
         this.testResult.set(null);
         this.dockerMessage.set(null);
+        this.dockerPhase.set(null);
         void this.refreshDockerStatus();
+      } else {
+        this.detachProgressListener();
       }
     });
+  }
+
+  protected async refreshApiKeyStatus(): Promise<void> {
+    try {
+      this.apiKeyStatus.set(await this.grammar.apiKeyStatus());
+    } catch {
+      this.apiKeyStatus.set(null);
+    }
+  }
+
+  protected markKeyForDeletion(): void {
+    this.clearKeyOnSave.set(true);
+    this.ltApiKey.set('');
+  }
+
+  protected undoKeyDeletion(): void {
+    this.clearKeyOnSave.set(false);
   }
 
   protected async refreshDockerStatus(): Promise<void> {
@@ -61,16 +102,36 @@ export class GrammarSettings {
 
   protected async startDocker(): Promise<void> {
     this.dockerBusy.set('starting');
-    this.dockerMessage.set('Levantando container (la primera vez baja ~300MB)…');
+    this.dockerPhase.set('checking');
+    this.dockerMessage.set('Chequeando que Docker esté instalado…');
+    await this.attachProgressListener();
     try {
       const msg = await this.grammar.dockerStart();
+      this.dockerPhase.set('ready');
       this.dockerMessage.set(msg);
     } catch (e) {
+      this.dockerPhase.set('error');
       this.dockerMessage.set(String(e));
     } finally {
       this.dockerBusy.set(null);
+      this.detachProgressListener();
       await this.refreshDockerStatus();
       await this.grammar.ping();
+    }
+  }
+
+  private async attachProgressListener(): Promise<void> {
+    this.detachProgressListener();
+    this.unlistenProgress = await listen<LtProgressEvent>('languagetool-progress', (ev) => {
+      this.dockerPhase.set(ev.payload.phase);
+      this.dockerMessage.set(ev.payload.message);
+    });
+  }
+
+  private detachProgressListener(): void {
+    if (this.unlistenProgress) {
+      this.unlistenProgress();
+      this.unlistenProgress = null;
     }
   }
 
@@ -102,13 +163,25 @@ export class GrammarSettings {
     this.testResult.set(null);
   }
 
+  /** Devuelve true si la fase `p` ya pasó (la actual está más adelante en el flujo). */
+  protected phaseDone(p: DockerPhase): boolean {
+    const order: DockerPhase[] = ['checking', 'pulling', 'starting', 'loading', 'ready'];
+    const cur = this.dockerPhase();
+    if (!cur || cur === 'error') return false;
+    return order.indexOf(cur) > order.indexOf(p);
+  }
+
   protected async test(): Promise<void> {
     this.testing.set(true);
     this.testResult.set(null);
     try {
+      // El test usa el apiKey del input (override transitorio). Si está vacío y
+      // hay key guardada en el keyring, el backend la usa.
       const cfg = {
         mode: this.mode(),
         customUrl: this.customUrl().trim() || null,
+        ltUsername: this.ltUsername().trim() || null,
+        ltApiKey: this.ltApiKey().trim() || null,
         variantEs: this.variantEs(),
         variantEn: this.variantEn(),
       };
@@ -125,11 +198,28 @@ export class GrammarSettings {
     this.saving.set(true);
     try {
       const url = this.customUrl().trim() || null;
+      const user = this.ltUsername().trim() || null;
+      const newKey = this.ltApiKey().trim();
       await this.settings.setGrammarVariants(this.variantEs(), this.variantEn());
-      await this.grammar.setMode(this.mode(), url);
+      await this.grammar.setMode(this.mode(), url, user);
+
+      // apiKey va al keyring por separado. Solo tocar si:
+      //   - usuario tipeó algo nuevo → guardar
+      //   - usuario clickeó "borrar key" → mandar string vacío
+      if (newKey) {
+        await this.grammar.saveApiKey(newKey);
+      } else if (this.clearKeyOnSave()) {
+        await this.grammar.saveApiKey('');
+      }
+
+      await this.grammar.ping();
       this.close();
     } finally {
       this.saving.set(false);
     }
+  }
+
+  protected toggleApiKeyVisibility(): void {
+    this.showApiKey.update((v) => !v);
   }
 }

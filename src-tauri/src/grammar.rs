@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use tauri::{AppHandle, Emitter};
 use tokio::time::sleep;
+
+use crate::secrets;
 
 const LT_CONTAINER: &str = "twriter-languagetool";
 const LT_IMAGE: &str = "erikvl87/languagetool:latest";
@@ -28,7 +31,7 @@ pub struct GrammarMatch {
     pub replacements: Vec<String>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Clone)]
 pub struct GrammarConfig {
     pub mode: String,
     #[serde(default, rename = "customUrl")]
@@ -37,6 +40,29 @@ pub struct GrammarConfig {
     pub variant_es: Option<String>,
     #[serde(default, rename = "variantEn")]
     pub variant_en: Option<String>,
+    /// LanguageTool Premium / self-hosted con auth. Solo aplica si `mode == "custom"`.
+    #[serde(default, rename = "ltUsername")]
+    pub lt_username: Option<String>,
+    /// Override transitorio del apiKey, solo usado por el modal de gramática para
+    /// poder hacer "Probar conexión" antes de persistir. En operación normal
+    /// (check_grammar de cada chunk) este campo viene `None` y el backend lo
+    /// carga del keyring del OS vía `secrets::load_lt_api_key`.
+    #[serde(default, rename = "ltApiKey")]
+    pub lt_api_key: Option<String>,
+}
+
+// Debug manual: nunca exponer el apiKey en logs ni snapshots.
+impl std::fmt::Debug for GrammarConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GrammarConfig")
+            .field("mode", &self.mode)
+            .field("custom_url", &self.custom_url)
+            .field("variant_es", &self.variant_es)
+            .field("variant_en", &self.variant_en)
+            .field("lt_username", &self.lt_username)
+            .field("lt_api_key", &self.lt_api_key.as_ref().map(|_| "***"))
+            .finish()
+    }
 }
 
 #[derive(Deserialize)]
@@ -171,6 +197,7 @@ pub async fn check_grammar_available(cfg: GrammarConfig) -> bool {
 
 #[tauri::command]
 pub async fn check_grammar(
+    app: AppHandle,
     text: String,
     lang: String,
     cfg: GrammarConfig,
@@ -190,9 +217,20 @@ pub async fn check_grammar(
             format!("HTTP client: {}", e)
         })?;
 
+    // Para modo custom, si cfg no trae apiKey transitorio, cargamos del keyring.
+    let resolved_key = if cfg.mode == "custom" && cfg.lt_api_key.is_none() {
+        secrets::load_lt_api_key(&app)
+    } else {
+        cfg.lt_api_key.clone()
+    };
+    let cfg_with_key = GrammarConfig {
+        lt_api_key: resolved_key,
+        ..cfg
+    };
+
     let mut all_matches: Vec<GrammarMatch> = Vec::new();
     for (i, chunk) in chunks.iter().enumerate() {
-        if cfg.mode == "public" {
+        if cfg_with_key.mode == "public" {
             let mut bug = PUBLIC_BUDGET
                 .lock()
                 .map_err(|_| "lock envenenado".to_string())?;
@@ -202,7 +240,7 @@ pub async fn check_grammar(
         if i > 0 {
             sleep(Duration::from_millis(250)).await;
         }
-        let matches = post_check(&client, &base, &chunk.text, &lang_code, &cfg).await?;
+        let matches = post_check(&client, &base, &chunk.text, &lang_code, &cfg_with_key).await?;
         for m in matches {
             all_matches.push(GrammarMatch {
                 offset: m.offset + chunk.start,
@@ -233,6 +271,18 @@ async fn post_check(
     ];
     if lang == "auto" {
         params.push(("preferredVariants", preferred_variants(cfg)));
+    }
+    // Premium / self-hosted auth: solo en modo custom, ambos campos requeridos.
+    // NUNCA loggear el apiKey en plain text.
+    if cfg.mode == "custom" {
+        if let (Some(user), Some(key)) = (cfg.lt_username.as_deref(), cfg.lt_api_key.as_deref()) {
+            let user = user.trim();
+            let key = key.trim();
+            if !user.is_empty() && !key.is_empty() {
+                params.push(("username", user.to_string()));
+                params.push(("apiKey", key.to_string()));
+            }
+        }
     }
     let resp = client
         .post(&url)
@@ -339,8 +389,27 @@ pub async fn languagetool_docker_status() -> LtDockerStatus {
     }
 }
 
+#[derive(Serialize, Clone)]
+struct LtProgress {
+    phase: &'static str,
+    message: String,
+}
+
+fn emit_progress(app: &AppHandle, phase: &'static str, message: impl Into<String>) {
+    let msg: String = message.into();
+    tracing::info!(target: "grammar", phase, msg = %msg, "languagetool progress");
+    let _ = app.emit(
+        "languagetool-progress",
+        LtProgress {
+            phase,
+            message: msg,
+        },
+    );
+}
+
 #[tauri::command]
-pub async fn languagetool_docker_start() -> Result<String, String> {
+pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String> {
+    emit_progress(&app, "checking", "Chequeando que Docker esté instalado…");
     let docker_check = Command::new("docker").arg("--version").output();
     match docker_check {
         Ok(o) if o.status.success() => {}
@@ -351,6 +420,7 @@ pub async fn languagetool_docker_start() -> Result<String, String> {
             );
         }
     }
+    emit_progress(&app, "checking", "Chequeando que el daemon de Docker responda…");
     if let Ok(o) = Command::new("docker").args(["info"]).output() {
         if !o.status.success() {
             return Err(
@@ -370,6 +440,7 @@ pub async fn languagetool_docker_start() -> Result<String, String> {
         })
         .unwrap_or(false);
     if already_running {
+        emit_progress(&app, "ready", "El container ya estaba corriendo.");
         return Ok("Ya estaba corriendo.".into());
     }
 
@@ -384,6 +455,7 @@ pub async fn languagetool_docker_start() -> Result<String, String> {
         .unwrap_or(false);
 
     if exists {
+        emit_progress(&app, "starting", "Reiniciando container existente…");
         let out = Command::new("docker")
             .args(["start", LT_CONTAINER])
             .output()
@@ -395,6 +467,11 @@ pub async fn languagetool_docker_start() -> Result<String, String> {
             ));
         }
     } else {
+        emit_progress(
+            &app,
+            "pulling",
+            "Bajando imagen erikvl87/languagetool (~300MB, puede tardar 1–3 min según conexión)…",
+        );
         let pull = tokio::task::spawn_blocking(|| {
             Command::new("docker").args(["pull", LT_IMAGE]).output()
         })
@@ -407,6 +484,7 @@ pub async fn languagetool_docker_start() -> Result<String, String> {
                 String::from_utf8_lossy(&pull.stderr)
             ));
         }
+        emit_progress(&app, "starting", "Creando container en localhost:8081…");
         let run = Command::new("docker")
             .args([
                 "run",
@@ -433,8 +511,14 @@ pub async fn languagetool_docker_start() -> Result<String, String> {
         }
     }
 
+    emit_progress(
+        &app,
+        "loading",
+        "Cargando modelos de español + inglés (~30s la primera vez)…",
+    );
     for _ in 0..40 {
         if ping_local_lt().await {
+            emit_progress(&app, "ready", "LanguageTool listo en localhost:8081");
             tracing::info!(target: "grammar", "LanguageTool Docker listo en localhost:8081");
             return Ok("LanguageTool listo en localhost:8081".into());
         }

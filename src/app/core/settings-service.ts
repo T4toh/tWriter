@@ -27,6 +27,7 @@ interface Settings {
   editorParagraphSpacing?: ParagraphSpacing;
   grammarMode?: GrammarMode;
   grammarCustomUrl?: string | null;
+  grammarLtUsername?: string | null;
   grammarVariantEs?: string | null;
   grammarVariantEn?: string | null;
   grammarAutoDisabled?: boolean;
@@ -42,6 +43,7 @@ export class SettingsService {
   readonly editorParagraphSpacing = signal<ParagraphSpacing>(SPACING_DEFAULT);
   readonly grammarMode = signal<GrammarMode>('public');
   readonly grammarCustomUrl = signal<string | null>(null);
+  readonly grammarLtUsername = signal<string | null>(null);
   readonly grammarVariantEs = signal<string>('es-AR');
   readonly grammarVariantEn = signal<string>('en-US');
   /** Auto-check de gramática desactivado por el usuario. Persiste cross-session. */
@@ -59,6 +61,7 @@ export class SettingsService {
       this.editorParagraphSpacing.set(s.editorParagraphSpacing ?? SPACING_DEFAULT);
       this.grammarMode.set((s.grammarMode as GrammarMode) ?? 'public');
       this.grammarCustomUrl.set(s.grammarCustomUrl ?? null);
+      this.grammarLtUsername.set(s.grammarLtUsername ?? null);
       this.grammarVariantEs.set(s.grammarVariantEs ?? 'es-AR');
       this.grammarVariantEn.set(s.grammarVariantEn ?? 'en-US');
       this.grammarAutoDisabled.set(s.grammarAutoDisabled ?? false);
@@ -100,9 +103,14 @@ export class SettingsService {
     void this.persist();
   }
 
-  async setGrammarMode(mode: GrammarMode, customUrl: string | null): Promise<void> {
+  async setGrammarMode(
+    mode: GrammarMode,
+    customUrl: string | null,
+    ltUsername: string | null = null,
+  ): Promise<void> {
     this.grammarMode.set(mode);
     this.grammarCustomUrl.set(customUrl);
+    this.grammarLtUsername.set(ltUsername);
     await this.persist();
   }
 
@@ -140,6 +148,7 @@ export class SettingsService {
       editorParagraphSpacing: this.editorParagraphSpacing(),
       grammarMode: this.grammarMode(),
       grammarCustomUrl: this.grammarCustomUrl(),
+      grammarLtUsername: this.grammarLtUsername(),
       grammarVariantEs: this.grammarVariantEs(),
       grammarVariantEn: this.grammarVariantEn(),
       grammarAutoDisabled: this.grammarAutoDisabled(),

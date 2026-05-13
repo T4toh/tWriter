@@ -1,8 +1,11 @@
 [package]
 name = "twriter"
 version = "0.1.13"
-description = "A Tauri App"
-authors = ["you"]
+description = "Editor desktop de novelas: editor TipTap, conversor RAE, gramática (LanguageTool) y EPUB."
+authors = ["Tatoh <tatukis@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/T4toh/tWriter"
+homepage = "https://github.com/T4toh/tWriter"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -34,4 +37,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "registry", "std"] }
 tantivy = "0.22"
 regex = "1"
+# Wallet/keyring del sistema para secretos sensibles (apiKey de LT Premium).
+# Linux: libsecret (gnome-keyring / KWallet6+). macOS: Keychain. Windows: Credential Manager.
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 

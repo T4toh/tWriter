@@ -33,6 +33,15 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub grammar_custom_url: Option<String>,
+    /// Username de LT Premium / self-hosted con auth. No es sensible (es un email),
+    /// se persiste en settings.json. El apiKey va al keyring del sistema vía el
+    /// módulo `secrets` (libsecret / Keychain / Credential Manager), nunca a este JSON.
+    #[serde(
+        default,
+        rename = "grammarLtUsername",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub grammar_lt_username: Option<String>,
     #[serde(
         default,
         rename = "grammarVariantEs",

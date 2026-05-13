@@ -124,14 +124,15 @@ Reglas:
 
 ### Gramática + ortografía (LanguageTool)
 
-- 3 modos: público (`api.languagetool.org`), local (Docker), custom URL.
+- 3 modos: público (`api.languagetool.org`), local (Docker), custom URL (self-hosted o LT Premium).
 - Underlines diferenciados: orto (rojo sólido), gramática (rojo wavy), estilo (amarillo wavy).
 - Popover con sugerencias clickeables + atribución LT.
 - Rate-limit client-side (18 req/min, 70KB/min) + chunking >20KB transparente.
 - Auto-check auto-on en modo local/custom tras ping ok. Toggle persistido (`settings.json::grammarAutoDisabled`). Público queda off por ToS.
 - Variantes regionales (es-AR, es-ES, en-US, en-GB…) globales + override per-saga (`saga.json::variante_es`/`variante_en`). Click en badge del footer abre dropdown.
 - Diccionario per-saga: "+ diccionario" en popover de TYPOS filtra matches.
-- Botones para levantar/detener Docker desde GUI.
+- **UX Docker explicativa**: stepper visual con fases `checking → pulling → starting → loading → ready` durante el arranque + bloque "Por qué Docker" con links a docker.com, languagetool.org, el repo oficial de LT y la imagen `erikvl87/languagetool` que usamos. Eventos `languagetool-progress` emitidos desde Rust con `tauri::Emitter`.
+- **LT Premium / self-hosted con auth**: en modo Custom URL podés pegar tu username + apiKey. El apiKey va al **keyring del OS** (libsecret/Keychain/Credential Manager) vía el módulo `secrets`. Detalle abajo.
 
 ### Importer
 
@@ -367,12 +368,9 @@ paru -S twriter-bin
 
 ### Bundle / Distribución (Linux nativo)
 
-> Todo toca `tauri.conf.json`, `Cargo.toml` o el AppRun hook de linuxdeploy. Atacar junto en un sprint de packaging.
-
-- Metadata + branding del bundle: ícono propio en `.deb`/`.msi`/`.exe` (hoy fallback genérico), description real (hoy "A Tauri App"), `bundle.copyright`, `bundle.publisher`, `bundle.shortDescription`/`longDescription`, `bundle.category` ("Productivity"). Fixea el `.desktop` (Comment + Categories) que hoy queda vacío. Como side-effect, el título del file picker via xdg-portal en KDE deja de mostrar el ícono default de Plasma — Plasma resuelve el ícono via `StartupWMClass` del `.desktop` y `bundle.identifier`.
-- Sizes de ícono adicionales en `.deb` (hoy solo 32/128/256@2 — algunos launchers buscan 48/64).
-- Tema GTK del window decoration / dialogs respetando sistema (hoy AppRun fuerza `GTK_THEME=Adwaita:light/dark` leyendo gsettings de GNOME — en KDE queda Adwaita default). Workaround: env var `APPIMAGE_GTK_THEME=Breeze:dark` o patchear AppRun hook en CI.
-- Mejor UX de instalación de Docker para LT (barrita o spinner que muestre que está pulleando la imagen).
+- ~~Metadata + branding del bundle (`publisher`, `copyright`, `shortDescription`, `longDescription`, `category`, `homepage`, `licenseFile`)~~ ✅ Cubierto en `tauri.conf.json::bundle` + `Cargo.toml`. Fixea el `.desktop` Comment + Categories vacíos y el `StartupWMClass` del Plasma (vía `bundle.identifier`).
+- ~~Sizes de ícono adicionales (48, 64)~~ ✅ Registrados en `bundle.icon` (32/48/64/128/128@2/icns/ico).
+- ~~Mejor UX de Docker para LT~~ ✅ Stepper con fases checking → pulling → starting → loading → ready + sección "Por qué Docker" con links a docker.com, languagetool.org, repo oficial y la imagen `erikvl87/languagetool`. Eventos `languagetool-progress` emitidos desde Rust con `tauri::Emitter`.
 
 ### Archivos
 
@@ -393,29 +391,69 @@ paru -S twriter-bin
 
 ## Gramática (LanguageTool)
 
-Por defecto tWriter usa el API público gratis de LanguageTool (`api.languagetool.org`).
-Limitado a 20 req/min, 75KB/min, 20KB/req — y el texto se envía a servidores LT.
-Por eso el modo público:
+tWriter soporta 3 backends de LanguageTool. Todos hablan el mismo endpoint
+HTTP (`/v2/check`); cambia dónde corre y cómo se autentica.
 
-- Solo permite chequeo on-demand (sin auto-recheck mientras escribís — el ToS lo prohíbe).
+### 1. API público (default)
+
+`api.languagetool.org` — gratis, sin instalación. Limitado a 20 req/min,
+75KB/min, 20KB/req. El texto se envía a servidores LT.
+
+- Solo chequeo on-demand (sin auto-recheck mientras escribís — el ToS lo prohíbe).
 - Banner naranja avisa la primera vez que activás la feature en una sesión.
 
-Para uso intensivo y privacidad total, levantar LT local con Docker:
+### 2. Local (Docker)
+
+Para uso intensivo y privacidad total. La app puede levantarlo desde el
+modal de gramática (⚙ del header → "Local (Docker)" → "Levantar LanguageTool"),
+o por CLI:
 
 ```bash
 ./scripts/start-languagetool.sh   # primera vez tarda ~30s en cargar modelos
-```
-
-En tWriter abrir el ⚙ del header → "Local (Docker)" → "Probar conexión" → "Aplicar".
-
-Para detenerlo:
-
-```bash
 ./scripts/stop-languagetool.sh
 ```
 
-Resource: ~2GB RAM corriendo. La imagen `erikvl87/languagetool` incluye hunspell para
-ortografía en español/inglés — no necesitás un diccionario aparte.
+Detalles bajo el hood:
+
+- Imagen [erikvl87/languagetool](https://hub.docker.com/r/erikvl87/languagetool)
+  ([repo](https://github.com/Erikvl87/docker-languagetool)) — Java 17 + LT
+  + hunspell, expone `:8010` que mapeamos a `localhost:8081`.
+- ~2GB RAM en runtime, ~300MB de imagen on disk. Hunspell incluido cubre
+  ES/EN — no necesitás diccionario aparte.
+- Auto-check on-by-default cuando el ping responde. Toggle persiste en
+  `settings.json::grammarAutoDisabled`.
+- El backend Rust emite eventos `languagetool-progress` con fases
+  `checking → pulling → starting → loading → ready`; el modal muestra
+  un stepper en vivo.
+
+### 3. URL custom — self-hosted o LT Premium
+
+Para apuntar a un endpoint LT propio (proxy / instancia interna) o a
+**LanguageTool Premium** (`api.languagetoolplus.com`).
+
+Premium requiere `username` + `apiKey` en cada POST a `/v2/check`:
+
+- **Username** queda en `settings.json` (no es sensible — es un email).
+- **API key** va al **keyring del OS**:
+  - Linux: libsecret / Secret Service API → resuelven `gnome-keyring`,
+    `kwalletd6` (Plasma 6+) u otros.
+  - macOS: Keychain.
+  - Windows: Credential Manager.
+  - El crate Rust [`keyring`](https://crates.io/crates/keyring) v3 abstrae
+    los tres.
+- Si el OS no expone un Secret Service (sistema sin DE, daemon caído),
+  caemos a `secrets-fallback.json` en `app_config_dir` con permisos `0600`
+  y un warning visible en el modal (`⚠ Plaintext (sin keyring disponible)`).
+
+El apiKey **nunca cruza el bridge JS → Rust** en operación normal: el
+backend la lee del keyring server-side cuando arma el form POST. El
+módulo `secrets` solo expone `lt_api_key_status` (devuelve `{present,
+backend, keyring_available}`) y `lt_api_key_save(value)` (escribir o
+borrar). El struct `GrammarConfig` tiene un `impl Debug` manual que
+enmascara el campo apiKey como `***` para que no aparezca jamás en logs,
+tracing ni snapshots del panel 🐛.
+
+Para sacar key de LT Premium: <https://languagetool.org/proofreading-api>.
 
 ## Instalación
 
