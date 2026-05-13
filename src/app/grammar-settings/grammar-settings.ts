@@ -35,6 +35,9 @@ export class GrammarSettings {
   protected readonly open = signal<boolean>(false);
   protected readonly mode = signal<GrammarMode>('public');
   protected readonly customUrl = signal<string>('');
+  protected readonly ltUsername = signal<string>('');
+  protected readonly ltApiKey = signal<string>('');
+  protected readonly showApiKey = signal<boolean>(false);
   protected readonly variantEs = signal<string>('es-AR');
   protected readonly variantEn = signal<string>('en-US');
   protected readonly testing = signal<boolean>(false);
@@ -51,6 +54,9 @@ export class GrammarSettings {
       if (this.open()) {
         this.mode.set(this.grammar.mode());
         this.customUrl.set(this.grammar.customUrl() ?? '');
+        this.ltUsername.set(this.grammar.ltUsername() ?? '');
+        this.ltApiKey.set(this.grammar.ltApiKey() ?? '');
+        this.showApiKey.set(false);
         this.variantEs.set(this.settings.grammarVariantEs());
         this.variantEn.set(this.settings.grammarVariantEn());
         this.testResult.set(null);
@@ -150,6 +156,8 @@ export class GrammarSettings {
       const cfg = {
         mode: this.mode(),
         customUrl: this.customUrl().trim() || null,
+        ltUsername: this.ltUsername().trim() || null,
+        ltApiKey: this.ltApiKey().trim() || null,
         variantEs: this.variantEs(),
         variantEn: this.variantEn(),
       };
@@ -166,11 +174,17 @@ export class GrammarSettings {
     this.saving.set(true);
     try {
       const url = this.customUrl().trim() || null;
+      const user = this.ltUsername().trim() || null;
+      const key = this.ltApiKey().trim() || null;
       await this.settings.setGrammarVariants(this.variantEs(), this.variantEn());
-      await this.grammar.setMode(this.mode(), url);
+      await this.grammar.setMode(this.mode(), url, user, key);
       this.close();
     } finally {
       this.saving.set(false);
     }
+  }
+
+  protected toggleApiKeyVisibility(): void {
+    this.showApiKey.update((v) => !v);
   }
 }

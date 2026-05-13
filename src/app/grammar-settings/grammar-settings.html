@@ -184,15 +184,65 @@
         />
         <div class="gs-option-text">
           <strong>URL custom</strong>
-          <span class="muted">Endpoint propio (ej: API premium con apiKey).</span>
+          <span class="muted">
+            Endpoint propio (self-hosted) o
+            <a href="https://languagetool.org/premium-api" target="_blank" rel="noopener">
+              LanguageTool Premium
+            </a>
+            con username + apiKey.
+          </span>
           @if (mode() === 'custom') {
             <input
               type="text"
               class="gs-url"
-              placeholder="https://my-lt.example.com"
+              placeholder="https://api.languagetoolplus.com  ·  https://mi-lt.example.com"
               [ngModel]="customUrl()"
               (ngModelChange)="customUrl.set($event)"
             />
+
+            <div class="gs-auth">
+              <label class="gs-auth-field">
+                <span>Username (opcional)</span>
+                <input
+                  type="text"
+                  class="gs-url"
+                  placeholder="email registrado en LT Premium"
+                  autocomplete="off"
+                  [ngModel]="ltUsername()"
+                  (ngModelChange)="ltUsername.set($event)"
+                />
+              </label>
+              <label class="gs-auth-field">
+                <span>API key (opcional)</span>
+                <div class="gs-key-wrap">
+                  <input
+                    [type]="showApiKey() ? 'text' : 'password'"
+                    class="gs-url"
+                    placeholder="dejá vacío si tu servidor no requiere auth"
+                    autocomplete="off"
+                    spellcheck="false"
+                    [ngModel]="ltApiKey()"
+                    (ngModelChange)="ltApiKey.set($event)"
+                  />
+                  <button
+                    type="button"
+                    class="gs-key-eye"
+                    (click)="toggleApiKeyVisibility()"
+                    [title]="showApiKey() ? 'Ocultar API key' : 'Mostrar API key'"
+                  >
+                    {{ showApiKey() ? '🙈' : '👁' }}
+                  </button>
+                </div>
+              </label>
+              <p class="gs-muted-note">
+                Los dos campos se guardan en tu <code>settings.json</code> local
+                (carpeta de config de Tauri, fuera de git). Se mandan en el POST
+                a <code>/v2/check</code> solo cuando ambos están seteados.
+                <a href="https://languagetool.org/proofreading-api" target="_blank" rel="noopener">
+                  Sacar API key →
+                </a>
+              </p>
+            </div>
           }
         </div>
       </label>

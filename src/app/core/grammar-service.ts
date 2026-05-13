@@ -8,6 +8,8 @@ import { DebugService } from './debug-service';
 interface GrammarCfg {
   mode: GrammarMode;
   customUrl: string | null;
+  ltUsername: string | null;
+  ltApiKey: string | null;
   variantEs: string;
   variantEn: string;
 }
@@ -30,6 +32,8 @@ export class GrammarService {
   readonly lastError = signal<string | null>(null);
   readonly mode = this.settings.grammarMode;
   readonly customUrl = this.settings.grammarCustomUrl;
+  readonly ltUsername = this.settings.grammarLtUsername;
+  readonly ltApiKey = this.settings.grammarLtApiKey;
 
   readonly canAutoCheck = computed(() => this.mode() === 'local' || this.mode() === 'custom');
   /**
@@ -45,6 +49,8 @@ export class GrammarService {
     return {
       mode: this.mode(),
       customUrl: this.customUrl(),
+      ltUsername: this.ltUsername(),
+      ltApiKey: this.ltApiKey(),
       variantEs: this.sagaCtx.varianteEs() ?? this.settings.grammarVariantEs(),
       variantEn: this.sagaCtx.varianteEn() ?? this.settings.grammarVariantEn(),
     };
@@ -91,9 +97,25 @@ export class GrammarService {
     void this.settings.setGrammarAutoDisabled(!this.settings.grammarAutoDisabled());
   }
 
-  async setMode(mode: GrammarMode, customUrl?: string | null): Promise<void> {
-    await this.settings.setGrammarMode(mode, customUrl ?? null);
-    this.debug.info('grammar', `modo cambiado a "${mode}"`, customUrl ?? undefined);
+  async setMode(
+    mode: GrammarMode,
+    customUrl?: string | null,
+    ltUsername?: string | null,
+    ltApiKey?: string | null,
+  ): Promise<void> {
+    await this.settings.setGrammarMode(
+      mode,
+      customUrl ?? null,
+      ltUsername ?? null,
+      ltApiKey ?? null,
+    );
+    // NUNCA loggear el apiKey. Solo el username si está seteado.
+    const authNote = ltUsername ? ` (auth: ${ltUsername})` : '';
+    this.debug.info(
+      'grammar',
+      `modo cambiado a "${mode}"${authNote}`,
+      customUrl ?? undefined,
+    );
     await this.ping();
   }
 

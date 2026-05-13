@@ -33,6 +33,22 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub grammar_custom_url: Option<String>,
+    /// Credenciales opcionales para LanguageTool Premium o un servidor self-hosted
+    /// que requiera auth. Se mandan en el form POST junto a text+language solo
+    /// cuando `grammar_mode == "custom"`. Almacenadas en `settings.json` (per-user,
+    /// fuera de git).
+    #[serde(
+        default,
+        rename = "grammarLtUsername",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub grammar_lt_username: Option<String>,
+    #[serde(
+        default,
+        rename = "grammarLtApiKey",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub grammar_lt_api_key: Option<String>,
     #[serde(
         default,
         rename = "grammarVariantEs",

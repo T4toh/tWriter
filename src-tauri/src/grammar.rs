@@ -38,6 +38,11 @@ pub struct GrammarConfig {
     pub variant_es: Option<String>,
     #[serde(default, rename = "variantEn")]
     pub variant_en: Option<String>,
+    /// LanguageTool Premium / self-hosted con auth. Solo aplica si `mode == "custom"`.
+    #[serde(default, rename = "ltUsername")]
+    pub lt_username: Option<String>,
+    #[serde(default, rename = "ltApiKey")]
+    pub lt_api_key: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -234,6 +239,18 @@ async fn post_check(
     ];
     if lang == "auto" {
         params.push(("preferredVariants", preferred_variants(cfg)));
+    }
+    // Premium / self-hosted auth: solo en modo custom, ambos campos requeridos.
+    // NUNCA loggear el apiKey en plain text.
+    if cfg.mode == "custom" {
+        if let (Some(user), Some(key)) = (cfg.lt_username.as_deref(), cfg.lt_api_key.as_deref()) {
+            let user = user.trim();
+            let key = key.trim();
+            if !user.is_empty() && !key.is_empty() {
+                params.push(("username", user.to_string()));
+                params.push(("apiKey", key.to_string()));
+            }
+        }
     }
     let resp = client
         .post(&url)
