@@ -7,6 +7,10 @@ import { DIALOG_TAGS, TAGS_ALT, isDialogTag } from './tags';
 const EM_DASH = '—';
 const QUOTES_CHAR_CLASS = '["“”]';
 const SINGLE_QUOTES_CHAR_CLASS = "['‘’]";
+/** Word boundary unicode-safe: JS `\b` es ASCII-only y nunca matchea después de
+ *  letras acentuadas (preguntó, exclamó, susurró…). Usamos negative lookahead
+ *  Unicode-aware. Requiere flag `u` en el regex contenedor. */
+const NOT_LETTER = '(?!\\p{L})';
 
 export interface ConvertResult {
   text: string;
@@ -15,18 +19,45 @@ export interface ConvertResult {
 
 export function convert(text: string): ConvertResult {
   let result = normalizeQuotes(text);
-  const before = result;
   result = normalizeSpacingBeforeTags(result);
 
-  const lines = result.split('\n');
-  const converted: string[] = [];
-  for (const line of lines) {
-    converted.push(convertLine(line));
+  // Si el input tiene <p>…</p> (caso normal del editor TipTap), convertir cada
+  // párrafo de forma independiente. El converter original opera línea-por-línea
+  // asumiendo que cada diálogo está separado por `\n`; en HTML, cada diálogo
+  // está en su propio `<p>`. Sin esta normalización D1 sólo dispara para el
+  // primer diálogo del chapter porque `</p><p>` no es `\s+`.
+  if (/<p[\s>]/i.test(text) || /<br\s*\/?>/i.test(text)) {
+    // Cada <p>…</p> se procesa independiente; dentro de un <p> los <br>
+    // (Shift+Enter en TipTap) también son separadores de diálogo. Sin esto, una
+    // línea con varios diálogos pegados por <br> sólo convierte el primero.
+    result = result.replace(
+      /<p\b([^>]*)>([\s\S]*?)<\/p>/gi,
+      (_full, attrs: string, inner: string) => {
+        return `<p${attrs}>${convertBrSeparated(inner)}</p>`;
+      },
+    );
+    // Texto fuera de <p> (raro, pero por las dudas)
+    if (!/<p[\s>]/i.test(text)) {
+      result = convertBrSeparated(result);
+    }
+  } else {
+    const lines = result.split('\n');
+    const converted: string[] = [];
+    for (const line of lines) {
+      converted.push(convertLine(line));
+    }
+    result = converted.join('\n');
   }
-  const finalText = converted.join('\n');
-  // Heurística cantidad de cambios: comparar caracteres distintos por línea.
-  const changes = before === finalText ? 0 : 1;
-  return { text: finalText, changes };
+  const changes = text === result ? 0 : 1;
+  return { text: result, changes };
+}
+
+function convertBrSeparated(inner: string): string {
+  if (!/<br\s*\/?>/i.test(inner)) return convertLine(inner);
+  const parts = inner.split(/(<br\s*\/?>)/gi);
+  return parts
+    .map((p) => (/^<br\s*\/?>$/i.test(p) ? p : convertLine(p)))
+    .join('');
 }
 
 function normalizeQuotes(text: string): string {
@@ -67,8 +98,8 @@ function convertLine(line: string): string {
 
 function fixPunctuationBeforeTag(line: string): string {
   const re = new RegExp(
-    `"([^"]+)\\.\\s*"\\s+(${TAGS_ALT})\\b([^"]*?)\\.\\s+"([^"]+)"`,
-    'gi',
+    `"([^"]+)\\.\\s*"\\s+(${TAGS_ALT})${NOT_LETTER}([^"]*?)\\.\\s+"([^"]+)"`,
+    'giu',
   );
   return line.replace(re, (_, c1: string, verb: string, rest: string, c2: string) => {
     const content1 = c1.trim();
@@ -85,8 +116,8 @@ function fixPunctuationBeforeTag(line: string): string {
 function applyD3(line: string): string {
   // "texto1", verbo[ resto], "texto2"
   const re1 = new RegExp(
-    `"([^"]+)",\\s+(${TAGS_ALT})\\b([^,]*),\\s+"([^"]+)"`,
-    'gi',
+    `"([^"]+)",\\s+(${TAGS_ALT})${NOT_LETTER}([^,]*),\\s+"([^"]+)"`,
+    'giu',
   );
   let result = line.replace(re1, (_, t1: string, verb: string, rest: string, t2: string) => {
     const text1 = t1.trim();
@@ -100,8 +131,8 @@ function applyD3(line: string): string {
 
   // "texto1", verbo resto. "texto2"
   const re2 = new RegExp(
-    `"([^"]+)",\\s+(${TAGS_ALT})\\b([^"]*?)\\.\\s+"([^"]+)"`,
-    'gi',
+    `"([^"]+)",\\s+(${TAGS_ALT})${NOT_LETTER}([^"]*?)\\.\\s+"([^"]+)"`,
+    'giu',
   );
   result = result.replace(re2, (_, t1: string, verb: string, rest: string, t2: string) => {
     const text1 = t1.trim();
@@ -113,7 +144,48 @@ function applyD3(line: string): string {
       : `${EM_DASH}${text1} ${EM_DASH}${v}${EM_DASH}. ${text2}`;
   });
 
+  // NUEVO — pattern 3: "texto1" verbo[ resto], "texto2"
+  // (sin coma entre comilla y verbo: caso típico cuando texto1 termina en
+  // ?, !, … o cuando el usuario simplemente no separó con coma)
+  const re3 = new RegExp(
+    `"([^"]+)"\\s+(${TAGS_ALT})${NOT_LETTER}([^,"]*),\\s+"([^"]+)"`,
+    'giu',
+  );
+  result = result.replace(re3, (_, t1: string, verb: string, rest: string, t2: string) => {
+    const text1 = cleanText1(t1);
+    const v = verb.toLowerCase();
+    const verbRest = rest.trim();
+    const text2 = t2.trim();
+    return verbRest
+      ? `${EM_DASH}${text1} ${EM_DASH}${v} ${verbRest}${EM_DASH}, ${text2}`
+      : `${EM_DASH}${text1} ${EM_DASH}${v}${EM_DASH}, ${text2}`;
+  });
+
+  // NUEVO — pattern 4: "texto1" verbo[ resto]. "texto2"
+  // (cierre con punto + continuación, sin coma entre comilla y verbo)
+  const re4 = new RegExp(
+    `"([^"]+)"\\s+(${TAGS_ALT})${NOT_LETTER}([^"]*?)\\.\\s+"([^"]+)"`,
+    'giu',
+  );
+  result = result.replace(re4, (_, t1: string, verb: string, rest: string, t2: string) => {
+    const text1 = cleanText1(t1);
+    const v = verb.toLowerCase();
+    const verbRest = rest.trim();
+    const text2 = t2.trim();
+    return verbRest
+      ? `${EM_DASH}${text1} ${EM_DASH}${v} ${verbRest}${EM_DASH}. ${text2}`
+      : `${EM_DASH}${text1} ${EM_DASH}${v}${EM_DASH}. ${text2}`;
+  });
+
   return result;
+}
+
+/** Strip trailing periods (RAE: el punto antes del verbo dicendi desaparece);
+ *  preserva ?, !, … porque esos sí van adentro del diálogo. */
+function cleanText1(raw: string): string {
+  let t = raw.trim();
+  if (/[?!…]$/.test(t)) return t;
+  return t.replace(/\.+$/, '').trim();
 }
 
 /** D4: Narración intermedia sin verbo. */
@@ -124,7 +196,10 @@ function applyD4(line: string): string {
     for (const w of words) {
       if (isDialogTag(w)) return full;
     }
-    const text1 = t1.trim().replace(/\.+$/, '');
+    // RAE: cuando NO hay verbo dicendi, la puntuación final del diálogo
+    // se preserva. Ej: "Hola." Cerró la puerta. "Adiós." → —Hola. —Cerró la
+    // puerta—. Adiós. (el punto del "Hola" queda adentro de la raya).
+    const text1 = t1.trim();
     return `${EM_DASH}${text1} ${EM_DASH}${narration.trim()}${EM_DASH}. ${t2.trim()}`;
   });
 }
@@ -133,8 +208,8 @@ function applyD4(line: string): string {
 function applyD2(line: string): string {
   // Patrón 1: "texto" verbo
   const re1 = new RegExp(
-    `${QUOTES_CHAR_CLASS}([^"\\u201C\\u201D]+)${QUOTES_CHAR_CLASS}\\s+(${TAGS_ALT})\\b`,
-    'gi',
+    `${QUOTES_CHAR_CLASS}([^"\\u201C\\u201D]+)${QUOTES_CHAR_CLASS}\\s+(${TAGS_ALT})${NOT_LETTER}`,
+    'giu',
   );
   let result = line.replace(re1, (_, content: string, tag: string) => {
     const c = content;
@@ -147,7 +222,7 @@ function applyD2(line: string): string {
 
   // Patrón 2: "texto"[,. ]palabra → si palabra es dialog tag o nueva narración
   const re2 = new RegExp(
-    `${QUOTES_CHAR_CLASS}([^"\\u201C\\u201D]+)${QUOTES_CHAR_CLASS}([,.\\s]+)([A-ZÁÉÍÓÚÑ][a-záéíóúñ]*)\\b`,
+    `${QUOTES_CHAR_CLASS}([^"\\u201C\\u201D]+)${QUOTES_CHAR_CLASS}([,.\\s]+)([A-ZÁÉÍÓÚÑ][a-záéíóúñ]*)${NOT_LETTER}`,
     'gu',
   );
   if (result === line) {
@@ -168,8 +243,8 @@ function applyD2(line: string): string {
 
   // Patrón 3: comillas simples con verbo
   const re3 = new RegExp(
-    `${SINGLE_QUOTES_CHAR_CLASS}([^'\\u2018\\u2019]+)${SINGLE_QUOTES_CHAR_CLASS}\\s+(${TAGS_ALT})\\b`,
-    'gi',
+    `${SINGLE_QUOTES_CHAR_CLASS}([^'\\u2018\\u2019]+)${SINGLE_QUOTES_CHAR_CLASS}\\s+(${TAGS_ALT})${NOT_LETTER}`,
+    'giu',
   );
   result = result.replace(re3, (_, content: string, tag: string) => {
     const c = content;
@@ -231,8 +306,8 @@ function applyD5(line: string): string {
   for (const tag of DIALOG_TAGS) {
     if (
       new RegExp(
-        `${EM_DASH}${tag}\\b[^"]*?[\\.,]\\s*${QUOTES_CHAR_CLASS}`,
-        'i',
+        `${EM_DASH}${tag}${NOT_LETTER}[^"]*?[\\.,]\\s*${QUOTES_CHAR_CLASS}`,
+        'iu',
       ).test(line)
     ) {
       return line;

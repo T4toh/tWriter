@@ -10,7 +10,7 @@
       @switch (wizard.step()) {
         @case ('tipo') {
           <p class="step-desc">¿Qué vas a importar?</p>
-          <div class="tipo-grid">
+          <div class="tipo-grid tipo-grid-3">
             <button
               type="button"
               class="tipo-card"
@@ -29,7 +29,50 @@
               <strong>Novela suelta</strong>
               <span class="muted">Un libro único, va directo en la raíz del repo</span>
             </button>
+            <button
+              type="button"
+              class="tipo-card"
+              [class.selected]="wizard.tipo() === 'demo'"
+              (click)="setTipo('demo')"
+            >
+              <strong>Generar demo</strong>
+              <span class="muted">Crea una saga de ejemplo con 1 libro, 5 capítulos y 15 partes para probar la app</span>
+            </button>
           </div>
+        }
+
+        @case ('demo-config') {
+          <p class="step-desc">
+            Vamos a crear una saga de ejemplo en tu carpeta raíz. Son archivos normales:
+            <strong>podés editarlos, renombrarlos o borrarlos cuando quieras</strong>.
+          </p>
+          <fieldset class="iw-fieldset">
+            <legend>Demo</legend>
+            <label class="iw-field">
+              <span>Nombre de la saga</span>
+              <input
+                type="text"
+                [ngModel]="wizard.demoSagaName()"
+                (ngModelChange)="wizard.demoSagaName.set($event)"
+              />
+            </label>
+            <label class="iw-field">
+              <span>Idioma del contenido</span>
+              <app-select
+                [ngModel]="wizard.demoLang()"
+                (ngModelChange)="updateDemoLang($event)"
+                [options]="demoLangOptions"
+              />
+            </label>
+          </fieldset>
+          <div class="iw-info">
+            Se generarán: 1 saga, 1 libro, 5 capítulos × 3 partes (15 archivos <code>.html</code> con prosa
+            de ejemplo y diálogos en estilo RAE). Si ya existe una carpeta con ese nombre, se creará con
+            sufijo <code>(2)</code>.
+          </div>
+          @if (wizard.error(); as err) {
+            <div class="iw-error">{{ err }}</div>
+          }
         }
 
         @case ('source') {
@@ -502,13 +545,19 @@
         }
 
         @case ('completo') {
-          <p class="step-desc">Importación finalizada.</p>
+          <p class="step-desc">
+            {{ wizard.tipo() === 'demo' ? 'Demo generado.' : 'Importación finalizada.' }}
+          </p>
           @if (wizard.summary(); as s) {
             <div class="resumen">
               <p>✓ {{ s.created_dirs }} carpetas creadas</p>
-              <p>✓ {{ s.converted_chapters }} capítulos convertidos a HTML</p>
-              <p>✓ {{ s.copied_chapters }} capítulos copiados sin convertir</p>
-              <p>✓ {{ s.copied_extras }} archivos extras copiados</p>
+              @if (wizard.tipo() === 'demo') {
+                <p>✓ {{ s.copied_chapters }} archivos generados</p>
+              } @else {
+                <p>✓ {{ s.converted_chapters }} capítulos convertidos a HTML</p>
+                <p>✓ {{ s.copied_chapters }} capítulos copiados sin convertir</p>
+                <p>✓ {{ s.copied_extras }} archivos extras copiados</p>
+              }
               @if (s.failed.length > 0) {
                 <details class="failed-details" open>
                   <summary>{{ s.failed.length }} fallaron</summary>
@@ -520,6 +569,13 @@
                 </details>
               }
             </div>
+            @if (wizard.tipo() === 'demo') {
+              <div class="iw-info">
+                Listo. Abrí el árbol y explorá los capítulos. <strong>Los archivos son tuyos</strong> —
+                editá, renombrá, borrá o reemplazá lo que quieras. Probá aplicar RAE o el chequeo de
+                gramática sobre alguna parte.
+              </div>
+            }
           }
         }
       }
@@ -543,6 +599,14 @@
           >
             {{ wizard.scanning() ? 'Escaneando…' : 'Escanear' }}
           </button>
+        }
+        @case ('demo-config') {
+          <button
+            type="button"
+            class="btn btn-primary"
+            [disabled]="!wizard.canApply() || wizard.applying()"
+            (click)="runDemo()"
+          >Generar demo</button>
         }
         @case ('saga-config') {
           <button type="button" class="btn btn-primary" (click)="next()">Siguiente</button>

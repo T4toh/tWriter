@@ -1,6 +1,7 @@
 mod book_config;
 mod create;
 mod debug_bridge;
+mod demo_template;
 mod dialogs;
 mod epub;
 mod extras;
@@ -26,6 +27,7 @@ mod util;
 use book_config::{get_book_config, mark_as_epilogo, set_book_config};
 use saga_config::{find_saga_dir, get_saga_config, set_saga_config};
 use create::{create_book, create_chapter, create_directory};
+use demo_template::generate_demo_template;
 use dialogs::{pick_file, pick_folder};
 use epub::{export_book, list_exports};
 use extras::{add_extra, has_extras, list_extras, remove_extra, rename_extra};
@@ -133,6 +135,7 @@ pub fn run() {
             set_directory_excluded,
             scan_import_source,
             import_wizard_apply,
+            generate_demo_template,
             list_extras,
             has_extras,
             add_extra,

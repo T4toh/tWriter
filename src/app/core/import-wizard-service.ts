@@ -10,12 +10,17 @@ export type WizardStep =
   | 'tipo'
   | 'source'
   | 'saga-config'
+  | 'demo-config'
   | 'estructura'
   | 'metadata'
   | 'resumen'
   | 'progreso'
   | 'completo';
-export type SourceKind = 'saga' | 'book';
+export type SourceKind = 'saga' | 'book' | 'demo';
+export type DemoLang = 'es' | 'en';
+
+export const DEMO_DEFAULT_NAME_ES = 'Tu saga de fantasía';
+export const DEMO_DEFAULT_NAME_EN = 'Your fantasy saga';
 
 export interface SourceFile {
   path: string;
@@ -163,9 +168,13 @@ export class ImportWizardService {
   readonly sagaDirName = signal<string>('');
   readonly books = signal<EditableBook[]>([]);
 
+  readonly demoSagaName = signal<string>('');
+  readonly demoLang = signal<DemoLang>('es');
+
   readonly canApply = computed(() => {
     const root = this.settings.root();
     if (!root) return false;
+    if (this.tipo() === 'demo') return this.demoSagaName().trim().length > 0;
     if (this.books().length === 0) return false;
     return this.books().some((b) => b.include);
   });
@@ -195,11 +204,19 @@ export class ImportWizardService {
     this.sagaConfig.set({ nombre: '' });
     this.sagaDirName.set('');
     this.books.set([]);
+    this.demoSagaName.set('');
+    this.demoLang.set('es');
   }
 
   setTipo(kind: SourceKind): void {
     this.tipo.set(kind);
-    this.step.set('source');
+    if (kind === 'demo') {
+      this.demoSagaName.set(DEMO_DEFAULT_NAME_ES);
+      this.demoLang.set('es');
+      this.step.set('demo-config');
+    } else {
+      this.step.set('source');
+    }
   }
 
   async scan(path: string): Promise<void> {
@@ -380,6 +397,46 @@ export class ImportWizardService {
       titulo: c.titulo,
       idioma,
     };
+  }
+
+  async generateDemo(): Promise<void> {
+    const root = this.settings.root();
+    if (!root) {
+      this.error.set('No hay carpeta raíz seleccionada.');
+      return;
+    }
+    const sagaName = this.demoSagaName().trim();
+    if (!sagaName) {
+      this.error.set('Nombre de saga vacío.');
+      return;
+    }
+    this.applying.set(true);
+    this.error.set(null);
+    this.summary.set(null);
+    this.progress.set({ done: 0, total: 15, current: '' });
+    this.step.set('progreso');
+    await this.attachProgress();
+    this.debug.info('import-wizard', `generate demo iniciado (lang=${this.demoLang()})`, sagaName);
+    try {
+      const summary = await invoke<ImportSummary>('generate_demo_template', {
+        targetRoot: root,
+        sagaName,
+        lang: this.demoLang(),
+      });
+      this.summary.set(summary);
+      this.step.set('completo');
+      this.debug.info(
+        'import-wizard',
+        `demo listo (dirs:${summary.created_dirs} files:${summary.copied_chapters})`,
+      );
+    } catch (e) {
+      this.error.set(String(e));
+      this.step.set('demo-config');
+      this.debug.error('import-wizard', `demo falló`, String(e));
+    } finally {
+      this.applying.set(false);
+      this.detachProgress();
+    }
   }
 
   async apply(): Promise<void> {
