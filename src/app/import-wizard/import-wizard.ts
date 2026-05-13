@@ -7,6 +7,9 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
+  DEMO_DEFAULT_NAME_EN,
+  DEMO_DEFAULT_NAME_ES,
+  DemoLang,
   EditableBook,
   EditableSection,
   ImportWizardService,
@@ -33,13 +36,20 @@ export class ImportWizard {
   private project = inject(ProjectService);
 
   protected readonly stepIndex = computed(() => {
-    const isSaga = this.wizard.tipo() === 'saga';
-    const order: WizardStep[] = isSaga
-      ? ['tipo', 'source', 'saga-config', 'estructura', 'metadata', 'resumen', 'progreso', 'completo']
-      : ['tipo', 'source', 'estructura', 'metadata', 'resumen', 'progreso', 'completo'];
+    const tipo = this.wizard.tipo();
+    const order: WizardStep[] =
+      tipo === 'demo'
+        ? ['tipo', 'demo-config', 'progreso', 'completo']
+        : tipo === 'saga'
+          ? ['tipo', 'source', 'saga-config', 'estructura', 'metadata', 'resumen', 'progreso', 'completo']
+          : ['tipo', 'source', 'estructura', 'metadata', 'resumen', 'progreso', 'completo'];
     return order.indexOf(this.wizard.step()) + 1;
   });
-  protected readonly totalSteps = computed(() => (this.wizard.tipo() === 'saga' ? 6 : 5));
+  protected readonly totalSteps = computed(() => {
+    const t = this.wizard.tipo();
+    if (t === 'demo') return 2;
+    return t === 'saga' ? 6 : 5;
+  });
   protected readonly expandedBookIdx = signal<number | null>(0);
   protected readonly expandedSections = signal<Set<string>>(new Set());
 
@@ -67,6 +77,10 @@ export class ImportWizard {
     { value: 'raw', label: '1' },
     { value: 'parte', label: 'Parte 1' },
     { value: 'punto', label: '1.' },
+  ];
+  protected readonly demoLangOptions: SelectOption[] = [
+    { value: 'es', label: 'Español' },
+    { value: 'en', label: 'Inglés' },
   ];
 
   protected isSectionExpanded(path: string): boolean {
@@ -99,8 +113,9 @@ export class ImportWizard {
   }
 
   private mainOrder(): WizardStep[] {
-    const isSaga = this.wizard.tipo() === 'saga';
-    return isSaga
+    const tipo = this.wizard.tipo();
+    if (tipo === 'demo') return ['tipo', 'demo-config'];
+    return tipo === 'saga'
       ? ['tipo', 'source', 'saga-config', 'estructura', 'metadata', 'resumen']
       : ['tipo', 'source', 'estructura', 'metadata', 'resumen'];
   }
@@ -333,6 +348,29 @@ export class ImportWizard {
       ...c,
       [field]: value,
     }));
+  }
+
+  protected updateDemoLang(value: DemoLang | string): void {
+    const lang = (value === 'en' ? 'en' : 'es') as DemoLang;
+    const current = this.wizard.demoSagaName().trim();
+    const wasDefault = current === DEMO_DEFAULT_NAME_ES || current === DEMO_DEFAULT_NAME_EN || current === '';
+    this.wizard.demoLang.set(lang);
+    if (wasDefault) {
+      this.wizard.demoSagaName.set(lang === 'en' ? DEMO_DEFAULT_NAME_EN : DEMO_DEFAULT_NAME_ES);
+    }
+  }
+
+  protected async runDemo(): Promise<void> {
+    await this.wizard.generateDemo();
+    const sum = this.wizard.summary();
+    if (sum) {
+      if (sum.failed.length > 0) {
+        this.toast.warn(`Demo con errores: ${sum.failed.length} fallidos.`);
+      } else {
+        this.toast.success(`Demo generado: ${sum.created_dirs} carpetas, ${sum.copied_chapters} archivos.`);
+      }
+      void this.project.loadTree();
+    }
   }
 
   protected async runImport(): Promise<void> {

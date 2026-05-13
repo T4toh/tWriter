@@ -137,6 +137,14 @@ Reglas:
 ### Importer
 
 - Pandoc CLI shell-out (`.docx`/`.odt` → HTML subset). Single chapter o bulk.
+- **Generar demo** (mismo wizard 📥, tercer tipo): crea una saga de ejemplo con
+  1 libro, 5 capítulos × 3 partes (15 archivos `.html`) con prosa fantasy
+  hardcoded en ES o EN. Incluye diálogos en estilo RAE, `<em>`, `<strong>`,
+  `<hr class="scene-break"/>` y un `<blockquote>` para cubrir el subset HTML
+  del editor. Auto-sufijo `(N)` si el nombre ya existe. Contenido y estructura
+  viven en `src-tauri/src/demo_template.rs` + `src-tauri/src/demo_content/`.
+  Los archivos generados son normales — el usuario los puede editar, renombrar
+  o borrar como cualquier otro.
 - Wizard de importación de saga/novela (📥 en header): trae carpeta externa al repo con detección heurística de estructura, decisión per-carpeta sobre conversión, metadata de saga + libros, normalización de tapas y extras, progress bar con eventos.
 
 #### Notas externas
