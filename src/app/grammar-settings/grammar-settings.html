@@ -212,13 +212,31 @@
                   (ngModelChange)="ltUsername.set($event)"
                 />
               </label>
+
               <label class="gs-auth-field">
-                <span>API key (opcional)</span>
+                <span>
+                  API key (opcional)
+                  @if (apiKeyStatus(); as st) {
+                    @if (st.present && !clearKeyOnSave()) {
+                      <span class="gs-key-badge ok">
+                        @if (st.backend === 'keyring') {
+                          🔐 Guardada en keyring del sistema
+                        } @else {
+                          ⚠ Guardada en plaintext (sin keyring disponible)
+                        }
+                      </span>
+                    } @else if (clearKeyOnSave()) {
+                      <span class="gs-key-badge warn">⊘ se borra al aplicar</span>
+                    }
+                  }
+                </span>
                 <div class="gs-key-wrap">
                   <input
                     [type]="showApiKey() ? 'text' : 'password'"
                     class="gs-url"
-                    placeholder="dejá vacío si tu servidor no requiere auth"
+                    [placeholder]="apiKeyStatus()?.present && !clearKeyOnSave()
+                      ? '•••••••• (tipear para reemplazar)'
+                      : 'pegá tu API key acá'"
                     autocomplete="off"
                     spellcheck="false"
                     [ngModel]="ltApiKey()"
@@ -233,11 +251,40 @@
                     {{ showApiKey() ? '🙈' : '👁' }}
                   </button>
                 </div>
+
+                @if (apiKeyStatus()?.present && !clearKeyOnSave()) {
+                  <button
+                    type="button"
+                    class="gs-key-delete"
+                    (click)="markKeyForDeletion()"
+                  >
+                    Borrar API key guardada
+                  </button>
+                } @else if (clearKeyOnSave()) {
+                  <button
+                    type="button"
+                    class="gs-key-delete"
+                    (click)="undoKeyDeletion()"
+                  >
+                    Cancelar borrado
+                  </button>
+                }
               </label>
+
               <p class="gs-muted-note">
-                Los dos campos se guardan en tu <code>settings.json</code> local
-                (carpeta de config de Tauri, fuera de git). Se mandan en el POST
-                a <code>/v2/check</code> solo cuando ambos están seteados.
+                @if (apiKeyStatus()?.keyring_available) {
+                  <strong>🔐 Keyring del sistema disponible</strong> —
+                  el API key se guarda encriptado en libsecret / KWallet /
+                  Keychain / Credential Manager, no en disco.
+                } @else {
+                  <strong>⚠ Sin keyring del sistema</strong> — caemos a
+                  fallback plaintext en <code>secrets-fallback.json</code>
+                  (carpeta de config de Tauri, permisos 0600, fuera de git).
+                  Si querés cifrado real, activá <code>gnome-keyring-daemon</code>
+                  o <code>kwalletd6</code>.
+                }
+                <br />
+                El username queda en <code>settings.json</code> (no es sensible).
                 <a href="https://languagetool.org/proofreading-api" target="_blank" rel="noopener">
                   Sacar API key →
                 </a>

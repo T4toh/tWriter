@@ -9,6 +9,7 @@ interface GrammarCfg {
   mode: GrammarMode;
   customUrl: string | null;
   ltUsername: string | null;
+  /** Override transitorio para "Probar conexión" antes de persistir. En check normal va `null` y el backend lee del keyring. */
   ltApiKey: string | null;
   variantEs: string;
   variantEn: string;
@@ -19,6 +20,14 @@ export interface LtDockerStatus {
   container_running: boolean;
   container_exists: boolean;
   api_responding: boolean;
+}
+
+export type SecretBackend = 'keyring' | 'plain' | 'none';
+
+export interface SecretStatus {
+  present: boolean;
+  backend: SecretBackend;
+  keyring_available: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -33,7 +42,6 @@ export class GrammarService {
   readonly mode = this.settings.grammarMode;
   readonly customUrl = this.settings.grammarCustomUrl;
   readonly ltUsername = this.settings.grammarLtUsername;
-  readonly ltApiKey = this.settings.grammarLtApiKey;
 
   readonly canAutoCheck = computed(() => this.mode() === 'local' || this.mode() === 'custom');
   /**
@@ -50,7 +58,8 @@ export class GrammarService {
       mode: this.mode(),
       customUrl: this.customUrl(),
       ltUsername: this.ltUsername(),
-      ltApiKey: this.ltApiKey(),
+      // apiKey va `null` en flow normal — el backend la carga del keyring del OS.
+      ltApiKey: null,
       variantEs: this.sagaCtx.varianteEs() ?? this.settings.grammarVariantEs(),
       variantEn: this.sagaCtx.varianteEn() ?? this.settings.grammarVariantEn(),
     };
@@ -101,15 +110,8 @@ export class GrammarService {
     mode: GrammarMode,
     customUrl?: string | null,
     ltUsername?: string | null,
-    ltApiKey?: string | null,
   ): Promise<void> {
-    await this.settings.setGrammarMode(
-      mode,
-      customUrl ?? null,
-      ltUsername ?? null,
-      ltApiKey ?? null,
-    );
-    // NUNCA loggear el apiKey. Solo el username si está seteado.
+    await this.settings.setGrammarMode(mode, customUrl ?? null, ltUsername ?? null);
     const authNote = ltUsername ? ` (auth: ${ltUsername})` : '';
     this.debug.info(
       'grammar',
@@ -117,6 +119,16 @@ export class GrammarService {
       customUrl ?? undefined,
     );
     await this.ping();
+  }
+
+  /** Estado del apiKey en el keyring del OS (presente / backend / disponibilidad). Nunca devuelve el valor. */
+  async apiKeyStatus(): Promise<SecretStatus> {
+    return invoke<SecretStatus>('lt_api_key_status');
+  }
+
+  /** Guarda o borra el apiKey (valor vacío = borrar). Va al keyring; si no hay, cae a plain con warning. */
+  async saveApiKey(value: string): Promise<SecretStatus> {
+    return invoke<SecretStatus>('lt_api_key_save', { value });
   }
 
   async dockerStatus(): Promise<LtDockerStatus> {

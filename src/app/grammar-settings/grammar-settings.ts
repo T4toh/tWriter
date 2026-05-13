@@ -8,7 +8,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { GrammarService, LtDockerStatus } from '../core/grammar-service';
+import { GrammarService, LtDockerStatus, SecretStatus } from '../core/grammar-service';
 import { SettingsService } from '../core/settings-service';
 import { Select } from '../shared/select';
 import { GrammarMode } from '../core/types';
@@ -36,8 +36,11 @@ export class GrammarSettings {
   protected readonly mode = signal<GrammarMode>('public');
   protected readonly customUrl = signal<string>('');
   protected readonly ltUsername = signal<string>('');
+  /** Buffer del input. Cuando hay key guardada en el keyring, queda vacío hasta que el usuario tipea para reemplazar. */
   protected readonly ltApiKey = signal<string>('');
   protected readonly showApiKey = signal<boolean>(false);
+  protected readonly apiKeyStatus = signal<SecretStatus | null>(null);
+  protected readonly clearKeyOnSave = signal<boolean>(false);
   protected readonly variantEs = signal<string>('es-AR');
   protected readonly variantEn = signal<string>('en-US');
   protected readonly testing = signal<boolean>(false);
@@ -55,8 +58,10 @@ export class GrammarSettings {
         this.mode.set(this.grammar.mode());
         this.customUrl.set(this.grammar.customUrl() ?? '');
         this.ltUsername.set(this.grammar.ltUsername() ?? '');
-        this.ltApiKey.set(this.grammar.ltApiKey() ?? '');
+        this.ltApiKey.set('');
         this.showApiKey.set(false);
+        this.clearKeyOnSave.set(false);
+        void this.refreshApiKeyStatus();
         this.variantEs.set(this.settings.grammarVariantEs());
         this.variantEn.set(this.settings.grammarVariantEn());
         this.testResult.set(null);
@@ -67,6 +72,23 @@ export class GrammarSettings {
         this.detachProgressListener();
       }
     });
+  }
+
+  protected async refreshApiKeyStatus(): Promise<void> {
+    try {
+      this.apiKeyStatus.set(await this.grammar.apiKeyStatus());
+    } catch {
+      this.apiKeyStatus.set(null);
+    }
+  }
+
+  protected markKeyForDeletion(): void {
+    this.clearKeyOnSave.set(true);
+    this.ltApiKey.set('');
+  }
+
+  protected undoKeyDeletion(): void {
+    this.clearKeyOnSave.set(false);
   }
 
   protected async refreshDockerStatus(): Promise<void> {
@@ -153,6 +175,8 @@ export class GrammarSettings {
     this.testing.set(true);
     this.testResult.set(null);
     try {
+      // El test usa el apiKey del input (override transitorio). Si está vacío y
+      // hay key guardada en el keyring, el backend la usa.
       const cfg = {
         mode: this.mode(),
         customUrl: this.customUrl().trim() || null,
@@ -175,9 +199,20 @@ export class GrammarSettings {
     try {
       const url = this.customUrl().trim() || null;
       const user = this.ltUsername().trim() || null;
-      const key = this.ltApiKey().trim() || null;
+      const newKey = this.ltApiKey().trim();
       await this.settings.setGrammarVariants(this.variantEs(), this.variantEn());
-      await this.grammar.setMode(this.mode(), url, user, key);
+      await this.grammar.setMode(this.mode(), url, user);
+
+      // apiKey va al keyring por separado. Solo tocar si:
+      //   - usuario tipeó algo nuevo → guardar
+      //   - usuario clickeó "borrar key" → mandar string vacío
+      if (newKey) {
+        await this.grammar.saveApiKey(newKey);
+      } else if (this.clearKeyOnSave()) {
+        await this.grammar.saveApiKey('');
+      }
+
+      await this.grammar.ping();
       this.close();
     } finally {
       this.saving.set(false);

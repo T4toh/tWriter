@@ -16,6 +16,7 @@ mod notes;
 mod reorder;
 mod saga_config;
 mod search;
+mod secrets;
 mod settings;
 mod storage;
 mod theme;
@@ -45,6 +46,7 @@ use import_wizard::{import_wizard_apply, scan_import_source};
 use notes::{create_folder, create_note, delete_note, read_note, write_note};
 use reorder::move_node;
 use search::{search_query, search_reindex};
+use secrets::{lt_api_key_save, lt_api_key_status};
 use settings::{get_settings, set_settings};
 use storage::detect_storage_backend;
 use themes::{
@@ -160,6 +162,8 @@ pub fn run() {
             search_reindex,
             joplin_scan,
             joplin_import_apply,
+            lt_api_key_status,
+            lt_api_key_save,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

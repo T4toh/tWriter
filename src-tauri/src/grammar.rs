@@ -5,6 +5,8 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use tokio::time::sleep;
 
+use crate::secrets;
+
 const LT_CONTAINER: &str = "twriter-languagetool";
 const LT_IMAGE: &str = "erikvl87/languagetool:latest";
 
@@ -29,7 +31,7 @@ pub struct GrammarMatch {
     pub replacements: Vec<String>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Clone)]
 pub struct GrammarConfig {
     pub mode: String,
     #[serde(default, rename = "customUrl")]
@@ -41,8 +43,26 @@ pub struct GrammarConfig {
     /// LanguageTool Premium / self-hosted con auth. Solo aplica si `mode == "custom"`.
     #[serde(default, rename = "ltUsername")]
     pub lt_username: Option<String>,
+    /// Override transitorio del apiKey, solo usado por el modal de gramática para
+    /// poder hacer "Probar conexión" antes de persistir. En operación normal
+    /// (check_grammar de cada chunk) este campo viene `None` y el backend lo
+    /// carga del keyring del OS vía `secrets::load_lt_api_key`.
     #[serde(default, rename = "ltApiKey")]
     pub lt_api_key: Option<String>,
+}
+
+// Debug manual: nunca exponer el apiKey en logs ni snapshots.
+impl std::fmt::Debug for GrammarConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GrammarConfig")
+            .field("mode", &self.mode)
+            .field("custom_url", &self.custom_url)
+            .field("variant_es", &self.variant_es)
+            .field("variant_en", &self.variant_en)
+            .field("lt_username", &self.lt_username)
+            .field("lt_api_key", &self.lt_api_key.as_ref().map(|_| "***"))
+            .finish()
+    }
 }
 
 #[derive(Deserialize)]
@@ -177,6 +197,7 @@ pub async fn check_grammar_available(cfg: GrammarConfig) -> bool {
 
 #[tauri::command]
 pub async fn check_grammar(
+    app: AppHandle,
     text: String,
     lang: String,
     cfg: GrammarConfig,
@@ -196,9 +217,20 @@ pub async fn check_grammar(
             format!("HTTP client: {}", e)
         })?;
 
+    // Para modo custom, si cfg no trae apiKey transitorio, cargamos del keyring.
+    let resolved_key = if cfg.mode == "custom" && cfg.lt_api_key.is_none() {
+        secrets::load_lt_api_key(&app)
+    } else {
+        cfg.lt_api_key.clone()
+    };
+    let cfg_with_key = GrammarConfig {
+        lt_api_key: resolved_key,
+        ..cfg
+    };
+
     let mut all_matches: Vec<GrammarMatch> = Vec::new();
     for (i, chunk) in chunks.iter().enumerate() {
-        if cfg.mode == "public" {
+        if cfg_with_key.mode == "public" {
             let mut bug = PUBLIC_BUDGET
                 .lock()
                 .map_err(|_| "lock envenenado".to_string())?;
@@ -208,7 +240,7 @@ pub async fn check_grammar(
         if i > 0 {
             sleep(Duration::from_millis(250)).await;
         }
-        let matches = post_check(&client, &base, &chunk.text, &lang_code, &cfg).await?;
+        let matches = post_check(&client, &base, &chunk.text, &lang_code, &cfg_with_key).await?;
         for m in matches {
             all_matches.push(GrammarMatch {
                 offset: m.offset + chunk.start,
