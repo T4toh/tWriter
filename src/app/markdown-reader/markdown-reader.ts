@@ -16,6 +16,8 @@ import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
 import { Markdown } from 'tiptap-markdown';
 import { MarkdownReaderService } from '../core/markdown-reader-service';
+import { SearchService } from '../core/search-service';
+import { highlightFirstMatch } from '../core/search-highlight';
 import { SettingsService } from '../core/settings-service';
 
 @Component({
@@ -26,6 +28,7 @@ import { SettingsService } from '../core/settings-service';
 export class MarkdownReader implements AfterViewInit, OnDestroy {
   private svc = inject(MarkdownReaderService);
   private settings = inject(SettingsService);
+  private search = inject(SearchService);
 
   @ViewChild('host', { static: true })
   hostRef!: ElementRef<HTMLDivElement>;
@@ -83,6 +86,17 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
         this.tiptap.commands.setContent(md, { emitUpdate: false });
       }
       this.lastLoadedAt = at;
+
+      // Si hay un highlight pendiente para esta nota (viene de Ctrl+F),
+      // saltar al primer match después del flush del DOM.
+      if (target.path) {
+        const pending = this.search.consumePendingHighlight(target.path);
+        if (pending) {
+          setTimeout(() => {
+            highlightFirstMatch(this.hostRef.nativeElement, pending.terms);
+          }, 0);
+        }
+      }
     });
   }
 

@@ -18,6 +18,8 @@ import TextAlign from '@tiptap/extension-text-align';
 import { ChapterService, PaneId } from '../core/chapter-service';
 import { SagaContextService } from '../core/saga-context-service';
 import { GrammarService } from '../core/grammar-service';
+import { SearchService } from '../core/search-service';
+import { highlightFirstMatch } from '../core/search-highlight';
 import { PARAGRAPH_SPACING_EM, SettingsService } from '../core/settings-service';
 import { GrammarMatch } from '../core/types';
 import { convert as convertRae } from '../dialogos/converter';
@@ -71,6 +73,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected grammar = inject(GrammarService);
   protected sagaCtx = inject(SagaContextService);
   private ctxMenu = inject(ContextMenuService);
+  private search = inject(SearchService);
 
   /** Pane que renderiza este editor. Default 0 = principal. 1 = secundario (split). */
   readonly paneId = input<PaneId>(0);
@@ -186,6 +189,17 @@ export class Editor implements AfterViewInit, OnDestroy {
       }
       this.lastLoadedAt = at;
       this.refreshState();
+
+      // Si hay un highlight pendiente para este capítulo (viene de Ctrl+F),
+      // saltar al primer match. setTimeout 0 para esperar el flush del DOM.
+      if (node?.path) {
+        const pending = this.search.consumePendingHighlight(node.path);
+        if (pending) {
+          setTimeout(() => {
+            highlightFirstMatch(this.hostRef.nativeElement, pending.terms);
+          }, 0);
+        }
+      }
 
       // Si el auto-check está prendido, lanzar el chequeo del nuevo capítulo
       // de inmediato (sin debounce) para que las marcas reaparezcan rápido y

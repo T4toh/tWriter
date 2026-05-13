@@ -1,0 +1,156 @@
+@if (wizard.open()) {
+  <div class="ij-backdrop" (click)="close()"></div>
+  <div class="ij-modal" (click)="$event.stopPropagation()">
+    <header class="ij-header">
+      <h2>Importar notas (Joplin)</h2>
+      <p class="step-pill">Paso {{ stepIndex() }} / {{ totalSteps() }}</p>
+    </header>
+
+    <div class="ij-body">
+      @switch (wizard.step()) {
+        @case ('source') {
+          <p class="step-desc">
+            Elegí la carpeta del export Markdown de Joplin
+            (<code>File → Export all → MD - Markdown</code>).
+          </p>
+          <div class="ij-source-row">
+            <button type="button" class="btn btn-secondary" (click)="pickSource()" [disabled]="wizard.scanning()">
+              {{ wizard.sourcePath() ? 'Cambiar carpeta' : 'Elegir carpeta…' }}
+            </button>
+            @if (wizard.sourcePath(); as p) {
+              <code class="ij-path">{{ p }}</code>
+            }
+          </div>
+          @if (wizard.scanning()) {
+            <p class="ij-status">Escaneando…</p>
+          }
+          @if (wizard.error(); as err) {
+            <p class="ij-error">{{ err }}</p>
+          }
+          <p class="ij-hint">
+            La carpeta puede tener cualquier estructura: <code>_resources/</code> y
+            otras carpetas que empiecen con <code>.</code> se ignoran.
+          </p>
+        }
+
+        @case ('preview') {
+          @if (wizard.preview(); as p) {
+            <div class="ij-summary-grid">
+              <div class="ij-stat">
+                <span class="ij-stat-num">{{ p.total_notes }}</span>
+                <span class="ij-stat-label">notas .md</span>
+              </div>
+              <div class="ij-stat">
+                <span class="ij-stat-num">{{ p.total_folders }}</span>
+                <span class="ij-stat-label">carpetas</span>
+              </div>
+              <div class="ij-stat">
+                <span class="ij-stat-num">{{ formatBytes(p.total_bytes) }}</span>
+                <span class="ij-stat-label">total</span>
+              </div>
+              <div class="ij-stat" [class.warn]="p.empty_notes > 0">
+                <span class="ij-stat-num">{{ p.empty_notes }}</span>
+                <span class="ij-stat-label">vacías</span>
+              </div>
+            </div>
+
+            <fieldset class="ij-fieldset">
+              <legend>Destino</legend>
+              <label class="ij-field">
+                <span>Carpeta dentro del repo</span>
+                <div class="ij-dest-row">
+                  <code class="ij-root">{{ settings.root() }}/</code>
+                  <input
+                    type="text"
+                    name="destSubdir"
+                    [ngModel]="wizard.destSubdir()"
+                    (ngModelChange)="wizard.destSubdir.set($event)"
+                  />
+                </div>
+              </label>
+            </fieldset>
+
+            <fieldset class="ij-fieldset">
+              <legend>Opciones</legend>
+              <label class="ij-checkbox">
+                <input
+                  type="checkbox"
+                  name="skipEmpty"
+                  [ngModel]="wizard.skipEmpty()"
+                  (ngModelChange)="wizard.skipEmpty.set($event)"
+                />
+                <span>Saltar notas vacías ({{ p.empty_notes }} archivos)</span>
+              </label>
+              <label class="ij-field">
+                <span>Si ya existe un archivo con ese nombre</span>
+                <select
+                  name="onConflict"
+                  [ngModel]="wizard.onConflict()"
+                  (ngModelChange)="wizard.onConflict.set($event)"
+                >
+                  <option value="suffix">Agregar sufijo (-2.md, -3.md…)</option>
+                  <option value="skip">Saltar (no copiar)</option>
+                  <option value="overwrite">Sobrescribir</option>
+                </select>
+              </label>
+            </fieldset>
+
+            @if (wizard.error(); as err) {
+              <p class="ij-error">{{ err }}</p>
+            }
+          }
+        }
+
+        @case ('progreso') {
+          <p class="step-desc">Copiando notas…</p>
+          @if (wizard.progress(); as pr) {
+            <div class="ij-progress">
+              <div class="ij-progress-text">
+                {{ pr.done }} / {{ pr.total }} — {{ pr.current }}
+              </div>
+              <div class="ij-progress-bar">
+                <div class="ij-progress-fill"
+                  [style.width.%]="pr.total > 0 ? (pr.done / pr.total) * 100 : 0">
+                </div>
+              </div>
+            </div>
+          }
+        }
+
+        @case ('completo') {
+          @if (wizard.result(); as r) {
+            <div class="ij-done">
+              <h3>Listo</h3>
+              <ul>
+                <li>Copiadas: <strong>{{ r.copied }}</strong></li>
+                <li>Saltadas: <strong>{{ r.skipped }}</strong></li>
+                <li>Conflictos resueltos: <strong>{{ r.conflicts }}</strong></li>
+              </ul>
+              <p class="ij-hint">
+                Destino: <code>{{ r.dest_root }}</code>
+              </p>
+              <p class="ij-hint">
+                Las notas se indexaron para Ctrl+F automáticamente.
+              </p>
+            </div>
+          }
+        }
+      }
+    </div>
+
+    <footer class="ij-footer">
+      @if (wizard.step() === 'preview') {
+        <button type="button" class="btn btn-secondary" (click)="back()" [disabled]="wizard.applying()">
+          Volver
+        </button>
+        <button type="button" class="btn btn-primary" (click)="apply()" [disabled]="wizard.applying() || !wizard.preview()">
+          Importar {{ wizard.preview()?.total_notes ?? 0 }} notas
+        </button>
+      } @else if (wizard.step() === 'completo') {
+        <button type="button" class="btn btn-primary" (click)="close()">Cerrar</button>
+      } @else if (wizard.step() === 'source') {
+        <button type="button" class="btn btn-secondary" (click)="close()">Cancelar</button>
+      }
+    </footer>
+  </div>
+}

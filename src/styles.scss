@@ -41,3 +41,28 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* ───── Flash de búsqueda (jump-to-term) ─────
+ * Aplicado al elemento padre del primer match cuando el usuario clickea
+ * un resultado en el panel de búsqueda. La selección nativa del browser
+ * desaparece al mover el cursor; este flash dura 2.5s y queda claro.
+ */
+@keyframes twriter-search-flash {
+  0% {
+    background: rgba(255, 220, 80, 0.55);
+    box-shadow: 0 0 0 4px rgba(255, 220, 80, 0.35);
+  }
+  20% {
+    background: rgba(255, 220, 80, 0.55);
+    box-shadow: 0 0 0 4px rgba(255, 220, 80, 0.35);
+  }
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+.search-flash {
+  animation: twriter-search-flash 2.5s ease-out 1;
+  border-radius: 3px;
+}

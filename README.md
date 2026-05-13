@@ -10,21 +10,26 @@ Las novelas viven en un repo privado aparte (HTML + JSON). Esta app es solo el e
 
 Cada saga/libro en el repo de novelas sigue una convención canónica para
 distinguir capítulos (lo que va al EPUB) de extras (manuscritos viejos, mapas,
-glosarios, tapas alternativas) y notas (research — feature futura).
+glosarios, tapas alternativas) y notas (research / worldbuilding).
 
 ```
 <root>/
+  README.md                        # opcional, visible en GitHub, oculto en la app
   themes/                          # opcional, temas reutilizables
     <id>/
       theme.json                   # { body_font, body_size, heading_font, heading_size, line_height, page_margin }
       fonts/                       # .ttf/.otf/.woff/.woff2
+  <carpeta-libre>/                 # opcional, kind: folder — notas y subcarpetas sueltas
+    <cualquier-archivo>.md         # notas markdown
+    <subcarpeta>/                  # recursivo
+  <cualquier-archivo>.md           # opcional, notas sueltas en root
   <saga>/
     saga.json
     cover.{jpg,png,jpeg,webp}      # opcional, tapa de la serie
     extras/                        # opcional, mapas/glosarios saga-level
       <cualquier-archivo>
     fonts/                         # opcional, override de fuentes per-saga
-    notas/                         # RESERVADO (feature futura)
+    notas/                         # opcional, notas saga-level (📒)
     <libro>/
       book.json
       cover.{jpg,png,jpeg,webp}    # opcional
@@ -32,7 +37,7 @@ glosarios, tapas alternativas) y notas (research — feature futura).
       extras/                      # opcional, manuscritos/refs book-level
         <cualquier-archivo>
       fonts/                       # opcional, override de fuentes per-libro
-      notas/                       # RESERVADO (feature futura)
+      notas/                       # opcional, notas book-level
       <n>.html + <n>.meta.json     # capítulos
       <sección>?/<n>.html          # capítulos en secciones
 ```
@@ -44,8 +49,15 @@ Reglas:
   filesystem.
 - `extras/` es flat. Podés crear subcarpetas si querés; la app no impone
   taxonomía. Cualquier tipo de archivo entra (imagen, docx, odt, txt, md, pdf).
-- `extras/`, `notas/`, `fonts/` y `themes/` quedan auto-excluidos del export
-  EPUB y del walk del tree. No necesitan `.twriter-ignore`.
+- `extras/`, `notas/`, `fonts/`, `themes/` y `.twriter/` (índice de búsqueda)
+  quedan auto-excluidos del export EPUB y del walk del tree. No necesitan
+  `.twriter-ignore`.
+- `README.md` y `.gitignore` en root tampoco aparecen en el tree (sirven para
+  GitHub, no para la app).
+- Carpetas en root sin `saga.json`/`book.json` y sin capítulos `.html`/`.odt`/`.docx`
+  se tratan como **carpetas libres** (`kind: folder`, 📁). Contienen notas `.md`
+  y subcarpetas recursivas para organización libre (worldbuilding, research, etc.).
+  No participan del TOC ni del EPUB.
 - Para libros standalone (sin saga padre), el layout del libro es idéntico —
   `<book>/cover.*`, `<book>/extras/`, `<book>/fonts/`, etc.
 - `themes/` vive solo en la raíz del repo. Cada tema es autocontenido (su
@@ -72,22 +84,37 @@ Reglas:
 - Editor separado para `.md` con TipTap + `tiptap-markdown` (no toca el flow de capítulos HTML).
 - Toolbar: B/I/S/code inline + H1/H2/H3 + listas bullet/numerada + blockquote + code block + hr. Sin RAE, LT ni idioma.
 - Convivencia con capítulos: mutex de un solo editor a la vez. El icono y footer marcan claramente "Nota".
-- `.md` aparecen en cualquier ubicación del árbol (saga, libro, sección, root); las carpetas `<saga>/notas/` y `<book>/notas/` se renderizan como 📒 expandibles.
+- `.md` aparecen en cualquier ubicación del árbol (root, carpeta libre, saga, libro, sección); las carpetas `<saga>/notas/` y `<book>/notas/` se renderizan como 📒 expandibles. Carpetas libres en root (sin saga.json/book.json) se renderizan como 📁.
+- Creación libre en root: click derecho en el área vacía del tree → "Nueva carpeta…" o "Nueva nota…" arman estructura paralela al TOC para worldbuilding/research. Click derecho sobre una carpeta 📁 permite anidar recursivo.
 - `notas/` y los `.md` quedan auto-excluidos del export EPUB y de la vista de tarjetas (la vista de tarjetas es para contenido del libro).
 - "Nueva nota…" desde context menu de saga/libro/carpeta `notas/` (autocrea el dir si no existe).
 - `.md` que viven en `extras/` también abren en este editor (no en `xdg-open`).
-- **Reader en panel derecho**: Shift+click sobre `.md` (en `notas/` o `extras/`) o context menu "Abrir en panel derecho" abre la nota como render read-only al costado, sin desplazar al capítulo del centro. Botón ✏️ promueve la nota al editor del centro para editar; 🗙 cierra. Mutex con image viewer y font preview.
+- **Reader en panel derecho**: click sobre `.md` (en `notas/` o `extras/`) abre la nota como render read-only al costado, sin desplazar al capítulo del centro. Botón ✏️ promueve la nota al editor del centro para editar; 🗙 cierra. Mutex con image viewer y font preview.
+- **Doble click** sobre `.md` abre directamente en el editor central (ahorra el click+✏️ del reader). Shift+click también. Mismo comportamiento en resultados de búsqueda y en archivos `.md` que vivan en `extras/`.
 - **Ancho del panel derecho**: botón en el header del reader cicla 4 presets (compacto 280px / normal 380px / ancho 560px / pantalla — oculta el centro). Persiste en `settings.json::rightPanelWidth`.
 
 ### Tree explorer
 
-- Jerarquía Saga / Libro / Sección / Capítulo + Notas + carpetas `notas/`.
-- Context menu: crear, mover, renombrar, importar, exportar EPUB, configurar libro, excluir del EPUB. Para notas: abrir, renombrar, borrar.
+- Jerarquía Saga / Libro / Sección / Capítulo + Notas + carpetas `notas/` + carpetas libres 📁 en root.
+- Context menu: crear, mover, renombrar, importar, exportar EPUB, configurar libro, excluir del EPUB. Para notas: abrir, renombrar, borrar. Para carpetas libres: nueva nota, nueva carpeta, renombrar, borrar.
+- Right-click en área vacía del tree → "Crear saga / novela", "Nueva carpeta…" (📁 libre), "Nueva nota…" (`.md` suelta).
 - Reorder de capítulos via context menu (↑ subir / ↓ bajar).
 - Archivos no-chapter visibles en el tree con íconos por tipo (🖼 imagen, 📄 documento, 📝 texto, 📦 otro). Notas con 📝 y badge `.md`.
 - Template inicial precargado (saga/libro/capítulo dummy) al crear sagas/libros nuevos.
 - Badge "excluido" para `.twriter-ignore`.
 - Selector de carpeta raíz persistido + auto-load del último capítulo abierto.
+
+### Búsqueda (Ctrl+F)
+
+- Panel lateral con full-text search sobre notas (`.md`) + capítulos (`.html`) + títulos de carpetas (sagas/libros/secciones/folders/notas).
+- Backend: [tantivy](https://github.com/quickwit-oss/tantivy) (in-process, sin servicio externo). Índice persistido en `<root>/.twriter/search-index/` — auto-excluido del tree y del export EPUB.
+- **Reindex incremental on-save**: cada `write_note` / `write_chapter` / `create_*` actualiza el índice de ese archivo. Render fresco en la próxima query, sin reindex manual.
+- **Reindex full** al boot si hay root configurado (async, no bloquea startup). Botón ↻ en el header del panel relanza un reindex completo si hace falta.
+- Resultados rankeados por relevancia (BM25), con snippet centrado en el primer match y highlight `<mark>` de los términos.
+- Click en un resultado: capítulo → abre en el editor central; nota → reader derecho (Shift+click la abre en el notes-editor central); carpeta → expande el árbol y navega.
+- **Jump-to-term**: al clickear un hit, el editor/reader hace scroll automático al primer match dentro del contenido y selecciona el término (selección nativa del browser). Cualquier movimiento del cursor la limpia. Funciona en chapter editor, notes editor y markdown reader vía DOM `TreeWalker` (sin depender de TipTap commands).
+- HTML strip simple para indexar capítulos (tags `<p>`, `<em>`, `<strong>`, etc. se desnudan a texto plano). El render del snippet sigue siendo texto + highlight, sin re-renderizar HTML.
+- Mutex con image-viewer / font-preview / markdown-reader: el panel de búsqueda usa el mismo slot derecho y cierra a los otros tres cuando se abre.
 
 ### Conversor RAE
 
@@ -110,6 +137,22 @@ Reglas:
 
 - Pandoc CLI shell-out (`.docx`/`.odt` → HTML subset). Single chapter o bulk.
 - Wizard de importación de saga/novela (📥 en header): trae carpeta externa al repo con detección heurística de estructura, decisión per-carpeta sobre conversión, metadata de saga + libros, normalización de tapas y extras, progress bar con eventos.
+
+#### Notas externas
+
+Botón 📝 en el header del tree abre un wizard separado para traer notas markdown de fuentes externas, preservando la jerarquía de carpetas.
+
+- **Joplin (Markdown export)**: en Joplin `File → Export all → MD - Markdown`. Apuntá el wizard a la carpeta exportada, elegí destino dentro del repo (default = nombre del folder source) y opciones:
+  - **Saltar notas vacías**: omite `.md` con 0 bytes o contenido sólo whitespace.
+  - **Conflicto de nombre**: sufijo (`nota-2.md`), saltar, o sobrescribir.
+- La estructura de carpetas se preserva 1:1. `_resources/` y carpetas que empiezan con `.` se ignoran (Joplin no exporta los adjuntos de imagen en este formato).
+- Las notas copiadas se indexan automáticamente para Ctrl+F al terminar.
+
+**Arquitectura extensible** — backend en `src-tauri/src/import_notes.rs` con trait `NoteImporter { id, name, scan, apply }`. Para sumar un source nuevo (Obsidian, Notion, Bear, Logseq, Markdown plano):
+
+1. Implementar el trait con `scan` (devuelve `ImportPreview`) y `apply` (copia + emite `<id>-import-progress`).
+2. Exponer comandos Tauri `<id>_scan` y `<id>_import_apply`.
+3. Crear servicio + componente frontend siguiendo el patrón de `import-joplin-service.ts` / `import-joplin/`.
 
 ### Extras + covers
 
@@ -285,15 +328,16 @@ paru -S twriter-bin
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
 - Drag & drop reorder de capítulos (hoy solo via context menu ↑/↓).
-- Sidebar derecho de research / vista global de notas con búsqueda (el reader de `.md` en el panel derecho ya existe; falta el panel agregador con búsqueda full-text).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
+- Operadores en la búsqueda (AND, OR, "frase exacta" entre comillas, filtros por kind). Hoy parsea como query libre con BM25.
 
 ### Tree / Importer
 
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Borrar entradas individuales del diccionario per-saga desde UI (hoy se editan en bloque vía textarea del modal de configuración; agregar funciona desde el popover de typos).
-- Importer dedicado de Joplin (parsea metadata propia + adjuntos). Para `.md` simples sin metadata, copialos directo a `<saga>/notas/` o `<book>/notas/` y aparecen en el árbol.
+- Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
+- Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
 
 ### EPUB
 

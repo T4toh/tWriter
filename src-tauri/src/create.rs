@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::book_config::BookConfig;
 use crate::saga_config::SagaConfig;
+use crate::search;
 
 #[derive(Serialize, Debug)]
 pub struct CreateResult {
@@ -57,9 +58,9 @@ fn create_chapter_impl(
     fs::write(&meta, serde_json::to_string_pretty(&meta_json).unwrap_or_default())
         .map_err(|e| e.to_string())?;
     tracing::info!(target: "create", path = %html.display(), idioma = %lang, "capítulo creado");
-    Ok(CreateResult {
-        path: html.to_string_lossy().into_owned(),
-    })
+    let path_str = html.to_string_lossy().into_owned();
+    search::index_path_best_effort(&path_str, "chapter");
+    Ok(CreateResult { path: path_str })
 }
 
 /// Crea un directorio dentro de `parent_dir` con `name`.

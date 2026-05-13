@@ -2,6 +2,8 @@ use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::search;
+
 #[derive(Serialize, Debug)]
 pub struct CreateNoteResult {
     pub path: String,
@@ -54,6 +56,7 @@ pub fn write_note(path: String, content: String) -> Result<(), String> {
         e.to_string()
     })?;
     tracing::info!(target: "note", path = %path, bytes, "nota guardada");
+    search::index_path_best_effort(&path, "note");
     Ok(())
 }
 
@@ -103,9 +106,9 @@ pub fn create_note(parent_dir: String, name: String) -> Result<CreateNoteResult,
         e.to_string()
     })?;
     tracing::info!(target: "note", path = %target.display(), "nota creada");
-    Ok(CreateNoteResult {
-        path: target.to_string_lossy().into_owned(),
-    })
+    let result_path = target.to_string_lossy().into_owned();
+    search::index_path_best_effort(&result_path, "note");
+    Ok(CreateNoteResult { path: result_path })
 }
 
 #[tauri::command]
@@ -122,7 +125,40 @@ pub fn delete_note(path: String) -> Result<(), String> {
         e.to_string()
     })?;
     tracing::info!(target: "note", path = %path, "nota borrada");
+    search::remove_path_best_effort(&path);
     Ok(())
+}
+
+/// Crea una carpeta vacía `<parent_dir>/<name>/`. Si `parent_dir` no existe, lo crea
+/// recursivo. Usado desde el tree para crear carpetas libres en root o anidadas.
+#[tauri::command]
+pub fn create_folder(parent_dir: String, name: String) -> Result<String, String> {
+    let parent = PathBuf::from(&parent_dir);
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("nombre vacío".to_string());
+    }
+    if trimmed.contains('/') || trimmed.contains('\\') {
+        return Err("nombre no puede contener separadores de path".to_string());
+    }
+    if !parent.exists() {
+        fs::create_dir_all(&parent).map_err(|e| {
+            tracing::error!(target: "note", path = %parent_dir, error = %e, "create_folder: no pude crear carpeta padre");
+            e.to_string()
+        })?;
+    } else if !parent.is_dir() {
+        return Err(format!("no es directorio: {}", parent.display()));
+    }
+    let target = parent.join(trimmed);
+    if target.exists() {
+        return Err(format!("ya existe: {}", target.display()));
+    }
+    fs::create_dir(&target).map_err(|e| {
+        tracing::error!(target: "note", path = %target.display(), error = %e, "create_folder falló");
+        e.to_string()
+    })?;
+    tracing::info!(target: "note", path = %target.display(), "carpeta creada");
+    Ok(target.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]
@@ -165,6 +201,33 @@ mod tests {
         let dir = tmp_dir("reject");
         let file = dir.join("nope.txt");
         assert!(write_note(file.to_string_lossy().into_owned(), "x".into()).is_err());
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn create_folder_makes_dir() {
+        let dir = tmp_dir("create-folder");
+        let res = create_folder(dir.to_string_lossy().into_owned(), "Worldbuilding".into()).unwrap();
+        let created = PathBuf::from(&res);
+        assert!(created.is_dir());
+        assert!(res.ends_with("Worldbuilding"));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn create_folder_rejects_separators() {
+        let dir = tmp_dir("folder-sep");
+        let res = create_folder(dir.to_string_lossy().into_owned(), "a/b".into());
+        assert!(res.is_err());
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn create_folder_rejects_existing() {
+        let dir = tmp_dir("folder-existing");
+        create_folder(dir.to_string_lossy().into_owned(), "Worldbuilding".into()).unwrap();
+        let res = create_folder(dir.to_string_lossy().into_owned(), "Worldbuilding".into());
+        assert!(res.is_err());
         fs::remove_dir_all(&dir).ok();
     }
 }

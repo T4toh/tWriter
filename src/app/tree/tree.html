@@ -63,10 +63,11 @@
       type="button"
       class="row note"
       [class.active]="node.path === activePath()"
-      [title]="node.path + ' — Shift+click para editar, arrastrá al centro para split'"
+      [title]="node.path + ' — doble click o Shift+click para editar, arrastrá al centro para split'"
       [style.padding-left.px]="8 + depth * 14"
       draggable="true"
       (click)="select(node, $event)"
+      (dblclick)="openNoteInEditor(node)"
       (contextmenu)="onContextMenu($event, node)"
       (dragstart)="onNodeDragStart($event, node)"
       (dragend)="onNodeDragEnd()"
@@ -89,6 +90,35 @@
     >
       <span class="chevron">{{ isExpanded(node) ? '▾' : '▸' }}</span>
       <span class="icon">📒</span>
+      <span class="name">{{ node.name }}</span>
+      @if (node.children.length > 0) {
+        <span class="ext">{{ node.children.length }}</span>
+      }
+    </button>
+    @if (isExpanded(node)) {
+      @for (child of node.children; track child.path) {
+        <ng-container
+          *ngTemplateOutlet="
+            nodeTpl;
+            context: { $implicit: child, depth: depth + 1 }
+          "
+        />
+      }
+    }
+  } @else if (node.kind === 'folder') {
+    <button
+      type="button"
+      class="row group folder"
+      [class.current]="node.path === currentPath()"
+      [class.ancestor]="ancestorPaths().has(node.path)"
+      [attr.data-kind]="node.kind"
+      [style.padding-left.px]="8 + depth * 14"
+      (click)="toggle(node)"
+      (contextmenu)="onContextMenu($event, node)"
+      [title]="node.path"
+    >
+      <span class="chevron">{{ isExpanded(node) ? '▾' : '▸' }}</span>
+      <span class="icon">📁</span>
       <span class="name">{{ node.name }}</span>
       @if (node.children.length > 0) {
         <span class="ext">{{ node.children.length }}</span>
@@ -219,6 +249,7 @@
           [attr.data-extra-scope]="scopePath"
           [style.padding-left.px]="8 + (depth + 1) * 14"
           (click)="openExtraEntry(scopePath, entry, $event)"
+          (dblclick)="openExtraInEditor(scopePath, entry)"
           (contextmenu)="onExtraContextMenu($event, scopePath, entry)"
           [title]="entry.relative_path"
         >

@@ -70,12 +70,13 @@
 }
 
 .panel-left header {
-  padding: 0.6rem 0.75rem;
+  height: 41px;
+  box-sizing: border-box;
+  padding: 0 0.75rem;
   font-family: var(--font-ui);
   border-bottom: 1px solid var(--border);
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
   flex-shrink: 0;
 }
 
@@ -83,6 +84,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .title {
