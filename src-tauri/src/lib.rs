@@ -17,6 +17,7 @@ mod reorder;
 mod saga_config;
 mod search;
 mod settings;
+mod storage;
 mod theme;
 mod themes;
 mod util;
@@ -45,6 +46,7 @@ use notes::{create_folder, create_note, delete_note, read_note, write_note};
 use reorder::move_node;
 use search::{search_query, search_reindex};
 use settings::{get_settings, set_settings};
+use storage::detect_storage_backend;
 use themes::{
     add_theme_font, create_theme, delete_theme, duplicate_theme, get_theme, list_font_usage,
     list_theme_fonts, list_themes, remove_theme_font, rename_theme, rename_theme_font, set_theme,
@@ -98,6 +100,7 @@ pub fn run() {
             git_commit_all,
             git_push,
             git_pull,
+            detect_storage_backend,
             import_chapter,
             delete_chapter_file,
             delete_directory,

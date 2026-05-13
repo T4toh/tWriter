@@ -251,6 +251,72 @@
   }
 }
 
+.backend-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--border);
+  color: var(--fg);
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+
+  &[data-backend='dropbox'] {
+    background: #0061ff;
+    color: white;
+  }
+  &[data-backend='pcloud'] {
+    background: #17bed0;
+    color: white;
+  }
+  &[data-backend='nextcloud'] {
+    background: #0082c9;
+    color: white;
+  }
+  &[data-backend='onedrive'] {
+    background: #0364b8;
+    color: white;
+  }
+  &[data-backend='gdrive'] {
+    background: #1a73e8;
+    color: white;
+  }
+  &[data-backend='icloud'] {
+    background: #3693f3;
+    color: white;
+  }
+  &[data-backend='sync'] {
+    background: #20bf6b;
+    color: white;
+  }
+  &[data-backend='mega'] {
+    background: #d9272e;
+    color: white;
+  }
+  &[data-backend='local'] {
+    background: var(--bg-soft);
+    color: var(--fg-muted);
+    border: 1px solid var(--border);
+  }
+}
+
+.icon-btn-mini {
+  min-width: 18px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: 11px;
+  opacity: 0.7;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
 .actions-footer {
   margin-top: 2px;
   gap: 4px;

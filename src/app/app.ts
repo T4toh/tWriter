@@ -5,6 +5,8 @@ import { FontPreviewService } from './core/font-preview-service';
 import { MarkdownReaderService } from './core/markdown-reader-service';
 import { NoteService } from './core/note-service';
 import { GitService } from './core/git-service';
+import { StorageService } from './core/storage-service';
+import { StorageHelpService } from './core/storage-help-service';
 import { GrammarService } from './core/grammar-service';
 import { ImageViewerService } from './core/image-viewer-service';
 import { ImportJoplinService } from './core/import-joplin-service';
@@ -32,6 +34,7 @@ import { GrammarSettings } from './grammar-settings/grammar-settings';
 import { ImportJoplin } from './import-joplin/import-joplin';
 import { ImportWizard } from './import-wizard/import-wizard';
 import { UpdateBanner } from './update-banner/update-banner';
+import { StorageHelpModal } from './storage-help/storage-help-modal';
 import { Spinner } from './shared/spinner';
 import { ModalHost } from './shared/modal-host';
 import { ModalService } from './shared/modal-service';
@@ -41,7 +44,7 @@ import { TreeNode } from './core/types';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, ToastContainer, GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, Spinner, ModalHost, ContextMenuHost],
+  imports: [Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, ToastContainer, GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, Spinner, ModalHost, ContextMenuHost],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -59,6 +62,8 @@ export class App {
   protected chapter = inject(ChapterService);
   protected note = inject(NoteService);
   protected git = inject(GitService);
+  protected storage = inject(StorageService);
+  protected storageHelp = inject(StorageHelpService);
   protected debug = inject(DebugService);
   protected paneSplit = inject(PaneSplitService);
   private grammar = inject(GrammarService);

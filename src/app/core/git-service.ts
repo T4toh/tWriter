@@ -1,6 +1,7 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { SettingsService } from './settings-service';
+import { StorageService } from './storage-service';
 
 export interface GitStatus {
   has_changes: boolean;
@@ -31,6 +32,7 @@ const AUTO_COMMIT_MS = 5 * 60_000;
 @Injectable({ providedIn: 'root' })
 export class GitService {
   private settings = inject(SettingsService);
+  private storage = inject(StorageService);
 
   readonly status = signal<GitStatus | null>(null);
   readonly currentOp = signal<'sync' | 'pull' | null>(null);
@@ -63,12 +65,13 @@ export class GitService {
   constructor() {
     effect(() => {
       const root = this.settings.root();
+      const isGit = this.storage.isGit();
       this.stopTimers();
-      if (root) {
+      this.status.set(null);
+      this.error.set(null);
+      if (root && isGit) {
         void this.refreshStatus();
         this.startTimers();
-      } else {
-        this.status.set(null);
       }
     });
   }
