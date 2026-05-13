@@ -162,6 +162,21 @@ export class NoteService {
     }
   }
 
+  /** Crea `<parentDir>/<name>/` y refresca el tree. No abre nada. */
+  async createFolder(parentDir: string, name: string): Promise<string | null> {
+    try {
+      const path = await invoke<string>('create_folder', { parentDir, name });
+      this.debug.info('note', `Carpeta creada: ${path}`);
+      await this.project.loadTree();
+      void this.git.refreshStatus();
+      return path;
+    } catch (err) {
+      this.debug.error('note', String(err));
+      this.panes[0].error.set(String(err));
+      throw err;
+    }
+  }
+
   async deleteNote(target: NoteTarget): Promise<boolean> {
     try {
       await invoke('delete_note', { path: target.path });

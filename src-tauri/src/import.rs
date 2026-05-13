@@ -312,7 +312,11 @@ fn delete_impl(path: &str) -> Result<DeleteResult, String> {
 
     let mut deleted = Vec::new();
     fs::remove_file(&p).map_err(|e| e.to_string())?;
-    deleted.push(p.to_string_lossy().into_owned());
+    let removed_path = p.to_string_lossy().into_owned();
+    if ext == "html" {
+        crate::search::remove_path_best_effort(&removed_path);
+    }
+    deleted.push(removed_path);
 
     // Borrar .meta.json huérfano si:
     //  - estamos borrando un .html → siempre
@@ -362,7 +366,11 @@ fn delete_dir_impl(root: &str, target: &str) -> Result<(), String> {
         return Err(format!("target está fuera de root ({})", root));
     }
 
-    fs::remove_dir_all(&target_p).map_err(|e| e.to_string())
+    fs::remove_dir_all(&target_p).map_err(|e| e.to_string())?;
+    // Best-effort: el directorio borrado puede tener chapters/notes indexados.
+    // Removemos solo el path raíz; el reindex full reconcilia eventualmente.
+    crate::search::remove_path_best_effort(&target_p.to_string_lossy());
+    Ok(())
 }
 
 #[allow(dead_code)]

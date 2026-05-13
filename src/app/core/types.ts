@@ -1,4 +1,4 @@
-export type NodeKind = 'saga' | 'book' | 'section' | 'chapter' | 'note' | 'notes';
+export type NodeKind = 'saga' | 'book' | 'section' | 'chapter' | 'note' | 'notes' | 'folder';
 
 export interface TreeNode {
   name: string;

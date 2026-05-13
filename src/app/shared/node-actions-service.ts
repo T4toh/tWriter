@@ -66,11 +66,60 @@ export class NodeActionsService {
       ];
     }
     if (node.kind === 'notes') {
+      // La carpeta `notas/` directa de saga/book se detecta por nombre exacto en
+      // el backend; renombrarla la convierte en `Folder` genérica al re-cargar
+      // el tree (las .md adentro siguen viéndose). Para subcarpetas anidadas
+      // (`notas/<sub>/`) el rename es totalmente seguro.
+      const isRootNotesDir = node.name === 'notas';
+      const entries: CtxMenuEntry[] = [
+        {
+          label: 'Nueva nota…',
+          kbd: '.md',
+          onClick: () => this.createNoteIn(node.path),
+        },
+        {
+          label: 'Nueva carpeta…',
+          kbd: '📒',
+          onClick: () => this.createFolderIn(node.path),
+        },
+        { kind: 'separator' },
+      ];
+      if (!isRootNotesDir) {
+        entries.push({
+          label: 'Renombrar…',
+          kbd: 'F2',
+          onClick: () => this.renameNode(node),
+        });
+      }
+      entries.push(
+        { kind: 'separator' },
+        {
+          label: isRootNotesDir ? 'Borrar carpeta notas' : 'Borrar carpeta',
+          danger: true,
+          onClick: () => this.deleteDir(node),
+        },
+      );
+      return entries;
+    }
+    if (node.kind === 'folder') {
       return [
         {
           label: 'Nueva nota…',
           kbd: '.md',
           onClick: () => this.createNoteIn(node.path),
+        },
+        {
+          label: 'Nueva carpeta…',
+          kbd: '📁',
+          onClick: () => this.createFolderIn(node.path),
+        },
+        { kind: 'separator' },
+        { label: 'Renombrar…', kbd: 'F2', onClick: () => this.renameNode(node) },
+        { kind: 'separator' },
+        {
+          label: 'Borrar carpeta',
+          danger: true,
+          onClick: () => this.deleteDir(node),
         },
       ];
     }
@@ -280,8 +329,22 @@ export class NodeActionsService {
   }
 
   buildEmptyMenu(): CtxMenuEntry[] {
-    if (!this.settings.root()) return [];
-    return [{ label: 'Crear saga / novela', onClick: () => this.createSaga() }];
+    const root = this.settings.root();
+    if (!root) return [];
+    return [
+      { label: 'Crear saga / novela', onClick: () => this.createSaga() },
+      { kind: 'separator' },
+      {
+        label: 'Nueva carpeta…',
+        kbd: '📁',
+        onClick: () => this.createFolderIn(root),
+      },
+      {
+        label: 'Nueva nota…',
+        kbd: '.md',
+        onClick: () => this.createNoteIn(root),
+      },
+    ];
   }
 
   buildThemeMenu(theme: ThemeMeta): CtxMenuEntry[] {
@@ -579,6 +642,26 @@ export class NodeActionsService {
     });
     if (!name?.trim()) return;
     await this.note.createNote(parentDir, name.trim());
+  }
+
+  async createFolderIn(parentDir: string): Promise<void> {
+    const name = await this.modal.prompt({
+      title: 'Nueva carpeta',
+      message: 'Carpeta libre para organizar notas. No afecta el EPUB.',
+      placeholder: 'Worldbuilding',
+      validate: (v) => {
+        const t = v.trim();
+        if (!t) return 'Nombre vacío';
+        if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
+        return null;
+      },
+    });
+    if (!name?.trim()) return;
+    try {
+      await this.note.createFolder(parentDir, name.trim());
+    } catch (e) {
+      this.toast.error(`No se pudo crear: ${e}`);
+    }
   }
 
   async renameExtra(scopePath: string, entry: ExtraEntry): Promise<void> {

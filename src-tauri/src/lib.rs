@@ -10,10 +10,12 @@ mod git;
 mod grammar;
 mod image;
 mod import;
+mod import_notes;
 mod import_wizard;
 mod notes;
 mod reorder;
 mod saga_config;
+mod search;
 mod settings;
 mod theme;
 mod themes;
@@ -37,9 +39,11 @@ use grammar::{
 };
 use image::read_image;
 use import::{delete_chapter_file, delete_directory, import_chapter};
+use import_notes::{joplin_import_apply, joplin_scan};
 use import_wizard::{import_wizard_apply, scan_import_source};
-use notes::{create_note, delete_note, read_note, write_note};
+use notes::{create_folder, create_note, delete_note, read_note, write_note};
 use reorder::move_node;
+use search::{search_query, search_reindex};
 use settings::{get_settings, set_settings};
 use themes::{
     add_theme_font, create_theme, delete_theme, duplicate_theme, get_theme, list_font_usage,
@@ -51,8 +55,31 @@ pub fn run() {
     debug_bridge::init_tracing();
     tauri::Builder::default()
         .setup(|app| {
-            debug_bridge::set_app_handle(app.handle().clone());
+            let handle = app.handle().clone();
+            debug_bridge::set_app_handle(handle.clone());
             tracing::info!(target: "boot", "tWriter listo");
+            // Auto-init search index si hay root configurado. Best-effort.
+            tauri::async_runtime::spawn(async move {
+                let cfg = match settings::get_settings(handle.clone()) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        tracing::warn!(target: "search", error = %e, "no pude leer settings al boot");
+                        return;
+                    }
+                };
+                let Some(root) = cfg.root else { return; };
+                let handle_for_blocking = handle.clone();
+                let _ = tauri::async_runtime::spawn_blocking(move || {
+                    let mut emit_cb = move |p: search::ReindexProgress| {
+                        let _ = tauri::Emitter::emit(&handle_for_blocking, "search-reindex-progress", p);
+                    };
+                    let r = std::path::PathBuf::from(&root);
+                    if let Err(e) = search::full_reindex(&r, Some(&mut emit_cb)) {
+                        tracing::warn!(target: "search", error = %e, "reindex boot falló");
+                    }
+                })
+                .await;
+            });
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
@@ -80,6 +107,7 @@ pub fn run() {
             read_note,
             write_note,
             create_note,
+            create_folder,
             delete_note,
             move_node,
             export_book,
@@ -125,6 +153,10 @@ pub fn run() {
             list_font_usage,
             pick_folder,
             pick_file,
+            search_query,
+            search_reindex,
+            joplin_scan,
+            joplin_import_apply,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

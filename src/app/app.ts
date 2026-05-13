@@ -7,10 +7,12 @@ import { NoteService } from './core/note-service';
 import { GitService } from './core/git-service';
 import { GrammarService } from './core/grammar-service';
 import { ImageViewerService } from './core/image-viewer-service';
+import { ImportJoplinService } from './core/import-joplin-service';
 import { ImportWizardService } from './core/import-wizard-service';
 import { PaneSplitService } from './core/pane-split-service';
 import { ProjectService } from './core/project-service';
 import { RustLogBridge } from './core/rust-log-bridge';
+import { SearchService } from './core/search-service';
 import { SettingsService } from './core/settings-service';
 import { ToastService } from './core/toast-service';
 import { UpdaterService } from './core/updater-service';
@@ -24,8 +26,10 @@ import { ThemeEditorModal } from './theme-editor/theme-editor-modal';
 import { ImageViewer } from './image-viewer/image-viewer';
 import { FontPreview } from './font-preview/font-preview';
 import { MarkdownReader } from './markdown-reader/markdown-reader';
+import { SearchPanel } from './search-panel/search-panel';
 import { ToastContainer } from './toast/toast-container';
 import { GrammarSettings } from './grammar-settings/grammar-settings';
+import { ImportJoplin } from './import-joplin/import-joplin';
 import { ImportWizard } from './import-wizard/import-wizard';
 import { UpdateBanner } from './update-banner/update-banner';
 import { Spinner } from './shared/spinner';
@@ -37,16 +41,18 @@ import { TreeNode } from './core/types';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, ToastContainer, GrammarSettings, ImportWizard, UpdateBanner, Spinner, ModalHost, ContextMenuHost],
+  imports: [Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, ToastContainer, GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, Spinner, ModalHost, ContextMenuHost],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
 export class App {
   @ViewChild(GrammarSettings) private grammarSettings?: GrammarSettings;
   protected importWizard = inject(ImportWizardService);
+  protected importJoplin = inject(ImportJoplinService);
   protected imageViewer = inject(ImageViewerService);
   protected fontPreview = inject(FontPreviewService);
   protected markdownReader = inject(MarkdownReaderService);
+  protected search = inject(SearchService);
 
   private project = inject(ProjectService);
   protected settings = inject(SettingsService);
@@ -130,6 +136,15 @@ export class App {
       if (this.markdownReader.viewing()) {
         this.imageViewer.close();
         this.fontPreview.close();
+        this.search.hide();
+      }
+    });
+    // Mutex: search panel cierra image/font/md y viceversa.
+    effect(() => {
+      if (this.search.open()) {
+        this.imageViewer.close();
+        this.fontPreview.close();
+        this.markdownReader.close();
       }
     });
     effect(() => {
@@ -216,6 +231,10 @@ export class App {
     this.importWizard.show();
   }
 
+  protected openImportJoplin(): void {
+    this.importJoplin.show();
+  }
+
   @HostListener('document:contextmenu', ['$event'])
   protected onGlobalContextMenu(event: MouseEvent): void {
     if (event.defaultPrevented) return;
@@ -226,6 +245,16 @@ export class App {
   protected onF11(event: Event): void {
     event.preventDefault();
     this.settings.toggleFocusMode();
+  }
+
+  @HostListener('window:keydown.control.f', ['$event'])
+  protected onCtrlF(event: Event): void {
+    event.preventDefault();
+    this.search.toggle();
+  }
+
+  protected toggleSearch(): void {
+    this.search.toggle();
   }
 
   @HostListener('window:keydown.Escape')

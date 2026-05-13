@@ -225,6 +225,11 @@ export class Tree implements OnDestroy {
     void this.actions.openExtra(scopePath, entry);
   }
 
+  protected openExtraInEditor(scopePath: string, entry: ExtraEntry): void {
+    if (!isMarkdownExt(entry.ext)) return;
+    void this.actions.openExtra(scopePath, entry);
+  }
+
   // ───── Fonts (single root pool) ─────
 
   /** Path del pool global de fuentes (<root>). null si no hay root elegido. */
@@ -456,6 +461,15 @@ export class Tree implements OnDestroy {
       // Reader en panel derecho — no toca el centro ni la navegación.
       await this.actions.openMdInReader({ path: node.path, name: node.name });
     }
+  }
+
+  /** Double-click: abre la nota en el editor central, ahorrando el "click + ✏️"
+   *  del reader. Mismo efecto que Shift+click. */
+  protected async openNoteInEditor(node: TreeNode): Promise<void> {
+    if (node.kind !== 'note') return;
+    const parentPath = node.path.replace(/\/[^/]+$/, '');
+    this.nav.setBrowsing(parentPath);
+    await this.note.open({ path: node.path, name: node.name });
   }
 
   // ───── Context menus (delegan al NodeActionsService) ─────

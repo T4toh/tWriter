@@ -17,6 +17,8 @@ import Typography from '@tiptap/extension-typography';
 import { Markdown } from 'tiptap-markdown';
 import { PaneId } from '../core/chapter-service';
 import { NoteService } from '../core/note-service';
+import { SearchService } from '../core/search-service';
+import { highlightFirstMatch } from '../core/search-highlight';
 import { PARAGRAPH_SPACING_EM, SettingsService } from '../core/settings-service';
 import {
   ContextMenuService,
@@ -66,6 +68,7 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
   protected note = inject(NoteService);
   protected settings = inject(SettingsService);
   private ctxMenu = inject(ContextMenuService);
+  private search = inject(SearchService);
 
   readonly paneId = input<PaneId>(0);
 
@@ -126,6 +129,16 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
       }
       this.lastLoadedAt = at;
       this.refreshState();
+
+      // Highlight pendiente desde Ctrl+F: salta al primer match.
+      if (target?.path) {
+        const pending = this.search.consumePendingHighlight(target.path);
+        if (pending) {
+          setTimeout(() => {
+            highlightFirstMatch(this.hostRef.nativeElement, pending.terms);
+          }, 0);
+        }
+      }
     });
   }
 

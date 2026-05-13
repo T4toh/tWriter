@@ -4,6 +4,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::search;
+
 const SKIP_DIRS: &[&str] = &[
     "convertidos",
     "Revisiones",
@@ -14,10 +16,13 @@ const SKIP_DIRS: &[&str] = &[
     "extras",
     "fonts",
     "themes",
+    ".twriter",
 ];
 const CHAPTER_EXTS: &[&str] = &["html", "odt", "docx"];
 const NOTE_EXTS: &[&str] = &["md", "markdown"];
 const NOTES_DIR_NAME: &str = "notas";
+/// Archivos sueltos en root que NO aparecen en el tree (visible en GitHub, invisible en la app).
+const ROOT_SKIP_FILES: &[&str] = &["README.md", "README.markdown", ".twriter-ignore", ".gitignore"];
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -29,6 +34,9 @@ pub enum NodeKind {
     Note,
     /// Carpeta `notas/` (o sub-carpeta dentro). Tiene Notes y/o NotesFolders como children.
     Notes,
+    /// Carpeta genérica en root (o anidada en otra Folder) sin `saga.json`/`book.json` y
+    /// sin capítulos. Contiene notas `.md` y sub-carpetas libres.
+    Folder,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -132,6 +140,7 @@ pub fn write_chapter(path: String, html: String) -> Result<(), String> {
         e.to_string()
     })?;
     tracing::info!(target: "fs", path = %path, bytes, "capítulo guardado");
+    search::index_path_best_effort(&path, "chapter");
     Ok(())
 }
 
@@ -174,6 +183,9 @@ pub fn rename_node(path: String, new_name: String) -> Result<String, String> {
             e.to_string()
         })?;
         tracing::info!(target: "fs", from = %path, to = %target.display(), "directorio renombrado");
+        // Rename de directorio mueve descendientes — más seguro pedir reindex full.
+        // No bloqueamos; el frontend puede disparar reindex si lo necesita.
+        search::remove_path_best_effort(&path);
         return Ok(target.to_string_lossy().into_owned());
     }
     if !p.is_file() {
@@ -205,6 +217,16 @@ pub fn rename_node(path: String, new_name: String) -> Result<String, String> {
         e.to_string()
     })?;
     tracing::info!(target: "fs", from = %path, to = %target.display(), "archivo renombrado");
+    search::remove_path_best_effort(&path);
+    let kind_hint = match old_ext.as_deref() {
+        Some("html") => Some("chapter"),
+        Some("md") | Some("markdown") => Some("note"),
+        _ => None,
+    };
+    if let Some(k) = kind_hint {
+        let new_path_str = target.to_string_lossy().into_owned();
+        search::index_path_best_effort(&new_path_str, k);
+    }
     let old_meta = parent.join(format!("{}.meta.json", old_stem));
     if old_meta.is_file() {
         let new_stem = PathBuf::from(&new_filename)
@@ -247,6 +269,7 @@ fn meta_path_for(chapter_path: &str) -> PathBuf {
 fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
     let mut out = Vec::new();
     let mut loose_notes = Vec::new();
+    let mut loose_folders = Vec::new();
     for entry in read_sorted_entries(root)? {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -255,6 +278,9 @@ fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
             Err(_) => continue,
         };
         if ft.is_file() {
+            if ROOT_SKIP_FILES.contains(&name.as_str()) {
+                continue;
+            }
             if let Some(node) = note_node(&path) {
                 loose_notes.push(node);
             }
@@ -319,9 +345,25 @@ fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
                     children,
                 });
             }
+            NodeKind::Folder => {
+                let children = list_folder_contents(&path)?;
+                let modified_ms = max_child_mtime(&children);
+                loose_folders.push(TreeNode {
+                    name,
+                    path: path.to_string_lossy().into_owned(),
+                    kind: NodeKind::Folder,
+                    ext: None,
+                    editable: None,
+                    modified_ms,
+                    word_count: None,
+                    excluded: None,
+                    children,
+                });
+            }
             _ => {}
         }
     }
+    out.append(&mut loose_folders);
     out.append(&mut loose_notes);
     Ok(out)
 }
@@ -476,6 +518,53 @@ fn notes_folder_node(path: &Path, name: String) -> Result<TreeNode, String> {
     })
 }
 
+/// Walk recursivo dentro de una carpeta genérica (kind: Folder). Devuelve sub-folders,
+/// carpetas `notas/`, y notas `.md` sueltas. NO desciende a sagas/books anidados —
+/// esas estructuras solo se reconocen en root.
+fn list_folder_contents(dir: &Path) -> Result<Vec<TreeNode>, String> {
+    let mut subdirs = Vec::new();
+    let mut files = Vec::new();
+    for entry in read_sorted_entries(dir)? {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let ft = match entry.file_type() {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        if ft.is_dir() {
+            if should_skip_dir(&name) {
+                continue;
+            }
+            if is_excluded_dir(&path) {
+                continue;
+            }
+            if name == NOTES_DIR_NAME {
+                subdirs.push(notes_folder_node(&path, name)?);
+                continue;
+            }
+            let children = list_folder_contents(&path)?;
+            let modified_ms = max_child_mtime(&children);
+            subdirs.push(TreeNode {
+                name,
+                path: path.to_string_lossy().into_owned(),
+                kind: NodeKind::Folder,
+                ext: None,
+                editable: None,
+                modified_ms,
+                word_count: None,
+                excluded: None,
+                children,
+            });
+        } else if ft.is_file() {
+            if let Some(node) = note_node(&path) {
+                files.push(node);
+            }
+        }
+    }
+    subdirs.append(&mut files);
+    Ok(subdirs)
+}
+
 /// Walk recursivo dentro de una carpeta `notas/`. Devuelve Notes (sub-dirs) y Notes hojas (`.md`).
 fn list_notes_dir(dir: &Path) -> Result<Vec<TreeNode>, String> {
     let mut subdirs = Vec::new();
@@ -607,6 +696,7 @@ fn classify_top_level(dir: &Path) -> NodeKind {
     }
     // Heurística: si los subdirs contienen subdirs o capítulos, es saga.
     // Si los subdirs son secciones (con capítulos adentro) o hay capítulos directos, es book.
+    // Si NO hay nada de eso, es una carpeta libre (Folder).
     let mut has_book_like_subdirs = false;
     let mut has_chapter_files = false;
     if let Ok(entries) = fs::read_dir(dir) {
@@ -623,10 +713,12 @@ fn classify_top_level(dir: &Path) -> NodeKind {
             }
         }
     }
-    if has_book_like_subdirs && !has_chapter_files {
+    if has_chapter_files {
+        NodeKind::Book
+    } else if has_book_like_subdirs {
         NodeKind::Saga
     } else {
-        NodeKind::Book
+        NodeKind::Folder
     }
 }
 

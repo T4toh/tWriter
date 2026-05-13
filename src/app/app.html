@@ -1,7 +1,7 @@
 <div
   class="shell"
   [class.focus]="settings.focusMode()"
-  [class.with-viewer]="imageViewer.viewing() !== null || fontPreview.viewing() !== null || markdownReader.viewing() !== null"
+  [class.with-viewer]="search.open() || imageViewer.viewing() !== null || fontPreview.viewing() !== null || markdownReader.viewing() !== null"
   [attr.data-rpw]="settings.rightPanelWidth()"
 >
   <aside class="panel panel-left">
@@ -17,6 +17,25 @@
             title="Importar saga / novela desde otra carpeta"
           >
             📥
+          </button>
+          <button
+            type="button"
+            class="icon-btn"
+            [disabled]="!root()"
+            (click)="openImportJoplin()"
+            title="Importar notas (Joplin)"
+          >
+            📝
+          </button>
+          <button
+            type="button"
+            class="icon-btn"
+            [class.active]="search.open()"
+            [disabled]="!root()"
+            (click)="toggleSearch()"
+            title="Buscar (Ctrl+F)"
+          >
+            🔍
           </button>
           <button
             type="button"
@@ -183,7 +202,11 @@
     }
   </main>
 
-  @if (imageViewer.viewing() !== null) {
+  @if (search.open()) {
+    <aside class="panel panel-right">
+      <app-search-panel />
+    </aside>
+  } @else if (imageViewer.viewing() !== null) {
     <aside class="panel panel-right">
       <app-image-viewer />
     </aside>
@@ -204,6 +227,7 @@
 <app-theme-editor-modal />
 <app-grammar-settings />
 <app-import-wizard />
+<app-import-joplin />
 <app-toast-container />
 <app-update-banner />
 <app-modal-host />
