@@ -7,10 +7,18 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { GrammarService, LtDockerStatus } from '../core/grammar-service';
 import { SettingsService } from '../core/settings-service';
 import { Select } from '../shared/select';
 import { GrammarMode } from '../core/types';
+
+export type DockerPhase = 'checking' | 'pulling' | 'starting' | 'loading' | 'ready' | 'error';
+
+interface LtProgressEvent {
+  phase: DockerPhase;
+  message: string;
+}
 
 @Component({
   selector: 'app-grammar-settings',
@@ -35,6 +43,8 @@ export class GrammarSettings {
   protected readonly dockerStatus = signal<LtDockerStatus | null>(null);
   protected readonly dockerBusy = signal<'starting' | 'stopping' | null>(null);
   protected readonly dockerMessage = signal<string | null>(null);
+  protected readonly dockerPhase = signal<DockerPhase | null>(null);
+  private unlistenProgress: UnlistenFn | null = null;
 
   constructor() {
     effect(() => {
@@ -45,7 +55,10 @@ export class GrammarSettings {
         this.variantEn.set(this.settings.grammarVariantEn());
         this.testResult.set(null);
         this.dockerMessage.set(null);
+        this.dockerPhase.set(null);
         void this.refreshDockerStatus();
+      } else {
+        this.detachProgressListener();
       }
     });
   }
@@ -61,16 +74,36 @@ export class GrammarSettings {
 
   protected async startDocker(): Promise<void> {
     this.dockerBusy.set('starting');
-    this.dockerMessage.set('Levantando container (la primera vez baja ~300MB)…');
+    this.dockerPhase.set('checking');
+    this.dockerMessage.set('Chequeando que Docker esté instalado…');
+    await this.attachProgressListener();
     try {
       const msg = await this.grammar.dockerStart();
+      this.dockerPhase.set('ready');
       this.dockerMessage.set(msg);
     } catch (e) {
+      this.dockerPhase.set('error');
       this.dockerMessage.set(String(e));
     } finally {
       this.dockerBusy.set(null);
+      this.detachProgressListener();
       await this.refreshDockerStatus();
       await this.grammar.ping();
+    }
+  }
+
+  private async attachProgressListener(): Promise<void> {
+    this.detachProgressListener();
+    this.unlistenProgress = await listen<LtProgressEvent>('languagetool-progress', (ev) => {
+      this.dockerPhase.set(ev.payload.phase);
+      this.dockerMessage.set(ev.payload.message);
+    });
+  }
+
+  private detachProgressListener(): void {
+    if (this.unlistenProgress) {
+      this.unlistenProgress();
+      this.unlistenProgress = null;
     }
   }
 
@@ -100,6 +133,14 @@ export class GrammarSettings {
   protected onModeChange(value: string): void {
     this.mode.set(value as GrammarMode);
     this.testResult.set(null);
+  }
+
+  /** Devuelve true si la fase `p` ya pasó (la actual está más adelante en el flujo). */
+  protected phaseDone(p: DockerPhase): boolean {
+    const order: DockerPhase[] = ['checking', 'pulling', 'starting', 'loading', 'ready'];
+    const cur = this.dockerPhase();
+    if (!cur || cur === 'error') return false;
+    return order.indexOf(cur) > order.indexOf(p);
   }
 
   protected async test(): Promise<void> {

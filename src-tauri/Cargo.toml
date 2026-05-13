@@ -1,8 +1,11 @@
 [package]
 name = "twriter"
 version = "0.1.13"
-description = "A Tauri App"
-authors = ["you"]
+description = "Editor desktop de novelas: editor TipTap, conversor RAE, gramática (LanguageTool) y EPUB."
+authors = ["Tatoh <tatukis@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/T4toh/tWriter"
+homepage = "https://github.com/T4toh/tWriter"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

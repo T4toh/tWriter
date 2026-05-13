@@ -367,12 +367,9 @@ paru -S twriter-bin
 
 ### Bundle / Distribución (Linux nativo)
 
-> Todo toca `tauri.conf.json`, `Cargo.toml` o el AppRun hook de linuxdeploy. Atacar junto en un sprint de packaging.
-
-- Metadata + branding del bundle: ícono propio en `.deb`/`.msi`/`.exe` (hoy fallback genérico), description real (hoy "A Tauri App"), `bundle.copyright`, `bundle.publisher`, `bundle.shortDescription`/`longDescription`, `bundle.category` ("Productivity"). Fixea el `.desktop` (Comment + Categories) que hoy queda vacío. Como side-effect, el título del file picker via xdg-portal en KDE deja de mostrar el ícono default de Plasma — Plasma resuelve el ícono via `StartupWMClass` del `.desktop` y `bundle.identifier`.
-- Sizes de ícono adicionales en `.deb` (hoy solo 32/128/256@2 — algunos launchers buscan 48/64).
-- Tema GTK del window decoration / dialogs respetando sistema (hoy AppRun fuerza `GTK_THEME=Adwaita:light/dark` leyendo gsettings de GNOME — en KDE queda Adwaita default). Workaround: env var `APPIMAGE_GTK_THEME=Breeze:dark` o patchear AppRun hook en CI.
-- Mejor UX de instalación de Docker para LT (barrita o spinner que muestre que está pulleando la imagen).
+- ~~Metadata + branding del bundle (`publisher`, `copyright`, `shortDescription`, `longDescription`, `category`, `homepage`, `licenseFile`)~~ ✅ Cubierto en `tauri.conf.json::bundle` + `Cargo.toml`. Fixea el `.desktop` Comment + Categories vacíos y el `StartupWMClass` del Plasma (vía `bundle.identifier`).
+- ~~Sizes de ícono adicionales (48, 64)~~ ✅ Registrados en `bundle.icon` (32/48/64/128/128@2/icns/ico).
+- ~~Mejor UX de Docker para LT~~ ✅ Stepper con fases checking → pulling → starting → loading → ready + sección "Por qué Docker" con links a docker.com, languagetool.org, repo oficial y la imagen `erikvl87/languagetool`. Eventos `languagetool-progress` emitidos desde Rust con `tauri::Emitter`.
 
 ### Archivos
 

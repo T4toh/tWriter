@@ -29,13 +29,27 @@
     "active": true,
     "targets": ["deb", "msi", "nsis"],
     "createUpdaterArtifacts": true,
+    "publisher": "Tatoh <tatukis@gmail.com>",
+    "copyright": "Copyright © 2026 Tatoh",
+    "category": "Productivity",
+    "shortDescription": "Editor de novelas con conversor RAE, gramática y EPUB",
+    "longDescription": "tWriter es un editor desktop para escribir novelas en español e inglés. Centraliza el flujo en una sola herramienta: editor TipTap → conversor de diálogos a estilo RAE (D1–D5) → chequeo de gramática y ortografía con LanguageTool → exportación a EPUB con templates 6×9\" / 5×8\" / A5. Soporta auto-sync via git, carpetas en Dropbox/pCloud y respaldo local. Reemplaza el flujo LibreOffice + Reedsy en un único editor.",
+    "homepage": "https://github.com/T4toh/tWriter",
+    "licenseFile": "../LICENSE",
     "icon": [
       "icons/32x32.png",
+      "icons/48x48.png",
+      "icons/64x64.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "section": "editors"
+      }
+    }
   },
   "plugins": {
     "updater": {

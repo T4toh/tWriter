@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use tauri::{AppHandle, Emitter};
 use tokio::time::sleep;
 
 const LT_CONTAINER: &str = "twriter-languagetool";
@@ -339,8 +340,27 @@ pub async fn languagetool_docker_status() -> LtDockerStatus {
     }
 }
 
+#[derive(Serialize, Clone)]
+struct LtProgress {
+    phase: &'static str,
+    message: String,
+}
+
+fn emit_progress(app: &AppHandle, phase: &'static str, message: impl Into<String>) {
+    let msg: String = message.into();
+    tracing::info!(target: "grammar", phase, msg = %msg, "languagetool progress");
+    let _ = app.emit(
+        "languagetool-progress",
+        LtProgress {
+            phase,
+            message: msg,
+        },
+    );
+}
+
 #[tauri::command]
-pub async fn languagetool_docker_start() -> Result<String, String> {
+pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String> {
+    emit_progress(&app, "checking", "Chequeando que Docker esté instalado…");
     let docker_check = Command::new("docker").arg("--version").output();
     match docker_check {
         Ok(o) if o.status.success() => {}
@@ -351,6 +371,7 @@ pub async fn languagetool_docker_start() -> Result<String, String> {
             );
         }
     }
+    emit_progress(&app, "checking", "Chequeando que el daemon de Docker responda…");
     if let Ok(o) = Command::new("docker").args(["info"]).output() {
         if !o.status.success() {
             return Err(
@@ -370,6 +391,7 @@ pub async fn languagetool_docker_start() -> Result<String, String> {
         })
         .unwrap_or(false);
     if already_running {
+        emit_progress(&app, "ready", "El container ya estaba corriendo.");
         return Ok("Ya estaba corriendo.".into());
     }
 
@@ -384,6 +406,7 @@ pub async fn languagetool_docker_start() -> Result<String, String> {
         .unwrap_or(false);
 
     if exists {
+        emit_progress(&app, "starting", "Reiniciando container existente…");
         let out = Command::new("docker")
             .args(["start", LT_CONTAINER])
             .output()
@@ -395,6 +418,11 @@ pub async fn languagetool_docker_start() -> Result<String, String> {
             ));
         }
     } else {
+        emit_progress(
+            &app,
+            "pulling",
+            "Bajando imagen erikvl87/languagetool (~300MB, puede tardar 1–3 min según conexión)…",
+        );
         let pull = tokio::task::spawn_blocking(|| {
             Command::new("docker").args(["pull", LT_IMAGE]).output()
         })
@@ -407,6 +435,7 @@ pub async fn languagetool_docker_start() -> Result<String, String> {
                 String::from_utf8_lossy(&pull.stderr)
             ));
         }
+        emit_progress(&app, "starting", "Creando container en localhost:8081…");
         let run = Command::new("docker")
             .args([
                 "run",
@@ -433,8 +462,14 @@ pub async fn languagetool_docker_start() -> Result<String, String> {
         }
     }
 
+    emit_progress(
+        &app,
+        "loading",
+        "Cargando modelos de español + inglés (~30s la primera vez)…",
+    );
     for _ in 0..40 {
         if ping_local_lt().await {
+            emit_progress(&app, "ready", "LanguageTool listo en localhost:8081");
             tracing::info!(target: "grammar", "LanguageTool Docker listo en localhost:8081");
             return Ok("LanguageTool listo en localhost:8081".into());
         }
