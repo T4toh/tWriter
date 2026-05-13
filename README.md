@@ -200,9 +200,22 @@ Botón 📝 en el header del tree abre un wizard separado para traer notas markd
 - **Persistencia sessionStorage**: log + visible + filtros sobreviven F5 (no entre sesiones).
 - Max 200 entries (drop oldest).
 
-### Git auto-sync
+### Storage backend (git / cloud / local)
 
-- `git2` crate (libgit2) — sin shellear `git`. SSH agent + fallback a `~/.ssh/id_ed25519/id_rsa/id_ecdsa`.
+tWriter auto-detecta cómo está versionada/sincronizada la carpeta raíz y adapta la UI:
+
+- **Git** (`.git/` presente): auto-commit cada 5 min, status polling 30s, botones ⇅/⤓ visibles, badge dot con color por estado.
+- **Cloud** (path bajo `Dropbox/`, `pCloud/`, `Nextcloud/`, `OneDrive/`, `Google Drive/`, `iCloud Drive/`, `Syncthing/`, `MEGA/`): badge con el nombre del servicio. La app solo escribe archivos — el cliente del servicio sincroniza.
+- **Local**: badge `💾 Local`. Cero versionado, cero sync — el usuario respalda por su cuenta.
+
+Cuando no es git, los controles ⇅/⤓ no aparecen y un botón `❓` al lado del badge abre un modal con la receta paso a paso para hacer `git init` + push a GitHub. Al cerrar el modal, la app re-chequea el folder, así que si corriste `git init` en una terminal aparte, el badge cambia a Git solo, sin reabrir la carpeta.
+
+Si la carpeta es git *y* además está adentro de Dropbox (caso "Dropbox como segundo sync"), gana git — los controles versionados son los que mostramos. Dropbox queda como redundancia invisible.
+
+### Git auto-sync (cuando backend = git)
+
+- `git2` crate (libgit2) para status + commit. Push/pull delegan al binario `git` del sistema (más estable para SSH/agent que libssh2).
+- SSH agent + fallback a `~/.ssh/id_ed25519/id_rsa/id_ecdsa`.
 - Auto-commit cada 5 min cuando hay cambios.
 - Status polling 30s.
 - Botón "sync ahora" (⇅) en header.
@@ -363,7 +376,10 @@ paru -S twriter-bin
 
 ### Archivos
 
-- Soportar servicios de nube como Dropbox y pCloud — sería lo mismo, pero sin git. UI más limpia.
+- ~~Soportar servicios de nube como Dropbox y pCloud~~ ✅ (auto-detección + UI condicional — ver "Storage backend").
+- Changelog screen in-app: panel/modal accesible desde el header (junto a 🐛) parseando `CHANGELOG.md` o release notes de GitHub. Útil para gente nueva post-AUR.
+- Guía in-app de primer uso: tour con flechas la primera vez que se abre la app (tree explorer, idioma, RAE, gramática, sync). Persiste flag en `settings.json`.
+- Botón "Abrir en terminal" dentro del modal storage-help (`xdg-open` / `konsole` / `gnome-terminal` / `wt`).
 
 ### Observabilidad / Stats
 

@@ -1,0 +1,64 @@
+@if (help.open()) {
+  <div class="sh-backdrop" (click)="close()"></div>
+  <div class="sh-modal" (click)="$event.stopPropagation()">
+    <header class="sh-header">
+      <h2>Cómo usar git con esta carpeta</h2>
+      <p>
+        Git te da snapshots automáticos, historial completo y backup gratis en GitHub.
+        Es opcional — tWriter funciona igual sin git, pero versionar tu novela suma
+        tranquilidad.
+      </p>
+    </header>
+
+    <div class="sh-body">
+      <ol class="sh-steps">
+        <li>
+          <strong>Abrí una terminal en la carpeta de la novela.</strong>
+          <pre><code>cd "{{ root() }}"</code></pre>
+        </li>
+
+        <li>
+          <strong>Iniciá el repo y hacé el primer commit.</strong>
+          <pre><code>git init
+git add -A
+git commit -m "inicio"</code></pre>
+        </li>
+
+        <li>
+          <strong>Creá un repo privado en GitHub.</strong>
+          <p class="sh-muted">
+            Ingresá a
+            <a href="https://github.com/new?visibility=private" target="_blank" rel="noopener">
+              github.com/new
+            </a>
+            y poné un nombre. Dejalo en privado — tu novela no es para el mundo todavía.
+          </p>
+        </li>
+
+        <li>
+          <strong>Conectá el repo local con GitHub y subí los archivos.</strong>
+          <pre><code>git remote add origin git&#64;github.com:&lt;usuario&gt;/&lt;repo&gt;.git
+git branch -M main
+git push -u origin main</code></pre>
+        </li>
+      </ol>
+
+      <p class="sh-note">
+        <strong>Requisitos:</strong> tener <code>git</code> instalado y una clave SSH
+        cargada en GitHub. Si no la tenés, generala con
+        <code>ssh-keygen -t ed25519</code> y pegá <code>~/.ssh/id_ed25519.pub</code> en
+        Settings → SSH keys de GitHub.
+      </p>
+
+      <p class="sh-note muted">
+        Cuando cerres este diálogo, tWriter va a re-chequear la carpeta. Si ya corriste
+        <code>git init</code>, el badge cambia a Git automáticamente y aparecen los
+        controles de sync.
+      </p>
+    </div>
+
+    <div class="sh-actions">
+      <button type="button" class="btn btn-primary" (click)="close()">Entendido</button>
+    </div>
+  </div>
+}

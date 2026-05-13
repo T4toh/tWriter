@@ -76,45 +76,68 @@
         </div>
       }
       @if (root(); as r) {
-        <div class="path-row" [title]="syncTitle()">
-          <span class="dot" [attr.data-state]="git.state()"></span>
-          <span class="path" [title]="r">{{ r }}</span>
-        </div>
-        <div class="sync-summary" [class.error]="git.state() === 'error'">
-          {{ git.error() ?? git.summary() }}
-        </div>
+        @if (storage.isGit()) {
+          <div class="path-row" [title]="syncTitle()">
+            <span class="dot" [attr.data-state]="git.state()"></span>
+            <span class="path" [title]="r">{{ r }}</span>
+          </div>
+          <div class="sync-summary" [class.error]="git.state() === 'error'">
+            {{ git.error() ?? git.summary() }}
+          </div>
+        } @else {
+          <div class="path-row">
+            <span
+              class="backend-badge"
+              [attr.data-backend]="storage.backend()"
+              [title]="'Backend de almacenamiento: ' + storage.label()"
+            >
+              {{ storage.icon() }} {{ storage.label() }}
+            </span>
+            <button
+              type="button"
+              class="icon-btn icon-btn-mini"
+              (click)="storageHelp.openHelp()"
+              title="Cómo usar git con esta carpeta"
+            >
+              ❓
+            </button>
+            <span class="path" [title]="r">{{ r }}</span>
+          </div>
+        }
       } @else {
         <div class="path-row">
           <span class="path muted">sin carpeta</span>
         </div>
       }
       <div class="actions actions-footer">
-        <button
-          type="button"
-          class="icon-btn"
-          (click)="syncNow()"
-          [disabled]="!root() || git.syncing() || git.state() === 'clean'"
-          [title]="syncTitle()"
-        >
-          @if (git.currentOp() === 'sync') {
-            <app-spinner />
-          } @else {
-            ⇅
-          }
-        </button>
-        <button
-          type="button"
-          class="icon-btn"
-          (click)="pull()"
-          [disabled]="!root() || git.syncing()"
-          title="Pull desde remoto (fast-forward, sin merge)"
-        >
-          @if (git.currentOp() === 'pull') {
-            <app-spinner />
-          } @else {
-            ⤓
-          }
-        </button>
+        @if (storage.isGit()) {
+          <button
+            type="button"
+            class="icon-btn"
+            (click)="syncNow()"
+            [disabled]="!root() || git.syncing() || git.state() === 'clean'"
+            [title]="syncTitle()"
+          >
+            @if (git.currentOp() === 'sync') {
+              <app-spinner />
+            } @else {
+              ⇅
+            }
+          </button>
+          <button
+            type="button"
+            class="icon-btn"
+            (click)="pull()"
+            [disabled]="!root() || git.syncing()"
+            title="Pull desde remoto (fast-forward, sin merge)"
+          >
+            @if (git.currentOp() === 'pull') {
+              <app-spinner />
+            } @else {
+              ⤓
+            }
+          </button>
+        }
         <button
           type="button"
           class="icon-btn"
@@ -228,6 +251,7 @@
 <app-grammar-settings />
 <app-import-wizard />
 <app-import-joplin />
+<app-storage-help-modal />
 <app-toast-container />
 <app-update-banner />
 <app-modal-host />
