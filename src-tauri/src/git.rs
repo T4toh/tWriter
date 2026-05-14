@@ -45,6 +45,11 @@ pub async fn git_pull(repo_path: String) -> Result<(), String> {
     run_blocking(move || git_pull_impl(&repo_path)).await
 }
 
+#[tauri::command]
+pub async fn git_pull_rebase(repo_path: String) -> Result<(), String> {
+    run_blocking(move || git_pull_rebase_impl(&repo_path)).await
+}
+
 async fn run_blocking<F, T>(f: F) -> Result<T, String>
 where
     F: FnOnce() -> Result<T, String> + Send + 'static,
@@ -198,13 +203,30 @@ fn git_pull_impl(repo_path: &str) -> Result<(), String> {
         let msg = if stderr.is_empty() {
             format!("pull falló (exit {})", output.status)
         } else {
-            stderr
+            categorize_git_error(&stderr)
         };
         tracing::error!(target: "git", error = %msg, "pull falló");
         return Err(msg);
     }
     tracing::info!(target: "git", "pull --ff-only ok");
     Ok(())
+}
+
+pub(crate) fn git_pull_rebase_impl(repo_path: &str) -> Result<(), String> {
+    let out = run_git(repo_path, &["pull", "--rebase", "--autostash"])?;
+    if out.success {
+        tracing::info!(target: "git", "pull --rebase --autostash ok");
+        return Ok(());
+    }
+    let _ = run_git(repo_path, &["rebase", "--abort"]);
+    let stderr_lc = out.stderr.to_lowercase();
+    let msg = if stderr_lc.contains("conflict") || stderr_lc.contains("could not apply") {
+        format!("conflict: {}", out.stderr)
+    } else {
+        categorize_git_error(&out.stderr)
+    };
+    tracing::error!(target: "git", error = %msg, "pull --rebase falló");
+    Err(msg)
 }
 
 // ─────────────── Helpers ───────────────
@@ -386,6 +408,38 @@ mod tests {
             "a.txt should be present after rebase"
         );
         assert!(pc_b.join("b.txt").exists());
+    }
+
+    #[test]
+    fn pull_rebase_succeeds_when_divergent_no_conflict() {
+        let (_origin, pc_a, pc_b) = setup_triple();
+        fs::write(pc_a.join("a.txt"), "from A\n").unwrap();
+        run(&pc_a, &["add", "."]);
+        run(&pc_a, &["commit", "-m", "A"]);
+        run(&pc_a, &["push"]);
+        fs::write(pc_b.join("b.txt"), "from B\n").unwrap();
+        run(&pc_b, &["add", "."]);
+        run(&pc_b, &["commit", "-m", "B"]);
+        git_pull_rebase_impl(pc_b.to_str().unwrap())
+            .expect("pull --rebase should succeed when no overlap");
+        assert!(pc_b.join("a.txt").exists());
+        assert!(pc_b.join("b.txt").exists());
+    }
+
+    #[test]
+    fn pull_rebase_returns_conflict_and_aborts() {
+        let (_origin, pc_a, pc_b) = setup_triple();
+        fs::write(pc_a.join("README.md"), "from A\n").unwrap();
+        run(&pc_a, &["add", "."]);
+        run(&pc_a, &["commit", "-m", "A"]);
+        run(&pc_a, &["push"]);
+        fs::write(pc_b.join("README.md"), "from B\n").unwrap();
+        run(&pc_b, &["add", "."]);
+        run(&pc_b, &["commit", "-m", "B"]);
+        let err = git_pull_rebase_impl(pc_b.to_str().unwrap()).expect_err("should fail with conflict");
+        assert!(err.starts_with("conflict:"), "got: {}", err);
+        assert!(!pc_b.join(".git/rebase-merge").exists());
+        assert!(!pc_b.join(".git/rebase-apply").exists());
     }
 
     #[test]
