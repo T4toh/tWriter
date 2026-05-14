@@ -1,3 +1,4 @@
+mod audit;
 mod book_config;
 mod create;
 mod debug_bridge;
@@ -24,6 +25,7 @@ mod theme;
 mod themes;
 mod util;
 
+use audit::list_chapters_for_audit;
 use book_config::{get_book_config, mark_as_epilogo, set_book_config};
 use saga_config::{find_saga_dir, get_saga_config, set_saga_config};
 use create::{create_book, create_chapter, create_directory};
@@ -128,6 +130,7 @@ pub fn run() {
             read_image,
             check_grammar,
             check_grammar_available,
+            list_chapters_for_audit,
             languagetool_docker_status,
             languagetool_docker_start,
             languagetool_docker_stop,

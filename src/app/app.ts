@@ -13,6 +13,7 @@ import { ImportJoplinService } from './core/import-joplin-service';
 import { ImportWizardService } from './core/import-wizard-service';
 import { PaneSplitService } from './core/pane-split-service';
 import { ProjectService } from './core/project-service';
+import { RaeAuditService } from './core/rae-audit-service';
 import { RustLogBridge } from './core/rust-log-bridge';
 import { SearchService } from './core/search-service';
 import { SettingsService } from './core/settings-service';
@@ -29,6 +30,7 @@ import { ImageViewer } from './image-viewer/image-viewer';
 import { FontPreview } from './font-preview/font-preview';
 import { MarkdownReader } from './markdown-reader/markdown-reader';
 import { SearchPanel } from './search-panel/search-panel';
+import { RaeAuditPanel } from './rae-audit/rae-audit-panel';
 import { ToastContainer } from './toast/toast-container';
 import { GrammarSettings } from './grammar-settings/grammar-settings';
 import { ImportJoplin } from './import-joplin/import-joplin';
@@ -44,7 +46,7 @@ import { TreeNode } from './core/types';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, ToastContainer, GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, Spinner, ModalHost, ContextMenuHost],
+  imports: [Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, ToastContainer, GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, Spinner, ModalHost, ContextMenuHost],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -56,6 +58,7 @@ export class App {
   protected fontPreview = inject(FontPreviewService);
   protected markdownReader = inject(MarkdownReaderService);
   protected search = inject(SearchService);
+  protected raeAudit = inject(RaeAuditService);
 
   private project = inject(ProjectService);
   protected settings = inject(SettingsService);

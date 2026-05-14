@@ -90,10 +90,21 @@
         type="button"
         class="tb-btn tb-text"
         (click)="openRae()"
-        title="Aplicar reglas RAE de diálogos (preview con diff)"
+        title="Aplicar reglas RAE de diálogos al capítulo entero (preview con diff)"
       >
         RAE
       </button>
+      @if (canCheckRae()) {
+        <button
+          type="button"
+          class="tb-btn tb-text"
+          [class.active]="raeAuto()"
+          (click)="toggleAutoRae()"
+          title="Validador RAE inline: marca violaciones mientras escribís"
+        >
+          ✓RAE
+        </button>
+      }
     }
 
     @if (canCheckGrammar()) {
@@ -278,5 +289,17 @@
     (apply)="applyGrammarReplacement($event)"
     (dismiss)="dismissGrammarMatch()"
     (addToDict)="addCurrentToDictionary()"
+  />
+}
+
+@if (raePopover(); as rp) {
+  <div class="grammar-pop-backdrop" (click)="dismissRae()"></div>
+  <app-rae-popover
+    [violation]="rp.violation"
+    [x]="rp.x"
+    [y]="rp.y"
+    (apply)="applyRaeFix()"
+    (applyParagraph)="applyRaeParagraph()"
+    (dismiss)="dismissRae()"
   />
 }

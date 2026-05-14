@@ -7,6 +7,7 @@ import { ExtraEntry, ExtrasService } from '../core/extras-service';
 import { FontsService } from '../core/fonts-service';
 import { ImageViewerService } from '../core/image-viewer-service';
 import { MarkdownReaderService } from '../core/markdown-reader-service';
+import { RaeAuditService } from '../core/rae-audit-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
 import { NoteService, NoteTarget } from '../core/note-service';
 import { ProjectService } from '../core/project-service';
@@ -37,6 +38,7 @@ export class NodeActionsService {
   private themesSvc = inject(ThemesService);
   private imageViewer = inject(ImageViewerService);
   private mdReader = inject(MarkdownReaderService);
+  private raeAudit = inject(RaeAuditService);
   private toast = inject(ToastService);
   private modal = inject(ModalService);
   private dialogs = inject(NativeDialogsService);
@@ -277,6 +279,18 @@ export class NodeActionsService {
       });
     }
 
+    const canAuditRae =
+      !isExcluded &&
+      (node.kind === 'saga' || node.kind === 'book' || node.kind === 'section');
+    if (canAuditRae) {
+      entries.push({ kind: 'separator' });
+      entries.push({
+        label: 'Revisar RAE',
+        kbd: '📐',
+        onClick: () => this.auditRae(node),
+      });
+    }
+
     if (!isExcluded) {
       entries.push({ kind: 'separator' });
       entries.push({
@@ -472,6 +486,10 @@ export class NodeActionsService {
 
   async exportEpub(node: TreeNode): Promise<void> {
     await this.chapter.exportEpub(node);
+  }
+
+  async auditRae(node: TreeNode): Promise<void> {
+    await this.raeAudit.open({ path: node.path, name: node.name });
   }
 
   configBook(node: TreeNode): void {

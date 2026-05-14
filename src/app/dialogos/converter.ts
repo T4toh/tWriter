@@ -69,8 +69,11 @@ function normalizeQuotes(text: string): string {
 }
 
 function normalizeSpacingBeforeTags(text: string): string {
-  // "texto"Verbo → "texto" Verbo (sólo si Verbo es dialog tag)
-  const pattern = /"([.,]?)"([A-ZÁÉÍÓÚÑ]\w+)/gu;
+  // "texto"Verbo → "texto" Verbo (sólo si Verbo es dialog tag).
+  // `\w+` es ASCII-only en JS y se corta antes de acentos: `Preguntó` →
+  // `Pregunt` → `isDialogTag('Pregunt')` false → normalize no aplica.
+  // `\p{L}+` con flag `u` matchea letras Unicode (incluye acentos).
+  const pattern = /"([.,]?)"(\p{Lu}\p{L}+)/gu;
   return text.replace(pattern, (full, punct: string, word: string) => {
     if (isDialogTag(word)) {
       return `"${punct}" ${word}`;

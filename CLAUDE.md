@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-**tWriter** es una app desktop (Tauri 2 + Angular 21, TypeScript 5.9) para escribir novelas en español e inglés con un solo flujo: editor → conversor de diálogos a estilo RAE → chequeo de gramática → exportación EPUB. Reemplaza el flujo actual del autor (LibreOffice → dialogos_a_esp → Quillbot → Reedsy).
+**tWriter** es una app desktop (Tauri 2 + Angular 21, TypeScript 5.9) para escribir novelas en español e inglés con un solo flujo: editor → conversor de diálogos a estilo RAE → chequeo de gramática → exportación EPUB. Reemplaza el flujo viejo del autor (LibreOffice → `dialogos_a_esp` [DEPRECADO, ver abajo] → Quillbot → Reedsy).
+
+> **Nota**: el repo Python [`dialogos_a_esp`](https://github.com/T4toh/dialogos_a_esp) está **deprecado** — tenía bugs (colapsaba párrafos al convertir, perdía verbos dicendi acentuados por `\b` ASCII-only) que se arrastraron al port TS y se fueron arreglando acá. El port en `src/app/dialogos/converter.ts` + `validator.ts` ya divergió de la fuente Python; usar este repo como única fuente de verdad de las reglas RAE.
 
 **Repo separado de contenido**: `~/Repos/Personal/Novelas/` (privado) guarda las novelas como HTML + JSON metadata. Este repo (`tWriter`) es solo la app — cero contenido.
 
@@ -85,7 +87,7 @@ El scaffold inicial usa nombres `app.component.*` — refactorizar a convencione
 
 ## Reuso desde otros repos del usuario
 
-- **Reglas de diálogos**: `/home/tatoh/Repos/Personal/dialogos_a_esp/src/rules.py` y `converter.py`. Portar 1:1 a TypeScript en `src/app/dialogos/`. Los tests en `dialogos_a_esp/tests/` sirven como fixtures (mismo input → mismo output).
+- **Reglas de diálogos** (~~`dialogos_a_esp/src/rules.py` y `converter.py`~~ **DEPRECADO**): la fuente original Python está deprecada — el repo Python tenía bugs (`\b` ASCII-only no matchea acentos, párrafos colapsados en la conversión, verbos dicendi acentuados invisibles) que se arrastraron al port TS y se fueron arreglando. Las reglas RAE vivas viven en `src/app/dialogos/converter.ts` + `rules-dedicated.ts` + `validator.ts`. No volver al Python como referencia.
 - **CSS y fuentes para EPUB**: extraídos de un EPUB de Reedsy. El de referencia es `~/Dropbox/Novelas/Buenos Aires 2077/1 - La Ciudad de las Luces/La Ciudad de las Luces Rev.2.epub`. Su `OEBPS/style.css` se recorta a un subset y vive en `src/styles/reedsy-subset.scss`. Las TTF (Merriweather, Lato, Roboto Mono) van a `src/assets/fonts/`.
 - **NO reusar componentes** de la-cueva-de-tatoh — la UI de tWriter es bespoke (3 paneles, modo focus, tipografía serif).
 
@@ -110,5 +112,5 @@ El repo `Novelas/` se sincroniza desde dentro de la app vía `git2` crate (libgi
 
 1. Importar `~/Dropbox/Novelas/Meridian/1 - Noche Eterna/Parte 1/` (.docx) → aparece como libro con 23 capítulos.
 2. Editar cap 1, agregar itálica, cerrar y reabrir → cambios persisten en disco.
-3. Click "Aplicar RAE" sobre cap en español → diff matchea output del CLI `dialogos_a_esp`.
+3. Click "Aplicar RAE" sobre cap en español → diff produce salida válida según [DPD raya](https://www.rae.es/dpd/raya) (la comparación contra `dialogos_a_esp` ya no aplica, el repo Python está deprecado y el port TS lo supera).
 4. Export EPUB del libro completo → calibre/Thorium lo abre, comparar visualmente con `Noche Eterna Parte 1 Rev.3 EPUB.epub`.
