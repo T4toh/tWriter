@@ -795,7 +795,7 @@ pub fn set_directory_excluded(path: String, excluded: bool) -> Result<(), String
     Ok(())
 }
 
-fn read_sorted_entries(p: &Path) -> Result<Vec<fs::DirEntry>, String> {
+pub(crate) fn read_sorted_entries(p: &Path) -> Result<Vec<fs::DirEntry>, String> {
     let mut entries: Vec<_> = fs::read_dir(p)
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
@@ -805,7 +805,7 @@ fn read_sorted_entries(p: &Path) -> Result<Vec<fs::DirEntry>, String> {
 }
 
 /// Ordena por prefijo numérico ("N - Name"), después alfabético.
-fn compare_names(a: &str, b: &str) -> Ordering {
+pub(crate) fn compare_names(a: &str, b: &str) -> Ordering {
     let na = leading_number(a);
     let nb = leading_number(b);
     match (na, nb) {
@@ -816,7 +816,7 @@ fn compare_names(a: &str, b: &str) -> Ordering {
     }
 }
 
-fn leading_number(s: &str) -> Option<u32> {
+pub(crate) fn leading_number(s: &str) -> Option<u32> {
     let trimmed = s.trim_start();
     let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
     if digits.is_empty() {
@@ -824,4 +824,20 @@ fn leading_number(s: &str) -> Option<u32> {
     } else {
         digits.parse().ok()
     }
+}
+
+pub(crate) fn classify_top_level_pub(dir: &Path) -> NodeKind {
+    classify_top_level(dir)
+}
+
+pub(crate) fn notes_dir_name() -> &'static str {
+    NOTES_DIR_NAME
+}
+
+pub(crate) fn chapter_exts() -> &'static [&'static str] {
+    CHAPTER_EXTS
+}
+
+pub(crate) fn note_exts() -> &'static [&'static str] {
+    NOTE_EXTS
 }

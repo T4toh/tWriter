@@ -176,7 +176,7 @@ export class NodeActionsService {
     const canExport = !isExcluded && node.kind === 'book';
     const canConfigBook = !isExcluded && node.kind === 'book';
     const canConfigSaga = !isExcluded && node.kind === 'saga';
-    const canMove = !isExcluded && node.kind !== 'saga' && this.isMoveable(node);
+    const canMove = !isExcluded && this.isMoveable(node);
     const canMarkEpilogo =
       !isExcluded && node.kind === 'section' && isEpilogoName(node.name);
 
@@ -826,10 +826,15 @@ export class NodeActionsService {
   // ───── Helpers ─────
 
   isMoveable(node: TreeNode): boolean {
-    if (node.kind === 'chapter') {
-      return /^\d+$/.test(node.name);
-    }
-    return /^\d+\s*-/.test(node.name);
+    // Cualquier nodo reordenable; el backend renumera/migra prefijos si falta.
+    // Solo bloqueamos kinds estructurales puros.
+    return (
+      node.kind === 'saga' ||
+      node.kind === 'book' ||
+      node.kind === 'section' ||
+      node.kind === 'chapter' ||
+      node.kind === 'note'
+    );
   }
 
   collectImportable(root: TreeNode): TreeNode[] {

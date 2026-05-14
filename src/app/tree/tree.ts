@@ -1,5 +1,6 @@
 import { Component, HostListener, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
+import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { invoke } from '@tauri-apps/api/core';
 import { openPath } from '@tauri-apps/plugin-opener';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -26,9 +27,16 @@ type DropScope =
   | { kind: 'fs'; path: string }
   | { kind: 'theme'; id: string };
 
+type DropListChildKind = 'saga' | 'book' | 'section' | 'chapter' | 'note';
+
+interface DropListData {
+  parentPath: string;
+  childKind: string;
+}
+
 @Component({
   selector: 'app-tree',
-  imports: [NgTemplateOutlet],
+  imports: [NgTemplateOutlet, CdkDropList, CdkDrag],
   templateUrl: './tree.html',
   styleUrl: './tree.scss',
 })
@@ -235,6 +243,105 @@ export class Tree implements OnDestroy {
 
   protected onNodeDragEnd(): void {
     this.paneSplit.endDrag();
+  }
+
+  // ───── CDK DnD interno (reorder + cross-parent) ─────
+
+  protected dropListId(parentPath: string, childKind: string): string {
+    return `dl::${childKind}::${parentPath}`;
+  }
+
+  /** Kind primario que el container acepta como children draggable. */
+  protected childKindFor(parentKind: TreeNode['kind']): string | null {
+    switch (parentKind) {
+      case 'saga':
+        return 'book';
+      case 'book':
+        return 'section';
+      case 'section':
+        return 'chapter';
+      case 'notes':
+      case 'folder':
+        return 'note';
+      default:
+        return null;
+    }
+  }
+
+  /** Filtra children por kind. Para casos como book con secciones + capítulos directos. */
+  protected childrenOfKind(node: TreeNode, kind: string | null): TreeNode[] {
+    if (!kind) return [];
+    return node.children.filter((c) => c.kind === kind);
+  }
+
+  /** Children que NO son del kind primario (notes folders dentro de un libro, etc.). */
+  protected childrenOfOtherKinds(
+    node: TreeNode,
+    primary: string | null,
+  ): TreeNode[] {
+    if (!primary) return node.children.slice();
+    return node.children.filter((c) => c.kind !== primary);
+  }
+
+  protected readonly dropListIds = computed(() => {
+    const r = this.root();
+    const out: Record<DropListChildKind, string[]> = {
+      saga: [],
+      book: [],
+      section: [],
+      chapter: [],
+      note: [],
+    };
+    if (!r) return out;
+    out.saga.push(this.dropListId(r.path, 'saga'));
+    const walk = (n: TreeNode): void => {
+      if (n.kind === 'saga') out.book.push(this.dropListId(n.path, 'book'));
+      if (n.kind === 'book') out.section.push(this.dropListId(n.path, 'section'));
+      if (n.kind === 'section') out.chapter.push(this.dropListId(n.path, 'chapter'));
+      if (n.kind === 'notes' || n.kind === 'folder') {
+        out.note.push(this.dropListId(n.path, 'note'));
+      }
+      for (const c of n.children) walk(c);
+    };
+    walk(r);
+    return out;
+  });
+
+  protected connectedFor(parentKind: TreeNode['kind']): string[] {
+    const k = this.childKindFor(parentKind);
+    if (!k) return [];
+    const map = this.dropListIds() as Record<string, string[]>;
+    return map[k] ?? [];
+  }
+
+  protected isDraggable(node: TreeNode): boolean {
+    if (node.kind === 'notes' || node.kind === 'folder') return false;
+    if (node.excluded) return false;
+    return true;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  protected async onDropList(event: CdkDragDrop<any>): Promise<void> {
+    if (
+      event.previousContainer === event.container &&
+      event.previousIndex === event.currentIndex
+    ) {
+      return;
+    }
+    const dragged: TreeNode = event.item.data;
+    const dst = event.container.data as DropListData;
+    if (
+      dst.parentPath === dragged.path ||
+      dst.parentPath.startsWith(dragged.path + '/')
+    ) {
+      this.toast.error('No se puede mover un nodo dentro de sí mismo.');
+      return;
+    }
+    await this.chapter.relocateNode(
+      dragged.path,
+      dst.parentPath,
+      event.currentIndex,
+    );
   }
 
   protected openExtraEntry(scopePath: string, entry: ExtraEntry, event?: MouseEvent): void {

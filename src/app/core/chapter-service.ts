@@ -330,16 +330,56 @@ export class ChapterService {
     }
   }
 
-  /** Sube o baja un nodo (capítulo o directorio numerado) entre sus siblings. */
+  /** Sube o baja un nodo entre sus siblings. Delegado a relocateNode. */
   async moveNode(node: TreeNode, direction: 'up' | 'down'): Promise<boolean> {
-    try {
-      const result = await invoke<{ from: string; to: string }>('move_node', {
-        path: node.path,
-        direction,
-      });
-      this.debug.info('reorder', `${node.name} → ${direction}`);
+    const tree = this.project.tree();
+    if (!tree) return false;
+    const parent = findParentNode(tree, node.path);
+    if (!parent) {
+      this.panes[0].error.set('Nodo sin padre — no se puede reordenar.');
+      return false;
+    }
+    const siblings = sameKindSiblings(parent, node.kind);
+    const idx = siblings.findIndex((s) => s.path === node.path);
+    if (idx < 0) return false;
+    const destIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (destIdx < 0 || destIdx >= siblings.length) return false;
+    return this.relocateNode(node.path, parent.path, destIdx);
+  }
 
-      // Capturar paths activos por pane antes de recargar.
+  /**
+   * Mueve un nodo a un padre (mismo o distinto) y lo inserta en `destIndex`.
+   * Renumera siblings de origen y destino para mantener prefijos `1..N` gap-free.
+   * Re-mapea panes abiertos que tocaban paths renombrados.
+   */
+  async relocateNode(
+    srcPath: string,
+    destParentPath: string,
+    destIndex: number,
+  ): Promise<boolean> {
+    const root = this.project.root();
+    if (!root) {
+      this.panes[0].error.set('Sin root configurado.');
+      return false;
+    }
+    // Flush autosave de panes con descendientes del src.
+    for (const i of PANE_IDS) {
+      const active = this.panes[i].active();
+      if (!active) continue;
+      if (active.path === srcPath || active.path.startsWith(srcPath + '/')) {
+        await this.flushPendingInPane(i);
+      }
+    }
+    try {
+      const result = await invoke<{
+        from: string;
+        to: string;
+        renamed: [string, string][];
+      }>('relocate_node', {
+        args: { srcPath, destParentPath, destIndex, root },
+      });
+
+      const remap = new Map<string, string>(result.renamed);
       const beforeByPane: Array<string | null> = PANE_IDS.map(
         (i) => this.panes[i].active()?.path ?? null,
       );
@@ -347,26 +387,29 @@ export class ChapterService {
       await this.project.loadTree();
       void this.git.refreshStatus();
 
-      // Re-foco por pane: si era el archivo movido, abrirlo en su nueva ubicación.
       for (const i of PANE_IDS) {
-        const activePath = beforeByPane[i];
-        if (activePath === null) continue;
-        const wasActive = activePath === node.path;
-        const wasInsideMoved = activePath.startsWith(result.from + '/');
-        if (wasActive) {
-          const newNode = this.findNode(this.project.tree(), result.to);
-          if (newNode) await this.openInPane(newNode, i);
-          else this.closeInPane(i);
-        } else if (wasInsideMoved) {
-          const remapped = result.to + activePath.slice(result.from.length);
-          const newNode = this.findNode(this.project.tree(), remapped);
-          if (newNode) await this.openInPane(newNode, i);
+        const before = beforeByPane[i];
+        if (!before) continue;
+        let newPath: string | null = remap.get(before) ?? null;
+        if (!newPath) {
+          for (const [oldP, newP] of remap) {
+            if (before.startsWith(oldP + '/')) {
+              newPath = newP + before.slice(oldP.length);
+              break;
+            }
+          }
+        }
+        if (newPath && newPath !== before) {
+          const node = this.findNode(this.project.tree(), newPath);
+          if (node) await this.openInPane(node, i);
           else this.closeInPane(i);
         }
       }
+      this.debug.info('reorder', `relocate ${result.from} → ${result.to}`);
       return true;
     } catch (err) {
-      this.debug.error('reorder', `${node.name}: ${err}`);
+      this.debug.error('reorder', String(err));
+      this.toast.error(`No se pudo mover: ${err}`);
       this.panes[0].error.set(String(err));
       return false;
     }
@@ -502,4 +545,17 @@ function countWords(html: string): number {
   const text = html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ');
   const matches = text.match(/\S+/g);
   return matches ? matches.length : 0;
+}
+
+function findParentNode(tree: TreeNode, childPath: string): TreeNode | null {
+  for (const c of tree.children) {
+    if (c.path === childPath) return tree;
+    const found = findParentNode(c, childPath);
+    if (found) return found;
+  }
+  return null;
+}
+
+function sameKindSiblings(parent: TreeNode, kind: TreeNode['kind']): TreeNode[] {
+  return parent.children.filter((c) => c.kind === kind);
 }
