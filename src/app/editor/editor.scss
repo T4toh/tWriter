@@ -494,44 +494,6 @@
   }
 }
 
-/* ─── Toolbar RAE button ─── */
-.tb-btn.rae-btn {
-  width: auto;
-  padding: 0 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-
-  img {
-    height: 14px;
-    width: auto;
-    display: block;
-    /* logo-rae viene azul oscuro (#002a5a). En dark mode lo aclaramos via
-       filter para no shippear una segunda copia blanca. */
-    filter: var(--rae-icon-filter, none);
-  }
-
-  .rae-check {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--fg-muted);
-    line-height: 1;
-  }
-
-  &.rae-btn--auto.active .rae-check {
-    color: var(--accent);
-  }
-}
-
-:root {
-  --rae-icon-filter: none;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --rae-icon-filter: invert(1) hue-rotate(180deg) brightness(1.4);
-  }
-}
-
 /* ─── Toolbar LanguageTool button ─── */
 .tb-btn.lt-btn {
   width: auto;

@@ -88,22 +88,21 @@
       <span class="sep"></span>
       <button
         type="button"
-        class="tb-btn rae-btn"
+        class="tb-btn tb-text"
         (click)="openRae()"
         title="Aplicar reglas RAE de diálogos al capítulo entero (preview con diff)"
       >
-        <img src="assets/rae.svg" alt="RAE" />
+        RAE
       </button>
       @if (canCheckRae()) {
         <button
           type="button"
-          class="tb-btn rae-btn rae-btn--auto"
+          class="tb-btn tb-text"
           [class.active]="raeAuto()"
           (click)="toggleAutoRae()"
           title="Validador RAE inline: marca violaciones mientras escribís"
         >
-          <span class="rae-check">✓</span>
-          <img src="assets/rae.svg" alt="RAE" />
+          ✓RAE
         </button>
       }
     }
