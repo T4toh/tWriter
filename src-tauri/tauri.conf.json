@@ -27,7 +27,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "msi", "nsis"],
+    "targets": ["deb", "nsis"],
     "createUpdaterArtifacts": true,
     "publisher": "Tatoh <tatukis@gmail.com>",
     "copyright": "Copyright © 2026 Tatoh",
