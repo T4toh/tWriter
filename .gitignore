@@ -45,3 +45,10 @@ Thumbs.db
 *.key
 *.key.pub
 .tauri/
+
+# makepkg artifacts (packaging/aur)
+packaging/aur/pkg/
+packaging/aur/src/
+packaging/aur/*.pkg.tar.zst
+packaging/aur/*.pkg.tar.xz
+packaging/aur/*.deb
