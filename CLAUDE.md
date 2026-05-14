@@ -98,7 +98,16 @@ El scaffold inicial usa nombres `app.component.*` — refactorizar a convencione
 
 ## Git auto-sync
 
-El repo `Novelas/` se sincroniza desde dentro de la app vía `git2` crate (libgit2 bindings) — sin shellear `git`. Auth con SSH key del sistema o token GitHub en keyring (`keyring` crate). Default: auto-commit cada 5 min y al cerrar capítulo, push en background.
+El repo `Novelas/` se sincroniza desde dentro de la app: `git2` (libgit2)
+para status + commit, binario `git` del sistema para push/pull (más robusto
+contra SSH/agent quirks). Default: auto-commit cada 5 min, status polling
+cada 30 s, auto-pull cuando `behind > 0`, auto-rebase + retry cuando
+`git push` es rechazado por non-FF. `.twriter/` (índice tantivy local) se
+destrackea automáticamente vía `git_ensure_twriter_ignored` para que no
+genere conflictos entre PCs. Errores del CLI git se categorizan en
+`auth`/`network`/`conflict`/`rejected`/`unknown` y
+`git-service.ts::friendlyError` los mapea a strings en español para la UI
+(nada de git jargon visible al usuario).
 
 ## Roadmap
 

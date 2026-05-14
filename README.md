@@ -318,10 +318,17 @@ Si la carpeta es git _y_ además está adentro de Dropbox (caso "Dropbox como se
 
 ### Git auto-sync (cuando backend = git)
 
+Objetivo: sync seamless entre PCs sin que el usuario tenga que abrir terminal
+ni saber qué es `git pull --rebase`.
+
 - `git2` crate (libgit2) para status + commit. Push/pull delegan al binario `git` del sistema (más estable para SSH/agent que libssh2).
 - SSH agent + fallback a `~/.ssh/id_ed25519/id_rsa/id_ecdsa`.
 - Auto-commit cada 5 min cuando hay cambios.
-- Status polling 30s.
+- Status polling 30 s; cuando detecta `behind > 0` corre auto-pull en background (`git pull --ff-only` o `git pull --rebase --autostash` si la rama está divergente).
+- **Push auto-rebase**: si el remoto avanzó desde otra PC, `git push` falla con non-FF; el backend corre `git pull --rebase --autostash` y reintenta el push una vez. Si el rebase choca, lo aborta y la UI muestra "Conflicto entre esta PC y el remoto. Abrí el panel 🐛 para detalle." (sin terminal jargon).
+- **`.twriter/` auto-ignorado al boot** (`git_ensure_twriter_ignored`): agrega `.twriter/` al `.gitignore` si falta y corre `git rm -r --cached .twriter` si está trackeado. Idempotente — los cambios quedan uncommitted y los pickea el próximo auto-commit. Evita conflictos add/add del índice tantivy entre PCs.
+- **Errores categorizados**: stderr del CLI git se clasifica en `auth` / `network` / `conflict` / `rejected` / `unknown` desde Rust; el frontend (`git-service.ts::friendlyError`) los mapea a strings en español. La UI nunca expone hints crudos de git.
+- **Throttle**: 3 fallas consecutivas de auto-pull pausan el loop 5 min para no spamear el panel 🐛. Sync manual (⇅) resetea el throttle. Conflict pausa de inmediato hasta sync manual.
 - Botón "sync ahora" (⇅) en header.
 
 ### Distribución
@@ -546,24 +553,19 @@ paru -S twriter-bin
 
 ### Git / Sync
 
-- **Push sin pull falla silencioso si el remoto avanzó desde otra PC**: el
-  auto-push hace `git push` directo y si la otra máquina pusheó primero, el
-  push se rechaza con `! [rejected] main -> main (fetch first)` y solo queda
-  loggeado en el panel 🐛. Hay que tirar `git pull --rebase && git push` a
-  mano en una terminal aparte. El backend (`git.rs::git_push`) debería: (a)
-  intentar `git pull --rebase` automático antes del push cuando detecta
-  non-fast-forward, o (b) al menos disparar un toast/modal claro "el remoto
-  avanzó, ejecutá pull antes" en vez de fallar silencioso.
-- **`.twriter/` se está versionando y genera conflictos cada sync entre
-  PCs**: el índice tantivy vive en `<root>/.twriter/search-index/` y se
-  regenera al boot (full reindex async), así que no tiene sentido
-  commitearlo — peor, cada PC lo escribe distinto y al pullear desde otra
-  máquina hay `CONFLICT (add/add) in .twriter/search-index/.managed.json` /
-  `meta.json` garantizado. Fix: agregar `.twriter/` al `.gitignore` del
-  template inicial de repo de novelas (y al wizard 📥 si crea el repo
-  desde tWriter), + correr `git rm -r --cached .twriter` para destrackear lo
-  que ya está commiteado. El README de tWriter ya dice "auto-excluido del
-  walk del tree y del export EPUB" pero no del `git` — incongruente.
+- ~~Push sin pull falla silencioso si el remoto avanzó desde otra PC~~ ✅
+  El backend ahora hace `git pull --rebase --autostash` y reintenta el push
+  una vez al detectar non-fast-forward. Si el rebase produce conflictos,
+  aborta y muestra "Conflicto entre esta PC y el remoto. Abrí el panel 🐛
+  para detalle." Sumado a auto-pull en background cada 30 s cuando
+  `behind > 0`, el sync entre PCs es seamless. Errores categorizados
+  (`auth`/`network`/`conflict`/`rejected`/`unknown`) mapeados a español en
+  la UI. Throttle a 5 min después de 3 fallas consecutivas para no spamear.
+- ~~`.twriter/` se está versionando y genera conflictos cada sync entre
+  PCs~~ ✅ Al detectar backend git, la app corre `git_ensure_twriter_ignored`
+  (idempotente): agrega `.twriter/` al `.gitignore` si falta y corre
+  `git rm -r --cached .twriter` si está trackeado. El cambio queda
+  uncommitted — el próximo auto-commit lo pickea.
 
 ### Validador RAE
 
