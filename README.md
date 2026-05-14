@@ -449,7 +449,6 @@ paru -S twriter-bin
 
 ### Editor / UX
 
-- ~~Checkeador de la regla a raya (RAE)~~ ✅ Implementado: validador inline (squiggles en el editor mientras escribís) + batch audit (context menu "Revisar RAE" sobre saga/libro/sección → panel derecho con lista de violaciones agrupadas por capítulo + click-to-jump). Detección híbrida: diff-based contra el converter (categoría `pending-conversion`) + 8 reglas dedicadas (`dash-short`, `dash-orphan`, `dash-quote-mix`, `paragraph-collapsed`, `space-after-open`, `space-before-verb`, `verb-capitalized`, `period-before-verb`). Heurísticas anti-falso-positivo para multi-paragraph speech, verbos mid-content, subordinantes post-tag y dicendi-incisos cortos. Ver sección **Validador RAE** abajo para detalle.
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
 - Drag & drop reorder de capítulos (hoy solo via context menu ↑/↓).
@@ -532,15 +531,8 @@ paru -S twriter-bin
 - Bio + foto del autor a nivel saga (heredados a libros nuevos) y/o `settings.json` (defaults globales del repo). Hoy solo `book.json`.
 - Vista copada para diseñar temas (Con preview de todo. Título, copyright, capítulo y una página.)
 
-### Bundle / Distribución (Linux nativo)
-
-- ~~Metadata + branding del bundle (`publisher`, `copyright`, `shortDescription`, `longDescription`, `category`, `homepage`, `licenseFile`)~~ ✅ Cubierto en `tauri.conf.json::bundle` + `Cargo.toml`. Fixea el `.desktop` Comment + Categories vacíos y el `StartupWMClass` del Plasma (vía `bundle.identifier`).
-- ~~Sizes de ícono adicionales (48, 64)~~ ✅ Registrados en `bundle.icon` (32/48/64/128/128@2/icns/ico).
-- ~~Mejor UX de Docker para LT~~ ✅ Stepper con fases checking → pulling → starting → loading → ready + sección "Por qué Docker" con links a docker.com, languagetool.org, repo oficial y la imagen `erikvl87/languagetool`. Eventos `languagetool-progress` emitidos desde Rust con `tauri::Emitter`.
-
 ### Archivos
 
-- ~~Soportar servicios de nube como Dropbox y pCloud~~ ✅ (auto-detección + UI condicional — ver "Storage backend").
 - Changelog screen in-app: panel/modal accesible desde el header (junto a 🐛) parseando `CHANGELOG.md` o release notes de GitHub. Útil para gente nueva post-AUR.
 - Guía in-app de primer uso: tour con flechas la primera vez que se abre la app (tree explorer, idioma, RAE, gramática, sync). Persiste flag en `settings.json`.
 - Botón "Abrir en terminal" dentro del modal storage-help (`xdg-open` / `konsole` / `gnome-terminal` / `wt`).
@@ -550,22 +542,6 @@ paru -S twriter-bin
 - Diff/historial visual via `git log`.
 - Stats: gráfico palabras/día.
 - Preview pre-push: hoy el indicador del header dice "15 archivos para subir" sin detalle. Tooltip con lista de paths (M/A/D) en hover, y/o dialog "Ver cambios pendientes" con `git status --short` + `git diff --stat`.
-
-### Git / Sync
-
-- ~~Push sin pull falla silencioso si el remoto avanzó desde otra PC~~ ✅
-  El backend ahora hace `git pull --rebase --autostash` y reintenta el push
-  una vez al detectar non-fast-forward. Si el rebase produce conflictos,
-  aborta y muestra "Conflicto entre esta PC y el remoto. Abrí el panel 🐛
-  para detalle." Sumado a auto-pull en background cada 30 s cuando
-  `behind > 0`, el sync entre PCs es seamless. Errores categorizados
-  (`auth`/`network`/`conflict`/`rejected`/`unknown`) mapeados a español en
-  la UI. Throttle a 5 min después de 3 fallas consecutivas para no spamear.
-- ~~`.twriter/` se está versionando y genera conflictos cada sync entre
-  PCs~~ ✅ Al detectar backend git, la app corre `git_ensure_twriter_ignored`
-  (idempotente): agrega `.twriter/` al `.gitignore` si falta y corre
-  `git rm -r --cached .twriter` si está trackeado. El cambio queda
-  uncommitted — el próximo auto-commit lo pickea.
 
 ### Validador RAE
 
