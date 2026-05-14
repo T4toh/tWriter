@@ -75,6 +75,16 @@
   gap: 12px;
   padding: 1.5rem;
   overflow-y: auto;
+  align-items: stretch;
+}
+
+.grid > * {
+  height: 100%;
+}
+
+.grid > app-saga-card,
+.grid > app-book-card {
+  display: block;
 }
 
 .grid[data-mode='books'] {

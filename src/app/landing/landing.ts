@@ -300,6 +300,9 @@ export class Landing {
       case 'book': return 'novela';
       case 'section': return 'capítulo';
       case 'chapter': return 'parte';
+      case 'folder': return 'carpeta';
+      case 'notes': return 'notas';
+      case 'note': return 'nota';
       default: return kind;
     }
   }

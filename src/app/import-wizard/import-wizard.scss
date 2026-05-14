@@ -364,6 +364,44 @@
   border-radius: 8px;
 }
 
+.files-subheader {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 6px 2px;
+  margin-top: 4px;
+  border-top: 1px dashed var(--border);
+  list-style: none;
+
+  &:first-child {
+    border-top: none;
+    margin-top: 0;
+  }
+
+  &.extras-subheader {
+    color: var(--accent, var(--fg-muted));
+  }
+}
+
+.file-target-path {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-muted);
+  flex: 1;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.extra-row {
+  background: rgba(255, 255, 255, 0.02);
+
+  .file-source {
+    font-style: italic;
+  }
+}
+
 .iw-fieldset {
   border: 1px solid var(--border);
   border-radius: 6px;

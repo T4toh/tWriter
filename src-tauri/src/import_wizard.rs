@@ -5,7 +5,14 @@ use std::process::Command;
 use tauri::{AppHandle, Emitter};
 
 use crate::book_config::BookConfig;
-use crate::fs::{is_chapter_file, should_skip_dir};
+use crate::fs::is_chapter_file;
+
+/// Skip más permisivo que `fs::should_skip_dir`: solo metadatos reales.
+/// El importer quiere capturar `convertidos/`, `original/`, `Revisiones/` etc.
+/// como extras — la lista grande de `fs.rs` es para ocultar en el tree, no acá.
+fn should_skip_dir(name: &str) -> bool {
+    matches!(name, ".git" | ".twriter") || name.starts_with('.')
+}
 use crate::import::{clean_html, count_words};
 use crate::saga_config::SagaConfig;
 
@@ -24,6 +31,8 @@ pub struct SourceFile {
     pub name: String,
     pub ext: String,
     pub is_chapter_candidate: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subpath: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -173,7 +182,11 @@ fn scan_book(book_dir: &Path) -> Result<SourceNode, String> {
             if should_skip_dir(&fname) {
                 continue;
             }
-            sections.push(scan_section(&path)?);
+            if dir_has_chapters_recursive(&path, 2) {
+                sections.push(scan_section(&path)?);
+            } else {
+                collect_extras_recursive(&path, &fname, &mut extras);
+            }
         } else if path.is_file() {
             classify_file_into(&path, &mut chapters, &mut extras);
         }
@@ -198,10 +211,17 @@ fn scan_section(section_dir: &Path) -> Result<SourceNode, String> {
     let mut extras: Vec<SourceFile> = Vec::new();
     for entry in sorted_entries(section_dir)? {
         let path = entry.path();
+        let fname = entry.file_name().to_string_lossy().into_owned();
         if path.is_file() {
             classify_file_into(&path, &mut chapters, &mut extras);
+        } else if path.is_dir() {
+            if should_skip_dir(&fname) {
+                continue;
+            }
+            // Subdirs adentro de section → extras de la section, preservando subpath.
+            // (No anidamos sections: estructura plana cap/extras.)
+            collect_extras_recursive(&path, &fname, &mut extras);
         }
-        // Subdirs adentro de section: ignoramos por ahora (estructura plana esperada).
     }
     Ok(SourceNode::Section {
         path: section_dir.to_string_lossy().into_owned(),
@@ -234,11 +254,51 @@ fn classify_file_into(path: &Path, chapters: &mut Vec<SourceFile>, extras: &mut 
         name,
         ext,
         is_chapter_candidate: candidate,
+        subpath: None,
     };
     if candidate {
         chapters.push(f);
     } else {
         extras.push(f);
+    }
+}
+
+fn collect_extras_recursive(dir: &Path, prefix: &str, out: &mut Vec<SourceFile>) {
+    let entries = match sorted_entries(dir) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    for entry in entries {
+        let path = entry.path();
+        let fname = entry.file_name().to_string_lossy().into_owned();
+        if path.is_dir() {
+            if should_skip_dir(&fname) {
+                continue;
+            }
+            let next_prefix = format!("{}/{}", prefix, fname);
+            collect_extras_recursive(&path, &next_prefix, out);
+        } else if path.is_file() {
+            if fname.ends_with(".meta.json") {
+                continue;
+            }
+            let name = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|s| s.to_lowercase())
+                .unwrap_or_default();
+            out.push(SourceFile {
+                path: path.to_string_lossy().into_owned(),
+                name,
+                ext,
+                is_chapter_candidate: false,
+                subpath: Some(prefix.to_string()),
+            });
+        }
     }
 }
 
@@ -735,5 +795,115 @@ fn handle_extra(target_dir: &Path, x: &ExtraImport, summary: &mut ImportSummary)
     match fs::copy(&src, &dest) {
         Ok(_) => summary.copied_extras += 1,
         Err(e) => summary.failed.push(format!("copiar {}: {}", x.source_path, e)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    static SEQ: AtomicU32 = AtomicU32::new(0);
+
+    fn unique_tmp(prefix: &str) -> PathBuf {
+        let n = SEQ.fetch_add(1, Ordering::SeqCst);
+        let pid = std::process::id();
+        let dir = std::env::temp_dir().join(format!("twriter-{}-{}-{}", prefix, pid, n));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("crear tmp");
+        dir
+    }
+
+    fn touch(p: &Path) {
+        if let Some(parent) = p.parent() {
+            fs::create_dir_all(parent).expect("mkdir");
+        }
+        fs::write(p, b"x").expect("write");
+    }
+
+    #[test]
+    fn scan_book_classifies_no_chapter_folder_as_extras_with_subpath() {
+        let root = unique_tmp("scanbook");
+        touch(&root.join("cap1.docx"));
+        touch(&root.join("section_a").join("c1.docx"));
+        touch(&root.join("sin_caps").join("foo.jpg"));
+        touch(&root.join("sin_caps").join("sub").join("bar.epub"));
+        touch(&root.join("notas.txt"));
+
+        let node = scan_book(&root).expect("scan_book");
+        let (sections, extras) = match node {
+            SourceNode::Book {
+                sections, extras, ..
+            } => (sections, extras),
+            _ => panic!("debería ser Book"),
+        };
+
+        assert_eq!(sections.len(), 1, "solo section_a debería ser section");
+        match &sections[0] {
+            SourceNode::Section { name, .. } => assert_eq!(name, "section_a"),
+            _ => panic!("debería ser Section"),
+        }
+
+        let foo = extras
+            .iter()
+            .find(|f| f.name == "foo")
+            .expect("foo en extras");
+        assert_eq!(foo.subpath.as_deref(), Some("sin_caps"));
+        assert_eq!(foo.ext, "jpg");
+
+        let bar = extras
+            .iter()
+            .find(|f| f.name == "bar")
+            .expect("bar en extras");
+        assert_eq!(bar.subpath.as_deref(), Some("sin_caps/sub"));
+        assert_eq!(bar.ext, "epub");
+
+        let notas = extras
+            .iter()
+            .find(|f| f.name == "notas")
+            .expect("notas en extras (suelto)");
+        assert!(notas.subpath.is_none(), "archivo suelto sin subpath");
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn scan_section_treats_subdirs_as_extras_with_subpath() {
+        let root = unique_tmp("scansection");
+        let book = root.join("book");
+        let sec = book.join("section_a");
+        touch(&sec.join("1.odt"));
+        touch(&sec.join("2.odt"));
+        touch(&sec.join("convertidos").join("1_convertido.odt"));
+        touch(&sec.join("convertidos").join("1_convertido.log.txt"));
+        touch(&sec.join("original").join("section_a.odt"));
+
+        let node = scan_book(&book).expect("scan_book");
+        let sections = match node {
+            SourceNode::Book { sections, .. } => sections,
+            _ => panic!("debería ser Book"),
+        };
+        assert_eq!(sections.len(), 1);
+        let (chapters, extras) = match &sections[0] {
+            SourceNode::Section {
+                chapters, extras, ..
+            } => (chapters, extras),
+            _ => panic!("debería ser Section"),
+        };
+        assert_eq!(chapters.len(), 2, "1.odt y 2.odt como caps");
+
+        let conv_odt = extras
+            .iter()
+            .find(|f| f.name == "1_convertido" && f.ext == "odt")
+            .expect("convertido odt en extras");
+        assert_eq!(conv_odt.subpath.as_deref(), Some("convertidos"));
+
+        let orig = extras
+            .iter()
+            .find(|f| f.name == "section_a" && f.ext == "odt")
+            .expect("original section_a.odt en extras");
+        assert_eq!(orig.subpath.as_deref(), Some("original"));
+
+        let _ = fs::remove_dir_all(&root);
     }
 }
