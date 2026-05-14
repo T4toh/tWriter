@@ -1,6 +1,6 @@
 use serde::Serialize;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::search;
 
@@ -11,7 +11,7 @@ pub struct CreateNoteResult {
 
 const NOTE_EXTS: &[&str] = &["md", "markdown"];
 
-fn is_note_path(path: &PathBuf) -> bool {
+fn is_note_path(path: &Path) -> bool {
     let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
         return false;
     };

@@ -45,7 +45,7 @@ fn read_impl(path: &str) -> Result<ImageData, String> {
 fn base64_encode(input: &[u8]) -> String {
     const ALPHABET: &[u8] =
         b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
+    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
     let mut chunks = input.chunks_exact(3);
     for chunk in &mut chunks {
         let b0 = chunk[0] as u32;

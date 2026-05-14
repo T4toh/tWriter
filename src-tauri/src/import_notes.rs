@@ -77,6 +77,7 @@ pub struct ImportProgress {
 /// Contrato común para importers de notas externas.
 pub trait NoteImporter {
     /// Identificador único (kebab-case). Se usa en eventos y logs.
+    #[allow(dead_code)]
     fn id(&self) -> &'static str;
     /// Nombre legible para UI.
     #[allow(dead_code)]
