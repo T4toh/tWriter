@@ -1,12 +1,26 @@
 /**
- * Busca el primer text node dentro de `host` que matchee alguno de `terms`
- * (case-insensitive). Si lo encuentra: lo selecciona y hace scroll al medio.
- * Devuelve true si hubo match.
+ * Busca el primer text node dentro de `host` que matchee la query.
+ *
+ * Si `rawQuery` viene con forma rica (mayúsculas o puntuación) y aparece
+ * literal en algún text node, gana sobre el match de tokens — así
+ * `¡Duendes!` cae sobre el grito específico, no sobre el primer `duendes`.
+ *
+ * Fallback al primer text node que contenga alguno de `terms` (caso
+ * legacy: query sin caracteres especiales).
  */
-export function highlightFirstMatch(host: HTMLElement | null, terms: string[]): boolean {
-  if (!host || terms.length === 0) return false;
+export function highlightFirstMatch(
+  host: HTMLElement | null,
+  terms: string[],
+  rawQuery?: string,
+): boolean {
+  if (!host) return false;
   const lowerTerms = terms.map((t) => t.toLowerCase()).filter((t) => t.length > 0);
-  if (lowerTerms.length === 0) return false;
+  const raw = (rawQuery ?? '').trim();
+  const rawLower = raw.toLowerCase();
+  const hasRichForm =
+    raw.length > 0 &&
+    [...raw].some((c) => c !== c.toLowerCase() || /[^\p{L}\p{N}\s]/u.test(c));
+  if (lowerTerms.length === 0 && !hasRichForm) return false;
 
   const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, {
     acceptNode: (node) =>
@@ -19,23 +33,47 @@ export function highlightFirstMatch(host: HTMLElement | null, terms: string[]): 
   let bestOffset = -1;
   let bestLen = 0;
 
-  // Recorrer todos los text nodes, encontrar el primero (en orden documental)
-  // que contenga uno de los términos. Para nodos múltiples con el mismo
-  // término, devolver el de menor offset.
-  let cur: Node | null = walker.nextNode();
-  while (cur) {
-    const text = (cur.nodeValue ?? '').toLowerCase();
-    for (const t of lowerTerms) {
-      const idx = text.indexOf(t);
+  // Pasada 1: buscar el literal `rawQuery` si tiene forma rica. Walker
+  // recorre en orden documental → primer match gana.
+  if (hasRichForm) {
+    let cur: Node | null = walker.nextNode();
+    while (cur) {
+      const text = (cur.nodeValue ?? '').toLowerCase();
+      const idx = text.indexOf(rawLower);
       if (idx >= 0) {
         bestNode = cur as Text;
         bestOffset = idx;
-        bestLen = t.length;
+        bestLen = raw.length;
         break;
       }
+      cur = walker.nextNode();
     }
-    if (bestNode) break;
-    cur = walker.nextNode();
+  }
+
+  // Pasada 2 (fallback): primer text node que contenga algún token.
+  if (!bestNode && lowerTerms.length > 0) {
+    // Reset walker: createTreeWalker no se rebobina; nuevo.
+    const walker2 = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) =>
+        node.nodeValue && node.nodeValue.trim().length > 0
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT,
+    });
+    let cur: Node | null = walker2.nextNode();
+    while (cur) {
+      const text = (cur.nodeValue ?? '').toLowerCase();
+      for (const t of lowerTerms) {
+        const idx = text.indexOf(t);
+        if (idx >= 0) {
+          bestNode = cur as Text;
+          bestOffset = idx;
+          bestLen = t.length;
+          break;
+        }
+      }
+      if (bestNode) break;
+      cur = walker2.nextNode();
+    }
   }
 
   if (!bestNode) return false;

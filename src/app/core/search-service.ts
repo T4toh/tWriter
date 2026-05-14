@@ -30,6 +30,10 @@ interface ReindexProgress {
 export interface PendingHighlight {
   path: string;
   terms: string[];
+  /** Query raw sin tokenizar (preserva mayúsculas, `¡!`, `?`). El highlighter
+   *  busca este literal primero — `¡Duendes!` cae en el grito, no en el
+   *  primer `duendes` lowercase del párrafo. Vacío si la query es trivial. */
+  rawQuery: string;
   requestId: number;
 }
 
@@ -130,6 +134,7 @@ export class SearchService {
     this.pendingHighlight.set({
       path,
       terms,
+      rawQuery: q,
       requestId: ++this.highlightCounter,
     });
   }

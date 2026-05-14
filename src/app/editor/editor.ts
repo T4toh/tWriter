@@ -233,7 +233,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         const pending = this.search.consumePendingHighlight(node.path);
         if (pending) {
           setTimeout(() => {
-            highlightFirstMatch(this.hostRef.nativeElement, pending.terms);
+            highlightFirstMatch(this.hostRef.nativeElement, pending.terms, pending.rawQuery);
           }, 0);
         }
       }
