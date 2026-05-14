@@ -3,6 +3,22 @@ import { invoke } from '@tauri-apps/api/core';
 import { SettingsService } from './settings-service';
 import { StorageService } from './storage-service';
 
+export function friendlyError(raw: string): string {
+  if (raw.startsWith('auth:')) {
+    return 'No se pudo autenticar contra el remoto. Revisá la clave SSH o el token.';
+  }
+  if (raw.startsWith('network:')) {
+    return 'Sin conexión al remoto. Reintentamos en 30 s.';
+  }
+  if (raw.startsWith('conflict:')) {
+    return 'Conflicto entre esta PC y el remoto. Abrí el panel 🐛 para detalle.';
+  }
+  if (raw.startsWith('rejected:')) {
+    return 'El remoto avanzó y reintentamos rebasear automáticamente. Si volvés a ver este mensaje, abrí el panel 🐛.';
+  }
+  return 'Falló el sync. Mirá el panel 🐛 para más info.';
+}
+
 export interface GitStatus {
   has_changes: boolean;
   changed: number;
