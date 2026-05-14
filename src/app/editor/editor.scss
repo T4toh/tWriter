@@ -464,6 +464,14 @@
   margin-left: auto;
 }
 
+.cursor-pos {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .indicator {
   padding: 2px 8px;
   border-radius: 3px;

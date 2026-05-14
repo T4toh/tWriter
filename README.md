@@ -78,6 +78,8 @@ Reglas:
 - `<app-select>` Angular standalone reemplaza los `<select>` nativos en todos los modales (no más widget del DE distinto por distro). Typeahead automático cuando hay >10 opciones.
 - File pickers nativos vía `rfd` 0.15 con feature `xdg-portal` — en KDE/Wayland abre el portal del sistema en vez del diálogo GTK 3 foreign del plugin-dialog.
 - **Split view**: arrastrá un capítulo o nota del árbol al panel central para abrir un segundo editor. Combos: chapter+chapter (comparar/escribir en paralelo) o chapter+note (nota como referencia mientras escribís). Cada pane tiene su propio autosave, idioma, gramática y RAE. Botón ⬍/⬌ cambia entre split horizontal (lado a lado) y vertical (apilado). Botón × cierra el pane secundario y vuelve a single-pane. Estado no persistido entre sesiones (cada vez arranca single).
+- **Indicador de posición en el footer**: `P. N · Col M` al lado del wordCount, contando bloques top-level (párrafos / headings / blockquotes) y el offset dentro del bloque que contiene al cursor. Estable contra wrap (no depende del ancho de hoja / font size); alinea con los offsets per-paragraph que reportan validador RAE / LT / batch audit. Cada pane (split view) tiene su propio indicador.
+- **Auto-replace `...` → `…`**: TipTap Typography activo en runtime (ya convertía al tipear). Sumamos normalización post-import en `clean_html` (`src-tauri/src/import.rs`) — los `.docx`/`.odt` que llegaban con `...` literal ahora se guardan con `…` (U+2026) directo.
 
 ### Notas (Markdown)
 
@@ -108,6 +110,8 @@ Reglas:
 
 - Panel lateral con full-text search sobre notas (`.md`) + capítulos (`.html`) + títulos de carpetas (sagas/libros/secciones/folders/notas).
 - Backend: [tantivy](https://github.com/quickwit-oss/tantivy) (in-process, sin servicio externo). Índice persistido en `<root>/.twriter/search-index/` — auto-excluido del tree y del export EPUB.
+- **Multi-palabra = AND**: query con 2+ términos requiere TODOS (no AT-LEAST-ONE). El default del `QueryParser` de tantivy es OR; lo forzamos a AND en `search.rs::search_query_impl` vía `parser.set_conjunction_by_default()`. Operadores explícitos (`AND`/`OR`/`-término`/`"frase"`/`kind:`) siguen pendientes — ver TODO.
+- **Forma exacta gana** (mayúsculas + `¡¿?!`): el tokenizer de tantivy stripea puntuación y lowercaseа, así que `¡Duendes!` indexa como `duendes`. Para que `¡Duendes!` priorice el grito específico y no el primer `duendes` lowercase de cualquier párrafo, agregamos tres capas: (1) **snippet centra en el literal** si aparece en el doc; (2) **boost de ranking ×2** sobre docs cuyo contenido contiene la forma rica (substring case-insensitive); (3) **jump-to-term** salta al primer match literal del raw query antes de fallback a tokens. Query sin formas ricas (`duendes` solo) sigue ranqueando puro BM25.
 - **Reindex incremental on-save**: cada `write_note` / `write_chapter` / `create_*` actualiza el índice de ese archivo. Render fresco en la próxima query, sin reindex manual.
 - **Reindex full** al boot si hay root configurado (async, no bloquea startup). Botón ↻ en el header del panel relanza un reindex completo si hace falta.
 - Resultados rankeados por relevancia (BM25), con snippet centrado en el primer match y highlight `<mark>` de los términos.
@@ -465,32 +469,18 @@ paru -S twriter-bin
   replacement, queda el array viejo con offsets stale hasta el próximo
   check. (c) Caracteres especiales tipo NBSP / soft-hyphen / zero-width
   joiners en el HTML del importer Pandoc cuentan distinto en plain vs PM.
-  Plan: agregar log target=`grammar` con `from/to/expected_word/actual_word`
-  al click del popover, ver si la divergencia es siempre por edits intermedios
-  o también en chapters recién abiertos.
-- **Auto-replace `...` → `…` al escribir**: TipTap Typography extension ya
-  está cargada (debería convertir `...` a `…` U+2026 en tiempo real), pero
-  hay capítulos donde aparecen `...` literales (caso reportado: cap 2 de
-  "Amigo del Bosque" tiene "Gracias..." en dos formas distintas). Verificar
-  que la regla `ellipsis` de Typography esté activa + agregar shortcut de
-  teclado o input rule por si el auto-replace está pisado por algo. Si vino
-  del importer Pandoc, agregar normalización post-import (`<p>` content:
-  `\.\.\.` → `…`).
-- **Indicador de línea/columna en footer del editor**: hoy solo muestra
-  palabras y estado guardado. Agregar `Ln 42, Col 15` (o número de párrafo)
-  para poder ubicar offsets reportados por el validador RAE / LT / batch
-  audit. Posición se lee de la selección de ProseMirror; render junto a
-  `wordCount` en `editor.html`.
-- Operadores en la búsqueda (AND, OR, "frase exacta" entre comillas, filtros por kind). Hoy parsea como query libre con BM25.
-- **Búsqueda multi-palabra trae basura**: con 2+ palabras devuelve cualquier
-  documento que tenga AT LEAST ONE término (semántica OR del query parser
-  de tantivy por default) en vez de los que tienen TODOS. Resultados
-  rankean por BM25, así que el "más relevante" sube primero, pero la lista
-  larga de coincidencias parciales confunde. Fix: pasar el `default_operator`
-  a `AND` al construir el `QueryParser` en `src-tauri/src/search.rs`, o
-  reescribir la query a `+term1 +term2` antes de parsear. Alternativa más
-  potente: usar el operador parser de tantivy y exponer query syntax al
-  usuario (ver item de arriba).
+  **Instrumentación ya en lugar**: `mapMatchesToPm` (`grammar-extension.ts`)
+  acepta un `OffsetMismatchReporter` opcional que el editor cablea a
+  `debug.warn('grammar:offset', ...)`. Compara `plain.slice(offset, length)`
+  vs `doc.textBetween(from, to)` y loggea drift. `applyGrammarReplacement`
+  (`editor.ts`) loggea `popover-apply` con `ltSlice`/`pmSlice`/`drift` al
+  click. Cuando aparezca un repro, filtrar panel 🐛 por source
+  `grammar:offset`, copiar entradas con 📋, y el patrón de drift indicará
+  qué sospecha (A/B/C) confirmar antes de fixear.
+- Operadores explícitos en la búsqueda (AND, OR, "frase exacta" entre
+  comillas, filtros `kind:note`, `kind:chapter`). Hoy el default es AND
+  implícito sobre todos los términos; sumar sintaxis para que el usuario
+  pueda forzar OR, frases exactas o filtrar por tipo de documento.
 
 ### Tree / Importer
 

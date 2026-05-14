@@ -252,6 +252,11 @@
       </button>
     }
     <span class="counter">{{ wordCount() }} palabras</span>
+    @if (canEdit()) {
+      <span class="cursor-pos" title="Párrafo · columna dentro del párrafo">
+        P. {{ cursorPos().paragraph }} · Col {{ cursorPos().col }}
+      </span>
+    }
     @if (dirty()) {
       <span class="indicator dirty">sin guardar</span>
     } @else if (canEdit()) {

@@ -135,7 +135,7 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
         const pending = this.search.consumePendingHighlight(target.path);
         if (pending) {
           setTimeout(() => {
-            highlightFirstMatch(this.hostRef.nativeElement, pending.terms);
+            highlightFirstMatch(this.hostRef.nativeElement, pending.terms, pending.rawQuery);
           }, 0);
         }
       }

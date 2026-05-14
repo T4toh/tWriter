@@ -140,17 +140,32 @@ fn html_to_text(html: &str) -> String {
 }
 
 /// Genera un snippet centrado en el primer match de los términos de la query.
-fn make_snippet(content: &str, query_terms: &[String]) -> String {
-    if content.is_empty() || query_terms.is_empty() {
-        let cut: String = content.chars().take(SNIPPET_MAX_LEN).collect();
-        return cut;
+/// Si `raw_query` (case-insensitive, preservando puntuación) aparece literal,
+/// gana sobre el match de tokens — así `¡Duendes!` cae en el grito y no en
+/// el primer `duendes` lowercase del párrafo.
+fn make_snippet(content: &str, raw_query: &str, query_terms: &[String]) -> String {
+    if content.is_empty() {
+        return String::new();
     }
     let lower = content.to_lowercase();
+    let raw_trim = raw_query.trim();
     let mut best: Option<usize> = None;
-    for t in query_terms {
-        if let Some(idx) = lower.find(&t.to_lowercase()) {
-            best = Some(best.map_or(idx, |b| b.min(idx)));
+    if !raw_trim.is_empty() {
+        let raw_lower = raw_trim.to_lowercase();
+        if let Some(idx) = lower.find(&raw_lower) {
+            best = Some(idx);
         }
+    }
+    if best.is_none() {
+        for t in query_terms {
+            if let Some(idx) = lower.find(&t.to_lowercase()) {
+                best = Some(best.map_or(idx, |b| b.min(idx)));
+            }
+        }
+    }
+    if best.is_none() && query_terms.is_empty() && raw_trim.is_empty() {
+        let cut: String = content.chars().take(SNIPPET_MAX_LEN).collect();
+        return cut;
     }
     let center = best.unwrap_or(0);
     let start = center.saturating_sub(SNIPPET_MAX_LEN / 3);
@@ -456,7 +471,8 @@ pub fn search_query_impl(query: &str, limit: usize) -> Result<SearchResult, Stri
         });
     }
     let searcher = idx.reader.searcher();
-    let parser = QueryParser::for_index(&idx.index, vec![idx.title_field, idx.content_field]);
+    let mut parser = QueryParser::for_index(&idx.index, vec![idx.title_field, idx.content_field]);
+    parser.set_conjunction_by_default();
     let parsed = match parser.parse_query(q) {
         Ok(p) => p,
         Err(_) => return Ok(SearchResult { hits: Vec::new(), total: 0 }),
@@ -470,6 +486,14 @@ pub fn search_query_impl(query: &str, limit: usize) -> Result<SearchResult, Stri
         .map(|t| t.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
         .filter(|t| !t.is_empty())
         .collect();
+    // Si la query "rica" (mayúsculas, `¡`, `!`, `?`, etc.) difiere del set de
+    // tokens normalizados que indexa tantivy, boostamos docs que contienen el
+    // literal por encima de los que solo matchean al token plano. Esto hace que
+    // `¡Duendes!` priorice el párrafo del grito, no el primer `duendes`.
+    let raw_lower = q.to_lowercase();
+    let has_rich_form = q
+        .chars()
+        .any(|c| c.is_uppercase() || (!c.is_alphanumeric() && !c.is_whitespace()));
     let mut hits = Vec::with_capacity(top_docs.len());
     for (score, addr) in top_docs {
         let doc: TantivyDocument = match searcher.doc(addr) {
@@ -496,13 +520,18 @@ pub fn search_query_impl(query: &str, limit: usize) -> Result<SearchResult, Stri
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
+        let exact_hit = has_rich_form && content.to_lowercase().contains(&raw_lower);
+        let final_score = if exact_hit { score * 2.0 } else { score };
         hits.push(SearchHit {
             path,
             kind,
             title,
-            snippet: make_snippet(&content, &terms),
-            score,
+            snippet: make_snippet(&content, q, &terms),
+            score: final_score,
         });
+    }
+    if has_rich_form {
+        hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
     }
     let total = hits.len();
     Ok(SearchResult { hits, total })
@@ -564,7 +593,72 @@ mod tests {
     #[test]
     fn snippet_centers_on_match() {
         let content = "lorem ipsum dolor sit amet magia consectetur adipiscing elit";
-        let s = make_snippet(content, &["magia".into()]);
+        let s = make_snippet(content, "magia", &["magia".into()]);
         assert!(s.contains("magia"));
+    }
+
+    #[test]
+    fn snippet_prefers_exact_form_over_first_token() {
+        // El raw `¡Duendes!` debe ganar sobre el primer `duendes` lowercase
+        // del párrafo, así el usuario ve el contexto que buscaba.
+        let content = "Hablaban del tema de los duendes. \
+            Mucho después, en otro momento, alguien gritó: ¡Duendes! gritó con energía.";
+        let s = make_snippet(content, "¡Duendes!", &["duendes".into()]);
+        assert!(
+            s.contains("¡Duendes!"),
+            "snippet debería centrar en el literal ¡Duendes!, got: {s:?}"
+        );
+    }
+
+    #[test]
+    fn snippet_falls_back_to_tokens_when_no_exact_match() {
+        let content = "Hablaban del tema de los duendes a la noche.";
+        let s = make_snippet(content, "¡Duendes!", &["duendes".into()]);
+        assert!(s.contains("duendes"));
+    }
+
+    #[test]
+    fn multi_word_query_requires_all_terms() {
+        let (schema, path_field, _kind_field, title_field, content_field, _mtime_field) =
+            build_schema();
+        let index = Index::create_in_ram(schema);
+        let mut writer = index.writer(WRITER_HEAP_BYTES).unwrap();
+        writer
+            .add_document(doc!(
+                path_field => "alpha-beta.html",
+                title_field => "ab",
+                content_field => "alpha beta",
+            ))
+            .unwrap();
+        writer
+            .add_document(doc!(
+                path_field => "alpha-gamma.html",
+                title_field => "ag",
+                content_field => "alpha gamma",
+            ))
+            .unwrap();
+        writer
+            .add_document(doc!(
+                path_field => "beta-gamma.html",
+                title_field => "bg",
+                content_field => "beta gamma",
+            ))
+            .unwrap();
+        writer.commit().unwrap();
+        let reader = index
+            .reader_builder()
+            .reload_policy(ReloadPolicy::OnCommitWithDelay)
+            .try_into()
+            .unwrap();
+        let searcher = reader.searcher();
+        let mut parser = QueryParser::for_index(&index, vec![title_field, content_field]);
+        parser.set_conjunction_by_default();
+        let parsed = parser.parse_query("alpha beta").unwrap();
+        let hits = searcher.search(&parsed, &TopDocs::with_limit(10)).unwrap();
+        assert_eq!(hits.len(), 1, "AND default debería traer solo el doc con ambos términos");
+        let (_score, addr) = hits[0];
+        let doc: TantivyDocument = searcher.doc(addr).unwrap();
+        let path = doc.get_first(path_field).and_then(|v| v.as_str()).unwrap();
+        assert_eq!(path, "alpha-beta.html");
     }
 }
