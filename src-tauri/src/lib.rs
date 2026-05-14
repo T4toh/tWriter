@@ -50,7 +50,7 @@ use import::{delete_chapter_file, delete_directory, import_chapter};
 use import_notes::{joplin_import_apply, joplin_scan};
 use import_wizard::{import_wizard_apply, scan_import_source};
 use notes::{create_folder, create_note, delete_note, read_note, write_note};
-use reorder::move_node;
+use reorder::{move_node, relocate_node};
 use search::{search_query, search_reindex};
 use secrets::{lt_api_key_save, lt_api_key_status};
 use settings::{get_settings, set_settings};
@@ -123,6 +123,7 @@ pub fn run() {
             create_folder,
             delete_note,
             move_node,
+            relocate_node,
             export_book,
             list_exports,
             get_book_config,

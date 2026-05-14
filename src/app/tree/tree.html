@@ -24,7 +24,22 @@
   @if (root(); as r) {
     <ng-container *ngTemplateOutlet="themesSectionTpl" />
     <ng-container *ngTemplateOutlet="rootFontsSectionTpl" />
-    @for (child of r.children; track child.path) {
+    <div
+      cdkDropList
+      [id]="dropListId(r.path, 'saga')"
+      [cdkDropListData]="{ parentPath: r.path, childKind: 'saga' }"
+      [cdkDropListConnectedTo]="dropListIds().saga"
+      (cdkDropListDropped)="onDropList($event)"
+    >
+      @for (child of childrenOfKind(r, 'saga'); track child.path) {
+        <div cdkDrag [cdkDragData]="child" [cdkDragDisabled]="!isDraggable(child)">
+          <ng-container
+            *ngTemplateOutlet="nodeTpl; context: { $implicit: child, depth: 0 }"
+          />
+        </div>
+      }
+    </div>
+    @for (child of childrenOfOtherKinds(r, 'saga'); track child.path) {
       <ng-container
         *ngTemplateOutlet="nodeTpl; context: { $implicit: child, depth: 0 }"
       />
@@ -96,7 +111,25 @@
       }
     </button>
     @if (isExpanded(node)) {
-      @for (child of node.children; track child.path) {
+      <div
+        cdkDropList
+        [id]="dropListId(node.path, 'note')"
+        [cdkDropListData]="{ parentPath: node.path, childKind: 'note' }"
+        [cdkDropListConnectedTo]="dropListIds().note"
+        (cdkDropListDropped)="onDropList($event)"
+      >
+        @for (child of childrenOfKind(node, 'note'); track child.path) {
+          <div cdkDrag [cdkDragData]="child" [cdkDragDisabled]="!isDraggable(child)">
+            <ng-container
+              *ngTemplateOutlet="
+                nodeTpl;
+                context: { $implicit: child, depth: depth + 1 }
+              "
+            />
+          </div>
+        }
+      </div>
+      @for (child of childrenOfOtherKinds(node, 'note'); track child.path) {
         <ng-container
           *ngTemplateOutlet="
             nodeTpl;
@@ -125,7 +158,25 @@
       }
     </button>
     @if (isExpanded(node)) {
-      @for (child of node.children; track child.path) {
+      <div
+        cdkDropList
+        [id]="dropListId(node.path, 'note')"
+        [cdkDropListData]="{ parentPath: node.path, childKind: 'note' }"
+        [cdkDropListConnectedTo]="dropListIds().note"
+        (cdkDropListDropped)="onDropList($event)"
+      >
+        @for (child of childrenOfKind(node, 'note'); track child.path) {
+          <div cdkDrag [cdkDragData]="child" [cdkDragDisabled]="!isDraggable(child)">
+            <ng-container
+              *ngTemplateOutlet="
+                nodeTpl;
+                context: { $implicit: child, depth: depth + 1 }
+              "
+            />
+          </div>
+        }
+      </div>
+      @for (child of childrenOfOtherKinds(node, 'note'); track child.path) {
         <ng-container
           *ngTemplateOutlet="
             nodeTpl;
@@ -155,13 +206,42 @@
       }
     </button>
     @if (isExpanded(node)) {
-      @for (child of node.children; track child.path) {
-        <ng-container
-          *ngTemplateOutlet="
-            nodeTpl;
-            context: { $implicit: child, depth: depth + 1 }
-          "
-        />
+      @if (childKindFor(node.kind); as primaryKind) {
+        <div
+          cdkDropList
+          [id]="dropListId(node.path, primaryKind)"
+          [cdkDropListData]="{ parentPath: node.path, childKind: primaryKind }"
+          [cdkDropListConnectedTo]="connectedFor(node.kind)"
+          (cdkDropListDropped)="onDropList($event)"
+        >
+          @for (child of childrenOfKind(node, primaryKind); track child.path) {
+            <div cdkDrag [cdkDragData]="child" [cdkDragDisabled]="!isDraggable(child)">
+              <ng-container
+                *ngTemplateOutlet="
+                  nodeTpl;
+                  context: { $implicit: child, depth: depth + 1 }
+                "
+              />
+            </div>
+          }
+        </div>
+        @for (child of childrenOfOtherKinds(node, primaryKind); track child.path) {
+          <ng-container
+            *ngTemplateOutlet="
+              nodeTpl;
+              context: { $implicit: child, depth: depth + 1 }
+            "
+          />
+        }
+      } @else {
+        @for (child of node.children; track child.path) {
+          <ng-container
+            *ngTemplateOutlet="
+              nodeTpl;
+              context: { $implicit: child, depth: depth + 1 }
+            "
+          />
+        }
       }
       @if ((node.kind === 'saga' || node.kind === 'book') && !node.excluded) {
         <ng-container

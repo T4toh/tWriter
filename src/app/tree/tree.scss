@@ -309,3 +309,33 @@
   border-radius: 3px;
   font-weight: 600;
 }
+
+// ─── CDK DragDrop interno (reorder + cross-parent) ───
+
+.cdk-drag-preview {
+  box-sizing: border-box;
+  background: var(--bg-secondary, var(--bg, #1a1a1a));
+  border: 1px solid var(--accent, #6cf);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  opacity: 0.92;
+  padding: 0;
+
+  .row {
+    padding-left: 8px !important;
+  }
+}
+
+.cdk-drag-placeholder {
+  opacity: 0;
+  min-height: 22px;
+  border-top: 2px solid var(--accent, #6cf);
+}
+
+.cdk-drop-list-dragging .cdk-drag:not(.cdk-drag-placeholder) {
+  transition: transform 180ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.cdk-drag-animating {
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
