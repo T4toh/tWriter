@@ -510,13 +510,16 @@ paru -S twriter-bin
 - Borrar entradas individuales del diccionario per-saga desde UI (hoy se editan en bloque vía textarea del modal de configuración; agregar funciona desde el popover de typos).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
-- **Limpiar restos de tema en el wizard importador**: la lógica de configurar
-  tema durante el import wizard se movió al theme editor, pero quedaron
-  campos / pasos / código muerto del flujo viejo en `import_wizard.rs` +
-  `import-wizard/` (frontend). Auditar: pasos del stepper que pregunten por
-  tema, fields en el payload del wizard, branches en `ImportWizardService`,
-  refs a `theme.base` durante el apply. Borrar todo y dejar el wizard
-  enfocado en estructura/metadata/conversión.
+- ~~Limpiar restos de tema en el wizard importador~~ ✅ El paso `saga-config`
+  del wizard ya no pregunta los 6 defaults EPUB (`template`,
+  `prefijo_capitulo`, `mostrar_titulo_capitulo`, `dropcap`,
+  `mostrar_numero_parte`, `formato_parte`). Quedó enfocado en
+  estructura/metadata/conversión + nombre/autor/idioma/imprenta. La
+  presentación se configura en el theme editor + `saga.json::theme` /
+  `book.json::theme`. Demo template y `applySagaDefaultsToBooks` stripeados
+  en consonancia. Read-side legacy fallback en `theme.rs::resolve_theme`
+  intacto para repos viejos que tengan los 6 campos al root de
+  saga.json/book.json.
 
 ### EPUB
 

@@ -63,21 +63,6 @@ export class ImportWizard {
     { value: 'es', label: 'Español' },
     { value: 'en', label: 'Inglés' },
   ];
-  protected readonly templateOptions: SelectOption[] = [
-    { value: '6x9', label: '6 × 9 in (default)' },
-    { value: '5x8', label: '5 × 8 in' },
-    { value: 'a5', label: 'A5 (148 × 210 mm)' },
-  ];
-  protected readonly prefijoCapituloOptions: SelectOption[] = [
-    { value: 'none', label: 'Sin prefijo' },
-    { value: 'decimal', label: 'Número (1, 2, 3…)' },
-    { value: 'roman', label: 'Romano (I, II, III…)' },
-  ];
-  protected readonly formatoParteOptions: SelectOption[] = [
-    { value: 'raw', label: '1' },
-    { value: 'parte', label: 'Parte 1' },
-    { value: 'punto', label: '1.' },
-  ];
   protected readonly demoLangOptions: SelectOption[] = [
     { value: 'es', label: 'Español' },
     { value: 'en', label: 'Inglés' },
@@ -329,24 +314,6 @@ export class ImportWizard {
     this.wizard.sagaConfig.update((c) => ({
       ...c,
       [field]: value || null,
-    }));
-  }
-
-  protected updateSagaSelect<
-    K extends 'template' | 'prefijo_capitulo' | 'formato_parte',
-  >(field: K, value: string): void {
-    this.wizard.sagaConfig.update((c) => ({
-      ...c,
-      [field]: (value || null) as any,
-    }));
-  }
-
-  protected updateSagaBool<
-    K extends 'mostrar_titulo_capitulo' | 'dropcap' | 'mostrar_numero_parte',
-  >(field: K, value: boolean): void {
-    this.wizard.sagaConfig.update((c) => ({
-      ...c,
-      [field]: value,
     }));
   }
 

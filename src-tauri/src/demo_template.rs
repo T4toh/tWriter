@@ -247,12 +247,6 @@ fn build_saga_cfg(nombre: &str, lang: &str) -> SagaConfig {
         autor: Some("Demo Author".to_string()),
         idioma: Some(lang.to_string()),
         imprenta: Some("Independiente".to_string()),
-        template: Some("6x9".to_string()),
-        prefijo_capitulo: Some("decimal".to_string()),
-        mostrar_titulo_capitulo: Some(true),
-        dropcap: Some(false),
-        mostrar_numero_parte: Some(true),
-        formato_parte: Some("raw".to_string()),
         ..Default::default()
     }
 }
@@ -265,12 +259,6 @@ fn build_book_cfg(titulo: &str, lang: &str, serie: &str) -> BookConfig {
         serie: Some(serie.to_string()),
         numero_en_serie: Some(1),
         imprenta: Some("Independiente".to_string()),
-        template: Some("6x9".to_string()),
-        prefijo_capitulo: Some("decimal".to_string()),
-        mostrar_titulo_capitulo: Some(true),
-        dropcap: Some(false),
-        mostrar_numero_parte: Some(true),
-        formato_parte: Some("raw".to_string()),
         derechos_reservados: Some(true),
         ..Default::default()
     }
