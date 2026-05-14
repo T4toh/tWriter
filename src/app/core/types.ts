@@ -99,3 +99,29 @@ export interface GrammarMatch {
   category: string;
   replacements: string[];
 }
+
+export type RaeCategory = 'pending-conversion' | 'char' | 'structure' | 'typo';
+export type RaeSeverity = 'error' | 'warning';
+
+export interface RaeAutoFix {
+  offset: number;
+  length: number;
+  replacement: string;
+}
+
+export interface RaeParagraphRange {
+  offset: number;
+  length: number;
+}
+
+export interface RaeViolation {
+  offset: number;
+  length: number;
+  category: RaeCategory;
+  severity: RaeSeverity;
+  ruleId: string;
+  message: string;
+  shortMessage: string;
+  autoFix?: RaeAutoFix;
+  paragraphRange?: RaeParagraphRange;
+}

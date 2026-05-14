@@ -118,7 +118,7 @@ Reglas:
 
 ### Conversor RAE
 
-- Port TS de reglas D1–D5 desde [`dialogos_a_esp`](https://github.com/T4toh/dialogos_a_esp).
+- Port TS de reglas D1–D5 desde [`dialogos_a_esp`](https://github.com/T4toh/dialogos_a_esp) — **el repo Python está deprecado**; arrastraba bugs (`\b` ASCII-only no matchea acentos, colapso de párrafos, D3/D5 incompletos) que se arreglaron del lado TS. Las reglas vivas viven acá; el Python queda solo como referencia histórica.
 - Botón "RAE" en toolbar (solo cuando `idioma === 'es'`).
 - Preview side-by-side antes de aplicar.
 - **Procesamiento per-paragraph**: el converter detecta el HTML del editor y
@@ -132,11 +132,90 @@ Reglas:
   estaba inactiva en la port TS (el Python original no tiene este problema
   porque `\b` ahí es Unicode-aware).
 - **Reglas RAE 3 y 5 (inciso con continuación)**: el diálogo `"texto1" verbo
-  inciso. "texto2"` ahora cierra la raya antes del punto y deja el texto2 sin
+inciso. "texto2"` ahora cierra la raya antes del punto y deja el texto2 sin
   raya de apertura — `—texto1 —verbo inciso—. texto2`. Aplica tanto a inciso
   con verbo dicendi (D3) como a inciso de acción sin verbo (D4). El punto
   del primer diálogo se preserva en D4 (acción) y se absorbe en D3 (verbo
   dicendi), siguiendo la distinción de [DPD raya](https://www.rae.es/dpd/raya).
+
+### Validador RAE (inline + batch)
+
+Detecta violaciones de la regla DPD de diálogos sobre texto ya escrito — tanto
+diálogos sin convertir (con `"..."`) como diálogos convertidos pero mal
+parseados por versiones viejas del converter (rayas huérfanas, párrafos
+colapsados, mezcla raya/comilla, etc.). Ground truth: [DPD raya](https://www.rae.es/dpd/raya).
+
+**Detección híbrida** (`src/app/dialogos/validator.ts` + `rules-dedicated.ts`):
+
+1. **Diff-based** (categoría `pending-conversion`): corre `convert()` sobre
+   cada párrafo; si el output difiere del input (más allá de la normalización
+   trivial de comillas tipográficas), emite violación con `autoFix` =
+   replacement del converter.
+2. **Reglas dedicadas** (texto ya convertido pero roto): 8 patrones regex
+   independientes para casos que el converter no toca por estar "ya con raya":
+
+   | ruleId | qué detecta | severidad | auto-fix |
+   |---|---|---|---|
+   | `dash-short` | `-`, `--` o `–` (en-dash) al inicio del diálogo en vez de `—` (em-dash) | error | sí (reemplazo a `—`) |
+   | `dash-orphan` | apertura `—texto` sin raya de cierre cuando hay verbo dicendi después en el mismo párrafo, indicando inciso mal cerrado | warning | no |
+   | `dash-quote-mix` | mismo párrafo con `—` y `"` (señal de parseo parcial) | error | no |
+   | `paragraph-collapsed` | ≥3 transiciones `[.?!…]\s+—` + ≥3 verbos dicendi → varios turns de diálogo aplastados en un solo `<p>` | error | no |
+   | `space-after-open` | `— Texto` (espacio sobrante después de raya inicial) | warning | sí (borra espacio) |
+   | `space-before-verb` | `—Texto—dijo` (sin espacio antes de raya del verbo) | warning | sí (inserta espacio) |
+   | `verb-capitalized` | `—Dijo` post-inciso (DPD pide minúscula tras la raya del verbo) | warning | sí (minúscula) |
+   | `period-before-verb` | `—Texto. —dijo` cuando D2 debería haber absorbido el punto | warning | sí (borra punto) |
+
+**Heurísticas anti-falso-positivo**:
+
+- `dash-orphan` solo dispara si el verbo está precedido por **sentence-end**
+  (`.?!…`), la palabra siguiente al verbo NO es subordinante (`que`/`si`/
+  `cuando`/`porque`/…), y entre el verbo y el próximo `.?!…` hay ≤4 palabras
+  (dicendi-inciso típico es corto: `<verbo> <sujeto>.`). Ej. `—Así le dicen
+  al oro, Adi.` no flagea (mid-content), `Dicen que una mansión está encantada`
+  no flagea (subordinante), `Bueno… dicen bastantes estupideces` no flagea
+  (más de 4 palabras entre tag y próximo `.`).
+- `paragraph-collapsed` exige tanto 3+ transiciones como 3+ verbos dicendi
+  distintos (un monólogo legítimo con 2 incisos no dispara).
+- `verb-capitalized` skipea raya de apertura del párrafo (`—Dicen eso...` =
+  primera palabra del speech) y raya post-sentence-end (`. —Dicen otra cosa`
+  = nuevo segmento del mismo hablante).
+- Validator exit-early si `meta.idioma !== 'es'`. Diff-based ignora cambios
+  por sola normalización de comillas tipográficas (`«»“”‘’`) para no flagear
+  apóstrofes ingleses (`Anar's rest`).
+
+**Inline UX** (`rae-extension.ts` + `rae-popover.ts`, mirror del patrón de
+`grammar-extension`):
+
+- Squiggle por categoría: char (rojo sólido), pending-conversion (naranja
+  wavy), structure (rojo punteado), typo (amarillo wavy).
+- Auto-check on chapter open + debounce 1.5s después de cada save. Toggle
+  `✓RAE` en toolbar persistido en `settings.json::raeAutoDisabled`. Solo
+  cuando `idioma == 'es'`.
+- Popover por severidad: char/typo → "Aplicar" (auto-fix directo). pending
+  → "Aplicar RAE al párrafo" (replacement con autoFix del converter).
+  structure → solo "OK" (flag + tooltip, edit manual).
+
+**Batch audit** (`RaeAuditService` + `RaeAuditPanel`):
+
+- Trigger: context menu de saga/libro/sección → "Revisar RAE".
+- Backend Rust `list_chapters_for_audit` (`src-tauri/src/audit.rs`) walks
+  el scope, lee cada `.html` + parsea `meta.json::idioma`, devuelve lote
+  completo en un solo invoke (sin round-trip por capítulo).
+- Frontend filtra a `idioma == 'es'` (con fallback `detectLang` heurístico
+  para chapters sin meta), corre validator sobre cada plain text, agrupa
+  por capítulo con snippet + severidad.
+- Mutex con search / image-viewer / font-preview / markdown-reader: al
+  abrir cierra a los otros tres.
+- Click en una violación → navega al capítulo + `requestHighlight` del
+  término para que el editor scrollee al match.
+
+**Verificación** (`scripts/run-rae-smoke.mjs`): 21 casos contra fixtures
+(diálogos simples, raya huérfana, pending D2, dash-short, párrafo colapsado,
+cita interna `«»` válida, multi-párrafo, monólogo con incisos, verbo regular
+mid-content, post-sentence-boundary, etc.). Tested contra Meridian 2.0 cap 1
+y 2 (`/home/tatoh/Dropbox/Novelas/Meridian 2.0/2 - Más que un trabajo/1 - Brickwell/convertidos/`):
+ambos parsean como 1 solo párrafo gigante por el bug del converter Python
+viejo, validador los detecta correctamente con `paragraph-collapsed`.
 
 ### Gramática + ortografía (LanguageTool)
 
@@ -235,7 +314,7 @@ tWriter auto-detecta cómo está versionada/sincronizada la carpeta raíz y adap
 
 Cuando no es git, los controles ⇅/⤓ no aparecen y un botón `❓` al lado del badge abre un modal con la receta paso a paso para hacer `git init` + push a GitHub. Al cerrar el modal, la app re-chequea el folder, así que si corriste `git init` en una terminal aparte, el badge cambia a Git solo, sin reabrir la carpeta.
 
-Si la carpeta es git *y* además está adentro de Dropbox (caso "Dropbox como segundo sync"), gana git — los controles versionados son los que mostramos. Dropbox queda como redundancia invisible.
+Si la carpeta es git _y_ además está adentro de Dropbox (caso "Dropbox como segundo sync"), gana git — los controles versionados son los que mostramos. Dropbox queda como redundancia invisible.
 
 ### Git auto-sync (cuando backend = git)
 
@@ -363,19 +442,75 @@ paru -S twriter-bin
 
 ### Editor / UX
 
+- ~~Checkeador de la regla a raya (RAE)~~ ✅ Implementado: validador inline (squiggles en el editor mientras escribís) + batch audit (context menu "Revisar RAE" sobre saga/libro/sección → panel derecho con lista de violaciones agrupadas por capítulo + click-to-jump). Detección híbrida: diff-based contra el converter (categoría `pending-conversion`) + 8 reglas dedicadas (`dash-short`, `dash-orphan`, `dash-quote-mix`, `paragraph-collapsed`, `space-after-open`, `space-before-verb`, `verb-capitalized`, `period-before-verb`). Heurísticas anti-falso-positivo para multi-paragraph speech, verbos mid-content, subordinantes post-tag y dicendi-incisos cortos. Ver sección **Validador RAE** abajo para detalle.
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
 - Drag & drop reorder de capítulos (hoy solo via context menu ↑/↓).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
+- **Offsets de LT se desfasan ("se corre") intermitente**: a veces el
+  squiggle queda sobre la palabra equivocada y el popover ofrece sugerencias
+  para otra palabra (ej. marca "casa" pero sugiere fixes para "cosa" que
+  está 2 chars antes). Difícil de reproducir. Sospechosos:
+  (a) `extractPlainText` en `grammar-extension.ts:90` mete `\n\n` por cada
+  `<br>` hard-break adentro de `<p>` — si LT cuenta los `\n\n` distinto que
+  PM, el offset → pmPos se corre. (b) `applyGrammarReplacement` no remapea
+  el resto de las matches con `transaction.mapping` después de insertar el
+  replacement, queda el array viejo con offsets stale hasta el próximo
+  check. (c) Caracteres especiales tipo NBSP / soft-hyphen / zero-width
+  joiners en el HTML del importer Pandoc cuentan distinto en plain vs PM.
+  Plan: agregar log target=`grammar` con `from/to/expected_word/actual_word`
+  al click del popover, ver si la divergencia es siempre por edits intermedios
+  o también en chapters recién abiertos.
+- **Auto-replace `...` → `…` al escribir**: TipTap Typography extension ya
+  está cargada (debería convertir `...` a `…` U+2026 en tiempo real), pero
+  hay capítulos donde aparecen `...` literales (caso reportado: cap 2 de
+  "Amigo del Bosque" tiene "Gracias..." en dos formas distintas). Verificar
+  que la regla `ellipsis` de Typography esté activa + agregar shortcut de
+  teclado o input rule por si el auto-replace está pisado por algo. Si vino
+  del importer Pandoc, agregar normalización post-import (`<p>` content:
+  `\.\.\.` → `…`).
+- **Indicador de línea/columna en footer del editor**: hoy solo muestra
+  palabras y estado guardado. Agregar `Ln 42, Col 15` (o número de párrafo)
+  para poder ubicar offsets reportados por el validador RAE / LT / batch
+  audit. Posición se lee de la selección de ProseMirror; render junto a
+  `wordCount` en `editor.html`.
 - Operadores en la búsqueda (AND, OR, "frase exacta" entre comillas, filtros por kind). Hoy parsea como query libre con BM25.
+- **Búsqueda multi-palabra trae basura**: con 2+ palabras devuelve cualquier
+  documento que tenga AT LEAST ONE término (semántica OR del query parser
+  de tantivy por default) en vez de los que tienen TODOS. Resultados
+  rankean por BM25, así que el "más relevante" sube primero, pero la lista
+  larga de coincidencias parciales confunde. Fix: pasar el `default_operator`
+  a `AND` al construir el `QueryParser` en `src-tauri/src/search.rs`, o
+  reescribir la query a `+term1 +term2` antes de parsear. Alternativa más
+  potente: usar el operador parser de tantivy y exponer query syntax al
+  usuario (ver item de arriba).
 
 ### Tree / Importer
 
+- **Importer no ve `convertidos/`**: el walker del tree (`fs.rs::SKIP_DIRS`)
+  excluye `convertidos/`, `Revisiones/`, etc. para no mostrar backups en el
+  árbol. Side effect: el wizard de importar tampoco los ve, así que si la
+  carpeta de origen (ej. `Meridian 2.0/2 - Más que un trabajo/1 - Brickwell/`)
+  tiene sus `.odt` modernos del converter Python en `convertidos/`, el
+  wizard ofrece solo los `.odt` originales del root (sin RAE). Fix posible:
+  (a) toggle en el wizard "incluir también `convertidos/`" para casos de
+  migración, o (b) detección heurística — si la carpeta tiene tanto `.odt`
+  raw como `convertidos/<n>_convertido.odt`, ofrecer el convertido por
+  default. Tested contra Meridian 2.0 cap 1 y 2: ambos parsean a 1 solo
+  párrafo gigante (bug del converter Python viejo, ya conocido) y el
+  validador RAE lo flagea con `paragraph-collapsed` correctamente.
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Borrar entradas individuales del diccionario per-saga desde UI (hoy se editan en bloque vía textarea del modal de configuración; agregar funciona desde el popover de typos).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
+- **Limpiar restos de tema en el wizard importador**: la lógica de configurar
+  tema durante el import wizard se movió al theme editor, pero quedaron
+  campos / pasos / código muerto del flujo viejo en `import_wizard.rs` +
+  `import-wizard/` (frontend). Auditar: pasos del stepper que pregunten por
+  tema, fields en el payload del wizard, branches en `ImportWizardService`,
+  refs a `theme.base` durante el apply. Borrar todo y dejar el wizard
+  enfocado en estructura/metadata/conversión.
 
 ### EPUB
 
@@ -409,6 +544,64 @@ paru -S twriter-bin
 - Stats: gráfico palabras/día.
 - Preview pre-push: hoy el indicador del header dice "15 archivos para subir" sin detalle. Tooltip con lista de paths (M/A/D) en hover, y/o dialog "Ver cambios pendientes" con `git status --short` + `git diff --stat`.
 
+### Git / Sync
+
+- **Push sin pull falla silencioso si el remoto avanzó desde otra PC**: el
+  auto-push hace `git push` directo y si la otra máquina pusheó primero, el
+  push se rechaza con `! [rejected] main -> main (fetch first)` y solo queda
+  loggeado en el panel 🐛. Hay que tirar `git pull --rebase && git push` a
+  mano en una terminal aparte. El backend (`git.rs::git_push`) debería: (a)
+  intentar `git pull --rebase` automático antes del push cuando detecta
+  non-fast-forward, o (b) al menos disparar un toast/modal claro "el remoto
+  avanzó, ejecutá pull antes" en vez de fallar silencioso.
+- **`.twriter/` se está versionando y genera conflictos cada sync entre
+  PCs**: el índice tantivy vive en `<root>/.twriter/search-index/` y se
+  regenera al boot (full reindex async), así que no tiene sentido
+  commitearlo — peor, cada PC lo escribe distinto y al pullear desde otra
+  máquina hay `CONFLICT (add/add) in .twriter/search-index/.managed.json` /
+  `meta.json` garantizado. Fix: agregar `.twriter/` al `.gitignore` del
+  template inicial de repo de novelas (y al wizard 📥 si crea el repo
+  desde tWriter), + correr `git rm -r --cached .twriter` para destrackear lo
+  que ya está commiteado. El README de tWriter ya dice "auto-excluido del
+  walk del tree y del export EPUB" pero no del `git` — incongruente.
+
+### Validador RAE
+
+- **Bulk auto-fix** desde el panel "Revisar RAE": hoy el panel es solo lista
+  + click-to-jump. La acción "Aplicar todos los auto-fixables (N)"
+  (replacements char/typo agrupados por archivo en orden descendente de
+  offset, un `write_chapter` por archivo) quedó fuera de v1 — el riesgo es
+  pisar inline markup (`<em>`/`<strong>`) al reconstruir HTML desde plain
+  text. Implementar con patch quirúrgico HTML-aware: encontrar el rango en
+  el HTML que corresponde al span del fix y reemplazar solo eso, sin tocar
+  el resto del párrafo.
+- **Fix de `pending-conversion` desde popover inline**: hoy aplica el
+  replacement del converter como plain text sobre el rango del párrafo, lo
+  que strip-ea inline markup en ese párrafo. Para párrafos con markup, usar
+  el botón "RAE" del toolbar (modal de capítulo entero) que sí preserva
+  markup vía el path `<p>…</p>` del converter. Solución: serializar el slice
+  ProseMirror del párrafo a HTML antes de invocar `convert()`, y replazar el
+  rango con el HTML resultante en vez de `insertContent` plano.
+- **Jump-to-exact-offset desde el batch**: el click en una violación del
+  panel usa el patrón `requestHighlight` de search (busca el término en el
+  capítulo y scrollea al primer match). Funciona para violaciones con
+  término único, pero para snippets repetidos (ej. `—dijo` que aparece 30
+  veces) salta al primer match, no al específico de la violación.
+  Implementar `consumePendingRaeJump(path)` que devuelva offset+length y el
+  editor mapee al `pmPos` correcto al render.
+- **Atribución D1-D5 en `pending-conversion`**: hoy el ruleId es genérico
+  `pending-conversion`. Para fine-grain (saber qué regla del converter
+  mordió en cada violación), instrumentar `convert()` con hooks que reporten
+  qué subpattern matcheó por párrafo.
+- **Salvaguardas adicionales**: `dash-orphan` puede dar falso positivo en
+  diálogos donde el verbo dicendi aparece dentro de una cita interna larga
+  (`—Me dijo «si pudieras venir, dijo...»`). Refinar: solo flaggear si el
+  verbo está en el nivel "narrativo" del párrafo, no dentro de `« »`.
+- **Tests con fixtures reales**: cuando `/home/tatoh/Repos/novelas/` tenga
+  los capítulos viejos de Meridian 2.0 pulleados, sumar `validator.spec.ts`
+  cases con párrafos textuales de esos archivos (incluyendo el caso "todo
+  colapsado en un párrafo" detectado en exploración) para regresión.
+
 ### Plataformas
 
 - Mobile (no urgente, capaz solo un exportador a EPUB para ver archivos desde gh).
@@ -441,7 +634,7 @@ Detalles bajo el hood:
 
 - Imagen [erikvl87/languagetool](https://hub.docker.com/r/erikvl87/languagetool)
   ([repo](https://github.com/Erikvl87/docker-languagetool)) — Java 17 + LT
-  + hunspell, expone `:8010` que mapeamos a `localhost:8081`.
+  - hunspell, expone `:8010` que mapeamos a `localhost:8081`.
 - ~2GB RAM en runtime, ~300MB de imagen on disk. Hunspell incluido cubre
   ES/EN — no necesitás diccionario aparte.
 - Auto-check on-by-default cuando el ping responde. Toggle persiste en

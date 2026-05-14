@@ -1,7 +1,7 @@
 <div
   class="shell"
   [class.focus]="settings.focusMode()"
-  [class.with-viewer]="search.open() || imageViewer.viewing() !== null || fontPreview.viewing() !== null || markdownReader.viewing() !== null"
+  [class.with-viewer]="search.open() || imageViewer.viewing() !== null || fontPreview.viewing() !== null || markdownReader.viewing() !== null || raeAudit.isOpen()"
   [attr.data-rpw]="settings.rightPanelWidth()"
 >
   <aside class="panel panel-left">
@@ -225,7 +225,11 @@
     }
   </main>
 
-  @if (search.open()) {
+  @if (raeAudit.isOpen()) {
+    <aside class="panel panel-right">
+      <app-rae-audit-panel />
+    </aside>
+  } @else if (search.open()) {
     <aside class="panel panel-right">
       <app-search-panel />
     </aside>

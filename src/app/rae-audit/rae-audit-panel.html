@@ -1,0 +1,71 @@
+@if (scope(); as s) {
+  <header class="rae-panel-head">
+    <div class="rae-panel-title">
+      <span class="rae-panel-icon">📐</span>
+      <div class="rae-panel-labels">
+        <span class="rae-panel-scope">RAE — {{ s.name }}</span>
+        <span class="rae-panel-sub">
+          @if (loading()) {
+            @if (progress(); as p) {
+              {{ p.done }} / {{ p.total }} capítulos
+            } @else {
+              Escaneando…
+            }
+          } @else if (error()) {
+            Error
+          } @else if (total() > 0) {
+            {{ total() }} violaciones en {{ chapters().length }} capítulos
+            @if (autoFixable() > 0) {
+              · {{ autoFixable() }} auto-fixables
+            }
+          } @else {
+            Sin violaciones detectadas
+          }
+        </span>
+      </div>
+    </div>
+    <button type="button" class="rae-panel-close" (click)="close()" title="Cerrar">
+      ×
+    </button>
+  </header>
+
+  @if (error(); as e) {
+    <div class="rae-panel-error">{{ e }}</div>
+  }
+
+  @if (emptyAfterLoad()) {
+    <div class="rae-panel-empty">
+      Ningún capítulo en español de este alcance tiene violaciones de la regla RAE
+      de diálogos.
+    </div>
+  }
+
+  <ul class="rae-panel-list">
+    @for (chapter of chapters(); track chapter.path) {
+      <li class="rae-chapter">
+        <header class="rae-chapter-head">
+          <span class="rae-chapter-title">{{ chapter.title }}</span>
+          <span class="rae-chapter-count">{{ chapter.violations.length }}</span>
+        </header>
+        <ul class="rae-violation-list">
+          @for (v of chapter.violations; track $index) {
+            <li class="rae-violation-row" (click)="openChapterAt(chapter, v)">
+              <div class="rae-violation-meta">
+                <span
+                  class="rae-violation-sev"
+                  [class.rae-violation-sev--error]="v.severity === 'error'"
+                  [class.rae-violation-sev--warning]="v.severity === 'warning'"
+                  >{{ severityIcon(v.severity) }}</span
+                >
+                <span class="rae-violation-cat">{{ categoryLabel(v.category) }}</span>
+                <span class="rae-violation-rule">{{ v.ruleId }}</span>
+              </div>
+              <div class="rae-violation-snippet">{{ snippet(chapter, v) }}</div>
+              <div class="rae-violation-msg">{{ v.shortMessage }}</div>
+            </li>
+          }
+        </ul>
+      </li>
+    }
+  </ul>
+}

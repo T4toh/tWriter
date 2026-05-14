@@ -31,6 +31,7 @@ interface Settings {
   grammarVariantEs?: string | null;
   grammarVariantEn?: string | null;
   grammarAutoDisabled?: boolean;
+  raeAutoDisabled?: boolean;
   rightPanelWidth?: RightPanelWidth;
 }
 
@@ -48,6 +49,8 @@ export class SettingsService {
   readonly grammarVariantEn = signal<string>('en-US');
   /** Auto-check de gramática desactivado por el usuario. Persiste cross-session. */
   readonly grammarAutoDisabled = signal<boolean>(false);
+  /** Auto-check del validador RAE desactivado por el usuario. Persiste cross-session. */
+  readonly raeAutoDisabled = signal<boolean>(false);
   readonly rightPanelWidth = signal<RightPanelWidth>(RIGHT_PANEL_DEFAULT);
   readonly focusMode = signal<boolean>(false);
   readonly loaded = signal<boolean>(false);
@@ -65,6 +68,7 @@ export class SettingsService {
       this.grammarVariantEs.set(s.grammarVariantEs ?? 'es-AR');
       this.grammarVariantEn.set(s.grammarVariantEn ?? 'en-US');
       this.grammarAutoDisabled.set(s.grammarAutoDisabled ?? false);
+      this.raeAutoDisabled.set(s.raeAutoDisabled ?? false);
       this.rightPanelWidth.set(s.rightPanelWidth ?? RIGHT_PANEL_DEFAULT);
     } catch {
       this.root.set(null);
@@ -125,6 +129,11 @@ export class SettingsService {
     await this.persist();
   }
 
+  async setRaeAutoDisabled(disabled: boolean): Promise<void> {
+    this.raeAutoDisabled.set(disabled);
+    await this.persist();
+  }
+
   async setRightPanelWidth(width: RightPanelWidth): Promise<void> {
     this.rightPanelWidth.set(width);
     await this.persist();
@@ -152,6 +161,7 @@ export class SettingsService {
       grammarVariantEs: this.grammarVariantEs(),
       grammarVariantEn: this.grammarVariantEn(),
       grammarAutoDisabled: this.grammarAutoDisabled(),
+      raeAutoDisabled: this.raeAutoDisabled(),
       rightPanelWidth: this.rightPanelWidth(),
     };
     await invoke('set_settings', { settings });

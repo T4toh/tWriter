@@ -548,6 +548,34 @@
   border-bottom: 2px dotted var(--fg-muted);
 }
 
+/* ─── RAE validator inline decorations ─── */
+.editor-host ::ng-deep .rae-violation {
+  cursor: pointer;
+  text-decoration: none;
+  background: transparent;
+}
+
+/* char: guion corto, espacios — rojo sólido finito */
+.editor-host ::ng-deep .rae-violation--char {
+  border-bottom: 2px solid #d23030;
+}
+
+/* pending-conversion: D1-D5 sin convertir — naranja wavy */
+.editor-host ::ng-deep .rae-violation--pending {
+  background: rgba(210, 122, 31, 0.12);
+  border-bottom: 2px solid #d27a1f;
+}
+
+/* estructura: raya huérfana, párrafo colapsado — rojo punteado */
+.editor-host ::ng-deep .rae-violation--structure {
+  border-bottom: 2px dotted #d23030;
+}
+
+/* tipografía: verbo capitalizado, punto sobrante — amarillo wavy */
+.editor-host ::ng-deep .rae-violation--typo {
+  border-bottom: 2px dotted #c89020;
+}
+
 /* ─── Privacy banner ─── */
 .privacy-banner {
   position: fixed;

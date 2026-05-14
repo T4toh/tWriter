@@ -62,6 +62,14 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub grammar_auto_disabled: Option<bool>,
+    /// Si true, el auto-check del validador RAE queda apagado. Default false
+    /// (auto-check activo cuando idioma == 'es').
+    #[serde(
+        default,
+        rename = "raeAutoDisabled",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub rae_auto_disabled: Option<bool>,
     /// Ancho del panel derecho ("compact" | "normal" | "wide" | "full").
     #[serde(
         default,

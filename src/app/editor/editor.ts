@@ -21,8 +21,9 @@ import { GrammarService } from '../core/grammar-service';
 import { SearchService } from '../core/search-service';
 import { highlightFirstMatch } from '../core/search-highlight';
 import { PARAGRAPH_SPACING_EM, SettingsService } from '../core/settings-service';
-import { GrammarMatch } from '../core/types';
+import { GrammarMatch, RaeViolation } from '../core/types';
 import { convert as convertRae } from '../dialogos/converter';
+import { validateRae } from '../dialogos/validator';
 import { Landing } from '../landing/landing';
 import {
   ContextMenuService,
@@ -36,6 +37,13 @@ import {
   setGrammarMatches,
 } from './grammar-extension';
 import { GrammarPopover } from './grammar-popover';
+import {
+  RaeExtension,
+  RaeViolationPos,
+  mapViolationsToPm,
+  setRaeViolations,
+} from './rae-extension';
+import { RaePopover } from './rae-popover';
 
 interface ToolbarState {
   bold: boolean;
@@ -63,7 +71,7 @@ const EMPTY_STATE: ToolbarState = {
 
 @Component({
   selector: 'app-editor',
-  imports: [Landing, GrammarPopover],
+  imports: [Landing, GrammarPopover, RaePopover],
   templateUrl: './editor.html',
   styleUrl: './editor.scss',
 })
@@ -107,6 +115,17 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly grammarError = this.grammar.lastError;
   protected readonly grammarMatches = signal<GrammarMatchPos[]>([]);
   protected readonly grammarPopover = signal<{ match: GrammarMatch; x: number; y: number; from: number; to: number } | null>(null);
+  protected readonly raeViolations = signal<RaeViolationPos[]>([]);
+  protected readonly raePopover = signal<{ violation: RaeViolationPos; x: number; y: number } | null>(null);
+  protected readonly raeAuto = computed(() => {
+    if (!this.canCheckRae()) return false;
+    return !this.settings.raeAutoDisabled();
+  });
+  protected readonly canCheckRae = computed(() => {
+    if (!this.canEdit()) return false;
+    const lang = this.meta().idioma;
+    return lang === 'es';
+  });
   protected readonly grammarBannerDismissed = signal<boolean>(false);
   private grammarUsed = signal<boolean>(false);
   protected readonly showPrivacyBanner = computed(() =>
@@ -153,10 +172,15 @@ export class Editor implements AfterViewInit, OnDestroy {
   private tiptap: TipTapEditor | null = null;
   private lastLoadedAt = 0;
   private grammarHostListener: ((e: MouseEvent) => void) | null = null;
+  private raeHostListener: ((e: MouseEvent) => void) | null = null;
   private grammarDebounceHandle: ReturnType<typeof setTimeout> | null = null;
+  private raeDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private skipNextGrammarRemap = false;
+  private skipNextRaeRemap = false;
   private lastAutoEnabled = false;
   private lastCheckedPlain: string | null = null;
+  private lastRaePlain: string | null = null;
+  private lastRaeAuto = false;
 
   constructor() {
     effect(() => {
@@ -175,11 +199,20 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.applyDecorations([]);
       this.grammarPopover.set(null);
       this.lastCheckedPlain = null;
+      this.raeViolations.set([]);
+      this.applyRaeDecorations([]);
+      this.raePopover.set(null);
+      this.lastRaePlain = null;
       if (this.grammarDebounceHandle !== null) {
         clearTimeout(this.grammarDebounceHandle);
         this.grammarDebounceHandle = null;
       }
+      if (this.raeDebounceHandle !== null) {
+        clearTimeout(this.raeDebounceHandle);
+        this.raeDebounceHandle = null;
+      }
       this.skipNextGrammarRemap = true;
+      this.skipNextRaeRemap = true;
 
       if (!this.tiptap) {
         this.createEditor(editable ? html : '', editable);
@@ -212,6 +245,9 @@ export class Editor implements AfterViewInit, OnDestroy {
       ) {
         void this.checkGrammar();
       }
+      if (editable && this.raeAuto()) {
+        this.checkRae();
+      }
     });
 
     // Auto-check de gramática: cuando LT pasa a disponible (y el modo lo
@@ -229,6 +265,26 @@ export class Editor implements AfterViewInit, OnDestroy {
         this.applyDecorations([]);
       }
     });
+
+    // Auto-check RAE: igual patrón. Si el toggle está prendido y el capítulo
+    // es ES, marca. Si se apaga, limpia.
+    effect(() => {
+      const on = this.raeAuto();
+      if (on === this.lastRaeAuto) return;
+      this.lastRaeAuto = on;
+      if (!this.viewReady() || !this.tiptap) return;
+      if (on) {
+        // Force=true porque el plain no cambió entre toggle-off y toggle-on;
+        // sin force, checkRae() vería `plain === lastRaePlain` y skipearía,
+        // dejando el editor sin decoraciones.
+        this.checkRae(true);
+      } else {
+        this.raeViolations.set([]);
+        this.applyRaeDecorations([]);
+        this.raePopover.set(null);
+        this.lastRaePlain = null;
+      }
+    });
   }
 
   ngAfterViewInit(): void {
@@ -241,9 +297,17 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.hostRef.nativeElement.removeEventListener('click', this.grammarHostListener);
       this.grammarHostListener = null;
     }
+    if (this.raeHostListener) {
+      this.hostRef.nativeElement.removeEventListener('click', this.raeHostListener);
+      this.raeHostListener = null;
+    }
     if (this.grammarDebounceHandle !== null) {
       clearTimeout(this.grammarDebounceHandle);
       this.grammarDebounceHandle = null;
+    }
+    if (this.raeDebounceHandle !== null) {
+      clearTimeout(this.raeDebounceHandle);
+      this.raeDebounceHandle = null;
     }
     this.tiptap?.destroy();
     this.tiptap = null;
@@ -546,6 +610,103 @@ export class Editor implements AfterViewInit, OnDestroy {
     }, 2000);
   }
 
+  protected toggleAutoRae(): void {
+    void this.settings.setRaeAutoDisabled(!this.settings.raeAutoDisabled());
+  }
+
+  protected checkRae(force = false): void {
+    if (!this.tiptap || !this.canCheckRae()) return;
+    const { plain, ranges } = extractPlainText(this.tiptap.state.doc);
+    if (!plain.trim()) {
+      this.raeViolations.set([]);
+      this.applyRaeDecorations([]);
+      this.lastRaePlain = '';
+      return;
+    }
+    if (!force && plain === this.lastRaePlain) return;
+    const lang = this.meta().idioma;
+    const raw: RaeViolation[] = validateRae(plain, lang);
+    const positioned = mapViolationsToPm(raw, ranges, this.tiptap.state.doc);
+    this.raeViolations.set(positioned);
+    this.applyRaeDecorations(positioned);
+    this.lastRaePlain = plain;
+  }
+
+  protected applyRaeFix(): void {
+    const popover = this.raePopover();
+    if (!popover || !this.tiptap) return;
+    const v = popover.violation;
+    if (!v.autoFix || v.fixFrom === undefined || v.fixTo === undefined) return;
+    this.tiptap
+      .chain()
+      .focus()
+      .setTextSelection({ from: v.fixFrom, to: v.fixTo })
+      .insertContent(v.autoFix.replacement)
+      .run();
+    this.raePopover.set(null);
+    this.raeViolations.update((list) => list.filter((m) => m.id !== v.id));
+    this.applyRaeDecorations(this.raeViolations());
+    if (this.raeAuto()) this.scheduleRaeRecheck();
+  }
+
+  protected applyRaeParagraph(): void {
+    const popover = this.raePopover();
+    if (!popover || !this.tiptap) return;
+    const v = popover.violation;
+    if (v.paragraphFrom === undefined || v.paragraphTo === undefined) return;
+    if (!v.autoFix) return;
+    this.tiptap
+      .chain()
+      .focus()
+      .setTextSelection({ from: v.paragraphFrom, to: v.paragraphTo })
+      .insertContent(v.autoFix.replacement)
+      .run();
+    this.raePopover.set(null);
+    this.raeViolations.update((list) => list.filter((m) => m.id !== v.id));
+    this.applyRaeDecorations(this.raeViolations());
+    if (this.raeAuto()) this.scheduleRaeRecheck();
+  }
+
+  protected dismissRae(): void {
+    this.raePopover.set(null);
+  }
+
+  private applyRaeDecorations(violations: RaeViolationPos[]): void {
+    const view = (this.tiptap as unknown as { view?: { dispatch: (tr: unknown) => void; state: { tr: unknown } } } | null)?.view;
+    if (!view) return;
+    setRaeViolations(view, violations);
+  }
+
+  private scheduleRaeRecheck(): void {
+    if (this.raeDebounceHandle !== null) {
+      clearTimeout(this.raeDebounceHandle);
+    }
+    this.raeDebounceHandle = setTimeout(() => {
+      this.raeDebounceHandle = null;
+      this.checkRae();
+    }, 1500);
+  }
+
+  private onRaeHostClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement | null;
+    const span = target?.closest('.rae-violation') as HTMLElement | null;
+    if (!span) {
+      if (this.raePopover()) this.raePopover.set(null);
+      return;
+    }
+    const idx = parseInt(span.dataset['raeIdx'] ?? '-1', 10);
+    const v = this.raeViolations()[idx];
+    if (!v) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = span.getBoundingClientRect();
+    this.raePopover.set({
+      violation: v,
+      x: Math.min(rect.left, window.innerWidth - 380),
+      y: rect.bottom + 4,
+    });
+  }
+
   private onGrammarHostClick(event: MouseEvent): void {
     const target = event.target as HTMLElement | null;
     const span = target?.closest('.grammar-error') as HTMLElement | null;
@@ -578,6 +739,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         Typography,
         TextAlign.configure({ types: ['paragraph', 'heading'] }),
         Grammar,
+        RaeExtension,
       ],
       content,
       editable,
@@ -612,6 +774,30 @@ export class Editor implements AfterViewInit, OnDestroy {
         if (this.grammar.autoEnabled() && this.canAutoGrammar() && this.canCheckGrammar()) {
           this.scheduleGrammarRecheck();
         }
+
+        if (this.skipNextRaeRemap) {
+          this.skipNextRaeRemap = false;
+          if (this.raePopover()) this.raePopover.set(null);
+        } else {
+          if (this.raeViolations().length > 0) {
+            const docSize = transaction.doc.content.size;
+            const remappedRae = this.raeViolations()
+              .map((v) => ({
+                ...v,
+                from: transaction.mapping.map(v.from, -1),
+                to: transaction.mapping.map(v.to, 1),
+                fixFrom: v.fixFrom !== undefined ? transaction.mapping.map(v.fixFrom, -1) : undefined,
+                fixTo: v.fixTo !== undefined ? transaction.mapping.map(v.fixTo, 1) : undefined,
+                paragraphFrom: v.paragraphFrom !== undefined ? transaction.mapping.map(v.paragraphFrom, -1) : undefined,
+                paragraphTo: v.paragraphTo !== undefined ? transaction.mapping.map(v.paragraphTo, 1) : undefined,
+              }))
+              .filter((v) => v.from < v.to && v.to <= docSize);
+            this.raeViolations.set(remappedRae);
+            this.applyRaeDecorations(remappedRae);
+          }
+          if (this.raePopover()) this.raePopover.set(null);
+          if (this.raeAuto()) this.scheduleRaeRecheck();
+        }
       },
     });
     if (this.grammarHostListener) {
@@ -619,6 +805,11 @@ export class Editor implements AfterViewInit, OnDestroy {
     }
     this.grammarHostListener = (e) => this.onGrammarHostClick(e);
     this.hostRef.nativeElement.addEventListener('click', this.grammarHostListener);
+    if (this.raeHostListener) {
+      this.hostRef.nativeElement.removeEventListener('click', this.raeHostListener);
+    }
+    this.raeHostListener = (e) => this.onRaeHostClick(e);
+    this.hostRef.nativeElement.addEventListener('click', this.raeHostListener);
   }
 
   private refreshState(): void {
