@@ -79,8 +79,12 @@
 }
 
 .grid > * {
-  display: block;
   height: 100%;
+}
+
+.grid > app-saga-card,
+.grid > app-book-card {
+  display: block;
 }
 
 .grid[data-mode='books'] {
