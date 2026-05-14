@@ -211,8 +211,124 @@ fn remote_for_branch(repo: &Repository, branch_name: &str) -> Result<String, Str
         .or_else(|_| Ok::<String, String>("origin".to_string()))
 }
 
+/// Classify git CLI stderr into a category prefix so the frontend can map
+/// it to a friendly Spanish message. Order matters: `rejected` must beat
+/// `conflict` because the rejected-push hint includes the word "conflict"
+/// in some locales, and `auth` must beat `network` because some auth errors
+/// also mention "unable to access".
+fn categorize_git_error(stderr: &str) -> String {
+    let s = stderr.to_lowercase();
+    let category = if s.contains("permission denied")
+        || s.contains("authentication failed")
+        || s.contains("could not read username")
+        || s.contains("could not read password")
+        || s.contains("publickey")
+    {
+        "auth"
+    } else if s.contains("[rejected]")
+        || s.contains("non-fast-forward")
+        || s.contains("fetch first")
+        || s.contains("updates were rejected")
+    {
+        "rejected"
+    } else if s.contains("conflict")
+        || s.contains("could not apply")
+        || s.contains("resolve all conflicts")
+    {
+        "conflict"
+    } else if s.contains("could not resolve host")
+        || s.contains("connection refused")
+        || s.contains("operation timed out")
+        || s.contains("unable to access")
+        || s.contains("network is unreachable")
+    {
+        "network"
+    } else {
+        "unknown"
+    };
+    format!("{}: {}", category, stderr)
+}
+
 fn signature(repo: &Repository) -> Result<Signature<'static>, String> {
     repo.signature()
         .or_else(|_| Signature::now("tWriter", "twriter@local"))
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn categorize_auth_errors() {
+        assert_eq!(
+            categorize_git_error("Permission denied (publickey)."),
+            "auth: Permission denied (publickey)."
+        );
+        assert_eq!(
+            categorize_git_error("fatal: Authentication failed for 'https://github.com/x.git'"),
+            "auth: fatal: Authentication failed for 'https://github.com/x.git'"
+        );
+        assert_eq!(
+            categorize_git_error("fatal: could not read Username for 'https://github.com'"),
+            "auth: fatal: could not read Username for 'https://github.com'"
+        );
+    }
+
+    #[test]
+    fn categorize_network_errors() {
+        assert_eq!(
+            categorize_git_error(
+                "fatal: unable to access 'https://github.com/x.git': Could not resolve host: github.com"
+            ),
+            "network: fatal: unable to access 'https://github.com/x.git': Could not resolve host: github.com"
+        );
+        assert_eq!(
+            categorize_git_error("fatal: unable to access 'https://x.git': Connection refused"),
+            "network: fatal: unable to access 'https://x.git': Connection refused"
+        );
+        assert_eq!(
+            categorize_git_error("Operation timed out"),
+            "network: Operation timed out"
+        );
+    }
+
+    #[test]
+    fn categorize_rejected_errors() {
+        assert_eq!(
+            categorize_git_error(
+                " ! [rejected]        main -> main (non-fast-forward)\nerror: failed to push some refs"
+            ),
+            "rejected:  ! [rejected]        main -> main (non-fast-forward)\nerror: failed to push some refs"
+        );
+        assert_eq!(
+            categorize_git_error(
+                "hint: Updates were rejected because the tip of your current branch is behind\nhint: its remote counterpart. Integrate the remote changes (e.g.\nhint: 'git pull ...') before pushing again."
+            ),
+            "rejected: hint: Updates were rejected because the tip of your current branch is behind\nhint: its remote counterpart. Integrate the remote changes (e.g.\nhint: 'git pull ...') before pushing again."
+        );
+    }
+
+    #[test]
+    fn categorize_conflict_errors() {
+        assert_eq!(
+            categorize_git_error("CONFLICT (content): Merge conflict in cap1.html"),
+            "conflict: CONFLICT (content): Merge conflict in cap1.html"
+        );
+        assert_eq!(
+            categorize_git_error(
+                "error: could not apply abc123... message\nhint: Resolve all conflicts manually"
+            ),
+            "conflict: error: could not apply abc123... message\nhint: Resolve all conflicts manually"
+        );
+    }
+
+    #[test]
+    fn categorize_unknown_falls_through() {
+        assert_eq!(
+            categorize_git_error("fatal: random unknown thing"),
+            "unknown: fatal: random unknown thing"
+        );
+        assert_eq!(categorize_git_error(""), "unknown: ");
+    }
 }
