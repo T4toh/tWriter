@@ -138,11 +138,24 @@ export function extractPlainText(doc: PmNode): { plain: string; ranges: TextRang
   return { plain, ranges };
 }
 
+/** Callback que recibe drift entre el slice esperado (LT plain) y el slice
+ * real (doc PM en la posición mapeada). El editor lo conecta a DebugService.
+ * Mantenemos el módulo DI-free pasándolo como argumento opcional. */
+export type OffsetMismatchReporter = (info: {
+  ltOffset: number;
+  ltLength: number;
+  from: number;
+  to: number;
+  expected: string;
+  actual: string;
+}) => void;
+
 export function mapMatchesToPm(
   matches: GrammarMatch[],
   ranges: TextRange[],
   doc: PmNode,
   plain: string,
+  onMismatch?: OffsetMismatchReporter,
 ): GrammarMatchPos[] {
   const out: GrammarMatchPos[] = [];
   for (const m of matches) {
@@ -154,6 +167,19 @@ export function mapMatchesToPm(
     const fromBlock = doc.resolve(from).parent;
     const toBlock = doc.resolve(to).parent;
     if (fromBlock !== toBlock) continue;
+    if (onMismatch) {
+      const actual = doc.textBetween(from, to, '\n');
+      if (actual !== slice) {
+        onMismatch({
+          ltOffset: m.offset,
+          ltLength: m.length,
+          from,
+          to,
+          expected: slice,
+          actual,
+        });
+      }
+    }
     out.push({ ...m, id: newGrammarId(), from, to });
   }
   return out;

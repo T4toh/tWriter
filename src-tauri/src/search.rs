@@ -456,7 +456,8 @@ pub fn search_query_impl(query: &str, limit: usize) -> Result<SearchResult, Stri
         });
     }
     let searcher = idx.reader.searcher();
-    let parser = QueryParser::for_index(&idx.index, vec![idx.title_field, idx.content_field]);
+    let mut parser = QueryParser::for_index(&idx.index, vec![idx.title_field, idx.content_field]);
+    parser.set_conjunction_by_default();
     let parsed = match parser.parse_query(q) {
         Ok(p) => p,
         Err(_) => return Ok(SearchResult { hits: Vec::new(), total: 0 }),
@@ -566,5 +567,50 @@ mod tests {
         let content = "lorem ipsum dolor sit amet magia consectetur adipiscing elit";
         let s = make_snippet(content, &["magia".into()]);
         assert!(s.contains("magia"));
+    }
+
+    #[test]
+    fn multi_word_query_requires_all_terms() {
+        let (schema, path_field, _kind_field, title_field, content_field, _mtime_field) =
+            build_schema();
+        let index = Index::create_in_ram(schema);
+        let mut writer = index.writer(WRITER_HEAP_BYTES).unwrap();
+        writer
+            .add_document(doc!(
+                path_field => "alpha-beta.html",
+                title_field => "ab",
+                content_field => "alpha beta",
+            ))
+            .unwrap();
+        writer
+            .add_document(doc!(
+                path_field => "alpha-gamma.html",
+                title_field => "ag",
+                content_field => "alpha gamma",
+            ))
+            .unwrap();
+        writer
+            .add_document(doc!(
+                path_field => "beta-gamma.html",
+                title_field => "bg",
+                content_field => "beta gamma",
+            ))
+            .unwrap();
+        writer.commit().unwrap();
+        let reader = index
+            .reader_builder()
+            .reload_policy(ReloadPolicy::OnCommitWithDelay)
+            .try_into()
+            .unwrap();
+        let searcher = reader.searcher();
+        let mut parser = QueryParser::for_index(&index, vec![title_field, content_field]);
+        parser.set_conjunction_by_default();
+        let parsed = parser.parse_query("alpha beta").unwrap();
+        let hits = searcher.search(&parsed, &TopDocs::with_limit(10)).unwrap();
+        assert_eq!(hits.len(), 1, "AND default debería traer solo el doc con ambos términos");
+        let (_score, addr) = hits[0];
+        let doc: TantivyDocument = searcher.doc(addr).unwrap();
+        let path = doc.get_first(path_field).and_then(|v| v.as_str()).unwrap();
+        assert_eq!(path, "alpha-beta.html");
     }
 }

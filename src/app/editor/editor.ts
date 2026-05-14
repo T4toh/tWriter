@@ -17,6 +17,7 @@ import Typography from '@tiptap/extension-typography';
 import TextAlign from '@tiptap/extension-text-align';
 import { ChapterService, PaneId } from '../core/chapter-service';
 import { SagaContextService } from '../core/saga-context-service';
+import { DebugService } from '../core/debug-service';
 import { GrammarService } from '../core/grammar-service';
 import { SearchService } from '../core/search-service';
 import { highlightFirstMatch } from '../core/search-highlight';
@@ -82,6 +83,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected sagaCtx = inject(SagaContextService);
   private ctxMenu = inject(ContextMenuService);
   private search = inject(SearchService);
+  private debug = inject(DebugService);
 
   /** Pane que renderiza este editor. Default 0 = principal. 1 = secundario (split). */
   readonly paneId = input<PaneId>(0);
@@ -98,6 +100,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly chapterError = computed(() => this.pane().error());
   protected readonly meta = computed(() => this.pane().meta());
   protected readonly state = signal<ToolbarState>(EMPTY_STATE);
+  /** Posición del cursor para el footer: número de párrafo (1-based) y columna dentro del párrafo. */
+  protected readonly cursorPos = signal<{ paragraph: number; col: number }>({ paragraph: 1, col: 0 });
   protected readonly rae = signal<{ original: string; converted: string } | null>(null);
   protected readonly importing = this.chapter.importing;
   protected readonly canApplyRae = computed(() => {
@@ -522,7 +526,19 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.grammarUsed.set(true);
     try {
       const matches = await this.grammar.check(plain, lang);
-      const positioned = mapMatchesToPm(matches, ranges, this.tiptap.state.doc, plain);
+      const positioned = mapMatchesToPm(
+        matches,
+        ranges,
+        this.tiptap.state.doc,
+        plain,
+        (info) => {
+          this.debug.warn(
+            'grammar:offset',
+            `mismatch lt=${info.ltOffset}+${info.ltLength} pm=${info.from}..${info.to}`,
+            JSON.stringify({ expected: info.expected, actual: info.actual }),
+          );
+        },
+      );
       const filtered = positioned.filter((m) => {
         if (m.category !== 'TYPOS') return true;
         const word = plain.slice(m.offset, m.offset + m.length);
@@ -550,6 +566,28 @@ export class Editor implements AfterViewInit, OnDestroy {
     const popover = this.grammarPopover();
     if (!popover || !this.tiptap) return;
     const dismissedId = (popover.match as GrammarMatchPos).id;
+    // Trace de offsets: lo que ProseMirror tiene en `popover.from..to` vs lo
+    // que LT pidió desde su plain (`popover.match.offset+length`). Si difieren,
+    // el squiggle está sobre la palabra equivocada (bug intermitente, README).
+    const { plain } = extractPlainText(this.tiptap.state.doc);
+    const ltSlice = plain.slice(
+      popover.match.offset,
+      popover.match.offset + popover.match.length,
+    );
+    const pmSlice = this.tiptap.state.doc.textBetween(popover.from, popover.to, '\n');
+    this.debug.info(
+      'grammar:offset',
+      `popover-apply from=${popover.from} to=${popover.to} drift=${ltSlice !== pmSlice}`,
+      JSON.stringify({
+        matchId: dismissedId,
+        ltOffset: popover.match.offset,
+        ltLength: popover.match.length,
+        ltSlice,
+        pmSlice,
+        replacement,
+        category: popover.match.category,
+      }),
+    );
     this.tiptap
       .chain()
       .focus()
@@ -816,6 +854,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     const e = this.tiptap;
     if (!e) {
       this.state.set(EMPTY_STATE);
+      this.cursorPos.set({ paragraph: 1, col: 0 });
       return;
     }
     const { from, to, empty } = e.state.selection;
@@ -830,7 +869,27 @@ export class Editor implements AfterViewInit, OnDestroy {
       canUndo: e.can().undo(),
       canRedo: e.can().redo(),
     });
+    this.cursorPos.set(computeCursorPos(e));
   }
+}
+
+function computeCursorPos(e: TipTapEditor): { paragraph: number; col: number } {
+  const { $from } = e.state.selection;
+  // Top-level depth = 0 (el doc). Cualquier nodo a depth 1 es bloque
+  // top-level (paragraph, blockquote, heading, hr). Contamos cuántos vienen
+  // antes para el número de párrafo, 1-based.
+  let paragraph = 1;
+  if ($from.depth >= 1) {
+    const top = $from.before(1);
+    e.state.doc.descendants((node, pos) => {
+      if (pos >= top) return false;
+      if (node.isBlock) paragraph++;
+      return false; // solo top-level
+    });
+  }
+  // Columna dentro del bloque que contiene al cursor (offset en chars).
+  const col = $from.depth >= 1 ? $from.parentOffset : 0;
+  return { paragraph, col };
 }
 
 function escapeHtml(s: string): string {

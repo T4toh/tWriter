@@ -164,6 +164,10 @@ pub(crate) fn clean_html(raw: &str) -> String {
         out = out.replace("<p></p>", "");
     }
 
+    // Normaliza `...` literales a `…` (U+2026). El subset HTML no permite <code>,
+    // así que cualquier `...` en el output es texto de prosa.
+    let out = out.replace("...", "…");
+
     out.split('\n')
         .map(|l| l.trim())
         .filter(|l| !l.is_empty())
@@ -222,6 +226,20 @@ mod tests {
         let input = "<p>Foo</p><hr><p>Bar</p>";
         let out = clean_html(input);
         assert_eq!(out, "<p>Foo</p><hr class=\"scene-break\"/><p>Bar</p>");
+    }
+
+    #[test]
+    fn triple_dots_become_ellipsis() {
+        let input = "<p>Gracias...</p><p>Hola...adiós</p>";
+        let out = clean_html(input);
+        assert_eq!(out, "<p>Gracias…</p><p>Hola…adiós</p>");
+    }
+
+    #[test]
+    fn more_than_three_dots_normalize() {
+        let input = "<p>Eh.... bueno</p>";
+        let out = clean_html(input);
+        assert_eq!(out, "<p>Eh…. bueno</p>");
     }
 }
 
