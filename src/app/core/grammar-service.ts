@@ -30,11 +30,22 @@ export interface SecretStatus {
   keyring_available: boolean;
 }
 
+/** Polling cuando LT está caído. 30s = balance entre recovery rápido y
+ * ruido en logs. Una vez que `available` flipea a true, el guard del
+ * setInterval lo deja como no-op (sin clearInterval para no bookkeepar). */
+const LT_RECOVERY_POLL_MS = 30_000;
+
 @Injectable({ providedIn: 'root' })
 export class GrammarService {
   private settings = inject(SettingsService);
   private sagaCtx = inject(SagaContextService);
   private debug = inject(DebugService);
+
+  constructor() {
+    setInterval(() => {
+      if (!this.available()) void this.ping();
+    }, LT_RECOVERY_POLL_MS);
+  }
 
   readonly available = signal<boolean>(false);
   readonly checking = signal<boolean>(false);
@@ -96,6 +107,10 @@ export class GrammarService {
       const msg = String(e ?? 'Error desconocido');
       this.lastError.set(msg);
       this.debug.error('grammar', `check falló (${lang}, ${text.length} bytes)`, msg);
+      // Recalibración inmediata: si LT acaba de caerse, el próximo
+      // scheduleGrammarRecheck del editor verá `available=false` y no spamea
+      // requests muertos hasta que el polling de recovery lo levante.
+      void this.ping();
       throw new Error(msg);
     } finally {
       this.checking.set(false);

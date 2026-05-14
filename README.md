@@ -460,25 +460,35 @@ paru -S twriter-bin
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
-- **Offsets de LT se desfasan ("se corre") intermitente**: a veces el
-  squiggle queda sobre la palabra equivocada y el popover ofrece sugerencias
-  para otra palabra (ej. marca "casa" pero sugiere fixes para "cosa" que
-  está 2 chars antes). Difícil de reproducir. Sospechosos:
-  (a) `extractPlainText` en `grammar-extension.ts:90` mete `\n\n` por cada
-  `<br>` hard-break adentro de `<p>` — si LT cuenta los `\n\n` distinto que
-  PM, el offset → pmPos se corre. (b) `applyGrammarReplacement` no remapea
-  el resto de las matches con `transaction.mapping` después de insertar el
-  replacement, queda el array viejo con offsets stale hasta el próximo
-  check. (c) Caracteres especiales tipo NBSP / soft-hyphen / zero-width
-  joiners en el HTML del importer Pandoc cuentan distinto en plain vs PM.
-  **Instrumentación ya en lugar**: `mapMatchesToPm` (`grammar-extension.ts`)
-  acepta un `OffsetMismatchReporter` opcional que el editor cablea a
-  `debug.warn('grammar:offset', ...)`. Compara `plain.slice(offset, length)`
-  vs `doc.textBetween(from, to)` y loggea drift. `applyGrammarReplacement`
-  (`editor.ts`) loggea `popover-apply` con `ltSlice`/`pmSlice`/`drift` al
-  click. Cuando aparezca un repro, filtrar panel 🐛 por source
-  `grammar:offset`, copiar entradas con 📋, y el patrón de drift indicará
-  qué sospecha (A/B/C) confirmar antes de fixear.
+- ~~**Offsets de LT se desfasan ("se corre") intermitente**~~ **[ARREGLADO]**:
+  el squiggle quedaba sobre la palabra equivocada en capítulos >19.5KB. Tres
+  bugs encadenados en el flujo de gramática, los tres fixeados en una sola
+  tanda:
+  1. **Panic en `find_split`** (`grammar.rs`): `text[start..target]` panickeaba
+     con `end byte index N is not a char boundary` cuando
+     `cursor + MAX_CHUNK_BYTES` caía adentro de un em-dash (3 bytes UTF-8)
+     u otro multibyte. El panic vivía en un worker de tokio y dejaba
+     `invoke('check_grammar')` **colgado en JS sin rechazar la promise** —
+     spinner del botón LT eterno, sin logs, marcas nunca aparecían. Fix: snap
+     `target` al char boundary previo antes del slice + fallback pathológico.
+  2. **`chunk.start` en bytes vs UTF-16**: `split_chunks` llevaba el cursor
+     en bytes UTF-8 y grababa `chunk.start = byte_cursor`. LT devuelve
+     `match.offset` en UTF-16 code units; el frontend sumaba ambos. Por cada
+     char no-ASCII en chunk 1 (em-dash = +2 bytes vs UTF-16, acento = +1)
+     los matches de chunk 2+ caían corridos sobre texto equivocado. Fix:
+     cursor UTF-16 paralelo al byte cursor, `chunk.start = utf16_cursor`.
+  3. **Caída transitoria de LT borraba todas las marcas**: si LT caía un
+     rato, `available` quedaba en false para siempre (sin re-ping) y el
+     effect del editor que reaccionaba a `autoEnabled` (que incluye
+     `available`) limpiaba todo en pantalla. Fix: polling de 30s en
+     `GrammarService` solo cuando `!available`, ping-on-error en `check()`,
+     y desacoplar la limpieza de marcas del editor del flip de availability
+     — ahora solo limpia ante el toggle explícito del usuario.
+
+  Tests: 5 en `grammar::tests` cubriendo offset alignment (em-dash + acento)
+  y panic-on-boundary. La instrumentación `OffsetMismatchReporter` +
+  `popover-apply` debug logs se quedan por si vuelve a aparecer drift por
+  otra causa.
 - Operadores explícitos en la búsqueda (AND, OR, "frase exacta" entre
   comillas, filtros `kind:note`, `kind:chapter`). Hoy el default es AND
   implícito sobre todos los términos; sumar sintaxis para que el usuario
