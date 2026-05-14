@@ -77,6 +77,11 @@ export class GitService {
 
   private statusTimer: ReturnType<typeof setInterval> | null = null;
   private commitTimer: ReturnType<typeof setInterval> | null = null;
+  private autoFailCount = 0;
+  private autoPaused = false;
+  private autoPauseTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoPullInflight = false;
+  private ensuredForRoot: string | null = null;
 
   constructor() {
     effect(() => {
@@ -86,8 +91,16 @@ export class GitService {
       this.status.set(null);
       this.error.set(null);
       if (root && isGit) {
+        if (this.ensuredForRoot !== root) {
+          this.ensuredForRoot = root;
+          void invoke('git_ensure_twriter_ignored', { repoPath: root }).catch((err) => {
+            console.warn('git_ensure_twriter_ignored failed', err);
+          });
+        }
         void this.refreshStatus();
         this.startTimers();
+      } else {
+        this.ensuredForRoot = null;
       }
     });
   }
@@ -99,9 +112,17 @@ export class GitService {
       const s = await invoke<GitStatus>('git_status', { repoPath: root });
       this.status.set(s);
       this.error.set(null);
+      if (
+        !this.autoPaused &&
+        !this.autoPullInflight &&
+        !this.syncing() &&
+        s.behind > 0
+      ) {
+        void this.autoPull(s);
+      }
     } catch (err) {
       this.status.set(null);
-      this.error.set(String(err));
+      this.error.set(friendlyError(String(err)));
     }
   }
 
@@ -127,8 +148,9 @@ export class GitService {
       }
       await this.refreshStatus();
       this.lastSyncAt.set(Date.now());
+      this.resetThrottle();
     } catch (err) {
-      this.error.set(String(err));
+      this.error.set(friendlyError(String(err)));
     } finally {
       this.currentOp.set(null);
     }
@@ -142,11 +164,58 @@ export class GitService {
     try {
       await invoke('git_pull', { repoPath: root });
       await this.refreshStatus();
+      this.resetThrottle();
     } catch (err) {
-      this.error.set(String(err));
+      this.error.set(friendlyError(String(err)));
     } finally {
       this.currentOp.set(null);
     }
+  }
+
+  private async autoPull(s: GitStatus): Promise<void> {
+    const root = this.settings.root();
+    if (!root) return;
+    this.autoPullInflight = true;
+    try {
+      if (s.ahead === 0) {
+        await invoke('git_pull', { repoPath: root });
+      } else {
+        await invoke('git_pull_rebase', { repoPath: root });
+      }
+      this.resetThrottle();
+      this.error.set(null);
+      await this.refreshStatus();
+    } catch (err) {
+      const raw = String(err);
+      if (raw.startsWith('conflict:')) {
+        this.error.set(friendlyError(raw));
+        this.pauseAutoLoop();
+      } else {
+        this.autoFailCount += 1;
+        if (this.autoFailCount >= 3) {
+          this.error.set(friendlyError(raw));
+          this.pauseAutoLoop();
+        }
+      }
+    } finally {
+      this.autoPullInflight = false;
+    }
+  }
+
+  private pauseAutoLoop(): void {
+    this.autoPaused = true;
+    if (this.autoPauseTimer) clearTimeout(this.autoPauseTimer);
+    this.autoPauseTimer = setTimeout(() => {
+      this.autoPaused = false;
+      this.autoFailCount = 0;
+    }, 5 * 60_000);
+  }
+
+  private resetThrottle(): void {
+    this.autoFailCount = 0;
+    if (this.autoPauseTimer) clearTimeout(this.autoPauseTimer);
+    this.autoPauseTimer = null;
+    this.autoPaused = false;
   }
 
   private startTimers(): void {
@@ -164,6 +233,11 @@ export class GitService {
     if (this.commitTimer) clearInterval(this.commitTimer);
     this.statusTimer = null;
     this.commitTimer = null;
+    if (this.autoPauseTimer) clearTimeout(this.autoPauseTimer);
+    this.autoPauseTimer = null;
+    this.autoPaused = false;
+    this.autoFailCount = 0;
+    this.autoPullInflight = false;
   }
 
   private defaultMessage(): string {
