@@ -20,6 +20,12 @@ pub struct GitCommitResult {
     pub files: u32,
 }
 
+#[derive(Serialize, Debug, Clone)]
+pub struct EnsureResult {
+    pub gitignore_updated: bool,
+    pub untracked_files: u32,
+}
+
 // ─────────────── Tauri commands (async, offload a thread pool) ───────────────
 
 #[tauri::command]
@@ -48,6 +54,11 @@ pub async fn git_pull(repo_path: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn git_pull_rebase(repo_path: String) -> Result<(), String> {
     run_blocking(move || git_pull_rebase_impl(&repo_path)).await
+}
+
+#[tauri::command]
+pub async fn git_ensure_twriter_ignored(repo_path: String) -> Result<EnsureResult, String> {
+    run_blocking(move || git_ensure_twriter_ignored_impl(&repo_path)).await
 }
 
 async fn run_blocking<F, T>(f: F) -> Result<T, String>
@@ -210,6 +221,68 @@ fn git_pull_impl(repo_path: &str) -> Result<(), String> {
     }
     tracing::info!(target: "git", "pull --ff-only ok");
     Ok(())
+}
+
+pub(crate) fn git_ensure_twriter_ignored_impl(repo_path: &str) -> Result<EnsureResult, String> {
+    let root = PathBuf::from(repo_path);
+    let gi_path = root.join(".gitignore");
+    let existing = std::fs::read_to_string(&gi_path).unwrap_or_default();
+    let already_ignored = existing.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed == ".twriter" || trimmed == ".twriter/"
+    });
+    let gitignore_updated = if !already_ignored {
+        let mut new_content = existing.clone();
+        if !new_content.is_empty() && !new_content.ends_with('\n') {
+            new_content.push('\n');
+        }
+        if !new_content.is_empty() {
+            new_content.push('\n');
+        }
+        new_content.push_str("# tWriter: índice de búsqueda local (se regenera al boot)\n");
+        new_content.push_str(".twriter/\n");
+        std::fs::write(&gi_path, new_content).map_err(|e| e.to_string())?;
+        true
+    } else {
+        false
+    };
+
+    let ls = Command::new("git")
+        .current_dir(&root)
+        .args(["ls-files", ".twriter"])
+        .output()
+        .map_err(|e| format!("git ls-files: {}", e))?;
+    let listed = String::from_utf8_lossy(&ls.stdout);
+    let untracked_files: u32 = if ls.status.success() && !listed.trim().is_empty() {
+        let count = listed.lines().count() as u32;
+        let rm = Command::new("git")
+            .current_dir(&root)
+            .args(["rm", "-r", "--cached", ".twriter"])
+            .output()
+            .map_err(|e| format!("git rm --cached: {}", e))?;
+        if !rm.status.success() {
+            let stderr = String::from_utf8_lossy(&rm.stderr).to_string();
+            tracing::warn!(target: "git", error = %stderr, "git rm --cached .twriter falló");
+            return Err(format!("no se pudo destrackear .twriter/: {}", stderr));
+        }
+        count
+    } else {
+        0
+    };
+
+    if gitignore_updated || untracked_files > 0 {
+        tracing::info!(
+            target: "git",
+            action = "twriter_cleanup",
+            gitignore_updated,
+            untracked_files,
+            "limpieza de .twriter/ aplicada"
+        );
+    }
+    Ok(EnsureResult {
+        gitignore_updated,
+        untracked_files,
+    })
 }
 
 pub(crate) fn git_pull_rebase_impl(repo_path: &str) -> Result<(), String> {
@@ -460,6 +533,78 @@ mod tests {
         );
         assert!(!pc_b.join(".git/rebase-merge").exists());
         assert!(!pc_b.join(".git/rebase-apply").exists());
+    }
+
+    fn init_repo() -> PathBuf {
+        let dir = tempdir("ensure");
+        run(&dir, &["init", "--initial-branch=main"]);
+        run(&dir, &["config", "user.email", "t@x"]);
+        run(&dir, &["config", "user.name", "t"]);
+        fs::write(dir.join("a.txt"), "x\n").unwrap();
+        run(&dir, &["add", "."]);
+        run(&dir, &["commit", "-m", "init"]);
+        dir
+    }
+
+    #[test]
+    fn ensure_appends_gitignore_when_missing() {
+        let dir = init_repo();
+        let res = git_ensure_twriter_ignored_impl(dir.to_str().unwrap()).unwrap();
+        assert!(res.gitignore_updated);
+        assert_eq!(res.untracked_files, 0);
+        let gi = fs::read_to_string(dir.join(".gitignore")).unwrap();
+        assert!(gi.contains(".twriter/"));
+    }
+
+    #[test]
+    fn ensure_idempotent_when_already_ignored() {
+        let dir = init_repo();
+        fs::write(dir.join(".gitignore"), "node_modules/\n.twriter/\n").unwrap();
+        let res = git_ensure_twriter_ignored_impl(dir.to_str().unwrap()).unwrap();
+        assert!(!res.gitignore_updated);
+        assert_eq!(res.untracked_files, 0);
+        let gi = fs::read_to_string(dir.join(".gitignore")).unwrap();
+        assert_eq!(gi.matches(".twriter/").count(), 1);
+    }
+
+    #[test]
+    fn ensure_matches_twriter_without_slash() {
+        let dir = init_repo();
+        fs::write(dir.join(".gitignore"), ".twriter\n").unwrap();
+        let res = git_ensure_twriter_ignored_impl(dir.to_str().unwrap()).unwrap();
+        assert!(!res.gitignore_updated, "bare `.twriter` should count as match");
+    }
+
+    #[test]
+    fn ensure_untracks_when_already_tracked() {
+        let dir = init_repo();
+        fs::create_dir_all(dir.join(".twriter/search-index")).unwrap();
+        fs::write(dir.join(".twriter/search-index/meta.json"), "{}\n").unwrap();
+        run(&dir, &["add", ".twriter"]);
+        run(&dir, &["commit", "-m", "oops"]);
+        let res = git_ensure_twriter_ignored_impl(dir.to_str().unwrap()).unwrap();
+        assert!(res.untracked_files > 0);
+        assert!(dir.join(".twriter/search-index/meta.json").exists());
+        let ls = Command::new("git")
+            .current_dir(&dir)
+            .args(["ls-files", ".twriter"])
+            .output()
+            .unwrap();
+        assert!(
+            String::from_utf8_lossy(&ls.stdout).is_empty(),
+            "ls-files should be empty after rm --cached"
+        );
+    }
+
+    #[test]
+    fn ensure_creates_gitignore_if_missing() {
+        let dir = init_repo();
+        let _ = fs::remove_file(dir.join(".gitignore"));
+        let res = git_ensure_twriter_ignored_impl(dir.to_str().unwrap()).unwrap();
+        assert!(res.gitignore_updated);
+        assert!(dir.join(".gitignore").exists());
+        let gi = fs::read_to_string(dir.join(".gitignore")).unwrap();
+        assert!(gi.contains(".twriter/"));
     }
 
     #[test]
