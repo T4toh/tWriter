@@ -167,7 +167,7 @@ fn build_inherited_book_config(
             parent
                 .file_name()
                 .and_then(|s| s.to_str())
-                .map(|s| strip_numeric_prefix(s))
+                .map(strip_numeric_prefix)
         })
         .filter(|s| !s.trim().is_empty());
 

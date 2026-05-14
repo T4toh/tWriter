@@ -38,7 +38,9 @@ use fs::{
     get_tree, is_directory_excluded, read_chapter, read_meta, rename_node, set_directory_excluded,
     write_chapter, write_meta,
 };
-use git::{git_commit_all, git_pull, git_push, git_status};
+use git::{
+    git_commit_all, git_ensure_twriter_ignored, git_pull, git_pull_rebase, git_push, git_status,
+};
 use grammar::{
     check_grammar, check_grammar_available, languagetool_docker_start, languagetool_docker_status,
     languagetool_docker_stop,
@@ -106,6 +108,8 @@ pub fn run() {
             git_commit_all,
             git_push,
             git_pull,
+            git_pull_rebase,
+            git_ensure_twriter_ignored,
             detect_storage_backend,
             import_chapter,
             delete_chapter_file,

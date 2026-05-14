@@ -321,7 +321,7 @@ pub fn full_reindex(
 /// Camina el repo y devuelve la lista de `(path, kind)` a indexar.
 fn collect_indexable(root: &Path) -> Vec<(PathBuf, String)> {
     let mut out = Vec::new();
-    walk_collect(root, root, &mut out, 0);
+    walk_collect(root, &mut out, 0);
     out
 }
 
@@ -341,7 +341,7 @@ const SKIP_DIRS: &[&str] = &[
 const CHAPTER_EXTS: &[&str] = &["html"];
 const NOTE_EXTS: &[&str] = &["md", "markdown"];
 
-fn walk_collect(root: &Path, dir: &Path, out: &mut Vec<(PathBuf, String)>, depth: u32) {
+fn walk_collect(dir: &Path, out: &mut Vec<(PathBuf, String)>, depth: u32) {
     // Indexar el dir como folder/saga/book/section (excepto root mismo).
     if depth > 0 {
         if let Some(kind) = classify_dir(dir) {
@@ -366,7 +366,7 @@ fn walk_collect(root: &Path, dir: &Path, out: &mut Vec<(PathBuf, String)>, depth
             if fs_mod::is_excluded_dir(&path) {
                 continue;
             }
-            walk_collect(root, &path, out, depth + 1);
+            walk_collect(&path, out, depth + 1);
             continue;
         }
         if !ft.is_file() {
@@ -380,10 +380,8 @@ fn walk_collect(root: &Path, dir: &Path, out: &mut Vec<(PathBuf, String)>, depth
             .and_then(|e| e.to_str())
             .map(|s| s.to_lowercase());
         match ext.as_deref() {
-            Some(e) if CHAPTER_EXTS.contains(&e) => {
-                if !name.ends_with(".meta.json") {
-                    out.push((path, "chapter".into()));
-                }
+            Some(e) if CHAPTER_EXTS.contains(&e) && !name.ends_with(".meta.json") => {
+                out.push((path, "chapter".into()));
             }
             Some(e) if NOTE_EXTS.contains(&e) => {
                 out.push((path, "note".into()));
@@ -406,30 +404,27 @@ fn classify_dir(dir: &Path) -> Option<&'static str> {
     }
     // Heurística: sección si tiene capítulos directos; folder en otro caso.
     let mut has_chapter = false;
-    let mut has_subdirs = false;
     if let Ok(entries) = fs::read_dir(dir) {
         for e in entries.flatten() {
             let p = e.path();
             if p.is_file() {
                 if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
                     if CHAPTER_EXTS.contains(&ext.to_lowercase().as_str())
-                        && !p.file_name()
+                        && !p
+                            .file_name()
                             .and_then(|s| s.to_str())
                             .map(|n| n.ends_with(".meta.json"))
                             .unwrap_or(false)
                     {
                         has_chapter = true;
+                        break;
                     }
                 }
-            } else if p.is_dir() {
-                has_subdirs = true;
             }
         }
     }
     if has_chapter {
         Some("section")
-    } else if has_subdirs {
-        Some("folder")
     } else {
         Some("folder")
     }

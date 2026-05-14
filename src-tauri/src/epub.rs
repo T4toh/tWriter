@@ -72,7 +72,7 @@ fn read_export_dir(dir: &Path) -> Result<Vec<ExportEntry>, String> {
             modified_ms,
         });
     }
-    out.sort_by(|a, b| b.modified_ms.unwrap_or(0).cmp(&a.modified_ms.unwrap_or(0)));
+    out.sort_by_key(|a| std::cmp::Reverse(a.modified_ms.unwrap_or(0)));
     Ok(out)
 }
 

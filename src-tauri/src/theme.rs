@@ -192,7 +192,7 @@ pub fn is_font_ext(ext: &str) -> bool {
 /// Detecta sufijo `-Regular|-Bold|-Italic|-BoldItalic|-Roman|-Oblique`
 /// (case-insensitive, separador `-` o `_`). Sin sufijo → `(stem, 400, "normal")`.
 pub fn parse_face_suffix(stem: &str) -> (String, u32, &'static str) {
-    if let Some(idx) = stem.rfind(|c: char| c == '-' || c == '_') {
+    if let Some(idx) = stem.rfind(['-', '_']) {
         let base = &stem[..idx];
         let suffix = &stem[idx + 1..];
         let lower = suffix.to_ascii_lowercase();
