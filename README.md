@@ -237,6 +237,8 @@ viejo, validador los detecta correctamente con `paragraph-collapsed`.
 
 - Pandoc CLI shell-out (`.docx`/`.odt` → HTML subset). Single chapter o bulk.
 - Wizard de importación de saga/novela (📥 en header): trae carpeta externa al repo con detección heurística de estructura, decisión per-carpeta sobre conversión, metadata de saga + libros (nombre / autor / idioma / imprenta), normalización de tapas y extras, progress bar con eventos. La presentación EPUB (template, dropcap, prefijo y numeración de capítulos) **no** se pregunta acá — vive en el tema (`theme.json` + `saga.json::theme.overrides` / `book.json::theme.overrides`) y se edita desde el theme editor. `SagaConfig`/`BookConfig` mantienen los 6 campos legacy como `Option<…>` y `theme.rs::resolve_theme` los lee de root para repos viejos (backcompat read-side intacta).
+- **Captura de extras con estructura**: subcarpetas sin `.docx`/`.odt` (ej. `versiones viejas/`) y subcarpetas dentro de secciones (`convertidos/`, `original/`, `Revisiones/`) se importan como extras preservando subpath, no se vuelven fake sections ni se pierden silenciosamente. Skip-list del importer separado del walker del tree (`fs.rs::SKIP_DIRS`) — el tree oculta `convertidos/` para no llenar la navegación; el importer lo agarra igual y lo guarda como backup. Wizard expone cada extra (incluyendo subpath) con su target path completo en el step "estructura".
+- **Toggle "Centralizar extras en `<saga>/extras/`"** (default ON, visible en step `saga-config`): redirige todos los extras (book + section + subpath) a la carpeta `extras/` de la saga preservando estructura `<book>/<section>/<subpath>/<file>`. El TOC de cada libro queda limpio (solo caps + book.json + cover). OFF mantiene comportamiento legacy con extras adentro de cada libro/sección.
 - **Generar demo** (mismo wizard 📥, tercer tipo): crea una saga de ejemplo con
   1 libro, 5 capítulos × 3 partes (15 archivos `.html`) con prosa fantasy
   hardcoded en ES o EN. Incluye diálogos en estilo RAE, `<em>`, `<strong>`,
@@ -269,6 +271,7 @@ Botón 📝 en el header del tree abre un wizard separado para traer notas markd
 - Drag&drop de archivos del OS al saga/libro.
 - Context menu por extra: abrir, renombrar, borrar.
 - `back-cover` embebida al final del EPUB si está presente.
+- **Tree view jerárquico**: subcarpetas dentro de `extras/` (ej. `1 - La Caballera Esmeralda/convertidos/`, `original/`) se renderean como folders expandibles independientes. Backend `list_extras` ya devuelve `relative_path` con subpath; frontend `buildExtrasTree` arma la jerarquía y un recursive template (`extrasNodeTpl`) la pinta.
 
 ### Export EPUB
 
@@ -484,18 +487,6 @@ paru -S twriter-bin
 
 ### Tree / Importer
 
-- **Importer no ve `convertidos/`**: el walker del tree (`fs.rs::SKIP_DIRS`)
-  excluye `convertidos/`, `Revisiones/`, etc. para no mostrar backups en el
-  árbol. Side effect: el wizard de importar tampoco los ve, así que si la
-  carpeta de origen (ej. `Meridian 2.0/2 - Más que un trabajo/1 - Brickwell/`)
-  tiene sus `.odt` modernos del converter Python en `convertidos/`, el
-  wizard ofrece solo los `.odt` originales del root (sin RAE). Fix posible:
-  (a) toggle en el wizard "incluir también `convertidos/`" para casos de
-  migración, o (b) detección heurística — si la carpeta tiene tanto `.odt`
-  raw como `convertidos/<n>_convertido.odt`, ofrecer el convertido por
-  default. Tested contra Meridian 2.0 cap 1 y 2: ambos parsean a 1 solo
-  párrafo gigante (bug del converter Python viejo, ya conocido) y el
-  validador RAE lo flagea con `paragraph-collapsed` correctamente.
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Borrar entradas individuales del diccionario per-saga desde UI (hoy se editan en bloque vía textarea del modal de configuración; agregar funciona desde el popover de typos).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
