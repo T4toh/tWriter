@@ -100,7 +100,7 @@ Reglas:
 - Jerarquía Saga / Libro / Sección / Capítulo + Notas + carpetas `notas/` + carpetas libres 📁 en root.
 - Context menu: crear, mover, renombrar, importar, exportar EPUB, configurar libro, excluir del EPUB. Para notas: abrir, renombrar, borrar. Para carpetas libres: nueva nota, nueva carpeta, renombrar, borrar.
 - Right-click en área vacía del tree → "Crear saga / novela", "Nueva carpeta…" (📁 libre), "Nueva nota…" (`.md` suelta).
-- Reorder de capítulos via context menu (↑ subir / ↓ bajar).
+- Reorder vía drag & drop (sagas, libros, secciones, capítulos, notas) + mover cross-parent (capítulo entre secciones, sección entre libros, libro entre sagas). Context menu ↑/↓ sigue disponible. Sagas/libros/secciones sin prefijo numérico se migran a `1..N` automáticamente en el primer DnD.
 - Archivos no-chapter visibles en el tree con íconos por tipo (🖼 imagen, 📄 documento, 📝 texto, 📦 otro). Notas con 📝 y badge `.md`.
 - Template inicial precargado (saga/libro/capítulo dummy) al crear sagas/libros nuevos.
 - Badge "excluido" para `.twriter-ignore`.
@@ -458,7 +458,6 @@ paru -S twriter-bin
 
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
-- Drag & drop reorder de capítulos (hoy solo via context menu ↑/↓).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
 - **Offsets de LT se desfasan ("se corre") intermitente**: a veces el
