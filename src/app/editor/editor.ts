@@ -181,7 +181,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   private raeDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private skipNextGrammarRemap = false;
   private skipNextRaeRemap = false;
-  private lastAutoEnabled = false;
+  private lastGrammarUserDisabled = false;
+  private lastGrammarAvailable = false;
   private lastCheckedPlain: string | null = null;
   private lastRaePlain: string | null = null;
   private lastRaeAuto = false;
@@ -254,20 +255,37 @@ export class Editor implements AfterViewInit, OnDestroy {
       }
     });
 
-    // Auto-check de gramática: cuando LT pasa a disponible (y el modo lo
-    // permite + el user no lo destrabó), arrancamos solos. Al apagarse,
-    // limpiamos las marcas.
+    // Toggle manual del usuario para auto-gramática. Reaccionamos SOLO al
+    // toggle explícito (`grammarAutoDisabled`), NO a `autoEnabled` — porque
+    // este último incluye `available`, y si LT cae transitoriamente no
+    // queremos borrarle las marcas al usuario. Las marcas viejas quedan
+    // visibles hasta que LT vuelva (el ping de recovery del service lo
+    // detecta) y el siguiente check las reemplace.
     effect(() => {
-      const on = this.grammar.autoEnabled();
-      if (on === this.lastAutoEnabled) return;
-      this.lastAutoEnabled = on;
+      const userDisabled = this.settings.grammarAutoDisabled();
+      if (userDisabled === this.lastGrammarUserDisabled) return;
+      this.lastGrammarUserDisabled = userDisabled;
       if (!this.viewReady() || !this.tiptap) return;
-      if (on) {
+      if (!userDisabled) {
         if (this.canCheckGrammar()) void this.checkGrammar();
       } else {
         this.grammarMatches.set([]);
         this.applyDecorations([]);
       }
+    });
+
+    // Recovery: cuando LT pasa de caído a disponible (polling del service o
+    // ping manual lo detectó), disparamos un check para repoblar marcas. Solo
+    // reaccionamos a la transición false→true. La transición true→false NO
+    // borra marcas — quedan stale hasta que LT vuelva, por la razón del
+    // effect de arriba.
+    effect(() => {
+      const avail = this.grammar.available();
+      if (avail === this.lastGrammarAvailable) return;
+      this.lastGrammarAvailable = avail;
+      if (!avail) return;
+      if (!this.viewReady() || !this.tiptap) return;
+      if (this.canCheckGrammar()) void this.checkGrammar();
     });
 
     // Auto-check RAE: igual patrón. Si el toggle está prendido y el capítulo

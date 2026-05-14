@@ -317,6 +317,11 @@ async fn post_check(
 }
 
 struct Chunk {
+    /// Offset del chunk en el texto original, contado en **UTF-16 code units**
+    /// (la unidad que usa LanguageTool en `match.offset` y JavaScript en
+    /// `string.slice`). El frontend suma `m.offset + chunk.start` para mapear
+    /// matches de chunk N>0 a la posición global; mezclarlo con bytes UTF-8
+    /// corre los squiggles cada vez que el prefijo tiene un char no-ASCII.
     start: usize,
     text: String,
 }
@@ -327,20 +332,22 @@ fn split_chunks(text: &str) -> Vec<Chunk> {
     }
     let mut out = Vec::new();
     let bytes = text.as_bytes();
-    let mut cursor = 0;
-    while cursor < bytes.len() {
-        let end_target = (cursor + MAX_CHUNK_BYTES).min(bytes.len());
+    let mut byte_cursor = 0;
+    let mut utf16_cursor: usize = 0;
+    while byte_cursor < bytes.len() {
+        let end_target = (byte_cursor + MAX_CHUNK_BYTES).min(bytes.len());
         let split_at = if end_target == bytes.len() {
             end_target
         } else {
-            find_split(text, cursor, end_target)
+            find_split(text, byte_cursor, end_target)
         };
-        let slice = &text[cursor..split_at];
+        let slice = &text[byte_cursor..split_at];
         out.push(Chunk {
-            start: cursor,
+            start: utf16_cursor,
             text: slice.to_string(),
         });
-        cursor = split_at;
+        utf16_cursor += slice.chars().map(|c| c.len_utf16()).sum::<usize>();
+        byte_cursor = split_at;
     }
     out
 }
@@ -558,6 +565,25 @@ async fn ping_local_lt() -> bool {
 }
 
 fn find_split(text: &str, start: usize, target: usize) -> usize {
+    // Snap target hacia abajo a un char boundary antes de slicear: `target =
+    // cursor + MAX_CHUNK_BYTES` puede caer adentro de un caracter multibyte
+    // (em-dash = 3 bytes UTF-8, acentos = 2 bytes), y `text[start..target]`
+    // panickea cuando target no es char boundary. El panic queda en el worker
+    // de tokio y deja `invoke('check_grammar')` colgado sin rechazar la promise.
+    let mut target = target.min(text.len());
+    while target > start && !text.is_char_boundary(target) {
+        target -= 1;
+    }
+    if target <= start {
+        // Pathological: no había boundary entre start y el target original.
+        // Avanzar un char completo para garantizar progreso del while de
+        // split_chunks (evita loop infinito).
+        return text[start..]
+            .char_indices()
+            .nth(1)
+            .map(|(i, _)| start + i)
+            .unwrap_or(text.len());
+    }
     if let Some(pos) = text[start..target].rfind("\n\n") {
         return start + pos + 2;
     }
@@ -570,9 +596,77 @@ fn find_split(text: &str, start: usize, target: usize) -> usize {
     if let Some(pos) = text[start..target].rfind(' ') {
         return start + pos + 1;
     }
-    let mut idx = target;
-    while idx > start && !text.is_char_boundary(idx) {
-        idx -= 1;
+    target
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn utf16_len(s: &str) -> usize {
+        s.chars().map(|c| c.len_utf16()).sum()
     }
-    idx.max(start + 1)
+
+    #[test]
+    fn chunk_start_is_utf16_offset_not_bytes() {
+        // Em-dash al inicio: 3 bytes UTF-8, 1 UTF-16 code unit. El resto ASCII.
+        // Forzamos chunking metiendo >MAX_CHUNK_BYTES de relleno ASCII.
+        let text = format!("—{}", "a".repeat(MAX_CHUNK_BYTES + 100));
+        let chunks = split_chunks(&text);
+        assert!(chunks.len() >= 2, "texto debería partirse en >=2 chunks");
+        // chunk[1].start representa el offset al que el frontend suma m.offset
+        // (UTF-16 en JS string). Tiene que ser UTF-16 del prefijo, no bytes.
+        let expected = utf16_len(&chunks[0].text);
+        assert_eq!(
+            chunks[1].start, expected,
+            "chunk.start debe ser UTF-16 offset; bytes del em-dash inflarían el offset"
+        );
+    }
+
+    #[test]
+    fn single_chunk_has_zero_start() {
+        let text = "—Hola, mundo.".to_string();
+        let chunks = split_chunks(&text);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].start, 0);
+    }
+
+    #[test]
+    fn find_split_handles_emdash_at_target_byte() {
+        // Em-dash en bytes 19499..19502; target del primer chunk = 19500 cae
+        // adentro del em-dash. Antes del fix esto panickeaba tokio worker.
+        let text = format!("{}—{}", "a".repeat(19_499), "a".repeat(1000));
+        let chunks = split_chunks(&text);
+        assert!(chunks.len() >= 2);
+        // Verificar que los chunks no rompen el texto a mitad de char:
+        // concatenar las partes y comparar.
+        let rebuilt: String = chunks.iter().map(|c| c.text.as_str()).collect();
+        assert_eq!(rebuilt, text);
+    }
+
+    #[test]
+    fn find_split_handles_accented_char_at_target_byte() {
+        // 'á' en bytes 19499..19501 (2 bytes UTF-8). target=19500 cae al medio.
+        let text = format!("{}á{}", "a".repeat(19_499), "a".repeat(1000));
+        let chunks = split_chunks(&text);
+        assert!(chunks.len() >= 2);
+        let rebuilt: String = chunks.iter().map(|c| c.text.as_str()).collect();
+        assert_eq!(rebuilt, text);
+    }
+
+    #[test]
+    fn multiple_chunks_accumulate_utf16() {
+        // 3 chunks: cada uno con varios em-dashes para que bytes >> UTF-16.
+        let block = format!("{}{}", "—".repeat(100), "a".repeat(MAX_CHUNK_BYTES));
+        let text = block.repeat(3);
+        let chunks = split_chunks(&text);
+        assert!(chunks.len() >= 2);
+        let mut acc = 0usize;
+        for (i, c) in chunks.iter().enumerate() {
+            assert_eq!(c.start, acc, "chunk[{}].start desalineado", i);
+            acc += utf16_len(&c.text);
+        }
+        // Suma total de UTF-16 de los chunks == UTF-16 del texto original
+        assert_eq!(acc, utf16_len(&text));
+    }
 }
