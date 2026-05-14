@@ -232,7 +232,7 @@ viejo, validador los detecta correctamente con `paragraph-collapsed`.
 ### Importer
 
 - Pandoc CLI shell-out (`.docx`/`.odt` → HTML subset). Single chapter o bulk.
-- Wizard de importación de saga/novela (📥 en header): trae carpeta externa al repo con detección heurística de estructura, decisión per-carpeta sobre conversión, metadata de saga + libros, normalización de tapas y extras, progress bar con eventos.
+- Wizard de importación de saga/novela (📥 en header): trae carpeta externa al repo con detección heurística de estructura, decisión per-carpeta sobre conversión, metadata de saga + libros (nombre / autor / idioma / imprenta), normalización de tapas y extras, progress bar con eventos. La presentación EPUB (template, dropcap, prefijo y numeración de capítulos) **no** se pregunta acá — vive en el tema (`theme.json` + `saga.json::theme.overrides` / `book.json::theme.overrides`) y se edita desde el theme editor. `SagaConfig`/`BookConfig` mantienen los 6 campos legacy como `Option<…>` y `theme.rs::resolve_theme` los lee de root para repos viejos (backcompat read-side intacta).
 - **Generar demo** (mismo wizard 📥, tercer tipo): crea una saga de ejemplo con
   1 libro, 5 capítulos × 3 partes (15 archivos `.html`) con prosa fantasy
   hardcoded en ES o EN. Incluye diálogos en estilo RAE, `<em>`, `<strong>`,
@@ -510,16 +510,6 @@ paru -S twriter-bin
 - Borrar entradas individuales del diccionario per-saga desde UI (hoy se editan en bloque vía textarea del modal de configuración; agregar funciona desde el popover de typos).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
-- ~~Limpiar restos de tema en el wizard importador~~ ✅ El paso `saga-config`
-  del wizard ya no pregunta los 6 defaults EPUB (`template`,
-  `prefijo_capitulo`, `mostrar_titulo_capitulo`, `dropcap`,
-  `mostrar_numero_parte`, `formato_parte`). Quedó enfocado en
-  estructura/metadata/conversión + nombre/autor/idioma/imprenta. La
-  presentación se configura en el theme editor + `saga.json::theme` /
-  `book.json::theme`. Demo template y `applySagaDefaultsToBooks` stripeados
-  en consonancia. Read-side legacy fallback en `theme.rs::resolve_theme`
-  intacto para repos viejos que tengan los 6 campos al root de
-  saga.json/book.json.
 
 ### EPUB
 
