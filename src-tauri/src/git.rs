@@ -108,27 +108,80 @@ fn git_commit_all_impl(repo_path: &str, message: &str) -> Result<GitCommitResult
 
 /// Push usando el binario `git` del sistema. Hereda SSH config + agent + askpass.
 /// libgit2/libssh2 falla seguido con "Failed getting response; class=Ssh"; el CLI siempre anda.
-fn git_push_impl(repo_path: &str) -> Result<(), String> {
-    let output = Command::new("git")
-        .current_dir(repo_path)
-        .args(["push"])
-        .output()
-        .map_err(|e| {
-            tracing::error!(target: "git", error = %e, "no se pudo lanzar git push");
-            format!("no se pudo ejecutar git: {}", e)
-        })?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let msg = if stderr.is_empty() {
-            format!("push falló (exit {})", output.status)
-        } else {
-            stderr
-        };
+///
+/// Si el push es rechazado por non-fast-forward (otra PC pusheó primero),
+/// corre `git pull --rebase --autostash` y reintenta una vez. Si el rebase
+/// produce conflictos, lo aborta y retorna `conflict: ...` para que la UI
+/// muestre un mensaje claro. Cualquier otro error se categoriza
+/// (`auth:`, `network:`, `unknown:`) vía `categorize_git_error`.
+pub(crate) fn git_push_impl(repo_path: &str) -> Result<(), String> {
+    let first = run_git(repo_path, &["push"])?;
+    if first.success {
+        tracing::info!(target: "git", "push ok");
+        return Ok(());
+    }
+    if !is_rejected(&first.stderr) {
+        let msg = categorize_git_error(&first.stderr);
         tracing::error!(target: "git", error = %msg, "push falló");
         return Err(msg);
     }
-    tracing::info!(target: "git", "push ok");
+    tracing::warn!(target: "git", "push rechazado (non-FF), intentando pull --rebase --autostash");
+    let pull = run_git(repo_path, &["pull", "--rebase", "--autostash"])?;
+    if !pull.success {
+        let _ = run_git(repo_path, &["rebase", "--abort"]);
+        let categorized = categorize_git_error(&pull.stderr);
+        let msg = if categorized.starts_with("conflict:") || categorized.starts_with("rejected:") {
+            categorized
+        } else if pull.stderr.to_lowercase().contains("conflict")
+            || pull.stderr.to_lowercase().contains("could not apply")
+        {
+            format!("conflict: {}", pull.stderr)
+        } else {
+            categorized
+        };
+        tracing::error!(target: "git", action = "push.rebase_conflict", error = %msg, "pull --rebase falló");
+        return Err(msg);
+    }
+    tracing::info!(target: "git", action = "push.pull_rebase_ok", "rebase ok, reintentando push");
+    let retry = run_git(repo_path, &["push"])?;
+    if !retry.success {
+        let msg = categorize_git_error(&retry.stderr);
+        tracing::error!(target: "git", action = "push.retry_failed", error = %msg, "retry de push falló");
+        return Err(msg);
+    }
+    tracing::info!(target: "git", action = "push.retry_ok", "push ok tras rebase");
     Ok(())
+}
+
+struct GitOutput {
+    success: bool,
+    stderr: String,
+    #[allow(dead_code)]
+    stdout: String,
+}
+
+fn run_git(cwd: &str, args: &[&str]) -> Result<GitOutput, String> {
+    let out = Command::new("git")
+        .current_dir(cwd)
+        .args(args)
+        .output()
+        .map_err(|e| {
+            tracing::error!(target: "git", error = %e, "no se pudo lanzar git");
+            format!("no se pudo ejecutar git: {}", e)
+        })?;
+    Ok(GitOutput {
+        success: out.status.success(),
+        stderr: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        stdout: String::from_utf8_lossy(&out.stdout).trim().to_string(),
+    })
+}
+
+fn is_rejected(stderr: &str) -> bool {
+    let s = stderr.to_lowercase();
+    s.contains("[rejected]")
+        || s.contains("non-fast-forward")
+        || s.contains("fetch first")
+        || s.contains("updates were rejected")
 }
 
 fn git_pull_impl(repo_path: &str) -> Result<(), String> {
@@ -258,6 +311,102 @@ fn signature(repo: &Repository) -> Result<Signature<'static>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    fn tempdir(label: &str) -> PathBuf {
+        let mut p = std::env::temp_dir();
+        let suffix: u128 = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        p.push(format!("twriter-git-test-{}-{}", label, suffix));
+        let _ = fs::remove_dir_all(&p);
+        fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    fn run(cwd: &PathBuf, args: &[&str]) -> String {
+        let out = Command::new("git")
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+        if !out.status.success() {
+            panic!(
+                "git {:?} failed in {:?}: {}",
+                args,
+                cwd,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        String::from_utf8_lossy(&out.stdout).to_string()
+    }
+
+    fn setup_triple() -> (PathBuf, PathBuf, PathBuf) {
+        let root = tempdir("triple");
+        let origin = root.join("origin.git");
+        fs::create_dir_all(&origin).unwrap();
+        run(&origin, &["init", "--bare", "--initial-branch=main"]);
+        let pc_a = root.join("pcA");
+        run(
+            &root,
+            &["clone", origin.to_str().unwrap(), pc_a.to_str().unwrap()],
+        );
+        run(&pc_a, &["config", "user.email", "a@x"]);
+        run(&pc_a, &["config", "user.name", "a"]);
+        fs::write(pc_a.join("README.md"), "base\n").unwrap();
+        run(&pc_a, &["add", "."]);
+        run(&pc_a, &["commit", "-m", "base"]);
+        run(&pc_a, &["push", "-u", "origin", "main"]);
+        let pc_b = root.join("pcB");
+        run(
+            &root,
+            &["clone", origin.to_str().unwrap(), pc_b.to_str().unwrap()],
+        );
+        run(&pc_b, &["config", "user.email", "b@x"]);
+        run(&pc_b, &["config", "user.name", "b"]);
+        (origin, pc_a, pc_b)
+    }
+
+    #[test]
+    fn push_auto_rebases_on_non_ff() {
+        let (_origin, pc_a, pc_b) = setup_triple();
+        fs::write(pc_a.join("a.txt"), "from A\n").unwrap();
+        run(&pc_a, &["add", "."]);
+        run(&pc_a, &["commit", "-m", "from A"]);
+        run(&pc_a, &["push"]);
+        fs::write(pc_b.join("b.txt"), "from B\n").unwrap();
+        run(&pc_b, &["add", "."]);
+        run(&pc_b, &["commit", "-m", "from B"]);
+        git_push_impl(pc_b.to_str().unwrap()).expect("push should auto-rebase and succeed");
+        assert!(
+            pc_b.join("a.txt").exists(),
+            "a.txt should be present after rebase"
+        );
+        assert!(pc_b.join("b.txt").exists());
+    }
+
+    #[test]
+    fn push_returns_conflict_on_rebase_conflict() {
+        let (_origin, pc_a, pc_b) = setup_triple();
+        fs::write(pc_a.join("README.md"), "from A\n").unwrap();
+        run(&pc_a, &["add", "."]);
+        run(&pc_a, &["commit", "-m", "A"]);
+        run(&pc_a, &["push"]);
+        fs::write(pc_b.join("README.md"), "from B\n").unwrap();
+        run(&pc_b, &["add", "."]);
+        run(&pc_b, &["commit", "-m", "B"]);
+        let err = git_push_impl(pc_b.to_str().unwrap()).expect_err("should fail with conflict");
+        assert!(
+            err.starts_with("conflict:"),
+            "expected conflict prefix, got: {}",
+            err
+        );
+        assert!(!pc_b.join(".git/rebase-merge").exists());
+        assert!(!pc_b.join(".git/rebase-apply").exists());
+    }
 
     #[test]
     fn categorize_auth_errors() {
