@@ -141,6 +141,21 @@
               />
             </label>
           </fieldset>
+          <fieldset class="iw-fieldset">
+            <legend>Extras</legend>
+            <label class="iw-check inline">
+              <input
+                type="checkbox"
+                [checked]="wizard.extrasToSaga()"
+                (change)="wizard.extrasToSaga.set(!wizard.extrasToSaga())"
+              />
+              <span>Centralizar extras en <code>{{ wizard.sagaDirName() || 'saga' }}/extras/</code> (preserva estructura por libro/sección)</span>
+            </label>
+            <p class="iw-hint">
+              Si está activo: todos los extras (backups, .epub viejos, <code>convertidos/</code>, <code>original/</code>, etc.) van a la carpeta <code>extras/</code> de la saga manteniendo subpath. El TOC de cada libro queda limpio.
+              Si está apagado: los extras viven dentro de cada libro/sección (más cercano pero más ruido en navegación).
+            </p>
+          </fieldset>
         }
 
         @case ('estructura') {
@@ -246,6 +261,9 @@
                         </header>
                         @if (isSectionExpanded(sec.source_path) && sec.include) {
                           <ul class="files-list">
+                            @if (sec.chapters.length > 0) {
+                              <li class="files-subheader">Capítulos (se convierten)</li>
+                            }
                             @for (ch of sec.chapters; track ch.source_path) {
                               <li class="file-row" [class.disabled]="!ch.include">
                                 <label class="iw-check">
@@ -267,6 +285,9 @@
                                 <span class="file-ext">.{{ sec.convert_chapters ? 'html' : ch.source_ext }}</span>
                               </li>
                             }
+                            @if (sec.extras.length > 0) {
+                              <li class="files-subheader extras-subheader">Extras (se copian tal cual a extras/)</li>
+                            }
                             @for (x of sec.extras; track x.source_path) {
                               <li class="file-row extra-row" [class.disabled]="!x.include">
                                 <label class="iw-check">
@@ -277,7 +298,8 @@
                                   />
                                 </label>
                                 <span class="file-source">{{ x.source_name }}.{{ x.source_ext }}</span>
-                                <span class="extra-tag">extra (se copia tal cual)</span>
+                                <span class="arrow">→</span>
+                                <span class="file-target-path">{{ x.relative_dest }}</span>
                               </li>
                             }
                           </ul>
@@ -337,6 +359,7 @@
                         </header>
                         @if (isSectionExpanded(book.source_path + '#extras')) {
                           <ul class="files-list">
+                            <li class="files-subheader extras-subheader">Se copian tal cual a extras/</li>
                             @for (x of book.extras; track x.source_path) {
                               <li class="file-row extra-row" [class.disabled]="!x.include">
                                 <label class="iw-check">
@@ -347,7 +370,8 @@
                                   />
                                 </label>
                                 <span class="file-source">{{ x.source_name }}.{{ x.source_ext }}</span>
-                                <span class="extra-tag">extra (se copia tal cual)</span>
+                                <span class="arrow">→</span>
+                                <span class="file-target-path">{{ x.relative_dest }}</span>
                               </li>
                             }
                           </ul>

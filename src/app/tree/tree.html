@@ -242,28 +242,56 @@
         Sin extras. Arrastrá archivos acá o click derecho para agregar.
       </p>
     } @else {
-      @for (entry of getExtras(scopePath); track entry.relative_path) {
-        <button
-          type="button"
-          class="row extra"
-          [attr.data-extra-scope]="scopePath"
-          [style.padding-left.px]="8 + (depth + 1) * 14"
-          (click)="openExtraEntry(scopePath, entry, $event)"
-          (dblclick)="openExtraInEditor(scopePath, entry)"
-          (contextmenu)="onExtraContextMenu($event, scopePath, entry)"
-          [title]="entry.relative_path"
-        >
-          <span class="icon">{{
-            entry.kind === 'image' ? '🖼' :
-            entry.kind === 'document' ? '📄' :
-            entry.kind === 'text' ? '📝' :
-            '📦'
-          }}</span>
-          <span class="name">{{ entry.name }}</span>
-          <span class="extra-badge">extra</span>
-        </button>
+      @for (node of getExtrasTree(scopePath); track node.relativePath) {
+        <ng-container
+          *ngTemplateOutlet="extrasNodeTpl; context: { scopePath: scopePath, node: node, depth: depth + 1 }"
+        />
       }
     }
+  }
+</ng-template>
+
+<ng-template #extrasNodeTpl let-scopePath="scopePath" let-node="node" let-depth="depth">
+  @if (node.type === 'dir') {
+    <button
+      type="button"
+      class="row extras-dir"
+      [style.padding-left.px]="8 + depth * 14"
+      (click)="toggleExtrasDir(scopePath, node.relativePath)"
+      [title]="node.relativePath"
+    >
+      <span class="chevron">{{ isExtrasDirExpanded(scopePath, node.relativePath) ? '▾' : '▸' }}</span>
+      <span class="icon">📁</span>
+      <span class="name">{{ node.name }}</span>
+      <span class="ext">{{ node.children.length }}</span>
+    </button>
+    @if (isExtrasDirExpanded(scopePath, node.relativePath)) {
+      @for (child of node.children; track child.relativePath) {
+        <ng-container
+          *ngTemplateOutlet="extrasNodeTpl; context: { scopePath: scopePath, node: child, depth: depth + 1 }"
+        />
+      }
+    }
+  } @else {
+    <button
+      type="button"
+      class="row extra"
+      [attr.data-extra-scope]="scopePath"
+      [style.padding-left.px]="8 + depth * 14"
+      (click)="openExtraEntry(scopePath, node.entry, $event)"
+      (dblclick)="openExtraInEditor(scopePath, node.entry)"
+      (contextmenu)="onExtraContextMenu($event, scopePath, node.entry)"
+      [title]="node.entry.relative_path"
+    >
+      <span class="icon">{{
+        node.entry.kind === 'image' ? '🖼' :
+        node.entry.kind === 'document' ? '📄' :
+        node.entry.kind === 'text' ? '📝' :
+        '📦'
+      }}</span>
+      <span class="name">{{ node.name }}</span>
+      <span class="extra-badge">extra</span>
+    </button>
   }
 </ng-template>
 

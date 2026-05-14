@@ -27,6 +27,7 @@ export interface SourceFile {
   name: string;
   ext: string;
   is_chapter_candidate: boolean;
+  subpath?: string;
 }
 
 export type SourceNode =
@@ -87,6 +88,7 @@ export interface BookImportSpec {
 export interface SagaImportSpec {
   dir_name: string;
   config: SagaConfig;
+  extras?: ExtraImport[];
 }
 
 export interface WizardPlan {
@@ -166,6 +168,7 @@ export class ImportWizardService {
 
   readonly sagaConfig = signal<SagaConfig>({ nombre: '' });
   readonly sagaDirName = signal<string>('');
+  readonly extrasToSaga = signal<boolean>(true);
   readonly books = signal<EditableBook[]>([]);
 
   readonly demoSagaName = signal<string>('');
@@ -203,6 +206,7 @@ export class ImportWizardService {
     this.error.set(null);
     this.sagaConfig.set({ nombre: '' });
     this.sagaDirName.set('');
+    this.extrasToSaga.set(true);
     this.books.set([]);
     this.demoSagaName.set('');
     this.demoLang.set('es');
@@ -330,11 +334,12 @@ export class ImportWizardService {
 
   private buildEditableExtra(file: SourceFile): EditableExtra {
     const fname = `${file.name}${file.ext ? '.' + file.ext : ''}`;
+    const sub = file.subpath ? `${file.subpath}/` : '';
     return {
       source_path: file.path,
       source_name: file.name,
       source_ext: file.ext,
-      relative_dest: `extras/${fname}`,
+      relative_dest: `extras/${sub}${fname}`,
       include: true,
     };
   }
@@ -345,33 +350,72 @@ export class ImportWizardService {
     if (!root) return null;
     const includedBooks = this.books().filter((b) => b.include);
     if (includedBooks.length === 0) return null;
-    const saga: SagaImportSpec | null = this.tipo() === 'saga'
-      ? { dir_name: this.sagaDirName().trim() || this.sagaConfig().nombre, config: this.sagaConfig() }
-      : null;
+    const redirectToSaga = this.tipo() === 'saga' && this.extrasToSaga();
+    const sagaExtras: ExtraImport[] = [];
 
-    const books: BookImportSpec[] = includedBooks.map((b) => ({
-      dir_name: b.dir_name,
-      config: b.config,
-      convert_chapters: b.convert_chapters,
-      sections: b.sections
+    const stripExtrasPrefix = (rd: string): string => rd.replace(/^extras\//, '');
+
+    const books: BookImportSpec[] = includedBooks.map((b) => {
+      const sections = b.sections
         .filter((s) => s.include)
-        .map((s) => ({
-          dir_name: s.dir_name,
-          convert_chapters: s.convert_chapters,
-          chapters: s.chapters
-            .filter((c) => c.include)
-            .map((c) => this.toChapterImport(c, b.config.idioma ?? null)),
-          extras: s.extras
-            .filter((x) => x.include)
-            .map((x) => ({ source_path: x.source_path, relative_dest: x.relative_dest })),
-        })),
-      direct_chapters: b.direct_chapters
-        .filter((c) => c.include)
-        .map((c) => this.toChapterImport(c, b.config.idioma ?? null)),
-      extras: b.extras
-        .filter((x) => x.include)
-        .map((x) => ({ source_path: x.source_path, relative_dest: x.relative_dest })),
-    }));
+        .map((s) => {
+          const sExtras = s.extras.filter((x) => x.include);
+          let sectionExtras: ExtraImport[];
+          if (redirectToSaga) {
+            for (const x of sExtras) {
+              sagaExtras.push({
+                source_path: x.source_path,
+                relative_dest: `extras/${b.dir_name}/${s.dir_name}/${stripExtrasPrefix(x.relative_dest)}`,
+              });
+            }
+            sectionExtras = [];
+          } else {
+            sectionExtras = sExtras.map((x) => ({
+              source_path: x.source_path,
+              relative_dest: x.relative_dest,
+            }));
+          }
+          return {
+            dir_name: s.dir_name,
+            convert_chapters: s.convert_chapters,
+            chapters: s.chapters
+              .filter((c) => c.include)
+              .map((c) => this.toChapterImport(c, b.config.idioma ?? null)),
+            extras: sectionExtras,
+          };
+        });
+      const bExtras = b.extras.filter((x) => x.include);
+      let bookExtras: ExtraImport[];
+      if (redirectToSaga) {
+        for (const x of bExtras) {
+          sagaExtras.push({
+            source_path: x.source_path,
+            relative_dest: `extras/${b.dir_name}/${stripExtrasPrefix(x.relative_dest)}`,
+          });
+        }
+        bookExtras = [];
+      } else {
+        bookExtras = bExtras.map((x) => ({ source_path: x.source_path, relative_dest: x.relative_dest }));
+      }
+      return {
+        dir_name: b.dir_name,
+        config: b.config,
+        convert_chapters: b.convert_chapters,
+        sections,
+        direct_chapters: b.direct_chapters
+          .filter((c) => c.include)
+          .map((c) => this.toChapterImport(c, b.config.idioma ?? null)),
+        extras: bookExtras,
+      };
+    });
+
+    const saga: SagaImportSpec | null = this.tipo() === 'saga'
+      ? {
+          dir_name: this.sagaDirName().trim() || this.sagaConfig().nombre,
+          config: this.sagaConfig(),
+          extras: sagaExtras,
+        }
+      : null;
     return { target_root: root, saga, books };
   }
 

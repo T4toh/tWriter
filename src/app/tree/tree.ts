@@ -5,7 +5,7 @@ import { openPath } from '@tauri-apps/plugin-opener';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { ChapterService } from '../core/chapter-service';
 import { DebugService } from '../core/debug-service';
-import { ExtraEntry, ExtrasService } from '../core/extras-service';
+import { buildExtrasTree, ExtraEntry, ExtrasNode, ExtrasService } from '../core/extras-service';
 import { FontPreviewService } from '../core/font-preview-service';
 import { NoteService } from '../core/note-service';
 import { ExportEntry, ExportsService } from '../core/exports-service';
@@ -101,6 +101,8 @@ export class Tree implements OnDestroy {
   private readonly forceState = signal<'collapsed' | 'expanded' | null>(null);
   /** Estado expand/collapse de la sección Extras por scopePath. Default: collapsed. */
   private readonly extrasExpanded = signal<Set<string>>(new Set());
+  /** Estado expand/collapse de subdirs dentro de Extras. Key: `${scopePath}::${relPath}`. */
+  private readonly extrasDirsExpanded = signal<Set<string>>(new Set());
   /** Estado expand/collapse de la sección Exportados por bookPath. Default: collapsed. */
   private readonly exportsExpanded = signal<Set<string>>(new Set());
 
@@ -128,6 +130,24 @@ export class Tree implements OnDestroy {
 
   protected getExtras(scopePath: string): ExtraEntry[] {
     return this.extras.get(scopePath);
+  }
+
+  protected getExtrasTree(scopePath: string): ExtrasNode[] {
+    return buildExtrasTree(this.extras.get(scopePath));
+  }
+
+  protected isExtrasDirExpanded(scopePath: string, relPath: string): boolean {
+    return this.extrasDirsExpanded().has(`${scopePath}::${relPath}`);
+  }
+
+  protected toggleExtrasDir(scopePath: string, relPath: string): void {
+    const key = `${scopePath}::${relPath}`;
+    this.extrasDirsExpanded.update((s) => {
+      const next = new Set(s);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   protected hasLoadedExtras(scopePath: string): boolean {

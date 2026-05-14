@@ -75,6 +75,12 @@
   gap: 12px;
   padding: 1.5rem;
   overflow-y: auto;
+  align-items: stretch;
+}
+
+.grid > * {
+  display: block;
+  height: 100%;
 }
 
 .grid[data-mode='books'] {

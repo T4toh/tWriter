@@ -12,6 +12,60 @@ export interface ExtraEntry {
   ext?: string | null;
 }
 
+export interface ExtrasDirNode {
+  type: 'dir';
+  name: string;
+  relativePath: string;
+  children: ExtrasNode[];
+}
+
+export interface ExtrasFileNode {
+  type: 'file';
+  name: string;
+  relativePath: string;
+  entry: ExtraEntry;
+}
+
+export type ExtrasNode = ExtrasDirNode | ExtrasFileNode;
+
+export function buildExtrasTree(entries: ExtraEntry[]): ExtrasNode[] {
+  const root: ExtrasNode[] = [];
+  const dirByPath = new Map<string, ExtrasDirNode>();
+  for (const e of entries) {
+    const parts = e.relative_path.split('/').filter(Boolean);
+    if (parts.length === 0) continue;
+    let parentChildren = root;
+    let parentRel = '';
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i];
+      const dirRel = parentRel ? `${parentRel}/${part}` : part;
+      let node = dirByPath.get(dirRel);
+      if (!node) {
+        node = { type: 'dir', name: part, relativePath: dirRel, children: [] };
+        dirByPath.set(dirRel, node);
+        parentChildren.push(node);
+      }
+      parentChildren = node.children;
+      parentRel = dirRel;
+    }
+    parentChildren.push({
+      type: 'file',
+      name: parts[parts.length - 1],
+      relativePath: e.relative_path,
+      entry: e,
+    });
+  }
+  const sortRec = (nodes: ExtrasNode[]): void => {
+    nodes.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    for (const n of nodes) if (n.type === 'dir') sortRec(n.children);
+  };
+  sortRec(root);
+  return root;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ExtrasService {
   /** Map de scopePath → entries cacheadas. Bumpea con cada list. */
