@@ -292,6 +292,12 @@ h1.part-title {
   text-indent: 0;
 }
 
+/* Párrafo vacío = renglón en blanco (espejo del editor). Sin esto, el reader
+   colapsa `<p></p>` a altura 0 por `margin: 0` arriba. nbsp da line-box. */
+.chapter-content p:empty::before {
+  content: "\00a0";
+}
+
 /* ─────────────────── Inline ─────────────────── */
 b, strong { font-weight: bold; }
 i, em { font-style: italic; }
