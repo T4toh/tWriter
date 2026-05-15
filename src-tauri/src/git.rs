@@ -142,19 +142,7 @@ pub(crate) fn git_push_impl(repo_path: &str) -> Result<(), String> {
         return Err(msg);
     }
     tracing::warn!(target: "git", "push rechazado (non-FF), intentando pull --rebase --autostash");
-    let pull = run_git(repo_path, &["pull", "--rebase", "--autostash"])?;
-    if !pull.success {
-        let _ = run_git(repo_path, &["rebase", "--abort"]);
-        let categorized = categorize_git_error(&pull.stderr);
-        let msg = if categorized.starts_with("conflict:") || categorized.starts_with("rejected:") {
-            categorized
-        } else if pull.stderr.to_lowercase().contains("conflict")
-            || pull.stderr.to_lowercase().contains("could not apply")
-        {
-            format!("conflict: {}", pull.stderr)
-        } else {
-            categorized
-        };
+    if let Err(msg) = git_pull_rebase_impl(repo_path) {
         tracing::error!(target: "git", action = "push.rebase_conflict", error = %msg, "pull --rebase falló");
         return Err(msg);
     }
@@ -200,24 +188,64 @@ fn is_rejected(stderr: &str) -> bool {
         || s.contains("updates were rejected")
 }
 
+fn current_branch_name(repo_path: &str) -> Option<String> {
+    let out = run_git(repo_path, &["symbolic-ref", "--short", "HEAD"]).ok()?;
+    if out.success && !out.stdout.is_empty() {
+        Some(out.stdout)
+    } else {
+        None
+    }
+}
+
+fn has_upstream(repo_path: &str) -> bool {
+    run_git(repo_path, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+        .map(|o| o.success)
+        .unwrap_or(false)
+}
+
+fn set_upstream(repo_path: &str, branch: &str) {
+    let upstream = format!("origin/{}", branch);
+    let res = run_git(
+        repo_path,
+        &["branch", "--set-upstream-to", &upstream, branch],
+    );
+    match res {
+        Ok(out) if out.success => {
+            tracing::info!(target: "git", branch, upstream = %upstream, "upstream seteado");
+        }
+        Ok(out) => {
+            tracing::warn!(target: "git", error = %out.stderr, "no se pudo setear upstream");
+        }
+        Err(e) => {
+            tracing::warn!(target: "git", error = %e, "no se pudo setear upstream");
+        }
+    }
+}
+
 fn git_pull_impl(repo_path: &str) -> Result<(), String> {
-    let output = Command::new("git")
-        .current_dir(repo_path)
-        .args(["pull", "--ff-only"])
-        .output()
-        .map_err(|e| {
-            tracing::error!(target: "git", error = %e, "no se pudo lanzar git pull");
-            format!("no se pudo ejecutar git: {}", e)
-        })?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let msg = if stderr.is_empty() {
-            format!("pull falló (exit {})", output.status)
+    let branch = current_branch_name(repo_path);
+    let needs_upstream = branch.is_some() && !has_upstream(repo_path);
+
+    let mut args: Vec<&str> = vec!["pull", "--ff-only"];
+    if needs_upstream {
+        args.push("origin");
+        args.push(branch.as_deref().unwrap());
+    }
+
+    let out = run_git(repo_path, &args)?;
+    if !out.success {
+        let msg = if out.stderr.is_empty() {
+            "pull falló (sin stderr)".to_string()
         } else {
-            categorize_git_error(&stderr)
+            categorize_git_error(&out.stderr)
         };
         tracing::error!(target: "git", error = %msg, "pull falló");
         return Err(msg);
+    }
+    if needs_upstream {
+        if let Some(b) = branch.as_deref() {
+            set_upstream(repo_path, b);
+        }
     }
     tracing::info!(target: "git", "pull --ff-only ok");
     Ok(())
@@ -286,8 +314,22 @@ pub(crate) fn git_ensure_twriter_ignored_impl(repo_path: &str) -> Result<EnsureR
 }
 
 pub(crate) fn git_pull_rebase_impl(repo_path: &str) -> Result<(), String> {
-    let out = run_git(repo_path, &["pull", "--rebase", "--autostash"])?;
+    let branch = current_branch_name(repo_path);
+    let needs_upstream = branch.is_some() && !has_upstream(repo_path);
+
+    let mut args: Vec<&str> = vec!["pull", "--rebase", "--autostash"];
+    if needs_upstream {
+        args.push("origin");
+        args.push(branch.as_deref().unwrap());
+    }
+
+    let out = run_git(repo_path, &args)?;
     if out.success {
+        if needs_upstream {
+            if let Some(b) = branch.as_deref() {
+                set_upstream(repo_path, b);
+            }
+        }
         tracing::info!(target: "git", "pull --rebase --autostash ok");
         return Ok(());
     }
@@ -533,6 +575,45 @@ mod tests {
         );
         assert!(!pc_b.join(".git/rebase-merge").exists());
         assert!(!pc_b.join(".git/rebase-apply").exists());
+    }
+
+    #[test]
+    fn pull_sets_upstream_when_missing() {
+        let (_origin, pc_a, pc_b) = setup_triple();
+        fs::write(pc_a.join("a.txt"), "from A\n").unwrap();
+        run(&pc_a, &["add", "."]);
+        run(&pc_a, &["commit", "-m", "A"]);
+        run(&pc_a, &["push"]);
+
+        run(&pc_b, &["branch", "--unset-upstream"]);
+        assert!(!has_upstream(pc_b.to_str().unwrap()));
+
+        git_pull_impl(pc_b.to_str().unwrap()).expect("pull should set upstream and succeed");
+
+        assert!(has_upstream(pc_b.to_str().unwrap()), "upstream should be set after pull");
+        assert!(pc_b.join("a.txt").exists());
+    }
+
+    #[test]
+    fn pull_rebase_sets_upstream_when_missing() {
+        let (_origin, pc_a, pc_b) = setup_triple();
+        fs::write(pc_a.join("a.txt"), "from A\n").unwrap();
+        run(&pc_a, &["add", "."]);
+        run(&pc_a, &["commit", "-m", "A"]);
+        run(&pc_a, &["push"]);
+
+        run(&pc_b, &["branch", "--unset-upstream"]);
+        fs::write(pc_b.join("b.txt"), "from B\n").unwrap();
+        run(&pc_b, &["add", "."]);
+        run(&pc_b, &["commit", "-m", "B"]);
+        assert!(!has_upstream(pc_b.to_str().unwrap()));
+
+        git_pull_rebase_impl(pc_b.to_str().unwrap())
+            .expect("pull --rebase should set upstream and succeed");
+
+        assert!(has_upstream(pc_b.to_str().unwrap()));
+        assert!(pc_b.join("a.txt").exists());
+        assert!(pc_b.join("b.txt").exists());
     }
 
     fn init_repo() -> PathBuf {

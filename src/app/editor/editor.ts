@@ -21,7 +21,12 @@ import { DebugService } from '../core/debug-service';
 import { GrammarService } from '../core/grammar-service';
 import { SearchService } from '../core/search-service';
 import { highlightFirstMatch } from '../core/search-highlight';
-import { PARAGRAPH_SPACING_EM, SettingsService } from '../core/settings-service';
+import {
+  EDITOR_FONT_LABEL,
+  EDITOR_FONT_STACK,
+  PARAGRAPH_SPACING_EM,
+  SettingsService,
+} from '../core/settings-service';
 import { GrammarMatch, RaeViolation } from '../core/types';
 import { convert as convertRae } from '../dialogos/converter';
 import { validateRae } from '../dialogos/validator';
@@ -141,6 +146,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly canAutoGrammar = this.grammar.canAutoCheck;
   protected readonly width = this.settings.editorWidth;
   protected readonly fontSize = this.settings.editorFontSize;
+  protected readonly fontFamily = this.settings.editorFontFamily;
+  protected readonly fontStack = computed(() => EDITOR_FONT_STACK[this.fontFamily()]);
+  protected readonly fontFamilyLabel = computed(() => EDITOR_FONT_LABEL[this.fontFamily()]);
   protected readonly paragraphSpacing = this.settings.editorParagraphSpacing;
   protected readonly paragraphSpacingEm = computed(() => PARAGRAPH_SPACING_EM[this.paragraphSpacing()]);
   protected readonly widthLabel = computed(() => {
@@ -459,6 +467,10 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   protected fontBump(delta: number): void {
     this.settings.bumpFontSize(delta);
+  }
+
+  protected cycleFontFamily(): void {
+    this.settings.cycleEditorFontFamily();
   }
 
   protected openRae(): void {
@@ -791,6 +803,10 @@ export class Editor implements AfterViewInit, OnDestroy {
       extensions: [
         StarterKit.configure({
           link: { autolink: false, openOnClick: false },
+          // Gap cursor produce un marker vertical en zonas vacías del editor
+          // (bug visible: caret huérfano arriba/al costado del texto).
+          // Para novela no aporta — desactivado.
+          gapcursor: false,
         }),
         Typography,
         TextAlign.configure({ types: ['paragraph', 'heading'] }),

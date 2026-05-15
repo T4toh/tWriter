@@ -6,12 +6,30 @@ import { GrammarMode } from './types';
 export type EditorWidth = 'narrow' | 'wide' | 'full';
 export type ParagraphSpacing = 'tight' | 'normal' | 'loose';
 export type RightPanelWidth = 'compact' | 'normal' | 'wide' | 'full';
+export type EditorFontFamily = 'serif' | 'sans' | 'mono' | 'system';
 
 const FONT_MIN = 12;
 const FONT_MAX = 28;
 const FONT_DEFAULT = 17;
 const SPACING_DEFAULT: ParagraphSpacing = 'tight';
 const RIGHT_PANEL_DEFAULT: RightPanelWidth = 'normal';
+const FONT_FAMILY_DEFAULT: EditorFontFamily = 'serif';
+
+/** Stack CSS para cada familia configurable del editor. Solo el editor;
+ *  EPUB y UI tienen su propio CSS y no se ven afectados. */
+export const EDITOR_FONT_STACK: Record<EditorFontFamily, string> = {
+  serif: "'Merriweather', Georgia, 'Times New Roman', serif",
+  sans: "'Lato', system-ui, -apple-system, 'Segoe UI', sans-serif",
+  mono: "'Roboto Mono', ui-monospace, monospace",
+  system: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+};
+
+export const EDITOR_FONT_LABEL: Record<EditorFontFamily, string> = {
+  serif: 'Serif',
+  sans: 'Sans',
+  mono: 'Mono',
+  system: 'Sistema',
+};
 
 /** em entre `<p>` en el editor por nivel. EPUB no se ve afectado — usa su propio CSS. */
 export const PARAGRAPH_SPACING_EM: Record<ParagraphSpacing, number> = {
@@ -24,6 +42,7 @@ interface Settings {
   root: string | null;
   editorWidth?: EditorWidth;
   editorFontSize?: number;
+  editorFontFamily?: EditorFontFamily;
   editorParagraphSpacing?: ParagraphSpacing;
   grammarMode?: GrammarMode;
   grammarCustomUrl?: string | null;
@@ -41,6 +60,7 @@ export class SettingsService {
   readonly root = signal<string | null>(null);
   readonly editorWidth = signal<EditorWidth>('narrow');
   readonly editorFontSize = signal<number>(FONT_DEFAULT);
+  readonly editorFontFamily = signal<EditorFontFamily>(FONT_FAMILY_DEFAULT);
   readonly editorParagraphSpacing = signal<ParagraphSpacing>(SPACING_DEFAULT);
   readonly grammarMode = signal<GrammarMode>('public');
   readonly grammarCustomUrl = signal<string | null>(null);
@@ -61,6 +81,7 @@ export class SettingsService {
       this.root.set(s.root ?? null);
       this.editorWidth.set(s.editorWidth ?? 'narrow');
       this.editorFontSize.set(clampFont(s.editorFontSize ?? FONT_DEFAULT));
+      this.editorFontFamily.set(s.editorFontFamily ?? FONT_FAMILY_DEFAULT);
       this.editorParagraphSpacing.set(s.editorParagraphSpacing ?? SPACING_DEFAULT);
       this.grammarMode.set((s.grammarMode as GrammarMode) ?? 'public');
       this.grammarCustomUrl.set(s.grammarCustomUrl ?? null);
@@ -97,6 +118,13 @@ export class SettingsService {
     const next = clampFont(this.editorFontSize() + delta);
     if (next === this.editorFontSize()) return;
     this.editorFontSize.set(next);
+    void this.persist();
+  }
+
+  cycleEditorFontFamily(): void {
+    const order: EditorFontFamily[] = ['serif', 'sans', 'mono', 'system'];
+    const next = order[(order.indexOf(this.editorFontFamily()) + 1) % order.length];
+    this.editorFontFamily.set(next);
     void this.persist();
   }
 
@@ -154,6 +182,7 @@ export class SettingsService {
       root: this.root(),
       editorWidth: this.editorWidth(),
       editorFontSize: this.editorFontSize(),
+      editorFontFamily: this.editorFontFamily(),
       editorParagraphSpacing: this.editorParagraphSpacing(),
       grammarMode: this.grammarMode(),
       grammarCustomUrl: this.grammarCustomUrl(),
