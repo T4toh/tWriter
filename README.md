@@ -70,8 +70,11 @@ Reglas:
 
 - TipTap con HTML subset: `<p>`, `<i>`, `<em>`, `<strong>`, `<u>`, `<hr>`, `<h1>`, `<blockquote>`.
 - Autosave debounced 1.5s.
-- Toolbar: B/I/U, alineación, salto de escena, RAE, gramática, ancho hoja, font size.
+- Toolbar: undo/redo, B/I/U, alineación, salto de escena, RAE, gramática, font size, familia tipográfica, espaciado de párrafos, ancho hoja.
 - Menú contextual propio.
+- **Layout flat**: el editor renderea párrafos sin `text-indent` y con `text-align: left` para que escribir no "salte" word-spacing por línea ni se vean indents que confunden. El EPUB exportado mantiene `text-indent: 1.5em` + `text-align: justify` desde `reedsy-subset.scss` — formato editorial al exportar, layout cómodo al escribir.
+- **Selector de fuente del editor**: cycle button en toolbar (`Serif / Sans / Mono / Sistema`) persistido en `settings.json::editorFontFamily`. CSS var `--editor-font-family` sobre `.ProseMirror`. Cuatro stacks hardcodeados; detección de fuentes instaladas en el OS queda en TODO.
+- **Gap cursor desactivado**: `StarterKit.configure({ gapcursor: false })` para evitar el marker vertical huérfano que aparecía en zonas vacías del editor (entre hr/h1/párrafos, click fuera del texto).
 - Modo focus (F11 / Esc): oculta tree, deja toolbar y footer.
 - Indicador de idioma en footer (badge color) + toggle ES/EN.
 - Diálogos custom (prompt/confirm/alert) coherentes con el resto de los modales — sin headers feos de WebKit.
@@ -332,6 +335,7 @@ ni saber qué es `git pull --rebase`.
 - SSH agent + fallback a `~/.ssh/id_ed25519/id_rsa/id_ecdsa`.
 - Auto-commit cada 5 min cuando hay cambios.
 - Status polling 30 s; cuando detecta `behind > 0` corre auto-pull en background (`git pull --ff-only` o `git pull --rebase --autostash` si la rama está divergente).
+- **Auto-upstream on pull**: si la rama local no tiene upstream seteado (caso típico: clonaste desde otra PC con `git clone` pero la branch nunca pusheó), `git pull` plano falla con `"There is no tracking information for the current branch"`. `git_pull_impl` / `git_pull_rebase_impl` detectan esto vía `git rev-parse --abbrev-ref @{u}`, ejecutan el pull pasando `origin <branch>` explícito, y al éxito setean el upstream con `git branch --set-upstream-to=origin/<branch>`. Los próximos pulls usan el camino vanilla. Tests `pull_sets_upstream_when_missing` + `pull_rebase_sets_upstream_when_missing` cubren ambos paths.
 - **Push auto-rebase**: si el remoto avanzó desde otra PC, `git push` falla con non-FF; el backend corre `git pull --rebase --autostash` y reintenta el push una vez. Si el rebase choca, lo aborta y la UI muestra "Conflicto entre esta PC y el remoto. Abrí el panel 🐛 para detalle." (sin terminal jargon).
 - **`.twriter/` auto-ignorado al boot** (`git_ensure_twriter_ignored`): agrega `.twriter/` al `.gitignore` si falta y corre `git rm -r --cached .twriter` si está trackeado. Idempotente — los cambios quedan uncommitted y los pickea el próximo auto-commit. Evita conflictos add/add del índice tantivy entre PCs.
 - **Errores categorizados**: stderr del CLI git se clasifica en `auth` / `network` / `conflict` / `rejected` / `unknown` desde Rust; el frontend (`git-service.ts::friendlyError`) los mapea a strings en español. La UI nunca expone hints crudos de git.
@@ -456,6 +460,7 @@ paru -S twriter-bin
 
 ### Editor / UX
 
+- **Detectar fuentes instaladas en el sistema** para el selector de familia tipográfica del editor. Hoy hay 4 stacks hardcodeados (`serif`/`sans`/`mono`/`system`); ampliar con listado real del OS via crate Rust (`font-kit` o `fontdb`) expuesto como `#[tauri::command] list_system_fonts`. UI: cambiar el cycle button por dropdown con search, ordenado por familias usadas recientemente.
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).

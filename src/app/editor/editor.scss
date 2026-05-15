@@ -38,6 +38,12 @@
   color: var(--fg);
 }
 
+.tb-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .tb-btn.active {
   background: var(--accent);
   color: var(--bg);
@@ -118,28 +124,17 @@
       0 0 0 1px var(--border),
       0 4px 24px rgba(0, 0, 0, 0.08);
     caret-color: var(--fg);
-    font-family: var(--font-body);
+    font-family: var(--editor-font-family, var(--font-body));
     font-size: var(--editor-font-size, 17px);
     line-height: 1.5;
 
     p {
       margin: 0 0 var(--editor-para-spacing, 0) 0;
-      text-indent: 1.5em;
-      text-align: justify;
-    }
-
-    p:first-child,
-    p.no-indent,
-    h1 + p,
-    h2 + p,
-    hr + p {
+      // Editor flat: sin first-line indent ni justify para que escribir
+      // no "salte" y los párrafos no se vean centrados. El EPUB exportado
+      // aplica text-indent: 1.5em y justify desde reedsy-subset.scss.
       text-indent: 0;
-    }
-
-    p[style*='text-align: center'],
-    p[style*='text-align: right'],
-    p[style*='text-align: left'] {
-      text-indent: 0;
+      text-align: left;
     }
 
     h1.chapter-title,
@@ -408,7 +403,8 @@
 
 .tb-btn.tb-text {
   width: auto;
-  padding: 0 0.5em;
+  padding: 0 10px;
+  margin: 0 1px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -497,7 +493,8 @@
 /* ─── Toolbar LanguageTool button ─── */
 .tb-btn.lt-btn {
   width: auto;
-  padding: 0 6px;
+  padding: 0 10px;
+  margin: 0 1px;
   position: relative;
 
   img {

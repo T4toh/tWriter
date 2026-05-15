@@ -3,6 +3,33 @@
     <button
       type="button"
       class="tb-btn"
+      [disabled]="!state().canUndo"
+      (click)="undo()"
+      title="Deshacer (Ctrl+Z)"
+    >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 7h6a3 3 0 0 1 0 6H6"/>
+        <polyline points="5 4 2 7 5 10"/>
+      </svg>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [disabled]="!state().canRedo"
+      (click)="redo()"
+      title="Rehacer (Ctrl+Shift+Z / Ctrl+Y)"
+    >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 7H5a3 3 0 0 0 0 6h3"/>
+        <polyline points="9 4 12 7 9 10"/>
+      </svg>
+    </button>
+
+    <span class="sep"></span>
+
+    <button
+      type="button"
+      class="tb-btn"
       [class.active]="state().bold"
       (click)="toggleBold()"
       title="Negrita (Ctrl+B)"
@@ -152,6 +179,15 @@
       <span class="ico">A+</span>
     </button>
 
+    <button
+      type="button"
+      class="tb-btn tb-text font-family-toggle"
+      (click)="cycleFontFamily()"
+      [title]="'Familia tipográfica del editor: ' + fontFamilyLabel()"
+    >
+      {{ fontFamilyLabel() }}
+    </button>
+
     <span class="sep"></span>
 
     <button
@@ -178,6 +214,7 @@
   class="editor-stack"
   [attr.data-width]="width()"
   [style.--editor-font-size.px]="fontSize()"
+  [style.--editor-font-family]="fontStack()"
   [style.--editor-para-spacing.em]="paragraphSpacingEm()"
 >
   <div
