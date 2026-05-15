@@ -10,6 +10,7 @@ import { ContextMenuService } from '../shared/context-menu-service';
 import { NodeActionsService } from '../shared/node-actions-service';
 import { BookCard } from './book-card';
 import { CreateCard } from './create-card';
+import { FolderCard } from './folder-card';
 import { SagaCard } from './saga-card';
 import { SagaHeader } from './saga-header';
 
@@ -20,7 +21,7 @@ interface Crumb {
 
 @Component({
   selector: 'app-landing',
-  imports: [BookCard, SagaCard, SagaHeader, CreateCard],
+  imports: [BookCard, SagaCard, SagaHeader, CreateCard, FolderCard],
   templateUrl: './landing.html',
   styleUrl: './landing.scss',
 })
@@ -54,13 +55,6 @@ export class Landing {
     const filtered = target.children.filter(
       (c) => c.kind !== 'note' && c.kind !== 'notes',
     );
-    if (!node) {
-      return [...filtered].sort((a, b) => {
-        const am = a.modifiedMs ?? 0;
-        const bm = b.modifiedMs ?? 0;
-        return bm - am;
-      });
-    }
     return filtered;
   });
 
@@ -72,7 +66,10 @@ export class Landing {
     if (!path) return list;
     const chain = pathChain(root, path);
     for (const n of chain) {
-      list.push({ label: n.name, node: n });
+      const label = n.kind === 'saga'
+        ? n.name.replace(/^\d+\s*-\s*/, '')
+        : n.name;
+      list.push({ label, node: n });
     }
     return list;
   });

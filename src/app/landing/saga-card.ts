@@ -38,6 +38,10 @@ export class SagaCard {
 
   protected readonly thumbs = signal<BookThumb[]>([]);
 
+  protected readonly displayName = computed(() =>
+    this.node().name.replace(/^\d+\s*-\s*/, ''),
+  );
+
   protected readonly bookCount = computed(
     () => this.node().children.filter((c) => c.kind === 'book').length,
   );
