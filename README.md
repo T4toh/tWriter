@@ -345,7 +345,7 @@ ni saber qué es `git pull --rebase`.
 ### Distribución
 
 - CI: `.github/workflows/release.yml`. Trigger: `git push --tags v*.*.*`. Linux job buildea `.deb`, Windows job buildea `.msi` + `.exe`. Ambos firmados ed25519.
-- **Linux Arch / CachyOS**: PKGBUILD `twriter-bin` local en `packaging/aur/`. Pull el `.deb` del release, instala vía pacman. Update: `./packaging/aur/rebuild.sh <version>`.
+- **Linux Arch / CachyOS**: PKGBUILD `twriter-bin` local en `packaging/aur/`. Pull el `.deb` del release, instala vía pacman. Update: `./packaging/aur/test.sh <version>`.
 - **Linux Debian / Ubuntu**: descargar `.deb`, `sudo apt install ./twriter_*.deb`. Sin auto-update.
 - **Windows**: descargar `.msi` o `.exe`. Auto-update Tauri-native vía banner in-app contra `releases/latest/download/latest.json`.
 - **macOS**: diferido hasta que arregle la pantalla del MacBook Pro.
@@ -363,24 +363,35 @@ Privada en `~/.tauri/twriter.key` — nunca commitear. Pública ya embebida en `
 - `TAURI_SIGNING_PRIVATE_KEY` ← contenido de `~/.tauri/twriter.key`
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` ← password elegida
 
-Después cada release:
+Flujo completo de una release (asumiendo setup hecho):
 
 ```bash
+# 1) Bump de versión en package.json, Cargo.toml, tauri.conf.json, Cargo.lock
+#    y packaging/aur/PKGBUILD (pkgver + pkgrel=1)
 ./scripts/bump-version.sh 0.2.0
 git add -A && git commit -m "chore: bump v0.2.0"
 git tag v0.2.0
 git push && git push --tags
-```
 
-CI buildea + sube a draft release. Revisás changelog y publicás manual. En Arch (instalación local):
+# 2) Esperar a que el GitHub Action publique el .deb / .msi / .exe
+gh run watch
 
-```bash
-./packaging/aur/rebuild.sh 0.2.0
+# 3) Revisar el draft release y publicarlo manual (changelog, etc.)
+
+# 4) Test local del PKGBUILD: valida pkgver, recalcula sha256,
+#    namcap, makepkg -si. Falla si el .deb no está en el release.
+./packaging/aur/test.sh
+
+# 5) Smoke test manual
+twriter                       # abrir, cargar proyecto, exportar EPUB
+
+# 6) Publicar al AUR (clona repo aur@…, regenera .SRCINFO, pide confirmación)
+./packaging/aur/publish.sh
 ```
 
 #### Publicar a AUR
 
-> **Estado actual**: el PKGBUILD vive en `packaging/aur/` para uso personal (instalación local via `rebuild.sh`). No publicado todavía en AUR — esta sección es la receta cuando lo haga.
+El flujo automatizado vive en `packaging/aur/test.sh` (build + install local) y `packaging/aur/publish.sh` (push al AUR). Esta sección documenta el setup inicial y qué hace cada paso por dentro, por si hay que debuggear a mano.
 
 Setup inicial (una sola vez):
 
@@ -432,21 +443,9 @@ Setup inicial (una sola vez):
    git push origin master
    ```
 
-Cada release nueva (después del setup inicial):
+Cada release nueva: usar `./packaging/aur/test.sh` + `./packaging/aur/publish.sh` (ver _Flujo completo de una release_ arriba). Los scripts encapsulan el bump del `pkgver`, `updpkgsums`, `makepkg -si`, regeneración de `.SRCINFO` y push al remoto `aur@aur.archlinux.org`.
 
-```bash
-cd aur-twriter-bin
-sed -i -E "s/^pkgver=.*/pkgver=0.2.0/" PKGBUILD
-sed -i -E "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
-updpkgsums
-makepkg --printsrcinfo > .SRCINFO
-makepkg -si                                  # smoke test local
-git add PKGBUILD .SRCINFO
-git commit -m "upgpkg: twriter-bin 0.2.0-1"
-git push origin master
-```
-
-Bumpear `pkgrel` (no `pkgver`) si cambia el PKGBUILD pero no la versión de tWriter.
+Bumpear `pkgrel` (no `pkgver`) si cambia el PKGBUILD pero no la versión de tWriter — editar a mano `packaging/aur/PKGBUILD` y correr `publish.sh` directo (saltea `test.sh` si el .deb del release ya está vivo).
 
 Una vez publicado, los usuarios pueden instalar con cualquier AUR helper:
 
@@ -660,14 +659,14 @@ yay -S twriter-bin     # o paru, pikaur, etc
 ```bash
 git clone https://github.com/T4toh/tWriter
 cd tWriter
-./packaging/aur/rebuild.sh
+./packaging/aur/test.sh
 ```
 
 Requiere `pacman-contrib` (`updpkgsums`) y `base-devel`. Para actualizar:
 
 ```bash
 git pull
-./packaging/aur/rebuild.sh <version>     # e.g. 0.2.0
+./packaging/aur/test.sh <version>     # e.g. 0.2.0
 ```
 
 ### Debian / Ubuntu
