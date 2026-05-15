@@ -5423,7 +5423,7 @@ dependencies = [
 
 [[package]]
 name = "twriter"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "fontdb",
  "git2",
