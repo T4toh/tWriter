@@ -45,6 +45,12 @@
           (select)="onBookSelect($event)"
           (contextmenu)="onCardContextMenu($event, item)"
         />
+      } @else if (item.kind === 'folder') {
+        <app-folder-card
+          [node]="item"
+          (select)="onBookSelect($event)"
+          (contextmenu)="onCardContextMenu($event, item)"
+        />
       } @else {
         <button
           type="button"

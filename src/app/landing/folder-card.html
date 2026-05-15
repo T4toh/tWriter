@@ -1,0 +1,23 @@
+<button type="button" class="folder-card" (click)="onClick()">
+  <div class="head">
+    <span class="kind">{{ kindLabel() }}</span>
+    <h3 class="name">{{ node().name }}</h3>
+  </div>
+  <div class="chips">
+    @for (c of chips(); track c.path) {
+      <span class="chip" [attr.data-kind]="c.kind">
+        <span class="icon">{{ c.icon }}</span>
+        <span class="chip-name">{{ c.name }}</span>
+      </span>
+    }
+    @if (extra() > 0) {
+      <span class="chip more">+{{ extra() }}</span>
+    }
+  </div>
+  <div class="foot">
+    <span class="date">{{ formatDate(node().modifiedMs) }}</span>
+    <span class="count">
+      {{ node().children.length }} item{{ node().children.length === 1 ? '' : 's' }}
+    </span>
+  </div>
+</button>

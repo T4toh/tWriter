@@ -200,7 +200,7 @@
       (contextmenu)="onContextMenu($event, node)"
     >
       <span class="chevron">{{ node.excluded ? '·' : (isExpanded(node) ? '▾' : '▸') }}</span>
-      <span class="name">{{ node.name }}</span>
+      <span class="name">{{ displayName(node) }}</span>
       @if (node.excluded) {
         <span class="excluded-badge" title="Excluido del export EPUB">excluido</span>
       }

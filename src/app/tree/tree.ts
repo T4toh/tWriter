@@ -535,6 +535,12 @@ export class Tree implements OnDestroy {
 
   // ───── Tree expansion / navigation ─────
 
+  protected displayName(node: TreeNode): string {
+    return node.kind === 'saga'
+      ? node.name.replace(/^\d+\s*-\s*/, '')
+      : node.name;
+  }
+
   protected isExpanded(node: TreeNode): boolean {
     const force = this.forceState();
     if (force === 'collapsed') return false;
