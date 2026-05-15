@@ -22,7 +22,7 @@ conflicts=('twriter')
 options=('!strip' '!debug')
 install="${pkgname}.install"
 source=("${pkgname}-${pkgver}.deb::https://github.com/T4toh/tWriter/releases/download/v${pkgver}/${_pkgname}_${pkgver}_amd64.deb")
-sha256sums=('b967fc0c5911ef2ec4c329c7e41e502154fbfcd0c9ebe49d3e81b4185caabd07')
+sha256sums=('2ce712c6cb1eb7c06d8c27cb4882de8d8cb0efe1670057c5661d02d6eed62395')
 
 package() {
     cd "${srcdir}"
