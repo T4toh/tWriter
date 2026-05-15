@@ -1,10 +1,27 @@
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::search;
+use crate::stats::{self, StatsMap};
+
+thread_local! {
+    /// Contexto del walk de `get_tree`: root + stats cargados una vez por call.
+    /// Se setea al inicio de `get_tree` y se consulta desde `chapter_node`.
+    /// `RefCell<Option<...>>` porque cada Tauri command corre en su propio
+    /// thread y nunca se anida.
+    static TREE_CTX: RefCell<Option<(PathBuf, StatsMap)>> = const { RefCell::new(None) };
+}
+
+fn with_tree_ctx<F, R>(f: F) -> R
+where
+    F: FnOnce(Option<&(PathBuf, StatsMap)>) -> R,
+{
+    TREE_CTX.with(|c| f(c.borrow().as_ref()))
+}
 
 const SKIP_DIRS: &[&str] = &[
     "convertidos",
@@ -60,16 +77,16 @@ pub struct TreeNode {
     pub children: Vec<TreeNode>,
 }
 
+/// Metadata persistente y estable de un capítulo. Solo cambia cuando el
+/// usuario renombra/reordena/cambia status o idioma. Los campos volátiles
+/// (`palabras`, `ultima_edicion`) viven en `.twriter/stats.json` (ver
+/// `stats.rs`) para que `meta.json` no genere commits ruidosos en cada save.
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct ChapterMeta {
     #[serde(default)]
     pub orden: u32,
     #[serde(default)]
     pub titulo: String,
-    #[serde(default)]
-    pub palabras: u32,
-    #[serde(default)]
-    pub ultima_edicion: Option<String>,
     #[serde(default)]
     pub status: Option<String>,
     #[serde(default)]
@@ -89,20 +106,37 @@ pub fn get_tree(root: String) -> Result<TreeNode, String> {
         .unwrap_or("Novelas")
         .to_string();
 
-    let children = list_sagas_or_books(&root_path)?;
-    let modified_ms = max_child_mtime(&children);
-    let word_count = sum_child_words(&children);
-    Ok(TreeNode {
-        name,
-        path: root_path.to_string_lossy().into_owned(),
-        kind: NodeKind::Saga,
-        ext: None,
-        editable: None,
-        modified_ms,
-        word_count,
-        excluded: None,
-        children,
-    })
+    // Migración one-shot: si no existe stats.json todavía, scaneamos meta.json
+    // y movemos palabras/ultima_edicion al cache local. No bloquea el walk si
+    // falla; mantenemos `read_meta_word_count` como fallback.
+    let stats_file = root_path.join(".twriter").join("stats.json");
+    if !stats_file.exists() {
+        if let Err(e) = stats::migrate_meta_to_stats(&root_path) {
+            tracing::warn!(target: "fs", error = %e, "migración stats falló");
+        }
+    }
+    let stats_map = stats::read_stats(&root_path);
+    TREE_CTX.with(|c| *c.borrow_mut() = Some((root_path.clone(), stats_map)));
+
+    let result: Result<TreeNode, String> = (|| {
+        let children = list_sagas_or_books(&root_path)?;
+        let modified_ms = max_child_mtime(&children);
+        let word_count = sum_child_words(&children);
+        Ok(TreeNode {
+            name,
+            path: root_path.to_string_lossy().into_owned(),
+            kind: NodeKind::Saga,
+            ext: None,
+            editable: None,
+            modified_ms,
+            word_count,
+            excluded: None,
+            children,
+        })
+    })();
+
+    TREE_CTX.with(|c| c.borrow_mut().take());
+    result
 }
 
 /// Lee el HTML de un capítulo. Solo soporta .html (los .odt/.docx hay que importar antes).
@@ -641,7 +675,7 @@ fn chapter_node(path: &Path) -> Option<TreeNode> {
         .unwrap_or("?")
         .to_string();
     let modified_ms = mtime_ms(path);
-    let word_count = read_meta_word_count(path);
+    let word_count = chapter_word_count(path);
     Some(TreeNode {
         name,
         path: path.to_string_lossy().into_owned(),
@@ -655,16 +689,14 @@ fn chapter_node(path: &Path) -> Option<TreeNode> {
     })
 }
 
-fn read_meta_word_count(chapter_path: &Path) -> Option<u32> {
-    let stem = chapter_path.file_stem().and_then(|s| s.to_str())?;
-    let parent = chapter_path.parent()?;
-    let meta_path = parent.join(format!("{}.meta.json", stem));
-    if !meta_path.exists() {
-        return None;
-    }
-    let raw = fs::read_to_string(&meta_path).ok()?;
-    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
-    v.get("palabras")?.as_u64().map(|n| n as u32)
+/// Devuelve palabras del capítulo: consulta el cache `.twriter/stats.json`
+/// (cargado al inicio de `get_tree`). Si falta, hace fallback computando
+/// desde el HTML (lazy).
+fn chapter_word_count(chapter_path: &Path) -> Option<u32> {
+    with_tree_ctx(|ctx| {
+        let (root, stats) = ctx?;
+        stats::palabras_for_chapter(stats, root, chapter_path)
+    })
 }
 
 fn mtime_ms(p: &Path) -> Option<u64> {

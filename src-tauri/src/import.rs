@@ -87,14 +87,16 @@ fn import_impl(input_path: &str) -> Result<ImportResult, String> {
         let meta = serde_json::json!({
             "orden": order,
             "titulo": stem,
-            "palabras": count_words(&raw_html),
-            "ultima_edicion": null,
             "status": "imported",
             "idioma": inherited_idioma,
         });
         fs::write(&meta_out, serde_json::to_string_pretty(&meta).unwrap_or_default())
             .map_err(|e| e.to_string())?;
     }
+    // `palabras` se computa lazy en el próximo refresh del tree (fallback de
+    // `chapter_word_count` lee el HTML). No seedeamos stats acá porque no
+    // tenemos el `root` del workspace; la fuente de verdad es el cache que
+    // arma `get_tree`.
 
     tracing::info!(target: "import", from = %input_path, to = %html_out.display(), "capítulo importado");
     Ok(ImportResult {

@@ -166,13 +166,19 @@ export class ChapterService {
     pane.saving.set(true);
     try {
       await invoke('write_chapter', { path: node.path, html: pane.content() });
-      const updated: ChapterMeta = {
-        ...pane.meta(),
-        palabras: countWords(pane.content()),
-        ultima_edicion: new Date().toISOString(),
-      };
-      await invoke('write_meta', { chapterPath: node.path, meta: updated });
-      pane.meta.set(updated);
+      const root = this.project.root();
+      if (root) {
+        // Persistimos palabras + ultima_edicion en `.twriter/stats.json` (no
+        // tocamos `meta.json` en cada save — antes generaba 1 commit ruidoso
+        // por cada autosave). meta.json solo se reescribe al cambiar idioma,
+        // titulo, status u orden.
+        await invoke('write_chapter_stats', {
+          root,
+          chapterPath: node.path,
+          palabras: countWords(pane.content()),
+          ultimaEdicion: new Date().toISOString(),
+        });
+      }
       pane.dirty.set(false);
       pane.lastSavedAt.set(Date.now());
     } catch (err) {
