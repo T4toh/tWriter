@@ -6,30 +6,55 @@ import { GrammarMode } from './types';
 export type EditorWidth = 'narrow' | 'wide' | 'full';
 export type ParagraphSpacing = 'tight' | 'normal' | 'loose';
 export type RightPanelWidth = 'compact' | 'normal' | 'wide' | 'full';
-export type EditorFontFamily = 'serif' | 'sans' | 'mono' | 'system';
+/** Los 4 keywords de preset siguen siendo válidos como valor. Cualquier otro
+ *  string se interpreta como nombre de familia (OS o pool del repo). */
+export type EditorFontPreset = 'serif' | 'sans' | 'mono' | 'system';
+export type EditorFontFamily = string;
 
 const FONT_MIN = 12;
 const FONT_MAX = 28;
 const FONT_DEFAULT = 17;
 const SPACING_DEFAULT: ParagraphSpacing = 'tight';
 const RIGHT_PANEL_DEFAULT: RightPanelWidth = 'normal';
-const FONT_FAMILY_DEFAULT: EditorFontFamily = 'serif';
+const FONT_FAMILY_DEFAULT: EditorFontPreset = 'serif';
+const FONT_RECENTS_MAX = 5;
 
-/** Stack CSS para cada familia configurable del editor. Solo el editor;
- *  EPUB y UI tienen su propio CSS y no se ven afectados. */
-export const EDITOR_FONT_STACK: Record<EditorFontFamily, string> = {
+/** Stack CSS para cada preset del editor. Solo el editor; EPUB y UI tienen
+ *  su propio CSS y no se ven afectados. */
+export const EDITOR_FONT_STACK: Record<EditorFontPreset, string> = {
   serif: "'Merriweather', Georgia, 'Times New Roman', serif",
   sans: "'Lato', system-ui, -apple-system, 'Segoe UI', sans-serif",
   mono: "'Roboto Mono', ui-monospace, monospace",
   system: "system-ui, -apple-system, 'Segoe UI', sans-serif",
 };
 
-export const EDITOR_FONT_LABEL: Record<EditorFontFamily, string> = {
+export const EDITOR_FONT_LABEL: Record<EditorFontPreset, string> = {
   serif: 'Serif',
   sans: 'Sans',
   mono: 'Mono',
   system: 'Sistema',
 };
+
+export const EDITOR_FONT_PRESETS: ReadonlyArray<EditorFontPreset> = [
+  'serif',
+  'sans',
+  'mono',
+  'system',
+];
+
+export function isEditorFontPreset(value: string): value is EditorFontPreset {
+  return value === 'serif' || value === 'sans' || value === 'mono' || value === 'system';
+}
+
+/** Resuelve un valor de `editorFontFamily` al stack CSS final que se aplica
+ *  al editor. Preset → stack hardcoded. Cualquier otro string → la familia
+ *  envuelta en comillas + fallback serif (para que el editor no rompa si la
+ *  fuente no está disponible en la PC actual). */
+export function resolveEditorFontStack(value: EditorFontFamily): string {
+  if (isEditorFontPreset(value)) return EDITOR_FONT_STACK[value];
+  // Cita el nombre para soportar familias con espacios ("EB Garamond").
+  return `'${value.replace(/'/g, "\\'")}', ${EDITOR_FONT_STACK.serif}`;
+}
 
 /** em entre `<p>` en el editor por nivel. EPUB no se ve afectado — usa su propio CSS. */
 export const PARAGRAPH_SPACING_EM: Record<ParagraphSpacing, number> = {
@@ -43,6 +68,7 @@ interface Settings {
   editorWidth?: EditorWidth;
   editorFontSize?: number;
   editorFontFamily?: EditorFontFamily;
+  editorFontRecents?: string[];
   editorParagraphSpacing?: ParagraphSpacing;
   grammarMode?: GrammarMode;
   grammarCustomUrl?: string | null;
@@ -61,6 +87,7 @@ export class SettingsService {
   readonly editorWidth = signal<EditorWidth>('narrow');
   readonly editorFontSize = signal<number>(FONT_DEFAULT);
   readonly editorFontFamily = signal<EditorFontFamily>(FONT_FAMILY_DEFAULT);
+  readonly editorFontRecents = signal<string[]>([]);
   readonly editorParagraphSpacing = signal<ParagraphSpacing>(SPACING_DEFAULT);
   readonly grammarMode = signal<GrammarMode>('public');
   readonly grammarCustomUrl = signal<string | null>(null);
@@ -82,6 +109,9 @@ export class SettingsService {
       this.editorWidth.set(s.editorWidth ?? 'narrow');
       this.editorFontSize.set(clampFont(s.editorFontSize ?? FONT_DEFAULT));
       this.editorFontFamily.set(s.editorFontFamily ?? FONT_FAMILY_DEFAULT);
+      this.editorFontRecents.set(
+        Array.isArray(s.editorFontRecents) ? s.editorFontRecents.slice(0, FONT_RECENTS_MAX) : [],
+      );
       this.editorParagraphSpacing.set(s.editorParagraphSpacing ?? SPACING_DEFAULT);
       this.grammarMode.set((s.grammarMode as GrammarMode) ?? 'public');
       this.grammarCustomUrl.set(s.grammarCustomUrl ?? null);
@@ -121,10 +151,13 @@ export class SettingsService {
     void this.persist();
   }
 
-  cycleEditorFontFamily(): void {
-    const order: EditorFontFamily[] = ['serif', 'sans', 'mono', 'system'];
-    const next = order[(order.indexOf(this.editorFontFamily()) + 1) % order.length];
-    this.editorFontFamily.set(next);
+  /** Cambia la familia del editor y agrega el valor a la lista de recientes
+   *  (unshift + dedupe + truncate a 5). Persiste settings.json. */
+  setEditorFontFamily(family: EditorFontFamily): void {
+    this.editorFontFamily.set(family);
+    const recents = this.editorFontRecents();
+    const next = [family, ...recents.filter((f) => f !== family)].slice(0, FONT_RECENTS_MAX);
+    this.editorFontRecents.set(next);
     void this.persist();
   }
 
@@ -183,6 +216,7 @@ export class SettingsService {
       editorWidth: this.editorWidth(),
       editorFontSize: this.editorFontSize(),
       editorFontFamily: this.editorFontFamily(),
+      editorFontRecents: this.editorFontRecents().length ? this.editorFontRecents() : undefined,
       editorParagraphSpacing: this.editorParagraphSpacing(),
       grammarMode: this.grammarMode(),
       grammarCustomUrl: this.grammarCustomUrl(),

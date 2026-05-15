@@ -22,6 +22,7 @@ mod secrets;
 mod settings;
 mod stats;
 mod storage;
+mod system_fonts;
 mod theme;
 mod themes;
 mod util;
@@ -57,9 +58,11 @@ use secrets::{lt_api_key_save, lt_api_key_status};
 use settings::{get_settings, set_settings};
 use stats::write_chapter_stats;
 use storage::detect_storage_backend;
+use system_fonts::{list_system_fonts, refresh_system_fonts};
 use themes::{
-    add_theme_font, create_theme, delete_theme, duplicate_theme, get_theme, list_font_usage,
-    list_theme_fonts, list_themes, remove_theme_font, rename_theme, rename_theme_font, set_theme,
+    add_theme_font, create_theme, delete_theme, duplicate_theme, get_chapter_theme_fonts,
+    get_theme, list_font_usage, list_theme_fonts, list_themes, remove_theme_font, rename_theme,
+    rename_theme_font, set_theme,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -158,8 +161,11 @@ pub fn run() {
             remove_font,
             rename_font,
             consolidate_fonts,
+            list_system_fonts,
+            refresh_system_fonts,
             list_themes,
             get_theme,
+            get_chapter_theme_fonts,
             set_theme,
             create_theme,
             rename_theme,

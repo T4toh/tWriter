@@ -179,14 +179,23 @@
       <span class="ico">A+</span>
     </button>
 
-    <button
-      type="button"
-      class="tb-btn tb-text font-family-toggle"
-      (click)="cycleFontFamily()"
-      [title]="'Familia tipográfica del editor: ' + fontFamilyLabel()"
-    >
-      {{ fontFamilyLabel() }}
-    </button>
+    <div class="font-family-picker" [title]="'Familia tipográfica del editor: ' + fontFamilyLabel()">
+      <app-select
+        [groups]="fontGroups()"
+        [itemTemplate]="fontItemTpl"
+        [searchThreshold]="0"
+        [ngModel]="fontFamily()"
+        (ngModelChange)="onFontSelect($event)"
+        (click)="onFontDropdownOpen()"
+        (itemHover)="onFontItemHover($event)"
+      ></app-select>
+      <ng-template #fontItemTpl let-opt>
+        <span
+          class="font-item"
+          [style.font-family]="opt.data?.fontFamily ? '\'' + opt.data.fontFamily + '\', serif' : null"
+        >{{ opt.label }}</span>
+      </ng-template>
+    </div>
 
     <span class="sep"></span>
 
@@ -298,6 +307,12 @@
       <span class="indicator dirty">sin guardar</span>
     } @else if (canEdit()) {
       <span class="indicator saved">guardado</span>
+    }
+    @if (fontMissing(); as miss) {
+      <span
+        class="font-missing-badge"
+        [title]="'Fuente «' + miss + '» no instalada en esta PC. Editor cae a serif default; el valor sigue guardado para otras PCs.'"
+      >⚠ {{ miss }}</span>
     }
     @if (chapterError(); as err) {
       <span class="indicator error">{{ err }}</span>

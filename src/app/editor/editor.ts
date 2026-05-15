@@ -11,6 +11,8 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { invoke } from '@tauri-apps/api/core';
 import { Editor as TipTapEditor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
@@ -23,10 +25,15 @@ import { SearchService } from '../core/search-service';
 import { highlightFirstMatch } from '../core/search-highlight';
 import {
   EDITOR_FONT_LABEL,
-  EDITOR_FONT_STACK,
+  EDITOR_FONT_PRESETS,
   PARAGRAPH_SPACING_EM,
   SettingsService,
+  isEditorFontPreset,
+  resolveEditorFontStack,
 } from '../core/settings-service';
+import { SystemFontsService } from '../core/system-fonts-service';
+import { FontsService } from '../core/fonts-service';
+import { Select, SelectGroup, SelectOption } from '../shared/select';
 import { GrammarMatch, RaeViolation } from '../core/types';
 import { convert as convertRae } from '../dialogos/converter';
 import { validateRae } from '../dialogos/validator';
@@ -77,7 +84,7 @@ const EMPTY_STATE: ToolbarState = {
 
 @Component({
   selector: 'app-editor',
-  imports: [Landing, GrammarPopover, RaePopover],
+  imports: [Landing, GrammarPopover, RaePopover, Select, FormsModule],
   templateUrl: './editor.html',
   styleUrl: './editor.scss',
 })
@@ -86,6 +93,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected settings = inject(SettingsService);
   protected grammar = inject(GrammarService);
   protected sagaCtx = inject(SagaContextService);
+  protected systemFonts = inject(SystemFontsService);
+  private fontsService = inject(FontsService);
   private ctxMenu = inject(ContextMenuService);
   private search = inject(SearchService);
   private debug = inject(DebugService);
@@ -147,8 +156,136 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly width = this.settings.editorWidth;
   protected readonly fontSize = this.settings.editorFontSize;
   protected readonly fontFamily = this.settings.editorFontFamily;
-  protected readonly fontStack = computed(() => EDITOR_FONT_STACK[this.fontFamily()]);
-  protected readonly fontFamilyLabel = computed(() => EDITOR_FONT_LABEL[this.fontFamily()]);
+  /** Stack CSS final aplicado al `--editor-font-family`. Para presets, usa el
+   *  stack hardcoded; para nombres libres (OS / pool), envuelve la familia
+   *  con fallback serif. */
+  protected readonly fontStack = computed(() => resolveEditorFontStack(this.fontFamily()));
+  /** Label legible para el trigger del dropdown: nombre del preset o la
+   *  familia tal cual. */
+  protected readonly fontFamilyLabel = computed(() => {
+    const v = this.fontFamily();
+    return isEditorFontPreset(v) ? EDITOR_FONT_LABEL[v] : v;
+  });
+  /** True si la familia configurada no es preset ni está en el OS ni en el
+   *  pool del repo (típico al sincronizar settings entre PCs con distintas
+   *  fuentes instaladas). El footer muestra un badge informativo. */
+  protected readonly fontMissing = computed<string | null>(() => {
+    const v = this.fontFamily();
+    if (isEditorFontPreset(v)) return null;
+    if (this.systemFonts.has(v)) return null;
+    if (this.poolFamilies().some((p) => p.family === v)) return null;
+    return v;
+  });
+  /** Fuentes del tema resuelto (saga/libro) para el capítulo activo. Se
+   *  populan al cambiar `active()`. Vacío si el chapter no tiene tema
+   *  aplicado o no pertenece a un libro. */
+  protected readonly themeFonts = signal<{
+    bodyFont?: string;
+    headingFont?: string;
+    editorialBodyFont?: string;
+    editorialHeadingFont?: string;
+  } | null>(null);
+  /** Pool del repo deduplicado por familia. Cada item conserva el path de uno
+   *  de sus faces (cualquiera sirve para registrar FontFace). */
+  protected readonly poolFamilies = computed(() => {
+    const root = this.settings.root();
+    if (!root) return [] as Array<{ family: string; path: string }>;
+    const entries = this.fontsService.get(root);
+    const seen = new Map<string, string>();
+    for (const e of entries) {
+      if (!seen.has(e.family)) seen.set(e.family, e.path);
+    }
+    return Array.from(seen.entries()).map(([family, path]) => ({ family, path }));
+  });
+  /** Grupos para el `<app-select>` del toolbar. Recientes (filtra a familias
+   *  válidas ahora) + Presets + Pool del repo + Sistema. Vacíos se ocultan. */
+  protected readonly fontGroups = computed<SelectGroup[]>(() => {
+    const groups: SelectGroup[] = [];
+    const recents = this.settings.editorFontRecents();
+    const sys = this.systemFonts.fonts();
+    const pool = this.poolFamilies();
+    const sysIndex = new Map(sys.map((f) => [f.family, f]));
+    const poolIndex = new Map(pool.map((p) => [p.family, p.path]));
+
+    if (recents.length > 0) {
+      const items: SelectOption[] = [];
+      for (const v of recents) {
+        if (isEditorFontPreset(v)) {
+          items.push({ value: v, label: EDITOR_FONT_LABEL[v] });
+        } else if (poolIndex.has(v)) {
+          items.push({
+            value: v,
+            label: v,
+            data: { fontFamily: v, path: poolIndex.get(v) },
+          });
+        } else if (sysIndex.has(v)) {
+          items.push({ value: v, label: v, data: { fontFamily: v } });
+        }
+      }
+      if (items.length > 0) groups.push({ label: 'Recientes', options: items });
+    }
+
+    // Tema activo del capítulo (saga/libro). Sugiere body/heading para que el
+    // autor pueda ver mientras escribe cómo va a verse en el EPUB exportado.
+    // Si la fuente ya está en pool o sistema, el data lleva el path para que
+    // el preview renderee en la propia tipografía; sino label plano.
+    const theme = this.themeFonts();
+    if (theme) {
+      const seen = new Set<string>();
+      const items: SelectOption[] = [];
+      const push = (family: string | undefined, role: string): void => {
+        if (!family || seen.has(family)) return;
+        seen.add(family);
+        const pathFromPool = poolIndex.get(family);
+        const inSys = sysIndex.has(family);
+        if (!pathFromPool && !inSys) {
+          // Familia referenciada por el tema pero no instalada — la mostramos
+          // igual para que el usuario sepa qué se va a usar en el EPUB.
+        }
+        items.push({
+          value: family,
+          label: `${role}: ${family}`,
+          data: {
+            fontFamily: family,
+            path: pathFromPool ?? (inSys ? sysIndex.get(family)!.path : undefined),
+          },
+        });
+      };
+      push(theme.bodyFont, 'Cuerpo');
+      push(theme.headingFont, 'Títulos');
+      push(theme.editorialBodyFont, 'Editorial');
+      if (items.length > 0) groups.push({ label: 'Del tema', options: items });
+    }
+
+    groups.push({
+      label: 'Presets',
+      options: EDITOR_FONT_PRESETS.map((p) => ({
+        value: p,
+        label: EDITOR_FONT_LABEL[p],
+      })),
+    });
+
+    if (pool.length > 0) {
+      const items = pool
+        .map((p) => ({
+          value: p.family,
+          label: p.family,
+          data: { fontFamily: p.family, path: p.path },
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+      groups.push({ label: 'Pool del repo', options: items });
+    }
+
+    if (sys.length > 0) {
+      const items = sys.map((f) => ({
+        value: f.family,
+        label: f.family,
+        data: { fontFamily: f.family, path: f.path },
+      }));
+      groups.push({ label: `Sistema (${sys.length})`, options: items });
+    }
+    return groups;
+  });
   protected readonly paragraphSpacing = this.settings.editorParagraphSpacing;
   protected readonly paragraphSpacingEm = computed(() => PARAGRAPH_SPACING_EM[this.paragraphSpacing()]);
   protected readonly widthLabel = computed(() => {
@@ -294,6 +431,35 @@ export class Editor implements AfterViewInit, OnDestroy {
       if (!avail) return;
       if (!this.viewReady() || !this.tiptap) return;
       if (this.canCheckGrammar()) void this.checkGrammar();
+    });
+
+    // Tema activo del chapter: cuando cambia el path del capítulo activo,
+    // resuelve las fuentes heredadas (root theme + saga overrides + book
+    // overrides) y las expone vía signal `themeFonts` para que el dropdown
+    // del editor las muestre en el grupo "Del tema".
+    effect(() => {
+      const node = this.active();
+      const root = this.settings.root();
+      if (!node?.path || !root) {
+        this.themeFonts.set(null);
+        return;
+      }
+      const path = node.path;
+      void invoke<{
+        bodyFont?: string;
+        headingFont?: string;
+        editorialBodyFont?: string;
+        editorialHeadingFont?: string;
+      }>('get_chapter_theme_fonts', { chapterPath: path, rootPath: root })
+        .then((res) => {
+          if (this.active()?.path !== path) return;
+          const has =
+            res.bodyFont || res.headingFont || res.editorialBodyFont || res.editorialHeadingFont;
+          this.themeFonts.set(has ? res : null);
+        })
+        .catch(() => {
+          this.themeFonts.set(null);
+        });
     });
 
     // Auto-check RAE: igual patrón. Si el toggle está prendido y el capítulo
@@ -469,8 +635,28 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.settings.bumpFontSize(delta);
   }
 
-  protected cycleFontFamily(): void {
-    this.settings.cycleEditorFontFamily();
+  /** Lazy load del listado del OS + pool en la primera apertura del dropdown
+   *  para evitar bloquear el boot con ~400ms de enumeración fontconfig. */
+  protected async onFontDropdownOpen(): Promise<void> {
+    void this.systemFonts.ensureLoaded();
+    const root = this.settings.root();
+    if (root && !this.fontsService.hasLoaded(root)) {
+      void this.fontsService.refresh(root);
+    }
+  }
+
+  /** Aplicado al hover dentro del dropdown: registra la FontFace de la
+   *  familia (solo no-presets) para que el preview del nombre renderee en
+   *  la propia tipografía. Idempotente. */
+  protected onFontItemHover(opt: SelectOption): void {
+    const data = opt.data as { fontFamily?: string; path?: string } | undefined;
+    if (!data?.fontFamily || !data.path) return;
+    void this.systemFonts.loadFace(data.fontFamily, data.path);
+  }
+
+  protected onFontSelect(family: string): void {
+    if (!family) return;
+    this.settings.setEditorFontFamily(family);
   }
 
   protected openRae(): void {

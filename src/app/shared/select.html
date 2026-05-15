@@ -38,21 +38,51 @@
       </div>
     }
     <ul class="sel-list" role="listbox" tabindex="-1">
-      @for (opt of visibleOptions(); track opt.value; let i = $index) {
-        <li
-          role="option"
-          [attr.aria-selected]="opt.value === value()"
-          [attr.data-idx]="i"
-          [class.is-highlighted]="i === highlightIdx()"
-          [class.is-selected]="opt.value === value()"
-          [class.is-disabled]="opt.disabled"
-          (mouseenter)="highlightIdx.set(i)"
-          (click)="pick(opt)"
-        >
-          {{ opt.label }}
-        </li>
-      } @empty {
-        <li class="sel-empty">Sin resultados</li>
+      @if (useGroups()) {
+        @for (g of visibleGroups(); track g.label) {
+          <li class="sel-group-header" role="presentation" aria-hidden="true">{{ g.label }}</li>
+          @for (opt of g.options; track opt.value; let i = $index) {
+            <li
+              role="option"
+              [attr.aria-selected]="opt.value === value()"
+              [attr.data-idx]="g.start + i"
+              [class.is-highlighted]="(g.start + i) === highlightIdx()"
+              [class.is-selected]="opt.value === value()"
+              [class.is-disabled]="opt.disabled"
+              (mouseenter)="onItemHover(opt, g.start + i)"
+              (click)="pick(opt)"
+            >
+              @if (itemTemplate()) {
+                <ng-container *ngTemplateOutlet="itemTemplate()!; context: { $implicit: opt }"></ng-container>
+              } @else {
+                {{ opt.label }}
+              }
+            </li>
+          }
+        } @empty {
+          <li class="sel-empty">Sin resultados</li>
+        }
+      } @else {
+        @for (opt of visibleOptions(); track opt.value; let i = $index) {
+          <li
+            role="option"
+            [attr.aria-selected]="opt.value === value()"
+            [attr.data-idx]="i"
+            [class.is-highlighted]="i === highlightIdx()"
+            [class.is-selected]="opt.value === value()"
+            [class.is-disabled]="opt.disabled"
+            (mouseenter)="onItemHover(opt, i)"
+            (click)="pick(opt)"
+          >
+            @if (itemTemplate()) {
+              <ng-container *ngTemplateOutlet="itemTemplate()!; context: { $implicit: opt }"></ng-container>
+            } @else {
+              {{ opt.label }}
+            }
+          </li>
+        } @empty {
+          <li class="sel-empty">Sin resultados</li>
+        }
       }
     </ul>
   }
