@@ -33,10 +33,14 @@ if [[ "$PKG_VER" != "$APP_VER" ]]; then
   exit 1
 fi
 
-# 2) Validar SSH al AUR (no falla si responde, solo verifica auth)
+# 2) Validar SSH al AUR (ssh -T sale con exit 1 porque AUR no da shell interactiva;
+#    capturamos la salida y greppeamos por separado para no chocar con pipefail)
 echo "Verificando SSH al AUR…"
-if ! ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -T aur@aur.archlinux.org 2>&1 | grep -q "Welcome"; then
+SSH_OUT="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -T aur@aur.archlinux.org 2>&1 || true)"
+if ! echo "$SSH_OUT" | grep -q "Welcome"; then
   echo "ERROR: no se pudo autenticar en aur@aur.archlinux.org." >&2
+  echo "       Salida de ssh:" >&2
+  echo "$SSH_OUT" | sed 's/^/         /' >&2
   echo "       Cargá tu clave pública en https://aur.archlinux.org/account/" >&2
   exit 1
 fi
