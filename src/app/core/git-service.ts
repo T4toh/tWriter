@@ -144,22 +144,36 @@ export class GitService {
   constructor() {
     effect(() => {
       const root = this.settings.root();
-      const isGit = this.storage.isGit();
+      // Leemos `backend()` directo (no `isGit()`) para distinguir 'unknown'
+      // (detect en vuelo) de un backend ya resuelto != git. Sin esto, al boot
+      // entrábamos al `else` con `isGit=false` mientras detect estaba en
+      // vuelo, dejando timers apagados; cuando backend resolvía a 'git' el
+      // effect re-corría pero la UI podía quedar en "sin estado" si algo
+      // cortaba la re-evaluación (race documentada en README:536).
+      const backend = this.storage.backend();
       this.stopTimers();
       this.status.set(null);
       this.error.set(null);
-      if (root && isGit) {
-        if (this.ensuredForRoot !== root) {
-          this.ensuredForRoot = root;
-          void invoke('git_ensure_twriter_ignored', { repoPath: root }).catch((err) => {
-            console.warn('git_ensure_twriter_ignored failed', err);
-          });
-        }
-        void this.refreshStatus();
-        this.startTimers();
-      } else {
-        this.ensuredForRoot = null;
+      if (!root || backend === 'unknown') {
+        // 'unknown' = detect en vuelo. Esperamos al próximo re-run del effect
+        // sin tocar `ensuredForRoot`, así no re-disparamos
+        // `git_ensure_twriter_ignored` si backend termina resolviendo a 'git'
+        // sobre el mismo root.
+        if (!root) this.ensuredForRoot = null;
+        return;
       }
+      if (backend !== 'git') {
+        this.ensuredForRoot = null;
+        return;
+      }
+      if (this.ensuredForRoot !== root) {
+        this.ensuredForRoot = root;
+        void invoke('git_ensure_twriter_ignored', { repoPath: root }).catch((err) => {
+          console.warn('git_ensure_twriter_ignored failed', err);
+        });
+      }
+      void this.refreshStatus();
+      this.startTimers();
     });
   }
 

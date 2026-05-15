@@ -55,10 +55,12 @@ export class StorageService {
   constructor() {
     effect(() => {
       const root = this.settings.root();
-      if (!root) {
-        this.backend.set('unknown');
-        return;
-      }
+      // Reset siempre antes de detect. Sin esto, al cambiar de root el signal
+      // retiene el backend viejo (e.g. 'git') durante la ventana async, y
+      // GitService dispara `git_status` sobre el folder nuevo asumiendo
+      // backend equivocado. Con el reset, consumers ven 'unknown' = pendiente.
+      this.backend.set('unknown');
+      if (!root) return;
       void this.detect(root);
     });
   }
