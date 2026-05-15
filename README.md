@@ -73,7 +73,7 @@ Reglas:
 - Toolbar: undo/redo, B/I/U, alineación, salto de escena, RAE, gramática, font size, familia tipográfica, espaciado de párrafos, ancho hoja.
 - Menú contextual propio.
 - **Layout flat**: el editor renderea párrafos sin `text-indent` y con `text-align: left` para que escribir no "salte" word-spacing por línea ni se vean indents que confunden. El EPUB exportado mantiene `text-indent: 1.5em` + `text-align: justify` desde `reedsy-subset.scss` — formato editorial al exportar, layout cómodo al escribir.
-- **Selector de fuente del editor**: cycle button en toolbar (`Serif / Sans / Mono / Sistema`) persistido en `settings.json::editorFontFamily`. CSS var `--editor-font-family` sobre `.ProseMirror`. Cuatro stacks hardcodeados; detección de fuentes instaladas en el OS queda en TODO.
+- **Selector de fuente del editor**: dropdown estilo LibreOffice/Word con búsqueda. Cuatro grupos: **Recientes** (top 5, persistido en `settings.json::editorFontRecents`), **Del tema** (body / heading / editorial del tema resuelto del capítulo activo — saga + libro override), **Presets** (`Serif / Sans / Mono / Sistema`, los 4 stacks hardcodeados originales), **Pool del repo** (familias deduplicadas de `<root>/fonts/`) y **Sistema (N)** (todas las familias instaladas en el OS, listadas via crate `fontdb` 0.23 en `src-tauri/src/system_fonts.rs::list_system_fonts`, cache lazy `Mutex<Option<Vec>>` + `refresh_system_fonts` para re-scan). Cada ítem renderea su nombre en su propia tipografía (FontFace API on-hover via `SystemFontsService::loadFace`, idempotente). Valor persistido en `settings.json::editorFontFamily` como `string` libre (los 4 keywords presets siguen siendo válidos). CSS var `--editor-font-family` sobre `.ProseMirror` aplica el stack resuelto vía `resolveEditorFontStack()` (preset → stack hardcoded, sino familia + fallback serif). **Fallback + badge**: si la familia guardada no existe en OS ni pool ni presets (típico al sincronizar settings entre PCs), el editor cae a serif default y el footer muestra badge `⚠ <nombre>` con tooltip explicativo; el valor en settings no se sobrescribe (al volver a la otra PC vuelve a aplicarse). Para el `<app-select>` se sumaron `groups` y `itemTemplate` manteniendo compat con el shape `options` plano.
 - **Gap cursor desactivado**: `StarterKit.configure({ gapcursor: false })` para evitar el marker vertical huérfano que aparecía en zonas vacías del editor (entre hr/h1/párrafos, click fuera del texto).
 - Modo focus (F11 / Esc): oculta tree, deja toolbar y footer.
 - Indicador de idioma en footer (badge color) + toggle ES/EN.
@@ -460,7 +460,6 @@ paru -S twriter-bin
 
 ### Editor / UX
 
-- **Detectar fuentes instaladas en el sistema** para el selector de familia tipográfica del editor. Hoy hay 4 stacks hardcodeados (`serif`/`sans`/`mono`/`system`); ampliar con listado real del OS via crate Rust (`font-kit` o `fontdb`) expuesto como `#[tauri::command] list_system_fonts`. UI: cambiar el cycle button por dropdown con search, ordenado por familias usadas recientemente.
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).

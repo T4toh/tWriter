@@ -5,25 +5,43 @@ import {
   DestroyRef,
   ElementRef,
   HostListener,
+  TemplateRef,
   computed,
   forwardRef,
   inject,
   input,
+  output,
   signal,
   viewChild,
 } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR } from '@angular/forms';
 
 export interface SelectOption {
   value: string;
   label: string;
   disabled?: boolean;
+  /** Datos arbitrarios que el consumer puede pasar para usar desde itemTemplate
+   *  o desde el handler (itemHover). El componente no los interpreta. */
+  data?: Record<string, unknown>;
+}
+
+export interface SelectGroup {
+  label: string;
+  options: SelectOption[];
+}
+
+interface VisibleGroup {
+  label: string;
+  options: SelectOption[];
+  /** Offset del primer ítem del grupo en la lista flat visible. */
+  start: number;
 }
 
 @Component({
   selector: 'app-select',
   standalone: true,
-  imports: [FormsModule],
+  imports: [CommonModule, FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './select.html',
   styleUrl: './select.scss',
@@ -40,11 +58,21 @@ export interface SelectOption {
   },
 })
 export class Select implements ControlValueAccessor {
-  readonly options = input.required<SelectOption[]>();
+  readonly options = input<SelectOption[]>([]);
+  /** Alternativa a `options`: render con headers de grupo. Si está seteado,
+   *  el componente ignora `options` y usa los items de los grupos. */
+  readonly groups = input<SelectGroup[]>([]);
   readonly placeholder = input<string>('Seleccionar…');
   readonly disabled = input<boolean>(false);
   readonly searchThreshold = input<number>(10);
   readonly invalid = input<boolean>(false);
+  /** Template opcional para renderizar el contenido de cada ítem. Recibe la
+   *  option como $implicit. Si no se pasa, render plano del `label`. */
+  readonly itemTemplate = input<TemplateRef<{ $implicit: SelectOption }> | null>(null);
+
+  /** Emite cuando el usuario hace hover sobre un ítem (o usa keyboard
+   *  para destacar uno nuevo). Útil para lazy-load de assets por ítem. */
+  readonly itemHover = output<SelectOption>();
 
   protected readonly open = signal(false);
   protected readonly value = signal<string>('');
@@ -73,17 +101,60 @@ export class Select implements ControlValueAccessor {
     });
   }
 
-  protected readonly showFilter = computed(() => this.options().length > this.searchThreshold());
+  protected readonly useGroups = computed(() => this.groups().length > 0);
 
-  protected readonly visibleOptions = computed(() => {
+  /** Conteo total de items (para decidir mostrar el filtro). */
+  private readonly totalCount = computed(() =>
+    this.useGroups()
+      ? this.groups().reduce((sum, g) => sum + g.options.length, 0)
+      : this.options().length,
+  );
+
+  protected readonly showFilter = computed(() => this.totalCount() > this.searchThreshold());
+
+  /** Lista flat de opciones visibles (para keyboard nav e indexación). */
+  protected readonly visibleOptions = computed<SelectOption[]>(() => {
     const q = this.filter().trim().toLowerCase();
-    const all = this.options();
-    if (!q) return all;
-    return all.filter((o) => o.label.toLowerCase().includes(q));
+    if (this.useGroups()) {
+      const all: SelectOption[] = [];
+      for (const g of this.groups()) {
+        for (const o of g.options) {
+          if (!q || o.label.toLowerCase().includes(q)) all.push(o);
+        }
+      }
+      return all;
+    }
+    const opts = this.options();
+    if (!q) return opts;
+    return opts.filter((o) => o.label.toLowerCase().includes(q));
+  });
+
+  /** Grupos con filtro aplicado y offsets para indexar contra visibleOptions. */
+  protected readonly visibleGroups = computed<VisibleGroup[]>(() => {
+    if (!this.useGroups()) return [];
+    const q = this.filter().trim().toLowerCase();
+    const out: VisibleGroup[] = [];
+    let cursor = 0;
+    for (const g of this.groups()) {
+      const filtered = q
+        ? g.options.filter((o) => o.label.toLowerCase().includes(q))
+        : g.options;
+      if (filtered.length === 0) continue;
+      out.push({ label: g.label, options: filtered, start: cursor });
+      cursor += filtered.length;
+    }
+    return out;
   });
 
   protected readonly selectedLabel = computed(() => {
     const v = this.value();
+    if (this.useGroups()) {
+      for (const g of this.groups()) {
+        const hit = g.options.find((o) => o.value === v);
+        if (hit) return hit.label;
+      }
+      return '';
+    }
     return this.options().find((o) => o.value === v)?.label ?? '';
   });
 
@@ -145,6 +216,11 @@ export class Select implements ControlValueAccessor {
     this.close();
   }
 
+  protected onItemHover(opt: SelectOption, idx: number): void {
+    this.highlightIdx.set(idx);
+    this.itemHover.emit(opt);
+  }
+
   protected onFilterChange(v: string): void {
     this.filter.set(v);
     this.highlightIdx.set(0);
@@ -185,12 +261,17 @@ export class Select implements ControlValueAccessor {
       event.preventDefault();
       this.highlightIdx.set(0);
       this.scrollHighlightedIntoView();
+      const first = vis[0];
+      if (first) this.itemHover.emit(first);
       return;
     }
     if (event.key === 'End') {
       event.preventDefault();
-      this.highlightIdx.set(Math.max(0, vis.length - 1));
+      const last = Math.max(0, vis.length - 1);
+      this.highlightIdx.set(last);
       this.scrollHighlightedIntoView();
+      const opt = vis[last];
+      if (opt) this.itemHover.emit(opt);
       return;
     }
   }
@@ -203,6 +284,8 @@ export class Select implements ControlValueAccessor {
     if (next >= vis.length) next = 0;
     this.highlightIdx.set(next);
     this.scrollHighlightedIntoView();
+    const opt = vis[next];
+    if (opt) this.itemHover.emit(opt);
   }
 
   private scrollHighlightedIntoView(): void {

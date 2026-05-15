@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::theme::{is_font_ext, Theme, ThemeRef};
+use crate::theme::{is_font_ext, resolve_theme, Theme, ThemeRef};
 use crate::util::{sanitize_name, unique_path};
 
 const THEMES_DIR: &str = "themes";
@@ -97,6 +97,70 @@ pub fn list_themes(root_path: String) -> Result<Vec<ThemeMeta>, String> {
     }
     out.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(out)
+}
+
+/// Familias de fuentes resueltas del tema activo en un capítulo dado. Útil
+/// para sugerir en el selector del editor "ver cómo se vería en el EPUB".
+/// Todos los campos son nombres de familia o `None` cuando el tema/scope no
+/// los define.
+#[derive(Serialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ChapterThemeFonts {
+    pub body_font: Option<String>,
+    pub heading_font: Option<String>,
+    pub editorial_body_font: Option<String>,
+    pub editorial_heading_font: Option<String>,
+}
+
+/// Dado el path absoluto de un capítulo (`<root>/<saga>?/<book>/<section>?/<n>.html`),
+/// camina hacia arriba para encontrar `book.json` y `saga.json`, resuelve el
+/// tema heredado (root theme + overrides saga + overrides book) y devuelve
+/// las familias de fuentes finales.
+#[tauri::command]
+pub fn get_chapter_theme_fonts(
+    chapter_path: String,
+    root_path: String,
+) -> Result<ChapterThemeFonts, String> {
+    let chap = PathBuf::from(&chapter_path);
+    let mut cur: PathBuf = if chap.is_file() {
+        chap.parent()
+            .ok_or_else(|| "chapter path sin parent".to_string())?
+            .to_path_buf()
+    } else {
+        chap
+    };
+    let root = PathBuf::from(&root_path);
+    let canon_root = root.canonicalize().unwrap_or(root.clone());
+
+    let mut book_dir: Option<PathBuf> = None;
+    let mut saga_dir: Option<PathBuf> = None;
+    loop {
+        if book_dir.is_none() && cur.join("book.json").is_file() {
+            book_dir = Some(cur.clone());
+        }
+        if saga_dir.is_none() && cur.join("saga.json").is_file() {
+            saga_dir = Some(cur.clone());
+        }
+        let canon_cur = cur.canonicalize().unwrap_or(cur.clone());
+        if canon_cur == canon_root {
+            break;
+        }
+        let Some(parent) = cur.parent() else { break };
+        if parent == cur {
+            break;
+        }
+        cur = parent.to_path_buf();
+    }
+    let Some(b_dir) = book_dir else {
+        return Ok(ChapterThemeFonts::default());
+    };
+    let resolved = resolve_theme(&b_dir, saga_dir.as_deref(), &root);
+    Ok(ChapterThemeFonts {
+        body_font: resolved.body_font,
+        heading_font: resolved.heading_font,
+        editorial_body_font: resolved.editorial_body_font,
+        editorial_heading_font: resolved.editorial_heading_font,
+    })
 }
 
 #[tauri::command]

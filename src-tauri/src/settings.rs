@@ -21,6 +21,15 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub editor_font_family: Option<String>,
+    /// Familias usadas recientemente en el dropdown del editor (más recientes
+    /// arriba, max 5). Persiste cross-session. Cada selección hace
+    /// unshift + dedupe + truncate en el frontend antes de guardar.
+    #[serde(
+        default,
+        rename = "editorFontRecents",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub editor_font_recents: Option<Vec<String>>,
     #[serde(
         default,
         rename = "editorParagraphSpacing",

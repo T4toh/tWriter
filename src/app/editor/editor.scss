@@ -410,6 +410,42 @@
   letter-spacing: 0.05em;
 }
 
+.font-family-picker {
+  display: inline-block;
+  width: 180px;
+  margin: 0 4px;
+  vertical-align: middle;
+
+  // Apretar el trigger del app-select dentro del toolbar.
+  ::ng-deep .sel-trigger {
+    padding: 4px 8px;
+    font-size: 12px;
+    height: 28px;
+  }
+  ::ng-deep .sel-caret {
+    font-size: 9px;
+  }
+}
+
+.font-item {
+  // Cuando el OS no tiene la fuente y la FontFace falla, el fallback serif
+  // mantiene legible el label.
+  font-size: 13px;
+}
+
+.font-missing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(193, 75, 75, 0.15);
+  color: #c14b4b;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: help;
+}
+
 .status-bar {
   display: flex;
   align-items: center;
