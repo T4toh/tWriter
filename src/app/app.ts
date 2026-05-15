@@ -4,7 +4,7 @@ import { DebugService } from './core/debug-service';
 import { FontPreviewService } from './core/font-preview-service';
 import { MarkdownReaderService } from './core/markdown-reader-service';
 import { NoteService } from './core/note-service';
-import { GitService } from './core/git-service';
+import { GitError, GitService } from './core/git-service';
 import { StorageService } from './core/storage-service';
 import { StorageHelpService } from './core/storage-help-service';
 import { GrammarService } from './core/grammar-service';
@@ -89,19 +89,19 @@ export class App {
   private lastChapterErr: string | null = null;
   private lastNoteErr: string | null = null;
   private lastProjectErr: string | null = null;
-  private lastGitErr: string | null = null;
+  private lastGitErr: GitError | null = null;
 
   protected readonly root = this.project.root;
   protected readonly syncTitle = computed(() => {
     const s = this.git.state();
     const summary = this.git.summary();
     const err = this.git.error();
-    if (err) return `Error: ${err}`;
+    if (err) return `Error: ${err.friendly}`;
     switch (s) {
       case 'syncing': return 'Sincronizando…';
       case 'pending': return summary + ' — click para sincronizar';
       case 'clean': return summary;
-      case 'error': return `Error: ${err ?? 'desconocido'}`;
+      case 'error': return `Error: ${err ? (err as GitError).friendly : 'desconocido'}`;
       default: return 'Estado desconocido';
     }
   });
@@ -162,7 +162,9 @@ export class App {
     });
     effect(() => {
       const e = this.git.error();
-      if (e && e !== this.lastGitErr) this.debug.error('git', e);
+      if (e && e !== this.lastGitErr) {
+        this.debug.error('git', `${e.friendly}\n${e.raw}`);
+      }
       this.lastGitErr = e;
     });
   }
@@ -189,6 +191,17 @@ export class App {
 
   protected pull(): void {
     void this.git.pull();
+  }
+
+  /** Trimea el root absoluto del path para mostrar `Saga/Libro/3.html`
+   *  en vez de `/home/.../Novelas/Saga/Libro/3.html` en la lista de cambios. */
+  protected relPath(absOrRel: string): string {
+    const root = this.root();
+    if (!root) return absOrRel;
+    if (absOrRel.startsWith(root)) {
+      return absOrRel.slice(root.length).replace(/^[\\/]+/, '');
+    }
+    return absOrRel;
   }
 
   protected toggleDebug(): void {

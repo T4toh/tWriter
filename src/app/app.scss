@@ -241,14 +241,92 @@
 .sync-summary {
   font-size: 10px;
   color: var(--fg-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   font-family: var(--font-ui);
+
+  // Cuando es un <div> (sin details) sigue truncando con ellipsis.
+  &:not(details) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   &.error {
     color: #c87070;
   }
+
+  // <details>: el summary muestra el resumen corto; al expandir sale la lista
+  // de archivos o el stderr crudo.
+  > summary {
+    list-style: none;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &::-webkit-details-marker { display: none; }
+    &::before {
+      content: '▸';
+      display: inline-block;
+      width: 10px;
+      color: var(--fg-muted);
+      transition: transform 80ms ease;
+    }
+  }
+
+  &[open] > summary::before {
+    content: '▾';
+  }
+}
+
+.sync-files {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 4px 0 4px 12px;
+  max-height: 180px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+
+  li {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    padding: 1px 0;
+  }
+}
+
+.sync-kind {
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  flex-shrink: 0;
+  min-width: 64px;
+
+  &[data-kind='nuevo'] { color: #6c9; }
+  &[data-kind='borrado'] { color: #c87070; }
+  &[data-kind='renombrado'] { color: #c9a36c; }
+  &[data-kind='conflicto'] { color: #c87070; font-weight: 600; }
+}
+
+.sync-path {
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sync-error-raw {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  background: var(--bg-darker, rgba(0, 0, 0, 0.25));
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow: auto;
+  border-radius: 3px;
 }
 
 .backend-badge {

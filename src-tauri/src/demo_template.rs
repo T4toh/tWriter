@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter};
 
 use crate::book_config::BookConfig;
-use crate::import::count_words;
 use crate::import_wizard::{ImportSummary, ProgressPayload};
 use crate::saga_config::SagaConfig;
 use crate::search;
@@ -195,12 +194,9 @@ pub fn generate_demo(
             }
             fs::write(&html_path, &html_owned)
                 .map_err(|e| format!("write {}: {}", html_path.display(), e))?;
-            let palabras = count_words(html);
             let meta = serde_json::json!({
                 "orden": n,
                 "titulo": "",
-                "palabras": palabras,
-                "ultima_edicion": null,
                 "status": "draft",
                 "idioma": lang,
             });

@@ -50,8 +50,6 @@ fn create_chapter_impl(
     let meta_json = serde_json::json!({
         "orden": n,
         "titulo": title,
-        "palabras": 0,
-        "ultima_edicion": null,
         "status": "draft",
         "idioma": lang,
     });

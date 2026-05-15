@@ -13,7 +13,7 @@ use crate::fs::is_chapter_file;
 fn should_skip_dir(name: &str) -> bool {
     matches!(name, ".git" | ".twriter") || name.starts_with('.')
 }
-use crate::import::{clean_html, count_words};
+use crate::import::clean_html;
 use crate::saga_config::SagaConfig;
 
 // ─────────── Scan: estructura propuesta del source ───────────
@@ -700,7 +700,7 @@ fn convert_to_html(
         cleaned.push('\n');
     }
     fs::write(&html_out, &cleaned).map_err(|e| e.to_string())?;
-    write_chapter_meta(target_dir, target_name, ch, count_words(&raw_html), "imported")?;
+    write_chapter_meta(target_dir, target_name, ch, "imported")?;
     Ok(())
 }
 
@@ -715,8 +715,7 @@ fn copy_html_chapter(
         return Err(format!("ya existe: {}", dest.display()));
     }
     fs::copy(src, &dest).map_err(|e| e.to_string())?;
-    let raw = fs::read_to_string(&dest).unwrap_or_default();
-    write_chapter_meta(target_dir, target_name, ch, count_words(&raw), "imported")?;
+    write_chapter_meta(target_dir, target_name, ch, "imported")?;
     Ok(())
 }
 
@@ -732,7 +731,7 @@ fn copy_raw_chapter(
         return Err(format!("ya existe: {}", dest.display()));
     }
     fs::copy(src, &dest).map_err(|e| e.to_string())?;
-    write_chapter_meta(target_dir, target_name, ch, 0, "raw")?;
+    write_chapter_meta(target_dir, target_name, ch, "raw")?;
     Ok(())
 }
 
@@ -740,7 +739,6 @@ fn write_chapter_meta(
     target_dir: &Path,
     target_name: &str,
     ch: &ChapterImport,
-    words: u32,
     status: &str,
 ) -> Result<(), String> {
     let meta_path = target_dir.join(format!("{}.meta.json", target_name));
@@ -760,8 +758,6 @@ fn write_chapter_meta(
     let meta = serde_json::json!({
         "orden": orden,
         "titulo": titulo,
-        "palabras": words,
-        "ultima_edicion": null,
         "status": status,
         "idioma": ch.idioma,
     });

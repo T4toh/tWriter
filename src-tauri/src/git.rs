@@ -11,6 +11,18 @@ pub struct GitStatus {
     pub behind: u32,
     pub branch: Option<String>,
     pub remote: Option<String>,
+    /// Lista detallada de archivos cambiados. El frontend agrupa pares
+    /// `<n>.html` + `<n>.meta.json` para mostrar "1 capítulo" en vez de
+    /// "2 archivos". Cap a 500 entradas para no inflar el IPC en repos
+    /// monstruosos (raro pero defensivo).
+    pub paths: Vec<GitStatusPath>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GitStatusPath {
+    pub path: String,
+    /// `new` | `modified` | `deleted` | `renamed` | `typechange` | `conflicted`
+    pub kind: String,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -358,6 +370,14 @@ fn status_for(repo: &Repository) -> Result<GitStatus, String> {
         .include_ignored(false);
     let statuses = repo.statuses(Some(&mut opts)).map_err(|e| e.to_string())?;
     let changed = statuses.len() as u32;
+    let mut paths: Vec<GitStatusPath> = Vec::with_capacity(statuses.len().min(500));
+    for entry in statuses.iter().take(500) {
+        let Some(p) = entry.path() else { continue };
+        paths.push(GitStatusPath {
+            path: p.to_string(),
+            kind: status_kind(entry.status()),
+        });
+    }
 
     let head = repo.head().ok();
     let branch = head.as_ref().and_then(|h| h.shorthand()).map(String::from);
@@ -391,7 +411,29 @@ fn status_for(repo: &Repository) -> Result<GitStatus, String> {
         behind,
         branch,
         remote,
+        paths,
     })
+}
+
+/// Mapea bits de `git2::Status` a una etiqueta corta para la UI. Si hay
+/// múltiples bits (e.g. INDEX_MODIFIED + WT_MODIFIED), gana el más severo:
+/// conflicted > deleted > renamed > new > typechange > modified.
+fn status_kind(s: git2::Status) -> String {
+    use git2::Status as S;
+    let kind = if s.contains(S::CONFLICTED) {
+        "conflicted"
+    } else if s.contains(S::INDEX_DELETED) || s.contains(S::WT_DELETED) {
+        "deleted"
+    } else if s.contains(S::INDEX_RENAMED) || s.contains(S::WT_RENAMED) {
+        "renamed"
+    } else if s.contains(S::INDEX_NEW) || s.contains(S::WT_NEW) {
+        "new"
+    } else if s.contains(S::INDEX_TYPECHANGE) || s.contains(S::WT_TYPECHANGE) {
+        "typechange"
+    } else {
+        "modified"
+    };
+    kind.to_string()
 }
 
 fn remote_for_branch(repo: &Repository, branch_name: &str) -> Result<String, String> {
@@ -759,5 +801,47 @@ mod tests {
             "unknown: fatal: random unknown thing"
         );
         assert_eq!(categorize_git_error(""), "unknown: ");
+    }
+
+    #[test]
+    fn status_kind_picks_most_severe() {
+        use git2::Status as S;
+        assert_eq!(status_kind(S::WT_NEW), "new");
+        assert_eq!(status_kind(S::INDEX_NEW), "new");
+        assert_eq!(status_kind(S::WT_MODIFIED), "modified");
+        assert_eq!(status_kind(S::INDEX_DELETED), "deleted");
+        assert_eq!(status_kind(S::WT_DELETED), "deleted");
+        assert_eq!(status_kind(S::CONFLICTED), "conflicted");
+        // CONFLICTED gana sobre MODIFIED.
+        assert_eq!(
+            status_kind(S::CONFLICTED | S::WT_MODIFIED),
+            "conflicted"
+        );
+        // DELETED gana sobre MODIFIED.
+        assert_eq!(
+            status_kind(S::WT_DELETED | S::WT_MODIFIED),
+            "deleted"
+        );
+    }
+
+    #[test]
+    fn status_for_populates_paths_for_modified_and_new() {
+        let dir = init_repo();
+        // Setup: tracked file modificado + archivo nuevo untracked.
+        fs::write(dir.join("tracked.html"), "v1\n").unwrap();
+        run(&dir, &["add", "."]);
+        run(&dir, &["commit", "-m", "base"]);
+        fs::write(dir.join("tracked.html"), "v2\n").unwrap();
+        fs::write(dir.join("untracked.html"), "new\n").unwrap();
+
+        let st = git_status_impl(dir.to_str().unwrap()).unwrap();
+        assert_eq!(st.changed, 2);
+        let kinds: std::collections::HashMap<_, _> = st
+            .paths
+            .iter()
+            .map(|p| (p.path.as_str(), p.kind.as_str()))
+            .collect();
+        assert_eq!(kinds.get("tracked.html"), Some(&"modified"));
+        assert_eq!(kinds.get("untracked.html"), Some(&"new"));
     }
 }

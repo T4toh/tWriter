@@ -15,8 +15,6 @@ export interface TreeNode {
 export interface ChapterMeta {
   orden: number;
   titulo: string;
-  palabras: number;
-  ultima_edicion: string | null;
   status: string | null;
   idioma: string | null;
 }
@@ -24,8 +22,6 @@ export interface ChapterMeta {
 export const EMPTY_META: ChapterMeta = {
   orden: 0,
   titulo: '',
-  palabras: 0,
-  ultima_edicion: null,
   status: null,
   idioma: null,
 };

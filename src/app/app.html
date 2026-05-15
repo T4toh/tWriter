@@ -81,9 +81,38 @@
             <span class="dot" [attr.data-state]="git.state()"></span>
             <span class="path" [title]="r">{{ r }}</span>
           </div>
-          <div class="sync-summary" [class.error]="git.state() === 'error'">
-            {{ git.error() ?? git.summary() }}
-          </div>
+          @if (git.error(); as gerr) {
+            <details class="sync-summary error sync-error">
+              <summary>{{ gerr.friendly }}</summary>
+              <pre class="sync-error-raw">{{ gerr.raw }}</pre>
+            </details>
+          } @else if (git.grouped(); as g) {
+            <details class="sync-summary">
+              <summary>{{ git.summary() }}</summary>
+              <ul class="sync-files">
+                @for (c of g.chapters; track c.primary) {
+                  <li>
+                    <span class="sync-kind" [attr.data-kind]="c.label">{{ c.label }}</span>
+                    <span class="sync-path" [title]="c.files.join('\n')">{{ relPath(c.primary) }}</span>
+                  </li>
+                }
+                @for (m of g.bookMeta; track m.primary) {
+                  <li>
+                    <span class="sync-kind" [attr.data-kind]="m.label">{{ m.label }}</span>
+                    <span class="sync-path">{{ relPath(m.primary) }}</span>
+                  </li>
+                }
+                @for (o of g.other; track o.primary) {
+                  <li>
+                    <span class="sync-kind" [attr.data-kind]="o.label">{{ o.label }}</span>
+                    <span class="sync-path">{{ relPath(o.primary) }}</span>
+                  </li>
+                }
+              </ul>
+            </details>
+          } @else {
+            <div class="sync-summary">{{ git.summary() }}</div>
+          }
         } @else {
           <div class="path-row">
             <span
@@ -129,7 +158,7 @@
             class="icon-btn"
             (click)="pull()"
             [disabled]="!root() || git.syncing()"
-            title="Pull desde remoto (fast-forward, sin merge)"
+            title="Pull desde remoto (rebase automático si hay commits locales)"
           >
             @if (git.currentOp() === 'pull') {
               <app-spinner />

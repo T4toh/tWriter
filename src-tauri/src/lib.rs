@@ -20,6 +20,7 @@ mod saga_config;
 mod search;
 mod secrets;
 mod settings;
+mod stats;
 mod storage;
 mod theme;
 mod themes;
@@ -54,6 +55,7 @@ use reorder::{move_node, relocate_node};
 use search::{search_query, search_reindex};
 use secrets::{lt_api_key_save, lt_api_key_status};
 use settings::{get_settings, set_settings};
+use stats::write_chapter_stats;
 use storage::detect_storage_backend;
 use themes::{
     add_theme_font, create_theme, delete_theme, duplicate_theme, get_theme, list_font_usage,
@@ -101,6 +103,7 @@ pub fn run() {
             write_chapter,
             read_meta,
             write_meta,
+            write_chapter_stats,
             rename_node,
             get_settings,
             set_settings,
