@@ -370,6 +370,11 @@ export class Editor implements AfterViewInit, OnDestroy {
         this.tiptap.commands.setContent(editable ? html : '', { emitUpdate: false });
         this.tiptap.setEditable(editable);
       }
+      // El scroller (.editor-host) conserva su scrollTop entre capítulos, así
+      // que al cambiar de archivo el usuario aparecía donde había dejado al
+      // anterior. Reset explícito al tope. Si hay un highlight pendiente de
+      // Ctrl+F, el setTimeout de abajo scrollea al match después.
+      this.hostRef.nativeElement.scrollTop = 0;
       this.lastLoadedAt = at;
       this.refreshState();
 
