@@ -108,6 +108,7 @@ Reglas:
 - Template inicial precargado (saga/libro/capítulo dummy) al crear sagas/libros nuevos.
 - Badge "excluido" para `.twriter-ignore`.
 - Selector de carpeta raíz persistido + auto-load del último capítulo abierto.
+- **Restaurar sesión**: al boot reabre el último cap/nota del pane 0 con el cursor en la posición exacta (`pmPos` de ProseMirror) y reaplica las carpetas que estaban expandidas (saga/libro/sección/folder libre + Extras + Extras subdirs + Exportados). Vive en `settings.json::lastSession` + `treeExpanded`/`treeExtrasExpanded`/`treeExtrasDirsExpanded`/`treeExportsExpanded`. Si el cap se borró/renombró entre sesiones, silent skip + clear del slot. Cap más corto (editado en otra PC) clampea el cursor al final. Split view (pane 1) no se restaura — sigue arrancando single como antes.
 
 ### Búsqueda (Ctrl+F)
 
@@ -531,12 +532,6 @@ paru -S twriter-bin
   repo de novelas, (b) sumar export/import manual, (c) sync explícito
   por gist/Dropbox. La (a) es la más seamless pero mezcla preferencias
   per-PC (font recents) con per-repo (tema, idioma).
-- **Recordar posición del cursor entre sesiones**: el auto-load del
-  último capítulo ya funciona, pero abre siempre en `P. 1 · Col 0`.
-  Sumar persistencia de `(chapterPath, pmPos, scrollTop)` en
-  `settings.json::lastCursor` y restaurar al boot. Cuidado con el
-  reset-scroll del commit `0e97af8` — sólo aplica al cambiar de
-  capítulo, no al boot inicial.
 
 ### Observabilidad / Stats
 

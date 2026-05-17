@@ -67,6 +67,15 @@ export const PARAGRAPH_SPACING_EM: Record<ParagraphSpacing, number> = {
   loose: 0.6,
 };
 
+/** Última sesión del pane 0: cap activo + posición absoluta del cursor en el
+ *  doc ProseMirror (state.selection.from). Se restaura al boot si el archivo
+ *  sigue existiendo. Si `pmPos` cae fuera del doc actual (cap más corto), se
+ *  clampea al final. */
+export interface LastSession {
+  chapterPath: string;
+  pmPos: number;
+}
+
 interface Settings {
   root: string | null;
   editorWidth?: EditorWidth;
@@ -86,6 +95,11 @@ interface Settings {
   /** Si está true, cada hit del panel de búsqueda muestra su score BM25 debajo
    *  del título — útil para diagnosticar ranking. Off por default. */
   searchDebug?: boolean;
+  lastSession?: LastSession;
+  treeExpanded?: string[];
+  treeExtrasExpanded?: string[];
+  treeExtrasDirsExpanded?: string[];
+  treeExportsExpanded?: string[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -109,8 +123,20 @@ export class SettingsService {
   readonly rightPanelWidth = signal<RightPanelWidth>(RIGHT_PANEL_DEFAULT);
   readonly searchScope = signal<SearchScope>(SEARCH_SCOPE_DEFAULT);
   readonly searchDebug = signal<boolean>(false);
+  /** Última sesión del pane 0 al cerrar la app. Null si nunca se abrió un cap
+   *  o si el cap se cerró sin reemplazo. */
+  readonly lastSession = signal<LastSession | null>(null);
+  /** Paths de nodos del tree (saga/libro/sección/folder libre) que estaban
+   *  expandidos en la sesión anterior. Apply al cargar el tree. */
+  readonly treeExpanded = signal<Set<string>>(new Set());
+  readonly treeExtrasExpanded = signal<Set<string>>(new Set());
+  /** Keys `<scopePath>::<relPath>` de subdirs Extras expandidos. */
+  readonly treeExtrasDirsExpanded = signal<Set<string>>(new Set());
+  readonly treeExportsExpanded = signal<Set<string>>(new Set());
   readonly focusMode = signal<boolean>(false);
   readonly loaded = signal<boolean>(false);
+  /** Timer del persist debounced (cursor moves). */
+  private persistDebounceHandle: ReturnType<typeof setTimeout> | null = null;
 
   async load(): Promise<void> {
     try {
@@ -133,11 +159,78 @@ export class SettingsService {
       this.rightPanelWidth.set(s.rightPanelWidth ?? RIGHT_PANEL_DEFAULT);
       this.searchScope.set(s.searchScope ?? SEARCH_SCOPE_DEFAULT);
       this.searchDebug.set(s.searchDebug ?? false);
+      this.lastSession.set(s.lastSession ?? null);
+      this.treeExpanded.set(new Set(Array.isArray(s.treeExpanded) ? s.treeExpanded : []));
+      this.treeExtrasExpanded.set(
+        new Set(Array.isArray(s.treeExtrasExpanded) ? s.treeExtrasExpanded : []),
+      );
+      this.treeExtrasDirsExpanded.set(
+        new Set(Array.isArray(s.treeExtrasDirsExpanded) ? s.treeExtrasDirsExpanded : []),
+      );
+      this.treeExportsExpanded.set(
+        new Set(Array.isArray(s.treeExportsExpanded) ? s.treeExportsExpanded : []),
+      );
     } catch {
       this.root.set(null);
     } finally {
       this.loaded.set(true);
     }
+  }
+
+  /** Setter del cursor del pane 0. Debounced 500ms — onSelectionUpdate dispara
+   *  por cada keystroke / movimiento, no queremos un write por evento. */
+  setLastSession(chapterPath: string, pmPos: number): void {
+    const prev = this.lastSession();
+    if (prev && prev.chapterPath === chapterPath && prev.pmPos === pmPos) return;
+    this.lastSession.set({ chapterPath, pmPos });
+    this.persistDebounced();
+  }
+
+  clearLastSession(): void {
+    if (this.lastSession() === null) return;
+    this.lastSession.set(null);
+    this.persistDebounced();
+  }
+
+  setTreeExpanded(paths: Set<string>): void {
+    this.treeExpanded.set(new Set(paths));
+    void this.persist();
+  }
+
+  setTreeExtrasExpanded(paths: Set<string>): void {
+    this.treeExtrasExpanded.set(new Set(paths));
+    void this.persist();
+  }
+
+  setTreeExtrasDirsExpanded(paths: Set<string>): void {
+    this.treeExtrasDirsExpanded.set(new Set(paths));
+    void this.persist();
+  }
+
+  setTreeExportsExpanded(paths: Set<string>): void {
+    this.treeExportsExpanded.set(new Set(paths));
+    void this.persist();
+  }
+
+  /** Schedule un persist debounced 500ms. Acumula múltiples cambios rápidos en
+   *  un solo write. */
+  private persistDebounced(): void {
+    if (this.persistDebounceHandle !== null) {
+      clearTimeout(this.persistDebounceHandle);
+    }
+    this.persistDebounceHandle = setTimeout(() => {
+      this.persistDebounceHandle = null;
+      void this.persist();
+    }, 500);
+  }
+
+  /** Fuerza un flush sync del persist debounced. Usado en onCloseRequested
+   *  para no perder el último cursor pos pendiente. */
+  async flushPending(): Promise<void> {
+    if (this.persistDebounceHandle === null) return;
+    clearTimeout(this.persistDebounceHandle);
+    this.persistDebounceHandle = null;
+    await this.persist();
   }
 
   async setRoot(path: string): Promise<void> {
@@ -233,6 +326,10 @@ export class SettingsService {
   }
 
   private async persist(): Promise<void> {
+    const expanded = Array.from(this.treeExpanded());
+    const extrasExp = Array.from(this.treeExtrasExpanded());
+    const extrasDirsExp = Array.from(this.treeExtrasDirsExpanded());
+    const exportsExp = Array.from(this.treeExportsExpanded());
     const settings: Settings = {
       root: this.root(),
       editorWidth: this.editorWidth(),
@@ -250,6 +347,11 @@ export class SettingsService {
       rightPanelWidth: this.rightPanelWidth(),
       searchScope: this.searchScope(),
       searchDebug: this.searchDebug() || undefined,
+      lastSession: this.lastSession() ?? undefined,
+      treeExpanded: expanded.length ? expanded : undefined,
+      treeExtrasExpanded: extrasExp.length ? extrasExp : undefined,
+      treeExtrasDirsExpanded: extrasDirsExp.length ? extrasDirsExp : undefined,
+      treeExportsExpanded: exportsExp.length ? exportsExp : undefined,
     };
     await invoke('set_settings', { settings });
   }
