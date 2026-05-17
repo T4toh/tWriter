@@ -35,11 +35,14 @@ tokio = { version = "1", features = ["sync", "time"] }
 rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "registry", "std"] }
-tantivy = "0.22"
+tantivy = { version = "0.22", features = ["stopwords"] }
 regex = "1"
 # Listado de fuentes del OS para el selector del editor (sin deps C — pure Rust).
 fontdb = { version = "0.23", default-features = false, features = ["fontconfig", "memmap"] }
 # Wallet/keyring del sistema para secretos sensibles (apiKey de LT Premium).
 # Linux: libsecret (gnome-keyring / KWallet6+). macOS: Keychain. Windows: Credential Manager.
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+
+[dev-dependencies]
+tempfile = "3"
 

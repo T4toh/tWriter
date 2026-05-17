@@ -8,16 +8,20 @@ import {
   effect,
   inject,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { ChapterService } from '../core/chapter-service';
 import { MarkdownReaderService } from '../core/markdown-reader-service';
 import { NavigationService } from '../core/navigation-service';
 import { NoteService } from '../core/note-service';
 import { ProjectService } from '../core/project-service';
 import { SearchHit, SearchService } from '../core/search-service';
+import { SearchScope, SettingsService } from '../core/settings-service';
+import { Select, SelectOption } from '../shared/select';
 import { TreeNode } from '../core/types';
 
 @Component({
   selector: 'app-search-panel',
+  imports: [FormsModule, Select],
   templateUrl: './search-panel.html',
   styleUrl: './search-panel.scss',
 })
@@ -28,6 +32,7 @@ export class SearchPanel implements AfterViewInit {
   private note = inject(NoteService);
   private nav = inject(NavigationService);
   private project = inject(ProjectService);
+  private settings = inject(SettingsService);
 
   @ViewChild('input', { static: true })
   inputRef!: ElementRef<HTMLInputElement>;
@@ -39,6 +44,26 @@ export class SearchPanel implements AfterViewInit {
   protected readonly reindexing = this.svc.reindexing;
   protected readonly reindexProgress = this.svc.reindexProgress;
   protected readonly count = computed(() => this.results().length);
+  protected readonly scope = this.settings.searchScope;
+  protected readonly searchDebug = this.settings.searchDebug;
+  protected readonly scopeNeedsContext = this.svc.scopeNeedsContext;
+
+  protected readonly scopeOptions: SelectOption[] = [
+    { value: 'all', label: 'Todo el repo' },
+    { value: 'saga', label: 'Saga actual' },
+    { value: 'book', label: 'Libro actual' },
+    { value: 'chapters', label: 'Solo capítulos' },
+    { value: 'notes', label: 'Solo notas' },
+  ];
+
+  protected readonly operatorsHelp = [
+    'duendes mansión  → ambos términos (AND)',
+    'duendes OR mansión  → cualquiera',
+    '"casa encantada"  → frase exacta',
+    '-trampa  → excluye el término',
+    'kind:note  → solo notas',
+    'kind:chapter  → solo capítulos',
+  ].join('\n');
 
   constructor() {
     // Cuando el panel se muestra (open=true), enfocar el input. open vive en el service.
@@ -69,6 +94,28 @@ export class SearchPanel implements AfterViewInit {
 
   protected reindex(): void {
     void this.svc.reindex();
+  }
+
+  protected onScopeChange(value: string): void {
+    if (
+      value !== 'all' &&
+      value !== 'saga' &&
+      value !== 'book' &&
+      value !== 'notes' &&
+      value !== 'chapters'
+    ) {
+      return;
+    }
+    void this.settings.setSearchScope(value as SearchScope);
+  }
+
+  protected toggleDebug(): void {
+    void this.settings.setSearchDebug(!this.searchDebug());
+  }
+
+  protected formatBm25(score: number | undefined): string {
+    if (score == null) return '';
+    return `BM25 ${score.toFixed(2)}`;
   }
 
   @HostListener('document:keydown.escape', ['$event'])

@@ -112,8 +112,18 @@ Reglas:
 ### Búsqueda (Ctrl+F)
 
 - Panel lateral con full-text search sobre notas (`.md`) + capítulos (`.html`) + títulos de carpetas (sagas/libros/secciones/folders/notas).
-- Backend: [tantivy](https://github.com/quickwit-oss/tantivy) (in-process, sin servicio externo). Índice persistido en `<root>/.twriter/search-index/` — auto-excluido del tree y del export EPUB.
-- **Multi-palabra = AND**: query con 2+ términos requiere TODOS (no AT-LEAST-ONE). El default del `QueryParser` de tantivy es OR; lo forzamos a AND en `search.rs::search_query_impl` vía `parser.set_conjunction_by_default()`. Operadores explícitos (`AND`/`OR`/`-término`/`"frase"`/`kind:`) siguen pendientes — ver TODO.
+- Backend: [tantivy](https://github.com/quickwit-oss/tantivy) (in-process, sin servicio externo). Índice persistido en `<root>/.twriter/search-index/` — auto-excluido del tree y del export EPUB. Schema versionado (`<root>/.twriter/search-index/.version`): cambios de schema disparan wipe + full reindex automático al boot.
+- **Multi-palabra = AND**: query con 2+ términos requiere TODOS (no AT-LEAST-ONE). El default del `QueryParser` de tantivy es OR; lo forzamos a AND en `search.rs::search_query_impl` vía `parser.set_conjunction_by_default()`.
+- **Operadores explícitos**:
+  - `duendes mansión` → ambos (AND default).
+  - `duendes OR mansión` → cualquiera.
+  - `"casa encantada"` → frase exacta.
+  - `-trampa duendes` → excluye `trampa`.
+  - `kind:note duendes`, `kind:chapter duendes` → filtra por tipo.
+  El botón `?` del header lista la sintaxis en tooltip.
+- **Scope persistido** (selector debajo del input): `Todo el repo / Saga actual / Libro actual / Solo capítulos / Solo notas`. `Saga actual` y `Libro actual` se resuelven contra el capítulo abierto en el pane principal (la app walkea ancestros saga/book del path activo). Si no hay cap activo, el scope cae a `Todo el repo` y aparece un hint sutil `⚠ sin cap activo`. La elección persiste en `settings.json::searchScope`.
+- **Ranking ES**: tokenizer custom `es_text` (`SimpleTokenizer + RemoveLongFilter(40) + LowerCaser + StopWordFilter::Spanish`) aplicado a `title` y `content`. Stopwords ES estándar (`el/la/los/las/de/del/que/y/o/...`, vía snowball embebido en tantivy `feature = "stopwords"`) no entran al índice — buscar `de` solo devuelve 0 hits y queries multi-término no ranquean por basura conectora. Field boost `title × 2.5` (`parser.set_field_boost`): un match en título ranquea sobre el body.
+- **Modo debug BM25** (toggle 🐞 en header, persistido en `settings.json::searchDebug`): muestra `BM25 X.XX` debajo del título de cada hit para diagnosticar el ranking. Off por default.
 - **Forma exacta gana** (mayúsculas + `¡¿?!`): el tokenizer de tantivy stripea puntuación y lowercaseа, así que `¡Duendes!` indexa como `duendes`. Para que `¡Duendes!` priorice el grito específico y no el primer `duendes` lowercase de cualquier párrafo, agregamos tres capas: (1) **snippet centra en el literal** si aparece en el doc; (2) **boost de ranking ×2** sobre docs cuyo contenido contiene la forma rica (substring case-insensitive); (3) **jump-to-term** salta al primer match literal del raw query antes de fallback a tokens. Query sin formas ricas (`duendes` solo) sigue ranqueando puro BM25.
 - **Reindex incremental on-save**: cada `write_note` / `write_chapter` / `create_*` actualiza el índice de ese archivo. Render fresco en la próxima query, sin reindex manual.
 - **Reindex full** al boot si hay root configurado (async, no bloquea startup). Botón ↻ en el header del panel relanza un reindex completo si hace falta.
@@ -480,22 +490,6 @@ paru -S twriter-bin
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
-- Operadores explícitos en la búsqueda (AND, OR, "frase exacta" entre
-  comillas, filtros `kind:note`, `kind:chapter`). Hoy el default es AND
-  implícito sobre todos los términos; sumar sintaxis para que el usuario
-  pueda forzar OR, frases exactas o filtrar por tipo de documento.
-- **Búsqueda con scope por saga / libro / novela / solo notas**: hoy el
-  panel Ctrl+F corre sobre todo el repo (capítulos + notas + títulos).
-  Sumar selector en el header del panel — `Todo / Saga actual / Libro
-actual / Solo notas / Solo capítulos` — y persistir la última elección
-  en `settings.json`. Útil cuando hay múltiples sagas y un término común
-  spamea hits de otras novelas.
-- **Resultados irrelevantes ("marca cualquier cosa")**: hits del panel
-  Ctrl+F que parecen no tener relación con el query — probable issue del
-  tokenizer + falta de stopwords ES en `search.rs::search_query_impl`.
-  Sumar stopwords (`el/la/los/las/de/que/y/un/una/...`), evaluar field
-  boosts (título > heading > body) y exponer el score BM25 en modo debug
-  para diagnosticar caso por caso.
 - **Editar notas inline en el panel derecho**: hoy el markdown reader es
   read-only y el botón ✏️ promueve la nota al editor central, lo que
   desplaza al capítulo activo. Sumar modo edit en el reader (TipTap

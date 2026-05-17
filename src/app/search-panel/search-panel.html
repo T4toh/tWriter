@@ -10,6 +10,24 @@
     spellcheck="false"
     autocomplete="off"
   />
+  <button
+    type="button"
+    class="sp-btn"
+    [title]="operatorsHelp"
+    aria-label="Operadores de búsqueda"
+  >
+    <span class="ico">?</span>
+  </button>
+  <button
+    type="button"
+    class="sp-btn"
+    [class.is-active]="searchDebug()"
+    (click)="toggleDebug()"
+    [title]="searchDebug() ? 'Modo debug ON — muestra BM25 por hit' : 'Modo debug OFF — muestra BM25 por hit'"
+    aria-label="Toggle debug BM25"
+  >
+    <span class="ico">🐞</span>
+  </button>
   @if (query()) {
     <button type="button" class="sp-btn" (click)="clear()" title="Limpiar (Esc)">
       <span class="ico">×</span>
@@ -26,6 +44,21 @@
   </button>
   <button type="button" class="sp-close" (click)="close()" title="Cerrar (Esc)">×</button>
 </header>
+
+<div class="sp-scope-row">
+  <span class="sp-scope-label">Scope</span>
+  <app-select
+    class="sp-scope-select"
+    [options]="scopeOptions"
+    [ngModel]="scope()"
+    (ngModelChange)="onScopeChange($event)"
+  />
+  @if (scopeNeedsContext()) {
+    <span class="sp-scope-hint" title="Abrí un capítulo para acotar a su saga/libro">
+      ⚠ sin cap activo
+    </span>
+  }
+</div>
 
 <div class="sp-body">
   @if (reindexing()) {
@@ -63,6 +96,9 @@
               <span class="sp-hit-title">{{ hit.title || hit.path }}</span>
               <span class="sp-hit-kind">{{ labelFor(hit.kind) }}</span>
             </div>
+            @if (searchDebug() && hit.bm25_score != null) {
+              <p class="sp-hit-bm25">{{ formatBm25(hit.bm25_score) }}</p>
+            }
             @if (hit.snippet) {
               <p class="sp-hit-snippet" [innerHTML]="highlightSnippet(hit.snippet, query())"></p>
             }

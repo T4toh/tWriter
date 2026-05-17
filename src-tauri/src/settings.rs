@@ -92,6 +92,21 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub right_panel_width: Option<String>,
+    /// Scope persistido del panel de búsqueda Ctrl+F.
+    /// "all" | "saga" | "book" | "notes" | "chapters".
+    #[serde(
+        default,
+        rename = "searchScope",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub search_scope: Option<String>,
+    /// Si true, el panel de búsqueda muestra el score BM25 por hit.
+    #[serde(
+        default,
+        rename = "searchDebug",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub search_debug: Option<bool>,
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
