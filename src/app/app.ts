@@ -126,6 +126,15 @@ export class App {
     effect(() => {
       if (this.chapter.panes[1].active()) this.note.closeInPane(1);
     });
+    // Mutex reader vs notes-editor central: si la misma nota se abre en un
+    // pane central, el reader del panel derecho cierra (flush si dirty).
+    effect(() => {
+      const readerPath = this.markdownReader.viewing()?.path;
+      if (!readerPath) return;
+      const inPane0 = this.note.panes[0].active()?.path === readerPath;
+      const inPane1 = this.note.panes[1].active()?.path === readerPath;
+      if (inPane0 || inPane1) this.markdownReader.close();
+    });
     // Mutex del panel derecho tri-direccional: image / font preview / md reader
     // no conviven; quien abre, cierra a los otros.
     effect(() => {
