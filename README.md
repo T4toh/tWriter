@@ -161,16 +161,16 @@ colapsados, mezcla raya/comilla, etc.). Ground truth: [DPD raya](https://www.rae
 2. **Reglas dedicadas** (texto ya convertido pero roto): 8 patrones regex
    independientes para casos que el converter no toca por estar "ya con raya":
 
-   | ruleId | qué detecta | severidad | auto-fix |
-   |---|---|---|---|
-   | `dash-short` | `-`, `--` o `–` (en-dash) al inicio del diálogo en vez de `—` (em-dash) | error | sí (reemplazo a `—`) |
-   | `dash-orphan` | apertura `—texto` sin raya de cierre cuando hay verbo dicendi después en el mismo párrafo, indicando inciso mal cerrado | warning | no |
-   | `dash-quote-mix` | mismo párrafo con `—` y `"` (señal de parseo parcial) | error | no |
-   | `paragraph-collapsed` | ≥3 transiciones `[.?!…]\s+—` + ≥3 verbos dicendi → varios turns de diálogo aplastados en un solo `<p>` | error | no |
-   | `space-after-open` | `— Texto` (espacio sobrante después de raya inicial) | warning | sí (borra espacio) |
-   | `space-before-verb` | `—Texto—dijo` (sin espacio antes de raya del verbo) | warning | sí (inserta espacio) |
-   | `verb-capitalized` | `—Dijo` post-inciso (DPD pide minúscula tras la raya del verbo) | warning | sí (minúscula) |
-   | `period-before-verb` | `—Texto. —dijo` cuando D2 debería haber absorbido el punto | warning | sí (borra punto) |
+   | ruleId                | qué detecta                                                                                                             | severidad | auto-fix             |
+   | --------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------- | -------------------- |
+   | `dash-short`          | `-`, `--` o `–` (en-dash) al inicio del diálogo en vez de `—` (em-dash)                                                 | error     | sí (reemplazo a `—`) |
+   | `dash-orphan`         | apertura `—texto` sin raya de cierre cuando hay verbo dicendi después en el mismo párrafo, indicando inciso mal cerrado | warning   | no                   |
+   | `dash-quote-mix`      | mismo párrafo con `—` y `"` (señal de parseo parcial)                                                                   | error     | no                   |
+   | `paragraph-collapsed` | ≥3 transiciones `[.?!…]\s+—` + ≥3 verbos dicendi → varios turns de diálogo aplastados en un solo `<p>`                  | error     | no                   |
+   | `space-after-open`    | `— Texto` (espacio sobrante después de raya inicial)                                                                    | warning   | sí (borra espacio)   |
+   | `space-before-verb`   | `—Texto—dijo` (sin espacio antes de raya del verbo)                                                                     | warning   | sí (inserta espacio) |
+   | `verb-capitalized`    | `—Dijo` post-inciso (DPD pide minúscula tras la raya del verbo)                                                         | warning   | sí (minúscula)       |
+   | `period-before-verb`  | `—Texto. —dijo` cuando D2 debería haber absorbido el punto                                                              | warning   | sí (borra punto)     |
 
 **Heurísticas anti-falso-positivo**:
 
@@ -178,7 +178,7 @@ colapsados, mezcla raya/comilla, etc.). Ground truth: [DPD raya](https://www.rae
   (`.?!…`), la palabra siguiente al verbo NO es subordinante (`que`/`si`/
   `cuando`/`porque`/…), y entre el verbo y el próximo `.?!…` hay ≤4 palabras
   (dicendi-inciso típico es corto: `<verbo> <sujeto>.`). Ej. `—Así le dicen
-  al oro, Adi.` no flagea (mid-content), `Dicen que una mansión está encantada`
+al oro, Adi.` no flagea (mid-content), `Dicen que una mansión está encantada`
   no flagea (subordinante), `Bueno… dicen bastantes estupideces` no flagea
   (más de 4 palabras entre tag y próximo `.`).
 - `paragraph-collapsed` exige tanto 3+ transiciones como 3+ verbos dicendi
@@ -352,7 +352,7 @@ ni saber qué es `git pull --rebase`.
 - **Throttle**: 3 fallas consecutivas de auto-pull pausan el loop 5 min para no spamear el panel 🐛. Sync manual (⇅) resetea el throttle. Conflict pausa de inmediato hasta sync manual.
 - **Boot sin race condition con storage detect**: `StorageService.detect`
   resuelve async; el effect de `GitService` espera viendo `backend() ===
-  'unknown'` antes de comprometerse, en vez de leer un `isGit=false` stale
+'unknown'` antes de comprometerse, en vez de leer un `isGit=false` stale
   durante la ventana. `storage-service.ts` resetea `backend='unknown'` antes
   de cada `detect` para que los consumers vean "pendiente" hasta la
   resolución. De yapa cubre el switch root git → non-git: el `git_status`
@@ -487,7 +487,7 @@ paru -S twriter-bin
 - **Búsqueda con scope por saga / libro / novela / solo notas**: hoy el
   panel Ctrl+F corre sobre todo el repo (capítulos + notas + títulos).
   Sumar selector en el header del panel — `Todo / Saga actual / Libro
-  actual / Solo notas / Solo capítulos` — y persistir la última elección
+actual / Solo notas / Solo capítulos` — y persistir la última elección
   en `settings.json`. Útil cuando hay múltiples sagas y un término común
   spamea hits de otras novelas.
 - **Resultados irrelevantes ("marca cualquier cosa")**: hits del panel
@@ -563,13 +563,13 @@ paru -S twriter-bin
 ### Validador RAE
 
 - **Bulk auto-fix** desde el panel "Revisar RAE": hoy el panel es solo lista
-  + click-to-jump. La acción "Aplicar todos los auto-fixables (N)"
-  (replacements char/typo agrupados por archivo en orden descendente de
-  offset, un `write_chapter` por archivo) quedó fuera de v1 — el riesgo es
-  pisar inline markup (`<em>`/`<strong>`) al reconstruir HTML desde plain
-  text. Implementar con patch quirúrgico HTML-aware: encontrar el rango en
-  el HTML que corresponde al span del fix y reemplazar solo eso, sin tocar
-  el resto del párrafo.
+  - click-to-jump. La acción "Aplicar todos los auto-fixables (N)"
+    (replacements char/typo agrupados por archivo en orden descendente de
+    offset, un `write_chapter` por archivo) quedó fuera de v1 — el riesgo es
+    pisar inline markup (`<em>`/`<strong>`) al reconstruir HTML desde plain
+    text. Implementar con patch quirúrgico HTML-aware: encontrar el rango en
+    el HTML que corresponde al span del fix y reemplazar solo eso, sin tocar
+    el resto del párrafo.
 - **Fix de `pending-conversion` desde popover inline**: hoy aplica el
   replacement del converter como plain text sobre el rango del párrafo, lo
   que strip-ea inline markup en ese párrafo. Para párrafos con markup, usar
