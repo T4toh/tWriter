@@ -230,6 +230,16 @@ viejo, validador los detecta correctamente con `paragraph-collapsed`.
 - Underlines diferenciados: orto (rojo sólido), gramática (rojo wavy), estilo (amarillo wavy).
 - Popover con sugerencias clickeables + atribución LT.
 - Rate-limit client-side (18 req/min, 70KB/min) + chunking >20KB transparente.
+- **Offsets UTF-16 alineados + tolerancia a caídas de LT**: `split_chunks`
+  (`grammar.rs`) lleva un cursor UTF-16 paralelo al byte cursor — los
+  `match.offset` de LT (UTF-16 code units) se suman al `chunk.start` UTF-16
+  y caen sobre el carácter correcto aún con em-dashes (3 bytes UTF-8 / 2
+  UTF-16) y acentos. `find_split` snapea al char boundary previo antes
+  del slice para no panickear en mitad de multibyte. Si LT cae transitorio,
+  `GrammarService` re-pinga cada 30s mientras `!available` y la limpieza
+  de marcas se desacopla del flip de availability — solo limpia ante toggle
+  explícito del usuario, no por una caída momentánea. Tests `grammar::tests`
+  (5) cubren em-dash + acento + boundary panic.
 - Auto-check auto-on en modo local/custom tras ping ok. Toggle persistido (`settings.json::grammarAutoDisabled`). Público queda off por ToS.
 - Variantes regionales (es-AR, es-ES, en-US, en-GB…) globales + override per-saga (`saga.json::variante_es`/`variante_en`). Click en badge del footer abre dropdown.
 - Diccionario per-saga: "+ diccionario" en popover de TYPOS filtra matches.
@@ -340,6 +350,13 @@ ni saber qué es `git pull --rebase`.
 - **`.twriter/` auto-ignorado al boot** (`git_ensure_twriter_ignored`): agrega `.twriter/` al `.gitignore` si falta y corre `git rm -r --cached .twriter` si está trackeado. Idempotente — los cambios quedan uncommitted y los pickea el próximo auto-commit. Evita conflictos add/add del índice tantivy entre PCs.
 - **Errores categorizados**: stderr del CLI git se clasifica en `auth` / `network` / `conflict` / `rejected` / `unknown` desde Rust; el frontend (`git-service.ts::friendlyError`) los mapea a strings en español. La UI nunca expone hints crudos de git.
 - **Throttle**: 3 fallas consecutivas de auto-pull pausan el loop 5 min para no spamear el panel 🐛. Sync manual (⇅) resetea el throttle. Conflict pausa de inmediato hasta sync manual.
+- **Boot sin race condition con storage detect**: `StorageService.detect`
+  resuelve async; el effect de `GitService` espera viendo `backend() ===
+  'unknown'` antes de comprometerse, en vez de leer un `isGit=false` stale
+  durante la ventana. `storage-service.ts` resetea `backend='unknown'` antes
+  de cada `detect` para que los consumers vean "pendiente" hasta la
+  resolución. De yapa cubre el switch root git → non-git: el `git_status`
+  ya no dispara sobre la carpeta nueva con el backend viejo.
 - Botón "sync ahora" (⇅) en header.
 
 ### Distribución
@@ -463,35 +480,6 @@ paru -S twriter-bin
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
-- ~~**Offsets de LT se desfasan ("se corre") intermitente**~~ **[ARREGLADO]**:
-  el squiggle quedaba sobre la palabra equivocada en capítulos >19.5KB. Tres
-  bugs encadenados en el flujo de gramática, los tres fixeados en una sola
-  tanda:
-  1. **Panic en `find_split`** (`grammar.rs`): `text[start..target]` panickeaba
-     con `end byte index N is not a char boundary` cuando
-     `cursor + MAX_CHUNK_BYTES` caía adentro de un em-dash (3 bytes UTF-8)
-     u otro multibyte. El panic vivía en un worker de tokio y dejaba
-     `invoke('check_grammar')` **colgado en JS sin rechazar la promise** —
-     spinner del botón LT eterno, sin logs, marcas nunca aparecían. Fix: snap
-     `target` al char boundary previo antes del slice + fallback pathológico.
-  2. **`chunk.start` en bytes vs UTF-16**: `split_chunks` llevaba el cursor
-     en bytes UTF-8 y grababa `chunk.start = byte_cursor`. LT devuelve
-     `match.offset` en UTF-16 code units; el frontend sumaba ambos. Por cada
-     char no-ASCII en chunk 1 (em-dash = +2 bytes vs UTF-16, acento = +1)
-     los matches de chunk 2+ caían corridos sobre texto equivocado. Fix:
-     cursor UTF-16 paralelo al byte cursor, `chunk.start = utf16_cursor`.
-  3. **Caída transitoria de LT borraba todas las marcas**: si LT caía un
-     rato, `available` quedaba en false para siempre (sin re-ping) y el
-     effect del editor que reaccionaba a `autoEnabled` (que incluye
-     `available`) limpiaba todo en pantalla. Fix: polling de 30s en
-     `GrammarService` solo cuando `!available`, ping-on-error en `check()`,
-     y desacoplar la limpieza de marcas del editor del flip de availability
-     — ahora solo limpia ante el toggle explícito del usuario.
-
-  Tests: 5 en `grammar::tests` cubriendo offset alignment (em-dash + acento)
-  y panic-on-boundary. La instrumentación `OffsetMismatchReporter` +
-  `popover-apply` debug logs se quedan por si vuelve a aparecer drift por
-  otra causa.
 - Operadores explícitos en la búsqueda (AND, OR, "frase exacta" entre
   comillas, filtros `kind:note`, `kind:chapter`). Hoy el default es AND
   implícito sobre todos los términos; sumar sintaxis para que el usuario
@@ -569,7 +557,6 @@ paru -S twriter-bin
 
 ### Git / Sync
 
-- ~~**Race entre `StorageService.detect` async y `GitService.effect`**~~ **[ARREGLADO]**: el effect de `GitService` leía `storage.isGit()` al boot, pero `StorageService.detect` resolvía async; durante la ventana, `isGit=false` y los timers nunca arrancaban. Fix en `storage-service.ts` (resetea `backend='unknown'` antes de cada `detect`, así consumers ven "pendiente" en vez de un valor stale) + `git-service.ts` (lee `backend()` directo y gate por `'unknown'` para esperar la resolución sin entrar al branch non-git). De yapa cerró un segundo race latente: switch de root git → non-git ya no dispara `git_status` sobre la carpeta nueva con el backend viejo.
 - **Fetch silencioso al abrir + pre-push**: que la app traiga refs remotos al cargar el root y antes de cada auto-push, en vez de depender del recovery por non-FF rejection. Espejo de `git_pull_impl` con `["fetch", "--prune"]` + hook en el effect de `GitService` después de `git_ensure_twriter_ignored` y al inicio de `syncNow()`. Filosofía: "no te hagas el lindo" — fallar silencioso si no hay agent SSH, el editor sigue offline-funcional.
 - **Endurecer `run_git` contra cuelgues sin TTY** (independiente, valioso por sí mismo): sumar `GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"` al `Command` en `git.rs:179-193`. Garantiza que ningún git op cuelgue forever si la app abre sin `SSH_AUTH_SOCK` o sin key cargada. También refactorizar `git_pull_impl` a usar `run_git` (hoy lanza `Command::new("git")` crudo y se le escapa el endurecimiento).
 
