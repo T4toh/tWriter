@@ -94,7 +94,7 @@ Reglas:
 - `notas/` y los `.md` quedan auto-excluidos del export EPUB y de la vista de tarjetas (la vista de tarjetas es para contenido del libro).
 - "Nueva nota…" desde context menu de saga/libro/carpeta `notas/` (autocrea el dir si no existe).
 - `.md` que viven en `extras/` también abren en este editor (no en `xdg-open`).
-- **Reader en panel derecho**: click sobre `.md` (en `notas/` o `extras/`) abre la nota como render read-only al costado, sin desplazar al capítulo del centro. Botón ✏️ promueve la nota al editor del centro para editar; 🗙 cierra. Mutex con image viewer y font preview.
+- **Reader en panel derecho**: click sobre `.md` (en `notas/` o `extras/`) abre la nota como render read-only al costado, sin desplazar al capítulo del centro. Botón ✏️ togglea **modo edit in-place** (toolbar reducida B/I/H1-3/listas/cita/code + autosave 1.5s) para tocar la nota sin perder el capítulo de contexto; ✓ vuelve a read-only; 🗙 cierra (flush sync si hay cambios). Mutex: si la misma nota se abre en el pane central, el reader cierra solo. Esc en edit → vuelve a read; Esc otra vez → cierra. Mutex con image viewer y font preview.
 - **Doble click** sobre `.md` abre directamente en el editor central (ahorra el click+✏️ del reader). Shift+click también. Mismo comportamiento en resultados de búsqueda y en archivos `.md` que vivan en `extras/`.
 - **Ancho del panel derecho**: botón en el header del reader cicla 4 presets (compacto 280px / normal 380px / ancho 560px / pantalla — oculta el centro). Persiste en `settings.json::rightPanelWidth`.
 
@@ -490,11 +490,6 @@ paru -S twriter-bin
 - Divisor automático de partes (reglas confusas, hoy lo hace a mano).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
-- **Editar notas inline en el panel derecho**: hoy el markdown reader es
-  read-only y el botón ✏️ promueve la nota al editor central, lo que
-  desplaza al capítulo activo. Sumar modo edit en el reader (TipTap
-  notes-editor reusable dentro del slot derecho) para tocar la nota sin
-  perder el capítulo de contexto.
 - **Marcador huérfano post jump-to-term**: el highlight naranja de
   `requestHighlight` (search → click resultado) o de la selección nativa
   del jump queda pegado sobre el carácter (típicamente un em-dash) aún

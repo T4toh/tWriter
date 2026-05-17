@@ -20,6 +20,30 @@ import { SearchService } from '../core/search-service';
 import { highlightFirstMatch } from '../core/search-highlight';
 import { SettingsService } from '../core/settings-service';
 
+interface ToolbarState {
+  bold: boolean;
+  italic: boolean;
+  h1: boolean;
+  h2: boolean;
+  h3: boolean;
+  bulletList: boolean;
+  orderedList: boolean;
+  blockquote: boolean;
+  codeBlock: boolean;
+}
+
+const EMPTY_STATE: ToolbarState = {
+  bold: false,
+  italic: false,
+  h1: false,
+  h2: false,
+  h3: false,
+  bulletList: false,
+  orderedList: false,
+  blockquote: false,
+  codeBlock: false,
+};
+
 @Component({
   selector: 'app-markdown-reader',
   templateUrl: './markdown-reader.html',
@@ -36,7 +60,11 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
   protected readonly viewing = this.svc.viewing;
   protected readonly loading = this.svc.loading;
   protected readonly error = this.svc.error;
+  protected readonly editing = this.svc.editing;
+  protected readonly dirty = this.svc.dirty;
+  protected readonly saving = this.svc.saving;
   protected readonly rightPanelWidth = this.settings.rightPanelWidth;
+  protected readonly state = signal<ToolbarState>(EMPTY_STATE);
   protected readonly widthIcon = computed(() => {
     switch (this.rightPanelWidth()) {
       case 'compact':
@@ -65,31 +93,49 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
   private viewReady = signal(false);
   private tiptap: TipTapEditor | null = null;
   private lastLoadedAt = 0;
+  private currentEditable = false;
 
   constructor() {
+    // Effect: cuando cambia la nota (loadedAt) o el modo edit, resincroniza.
     effect(() => {
       const at = this.svc.loadedAt();
+      const wantEditable = this.svc.editing();
       const ready = this.viewReady();
       if (!ready) return;
-      if (at === this.lastLoadedAt) return;
-      const md = untracked(() => this.svc.content());
       const target = untracked(() => this.svc.viewing());
       if (!target) {
-        this.tiptap?.destroy();
-        this.tiptap = null;
+        if (this.tiptap) {
+          this.tiptap.destroy();
+          this.tiptap = null;
+        }
         this.lastLoadedAt = at;
+        this.currentEditable = false;
+        this.state.set(EMPTY_STATE);
         return;
       }
-      if (!this.tiptap) {
-        this.createEditor(md);
-      } else {
-        this.tiptap.commands.setContent(md, { emitUpdate: false });
-      }
-      this.lastLoadedAt = at;
 
-      // Si hay un highlight pendiente para esta nota (viene de Ctrl+F),
-      // saltar al primer match después del flush del DOM.
-      if (target.path) {
+      const reloaded = at !== this.lastLoadedAt;
+      const editableChanged = wantEditable !== this.currentEditable;
+
+      if (reloaded || editableChanged || !this.tiptap) {
+        // Recrear editor para applicar editable correctamente (setEditable
+        // existe en TipTap, pero recrear nos permite también swap del
+        // contenido limpio y atajos del modo edit).
+        if (this.tiptap) {
+          this.tiptap.destroy();
+          this.tiptap = null;
+        }
+        const md = untracked(() => this.svc.content());
+        this.createEditor(md, wantEditable);
+        this.currentEditable = wantEditable;
+      }
+
+      this.lastLoadedAt = at;
+      this.refreshState();
+
+      // Highlight pendiente desde Ctrl+F: salta al primer match. Solo cuando
+      // recién se cargó la nota (no en cada toggle de edit mode).
+      if (reloaded && target.path) {
         const pending = this.search.consumePendingHighlight(target.path);
         if (pending) {
           setTimeout(() => {
@@ -105,6 +151,9 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.svc.dirty()) {
+      void this.svc.flushPending();
+    }
     this.tiptap?.destroy();
     this.tiptap = null;
   }
@@ -113,8 +162,12 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
     this.svc.close();
   }
 
-  protected promote(): void {
-    void this.svc.promoteToCenter();
+  protected toggleEdit(): void {
+    if (this.svc.editing()) {
+      void this.svc.exitEdit();
+    } else {
+      this.svc.enterEdit();
+    }
   }
 
   protected cycleWidth(): void {
@@ -123,10 +176,37 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
 
   @HostListener('document:keydown.escape')
   onEsc(): void {
-    if (this.svc.isOpen()) this.svc.close();
+    if (!this.svc.isOpen()) return;
+    if (this.svc.editing()) {
+      void this.svc.exitEdit();
+    } else {
+      this.svc.close();
+    }
   }
 
-  private createEditor(content: string): void {
+  protected toggleBold(): void {
+    this.tiptap?.chain().focus().toggleBold().run();
+  }
+  protected toggleItalic(): void {
+    this.tiptap?.chain().focus().toggleItalic().run();
+  }
+  protected setHeading(level: 1 | 2 | 3): void {
+    this.tiptap?.chain().focus().toggleHeading({ level }).run();
+  }
+  protected toggleBulletList(): void {
+    this.tiptap?.chain().focus().toggleBulletList().run();
+  }
+  protected toggleOrderedList(): void {
+    this.tiptap?.chain().focus().toggleOrderedList().run();
+  }
+  protected toggleBlockquote(): void {
+    this.tiptap?.chain().focus().toggleBlockquote().run();
+  }
+  protected toggleCodeBlock(): void {
+    this.tiptap?.chain().focus().toggleCodeBlock().run();
+  }
+
+  private createEditor(content: string, editable: boolean): void {
     this.tiptap = new TipTapEditor({
       element: this.hostRef.nativeElement,
       extensions: [
@@ -140,13 +220,40 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
           bulletListMarker: '-',
           linkify: false,
           breaks: false,
-          transformPastedText: false,
-          transformCopiedText: false,
+          transformPastedText: editable,
+          transformCopiedText: editable,
         }),
       ],
       content,
-      editable: false,
-      autofocus: false,
+      editable,
+      autofocus: editable ? 'end' : false,
+      onUpdate: ({ editor }) => {
+        if (!editable) return;
+        const storage = (editor.storage as { markdown?: { getMarkdown: () => string } }).markdown;
+        const md = storage ? storage.getMarkdown() : '';
+        this.svc.updateContent(md);
+      },
+      onSelectionUpdate: () => this.refreshState(),
+      onTransaction: () => this.refreshState(),
+    });
+  }
+
+  private refreshState(): void {
+    const e = this.tiptap;
+    if (!e || !this.svc.editing()) {
+      this.state.set(EMPTY_STATE);
+      return;
+    }
+    this.state.set({
+      bold: e.isActive('bold'),
+      italic: e.isActive('italic'),
+      h1: e.isActive('heading', { level: 1 }),
+      h2: e.isActive('heading', { level: 2 }),
+      h3: e.isActive('heading', { level: 3 }),
+      bulletList: e.isActive('bulletList'),
+      orderedList: e.isActive('orderedList'),
+      blockquote: e.isActive('blockquote'),
+      codeBlock: e.isActive('codeBlock'),
     });
   }
 }

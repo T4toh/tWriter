@@ -1,5 +1,5 @@
 <header class="mr-header">
-  <span class="mr-icon">📖</span>
+  <span class="mr-icon">{{ editing() ? '📝' : '📖' }}</span>
   <span class="mr-title" [title]="viewing()?.path">{{ viewing()?.name }}</span>
   <button
     type="button"
@@ -12,10 +12,11 @@
   <button
     type="button"
     class="mr-btn"
-    (click)="promote()"
-    title="Editar nota (abrir en el editor)"
+    [class.active]="editing()"
+    (click)="toggleEdit()"
+    [title]="editing() ? 'Salir de edición (Esc)' : 'Editar nota'"
   >
-    <span class="ico">✏️</span>
+    <span class="ico">{{ editing() ? '✓' : '✏️' }}</span>
   </button>
   <button
     type="button"
@@ -26,11 +27,103 @@
     ×
   </button>
 </header>
+@if (editing()) {
+  <div class="mr-toolbar">
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().bold"
+      (click)="toggleBold()"
+      title="Negrita (Ctrl+B)"
+    >
+      <span class="ico bold">B</span>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().italic"
+      (click)="toggleItalic()"
+      title="Itálica (Ctrl+I)"
+    >
+      <span class="ico italic">I</span>
+    </button>
+    <span class="sep"></span>
+    <button
+      type="button"
+      class="tb-btn tb-text"
+      [class.active]="state().h1"
+      (click)="setHeading(1)"
+      title="Heading 1"
+    >H1</button>
+    <button
+      type="button"
+      class="tb-btn tb-text"
+      [class.active]="state().h2"
+      (click)="setHeading(2)"
+      title="Heading 2"
+    >H2</button>
+    <button
+      type="button"
+      class="tb-btn tb-text"
+      [class.active]="state().h3"
+      (click)="setHeading(3)"
+      title="Heading 3"
+    >H3</button>
+    <span class="sep"></span>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().bulletList"
+      (click)="toggleBulletList()"
+      title="Lista bullet"
+    >
+      <span class="ico">•</span>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().orderedList"
+      (click)="toggleOrderedList()"
+      title="Lista numerada"
+    >
+      <span class="ico">1.</span>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().blockquote"
+      (click)="toggleBlockquote()"
+      title="Cita"
+    >
+      <span class="ico">&ldquo;</span>
+    </button>
+    <button
+      type="button"
+      class="tb-btn"
+      [class.active]="state().codeBlock"
+      (click)="toggleCodeBlock()"
+      title="Bloque de código"
+    >
+      <span class="ico">&lt;/&gt;</span>
+    </button>
+  </div>
+}
 <div class="mr-body">
   @if (loading()) {
     <p class="mr-status">Cargando…</p>
   } @else if (error(); as err) {
     <p class="mr-status mr-error">{{ err }}</p>
   }
-  <div class="mr-host" #host></div>
+  <div class="mr-host" [class.editing]="editing()" #host></div>
 </div>
+@if (editing()) {
+  <footer class="mr-footer">
+    @if (saving()) {
+      <span class="mr-flag saving">Guardando…</span>
+    } @else if (dirty()) {
+      <span class="mr-flag dirty">sin guardar</span>
+    } @else {
+      <span class="mr-flag saved">guardado</span>
+    }
+  </footer>
+}
