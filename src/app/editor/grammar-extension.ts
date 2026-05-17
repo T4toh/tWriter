@@ -16,7 +16,7 @@ function newGrammarId(): string {
   return `g${Date.now().toString(36)}-${_grammarIdSeq}`;
 }
 
-interface TextRange {
+export interface TextRange {
   plainStart: number;
   plainEnd: number;
   pmPos: number;
@@ -185,7 +185,7 @@ export function mapMatchesToPm(
   return out;
 }
 
-function offsetToPm(offset: number, ranges: TextRange[]): number | null {
+export function offsetToPm(offset: number, ranges: TextRange[]): number | null {
   for (const r of ranges) {
     if (offset >= r.plainStart && offset <= r.plainEnd) {
       return r.pmPos + (offset - r.plainStart);

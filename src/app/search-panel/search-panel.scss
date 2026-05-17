@@ -144,6 +144,85 @@
   margin: 0;
 }
 
+/* ─── Grupos por archivo ───
+ * Summary nativo del <details> con título + count colapsable. Clicar el
+ * summary toggle. Default open viene del attr. */
+.sp-group {
+  border-bottom: 1px solid var(--border, #333);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.sp-group-details {
+  /* Reset del marker default; uso uno custom abajo. */
+  & > summary {
+    list-style: none;
+    &::-webkit-details-marker { display: none; }
+  }
+}
+
+.sp-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: var(--panel-header-bg, #1f1f1f);
+  user-select: none;
+
+  /* Caret indicador del estado open/closed. */
+  &::before {
+    content: '▸';
+    font-size: 0.7rem;
+    opacity: 0.6;
+    transition: transform 0.12s ease;
+    display: inline-block;
+    width: 0.9em;
+  }
+
+  &:hover {
+    background: var(--hover-bg, #2a2a2a);
+  }
+}
+
+.sp-group-details[open] > .sp-group-head::before {
+  transform: rotate(90deg);
+}
+
+.sp-group-count {
+  font-size: 0.72rem;
+  color: var(--muted, #888);
+  background: var(--input-bg, #2a2a2a);
+  padding: 1px 6px;
+  border-radius: 8px;
+  min-width: 1.5em;
+  text-align: center;
+}
+
+.sp-group-body {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--panel-bg, #1a1a1a);
+}
+
+.sp-group-body .sp-hit {
+  padding-left: 24px;
+}
+
+.sp-group-details > .sp-hit-path {
+  margin: 0;
+  padding: 4px 12px 8px 24px;
+  font-size: 0.68rem;
+  color: var(--muted-darker, #666);
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sp-hit {
   width: 100%;
   background: transparent;

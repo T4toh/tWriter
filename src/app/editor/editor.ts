@@ -23,7 +23,10 @@ import { SagaContextService } from '../core/saga-context-service';
 import { DebugService } from '../core/debug-service';
 import { GrammarService } from '../core/grammar-service';
 import { SearchService } from '../core/search-service';
-import { highlightFirstMatch } from '../core/search-highlight';
+import {
+  findAllMatchesInPlain,
+  highlightFirstMatch,
+} from '../core/search-highlight';
 import {
   EDITOR_FONT_LABEL,
   EDITOR_FONT_PRESETS,
@@ -48,8 +51,10 @@ import {
   GrammarMatchPos,
   extractPlainText,
   mapMatchesToPm,
+  offsetToPm,
   setGrammarMatches,
 } from './grammar-extension';
+import { SearchHighlight, setSearchHighlights } from './search-highlight-extension';
 import { GrammarPopover } from './grammar-popover';
 import {
   RaeExtension,
@@ -493,6 +498,44 @@ export class Editor implements AfterViewInit, OnDestroy {
         });
     });
 
+    // Resalto de todas las ocurrencias de la query mientras el panel de
+    // búsqueda esté abierto. Reactivo a query + active path + edits del
+    // doc (loadedAt + cualquier transacción remapea las decoraciones).
+    effect(() => {
+      const terms = this.search.highlightTerms();
+      const node = this.active();
+      // Touch loadedAt para re-aplicar cuando se reemplaza el contenido.
+      this.pane().loadedAt();
+      if (!this.viewReady() || !this.tiptap) return;
+      if (this.paneId() !== 0 && !this.search.pendingHighlight()) {
+        // Solo el pane 0 resalta automáticamente — el split secundario
+        // no responde a la query global. (Si el usuario edita el cap del
+        // split y el path coincide, sigue sin pintar; la prioridad es
+        // mantener el contexto del editor principal.)
+      }
+      if (!terms || !node) {
+        this.applySearchDecorations([]);
+        return;
+      }
+      this.recomputeSearchDecorations(terms.terms, terms.rawQuery);
+    });
+
+    // Pending highlight (scroll-to-match) cuando el archivo YA está abierto.
+    // El consume del loadedAt-effect maneja el caso recién-cargado; este
+    // cubre el caso "click en hit del mismo archivo abierto" donde no hay
+    // recarga ni nuevo loadedAt.
+    effect(() => {
+      const pending = this.search.pendingHighlight();
+      const node = this.active();
+      if (!pending || !node || pending.path !== node.path) return;
+      if (!this.viewReady() || !this.tiptap) return;
+      const consumed = this.search.consumePendingHighlight(node.path);
+      if (!consumed) return;
+      setTimeout(() => {
+        highlightFirstMatch(this.hostRef.nativeElement, consumed.terms, consumed.rawQuery);
+      }, 0);
+    });
+
     // Auto-check RAE: igual patrón. Si el toggle está prendido y el capítulo
     // es ES, marca. Si se apaga, limpia.
     effect(() => {
@@ -893,6 +936,30 @@ export class Editor implements AfterViewInit, OnDestroy {
     setGrammarMatches(view, matches);
   }
 
+  private applySearchDecorations(ranges: { from: number; to: number }[]): void {
+    const view = (this.tiptap as unknown as { view?: { dispatch: (tr: unknown) => void; state: { tr: unknown } } } | null)?.view;
+    if (!view) return;
+    setSearchHighlights(view, ranges);
+  }
+
+  private recomputeSearchDecorations(terms: string[], rawQuery: string): void {
+    if (!this.tiptap) return;
+    const { plain, ranges } = extractPlainText(this.tiptap.state.doc);
+    if (!plain) {
+      this.applySearchDecorations([]);
+      return;
+    }
+    const hits = findAllMatchesInPlain(plain, terms, rawQuery);
+    const positioned: { from: number; to: number }[] = [];
+    for (const h of hits) {
+      const from = offsetToPm(h.start, ranges);
+      const to = offsetToPm(h.end, ranges);
+      if (from === null || to === null || to <= from) continue;
+      positioned.push({ from, to });
+    }
+    this.applySearchDecorations(positioned);
+  }
+
   private scheduleGrammarRecheck(): void {
     if (this.grammarDebounceHandle !== null) {
       clearTimeout(this.grammarDebounceHandle);
@@ -1037,6 +1104,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         TextAlign.configure({ types: ['paragraph', 'heading'] }),
         Grammar,
         RaeExtension,
+        SearchHighlight,
       ],
       content,
       editable,
@@ -1044,7 +1112,13 @@ export class Editor implements AfterViewInit, OnDestroy {
       onUpdate: ({ editor }) => {
         this.chapter.updateContentInPane(editor.getHTML(), this.paneId());
       },
-      onSelectionUpdate: () => this.refreshState(),
+      onSelectionUpdate: () => {
+        this.refreshState();
+        // Marca este editor como la superficie con foco para search 'current'
+        // y resaltado. Solo el pane 0 cuenta — el split secundario no debe
+        // robarle foco al principal al cambiar de selección.
+        if (this.paneId() === 0) this.search.setFocused('chapter');
+      },
       onTransaction: ({ transaction }) => {
         this.refreshState();
         if (!transaction.docChanged) return;

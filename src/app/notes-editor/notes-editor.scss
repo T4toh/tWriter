@@ -226,6 +226,11 @@
   background: transparent;
 }
 
+.editor-host ::ng-deep .search-hit {
+  background: rgba(255, 213, 0, 0.35);
+  border-radius: 2px;
+}
+
 .overlay {
   position: absolute;
   inset: 0;

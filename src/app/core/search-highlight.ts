@@ -112,6 +112,70 @@ function flashElement(el: HTMLElement): void {
   }, 2500);
 }
 
+/**
+ * Devuelve todas las ocurrencias de la query dentro de `plain` como rangos
+ * `[start, end)` no solapados. Misma prioridad que `highlightFirstMatch`:
+ * si `rawQuery` tiene forma rica (mayúsculas o puntuación), busca ese literal
+ * case-insensitive como única forma. Si no, busca cada token de `terms` y
+ * combina los hits eliminando solapamientos (el más temprano gana).
+ *
+ * Útil para pintar todas las coincidencias visibles del término en un texto
+ * — el editor las mapea a posiciones PM via `offsetToPm` y aplica
+ * decoraciones inline.
+ */
+export function findAllMatchesInPlain(
+  plain: string,
+  terms: string[],
+  rawQuery: string,
+): { start: number; end: number }[] {
+  if (!plain) return [];
+  const raw = (rawQuery ?? '').trim();
+  const rawLower = raw.toLowerCase();
+  const hasRichForm =
+    raw.length > 0 &&
+    [...raw].some((c) => c !== c.toLowerCase() || /[^\p{L}\p{N}\s]/u.test(c));
+  const lowerPlain = plain.toLowerCase();
+  const hits: { start: number; end: number }[] = [];
+
+  if (hasRichForm) {
+    const len = raw.length;
+    let from = 0;
+    while (from <= lowerPlain.length - len) {
+      const idx = lowerPlain.indexOf(rawLower, from);
+      if (idx < 0) break;
+      hits.push({ start: idx, end: idx + len });
+      from = idx + len;
+    }
+    return hits;
+  }
+
+  const lowerTerms = terms.map((t) => t.toLowerCase()).filter((t) => t.length > 0);
+  if (lowerTerms.length === 0) return [];
+
+  const all: { start: number; end: number }[] = [];
+  for (const t of lowerTerms) {
+    const len = t.length;
+    let from = 0;
+    while (from <= lowerPlain.length - len) {
+      const idx = lowerPlain.indexOf(t, from);
+      if (idx < 0) break;
+      all.push({ start: idx, end: idx + len });
+      from = idx + len;
+    }
+  }
+  // Resolver solapamientos: ordenar por start ascendente; al empate, ganador
+  // el más largo. Descartar cualquier hit que solape con el anterior aceptado.
+  all.sort((a, b) => (a.start - b.start) || (b.end - a.end));
+  let lastEnd = -1;
+  for (const h of all) {
+    if (h.start >= lastEnd) {
+      hits.push(h);
+      lastEnd = h.end;
+    }
+  }
+  return hits;
+}
+
 /** Separa una query en términos individuales (split por whitespace, sin puntuación). */
 export function tokenize(query: string): string[] {
   return query

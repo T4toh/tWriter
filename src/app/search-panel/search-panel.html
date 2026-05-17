@@ -54,8 +54,8 @@
     (ngModelChange)="onScopeChange($event)"
   />
   @if (scopeNeedsContext()) {
-    <span class="sp-scope-hint" title="Abrí un capítulo para acotar a su saga/libro">
-      ⚠ sin cap activo
+    <span class="sp-scope-hint" title="Abrí un capítulo o nota para usar este scope">
+      ⚠ sin archivo activo
     </span>
   }
 </div>
@@ -82,28 +82,40 @@
   @if (results().length > 0) {
     <p class="sp-count">{{ count() }} resultado{{ count() === 1 ? '' : 's' }}</p>
     <ul class="sp-list">
-      @for (hit of results(); track hit.path) {
-        <li class="sp-item">
-          <button
-            type="button"
-            class="sp-hit"
-            (click)="openHit(hit, $event)"
-            (dblclick)="openHitInEditor(hit)"
-            [title]="hit.path"
-          >
-            <div class="sp-hit-head">
-              <span class="sp-hit-icon">{{ iconFor(hit.kind) }}</span>
-              <span class="sp-hit-title">{{ hit.title || hit.path }}</span>
-              <span class="sp-hit-kind">{{ labelFor(hit.kind) }}</span>
-            </div>
-            @if (searchDebug() && hit.bm25_score != null) {
-              <p class="sp-hit-bm25">{{ formatBm25(hit.bm25_score) }}</p>
-            }
-            @if (hit.snippet) {
-              <p class="sp-hit-snippet" [innerHTML]="highlightSnippet(hit.snippet, query())"></p>
-            }
-            <p class="sp-hit-path">{{ hit.path }}</p>
-          </button>
+      @for (group of groups(); track group.path) {
+        <li class="sp-group">
+          <details class="sp-group-details" [attr.open]="group.defaultOpen ? '' : null">
+            <summary class="sp-group-head" [title]="group.path">
+              <span class="sp-hit-icon">{{ iconFor(group.kind) }}</span>
+              <span class="sp-hit-title">{{ group.title }}</span>
+              @if (group.hits.length > 1) {
+                <span class="sp-group-count" [title]="group.hits.length + ' coincidencias'">
+                  {{ group.hits.length }}
+                </span>
+              }
+            </summary>
+            <ul class="sp-group-body">
+              @for (hit of group.hits; track $index) {
+                <li class="sp-item">
+                  <button
+                    type="button"
+                    class="sp-hit"
+                    (click)="openHit(hit, $event)"
+                    (dblclick)="openHitInEditor(hit)"
+                    [title]="hit.path"
+                  >
+                    @if (searchDebug() && hit.bm25_score != null) {
+                      <p class="sp-hit-bm25">{{ formatBm25(hit.bm25_score) }}</p>
+                    }
+                    @if (hit.snippet) {
+                      <p class="sp-hit-snippet" [innerHTML]="highlightSnippet(hit.snippet, query())"></p>
+                    }
+                  </button>
+                </li>
+              }
+            </ul>
+            <p class="sp-hit-path">{{ group.path }}</p>
+          </details>
         </li>
       }
     </ul>

@@ -3,9 +3,25 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { ChapterService } from './chapter-service';
 import { DebugService } from './debug-service';
+import { MarkdownReaderService } from './markdown-reader-service';
+import { NoteService } from './note-service';
 import { ProjectService } from './project-service';
-import { tokenize } from './search-highlight';
+import { findAllMatchesInPlain, tokenize } from './search-highlight';
 import { SearchScope as SearchScopeKey, SettingsService } from './settings-service';
+
+const CURRENT_FILE_MAX_PARAGRAPH_HITS = 200;
+
+export type FocusedSurface = 'chapter' | 'note' | 'mdReader';
+
+interface ActiveFile {
+  path: string;
+  kind: 'chapter' | 'note';
+  /** Texto plano del archivo (HTML stripped o markdown crudo) listo para scan. */
+  plain: string;
+  /** Plain text dividido en párrafos para snippets de "Archivo actual". */
+  paragraphs: { text: string; offset: number }[];
+  title: string;
+}
 
 export interface SearchHit {
   path: string;
@@ -57,6 +73,8 @@ export class SearchService {
   private debug = inject(DebugService);
   private project = inject(ProjectService);
   private chapter = inject(ChapterService);
+  private note = inject(NoteService);
+  private mdReader = inject(MarkdownReaderService);
 
   readonly open = signal<boolean>(false);
   readonly query = signal<string>('');
@@ -67,13 +85,51 @@ export class SearchService {
   readonly reindexProgress = signal<ReindexProgress | null>(null);
   readonly hasResults = computed(() => this.results().length > 0);
   readonly pendingHighlight = signal<PendingHighlight | null>(null);
-  /** True cuando el scope seteado en settings exige contexto (saga/book) pero
-   *  no hay capítulo activo. La UI muestra un hint sutil; el search corre
-   *  igual cayendo a scope='all' (fallback en `resolveScope`). */
+  /** Última superficie con foco. Define qué archivo es "el actual" para el
+   *  scope `current` y para el resalto de todas las ocurrencias cuando hay
+   *  más de un doc abierto (capítulo + nota en md-reader, etc.). Cada
+   *  superficie llama `setFocused()` en `focusin`. */
+  readonly lastFocusedSurface = signal<FocusedSurface | null>(null);
+  /** Archivo "actual": resuelto contra `lastFocusedSurface` con fallback en
+   *  orden chapter → note → mdReader. Null si no hay nada abierto. El plain
+   *  se computa una vez (HTML stripped o markdown crudo) y se reutiliza para
+   *  resultados y para resalto. */
+  readonly activeFile = computed<ActiveFile | null>(() => {
+    const focus = this.lastFocusedSurface();
+    const order: FocusedSurface[] = focus
+      ? [focus, ...(['chapter', 'note', 'mdReader'] as FocusedSurface[]).filter((s) => s !== focus)]
+      : ['chapter', 'note', 'mdReader'];
+    for (const s of order) {
+      const f = this.resolveSurface(s);
+      if (f) return f;
+    }
+    return null;
+  });
+  /** True cuando el scope seteado en settings exige contexto (saga/book/current)
+   *  pero el contexto no existe. La UI muestra un hint sutil; saga/book caen a
+   *  scope='all' (fallback en `resolveScope`). 'current' devuelve resultados
+   *  vacíos. */
   readonly scopeNeedsContext = computed(() => {
     const s = this.settings.searchScope();
+    if (s === 'current') return this.activeFile() == null;
     if (s !== 'saga' && s !== 'book') return false;
     return this.chapter.panes[0].active() == null;
+  });
+  /** Términos a resaltar (vivos) en el archivo activo mientras el panel esté
+   *  abierto y la query tenga contenido. Independiente del scope: aplica en
+   *  cualquier modo. Las superficies del editor leen este signal y aplican
+   *  decoraciones PM. */
+  readonly highlightTerms = computed<{ terms: string[]; rawQuery: string } | null>(() => {
+    if (!this.open()) return null;
+    const q = this.query().trim();
+    if (!q) return null;
+    const terms = tokenize(q);
+    if (terms.length === 0) {
+      // Query sin tokens (solo puntuación) — sigue siendo válida si tiene
+      // forma rica; el highlighter usa rawQuery como literal.
+      return { terms: [], rawQuery: q };
+    }
+    return { terms, rawQuery: q };
   });
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -82,17 +138,28 @@ export class SearchService {
 
   constructor() {
     void this.bindProgressListener();
-    // Re-corre la query cuando cambia el scope, el debug o el capítulo activo
-    // (este último porque "saga actual" depende del cap abierto en pane 0).
+    // Re-corre la query cuando cambia el scope, el debug o el archivo activo
+    // ("saga actual" depende del cap del pane 0; "current" depende del archivo
+    // resuelto por activeFile, que incluye notas y md-reader).
     effect(() => {
       this.settings.searchScope();
       this.settings.searchDebug();
       this.chapter.panes[0].active();
-      // Toca dependencias arriba; abajo se decide si hay algo que re-correr.
+      this.chapter.panes[0].content();
+      this.note.panes[0].active();
+      this.note.panes[0].content();
+      this.mdReader.viewing();
+      this.mdReader.content();
+      this.lastFocusedSurface();
       if (this.query().trim()) {
         this.scheduleSearch();
       }
     });
+  }
+
+  setFocused(surface: FocusedSurface): void {
+    if (this.lastFocusedSurface() === surface) return;
+    this.lastFocusedSurface.set(surface);
   }
 
   toggle(): void {
@@ -142,6 +209,13 @@ export class SearchService {
     const id = ++this.currentRequestId;
     this.loading.set(true);
     this.error.set(null);
+    // Scope 'current' es client-side: lee el buffer vivo del editor, no toca
+    // tantivy. Esto incluye ediciones sin guardar.
+    if (this.settings.searchScope() === 'current') {
+      this.runCurrentFileSearch(q);
+      if (id === this.currentRequestId) this.loading.set(false);
+      return;
+    }
     const scope = this.resolveScope();
     const debug = this.settings.searchDebug();
     try {
@@ -161,6 +235,75 @@ export class SearchService {
     } finally {
       if (id === this.currentRequestId) this.loading.set(false);
     }
+  }
+
+  /** Búsqueda client-side sobre el archivo activo. Cada párrafo con match es
+   *  un hit independiente (mismo path repetido). Snippet centrado en el primer
+   *  match con `<mark>` sobre cada ocurrencia del párrafo. */
+  private runCurrentFileSearch(q: string): void {
+    const file = this.activeFile();
+    if (!file) {
+      this.results.set([]);
+      return;
+    }
+    const terms = tokenize(q);
+    const hits: SearchHit[] = [];
+    let total = 0;
+    for (const para of file.paragraphs) {
+      if (total >= CURRENT_FILE_MAX_PARAGRAPH_HITS) break;
+      const matches = findAllMatchesInPlain(para.text, terms, q);
+      if (matches.length === 0) continue;
+      hits.push({
+        path: file.path,
+        kind: file.kind,
+        title: file.title,
+        snippet: snippetWithMarks(para.text, matches),
+        score: -total,
+      });
+      total++;
+    }
+    this.results.set(hits);
+  }
+
+  /** Resuelve una superficie a un `ActiveFile`. Null si no tiene archivo abierto.
+   *  Cap: HTML → plain stripped. Nota / md-reader: markdown crudo. */
+  private resolveSurface(surface: FocusedSurface): ActiveFile | null {
+    if (surface === 'chapter') {
+      const node = this.chapter.panes[0].active();
+      if (!node) return null;
+      const html = this.chapter.panes[0].content();
+      const plain = htmlToPlain(html);
+      return {
+        path: node.path,
+        kind: 'chapter',
+        plain,
+        paragraphs: splitParagraphs(plain),
+        title: this.chapter.panes[0].meta()?.titulo || node.name || node.path.split('/').pop() || node.path,
+      };
+    }
+    if (surface === 'note') {
+      const target = this.note.panes[0].active();
+      if (!target) return null;
+      const md = this.note.panes[0].content();
+      return {
+        path: target.path,
+        kind: 'note',
+        plain: md,
+        paragraphs: splitParagraphs(md),
+        title: target.name || target.path.split('/').pop() || target.path,
+      };
+    }
+    // mdReader
+    const viewing = this.mdReader.viewing();
+    if (!viewing) return null;
+    const md = this.mdReader.content();
+    return {
+      path: viewing.path,
+      kind: 'note',
+      plain: md,
+      paragraphs: splitParagraphs(md),
+      title: viewing.name || viewing.path.split('/').pop() || viewing.path,
+    };
   }
 
   /**
@@ -251,4 +394,61 @@ export class SearchService {
       // SSR / no-Tauri: sin listener.
     }
   }
+}
+
+/** HTML del capítulo → texto plano. Preserva separación de párrafos entre
+ *  bloques (`<p>`, `<hr/>`, `<blockquote>`, headings) con `\n\n` y collapsa
+ *  whitespace. No usa DOMParser — el contenido siempre es el subset XHTML
+ *  conocido del editor. Suficiente para scan de matches. */
+function htmlToPlain(html: string): string {
+  if (!html) return '';
+  let s = html;
+  s = s.replace(/<(?:\/p|\/h[1-6]|\/blockquote|\/li|br\s*\/?|hr\s*\/?)>/gi, '\n\n');
+  s = s.replace(/<[^>]+>/g, '');
+  s = s
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  s = s.replace(/\n{3,}/g, '\n\n');
+  s = s.replace(/[ \t]+\n/g, '\n').trim();
+  return s;
+}
+
+/** Split por párrafos (`\n\n`). Devuelve cada párrafo con su offset original
+ *  en el plain. */
+function splitParagraphs(plain: string): { text: string; offset: number }[] {
+  if (!plain) return [];
+  const out: { text: string; offset: number }[] = [];
+  const parts = plain.split(/\n\n+/);
+  let offset = 0;
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (trimmed.length > 0) {
+      const leading = part.length - part.replace(/^\s+/, '').length;
+      out.push({ text: trimmed, offset: offset + leading });
+    }
+    offset += part.length + 2;
+  }
+  return out;
+}
+
+/** Recorte de párrafo centrado en el primer match. Devuelve TEXTO PLANO con
+ *  ellipsis — `search-panel.highlightSnippet` se encarga de envolver matches
+ *  con `<mark>` después del escape HTML. Si pre-marcáramos acá, el escape de
+ *  `highlightSnippet` convertiría los tags en texto literal. */
+function snippetWithMarks(paragraph: string, matches: { start: number; end: number }[]): string {
+  if (matches.length === 0) return paragraph.slice(0, 240);
+  const first = matches[0];
+  const len = paragraph.length;
+  const half = Math.floor((240 - (first.end - first.start)) / 2);
+  let start = Math.max(0, first.start - half);
+  let end = Math.min(len, start + 240);
+  if (end - start < 240) start = Math.max(0, end - 240);
+  let out = paragraph.slice(start, end);
+  if (start > 0) out = '…' + out;
+  if (end < len) out = out + '…';
+  return out;
 }

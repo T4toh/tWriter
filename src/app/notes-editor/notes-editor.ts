@@ -19,7 +19,15 @@ import { PaneId } from '../core/chapter-service';
 import { CursorRestoreService } from '../core/cursor-restore-service';
 import { NoteService } from '../core/note-service';
 import { SearchService } from '../core/search-service';
-import { highlightFirstMatch } from '../core/search-highlight';
+import {
+  findAllMatchesInPlain,
+  highlightFirstMatch,
+} from '../core/search-highlight';
+import { extractPlainText, offsetToPm } from '../editor/grammar-extension';
+import {
+  SearchHighlight,
+  setSearchHighlights,
+} from '../editor/search-highlight-extension';
 import { PARAGRAPH_SPACING_EM, SettingsService } from '../core/settings-service';
 import {
   ContextMenuService,
@@ -159,6 +167,33 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
         }
       }
     });
+
+    // Resalto de todas las ocurrencias de la query mientras el panel esté
+    // abierto. Reactivo a query + nota activa + loadedAt.
+    effect(() => {
+      const terms = this.search.highlightTerms();
+      const target = this.active();
+      this.pane().loadedAt();
+      if (!this.viewReady() || !this.tiptap) return;
+      if (!terms || !target) {
+        this.applySearchDecorations([]);
+        return;
+      }
+      this.recomputeSearchDecorations(terms.terms, terms.rawQuery);
+    });
+
+    // Pending highlight para nota ya abierta (click sobre hit del mismo path).
+    effect(() => {
+      const pending = this.search.pendingHighlight();
+      const target = this.active();
+      if (!pending || !target || pending.path !== target.path) return;
+      if (!this.viewReady() || !this.tiptap) return;
+      const consumed = this.search.consumePendingHighlight(target.path);
+      if (!consumed) return;
+      setTimeout(() => {
+        highlightFirstMatch(this.hostRef.nativeElement, consumed.terms, consumed.rawQuery);
+      }, 0);
+    });
   }
 
   ngAfterViewInit(): void {
@@ -292,6 +327,7 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
           transformPastedText: true,
           transformCopiedText: true,
         }),
+        SearchHighlight,
       ],
       content,
       editable,
@@ -301,9 +337,36 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
         const md = storage ? storage.getMarkdown() : '';
         this.note.updateContentInPane(md, this.paneId());
       },
-      onSelectionUpdate: () => this.refreshState(),
+      onSelectionUpdate: () => {
+        this.refreshState();
+        if (this.paneId() === 0) this.search.setFocused('note');
+      },
       onTransaction: () => this.refreshState(),
     });
+  }
+
+  private applySearchDecorations(ranges: { from: number; to: number }[]): void {
+    const view = (this.tiptap as unknown as { view?: { dispatch: (tr: unknown) => void; state: { tr: unknown } } } | null)?.view;
+    if (!view) return;
+    setSearchHighlights(view, ranges);
+  }
+
+  private recomputeSearchDecorations(terms: string[], rawQuery: string): void {
+    if (!this.tiptap) return;
+    const { plain, ranges } = extractPlainText(this.tiptap.state.doc);
+    if (!plain) {
+      this.applySearchDecorations([]);
+      return;
+    }
+    const hits = findAllMatchesInPlain(plain, terms, rawQuery);
+    const positioned: { from: number; to: number }[] = [];
+    for (const h of hits) {
+      const from = offsetToPm(h.start, ranges);
+      const to = offsetToPm(h.end, ranges);
+      if (from === null || to === null || to <= from) continue;
+      positioned.push({ from, to });
+    }
+    this.applySearchDecorations(positioned);
   }
 
   private refreshState(): void {

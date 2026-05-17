@@ -617,6 +617,14 @@
   border-bottom: 2px dotted #c89020;
 }
 
+/* ─── Search highlights ─── */
+/* Marca de todas las ocurrencias de la query mientras el panel de búsqueda
+ * esté abierto. Convive con grammar/rae sin romper sus borders. */
+.editor-host ::ng-deep .search-hit {
+  background: rgba(255, 213, 0, 0.35);
+  border-radius: 2px;
+}
+
 /* ─── Privacy banner ─── */
 .privacy-banner {
   position: fixed;
