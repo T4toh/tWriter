@@ -3,6 +3,17 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
+/// Estado de la última sesión del editor. `chapter_path` es relativo al root
+/// y `pm_pos` es la posición absoluta del cursor en el documento ProseMirror
+/// (state.selection.from). Se aplica al boot si el archivo sigue existiendo.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LastSession {
+    #[serde(rename = "chapterPath")]
+    pub chapter_path: String,
+    #[serde(rename = "pmPos")]
+    pub pm_pos: usize,
+}
+
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Settings {
     #[serde(default)]
@@ -107,6 +118,43 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub search_debug: Option<bool>,
+    /// Última sesión del pane 0: cap activo + posición del cursor. Se restaura
+    /// al boot si el archivo sigue existiendo.
+    #[serde(
+        default,
+        rename = "lastSession",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub last_session: Option<LastSession>,
+    /// Paths de nodos del tree (saga/libro/sección/folder libre) que estaban
+    /// expandidos al cerrar. Apply al cargar el tree.
+    #[serde(
+        default,
+        rename = "treeExpanded",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub tree_expanded: Option<Vec<String>>,
+    /// Scope paths con la sección Extras abierta.
+    #[serde(
+        default,
+        rename = "treeExtrasExpanded",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub tree_extras_expanded: Option<Vec<String>>,
+    /// Keys `<scopePath>::<relPath>` de subdirs dentro de Extras expandidos.
+    #[serde(
+        default,
+        rename = "treeExtrasDirsExpanded",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub tree_extras_dirs_expanded: Option<Vec<String>>,
+    /// Book paths con la sección Exportados abierta.
+    #[serde(
+        default,
+        rename = "treeExportsExpanded",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub tree_exports_expanded: Option<Vec<String>>,
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -133,4 +181,63 @@ pub fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     let path = settings_path(&app)?;
     let raw = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
     fs::write(&path, raw).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn last_session_roundtrip() {
+        let mut s = Settings::default();
+        s.last_session = Some(LastSession {
+            chapter_path: "Saga/Libro/1.html".to_string(),
+            pm_pos: 1234,
+        });
+        s.tree_expanded = Some(vec!["Saga".to_string(), "Saga/Libro".to_string()]);
+        s.tree_extras_expanded = Some(vec!["Saga".to_string()]);
+        s.tree_extras_dirs_expanded = Some(vec!["Saga::convertidos".to_string()]);
+        s.tree_exports_expanded = Some(vec!["Saga/Libro".to_string()]);
+
+        let json = serde_json::to_string(&s).unwrap();
+        let back: Settings = serde_json::from_str(&json).unwrap();
+        let ls = back.last_session.expect("last_session");
+        assert_eq!(ls.chapter_path, "Saga/Libro/1.html");
+        assert_eq!(ls.pm_pos, 1234);
+        assert_eq!(back.tree_expanded.as_deref(), Some(&[
+            "Saga".to_string(),
+            "Saga/Libro".to_string(),
+        ][..]));
+        assert_eq!(back.tree_extras_expanded.as_deref().map(|v| v.len()), Some(1));
+        assert_eq!(back.tree_extras_dirs_expanded.as_deref().map(|v| v.len()), Some(1));
+        assert_eq!(back.tree_exports_expanded.as_deref().map(|v| v.len()), Some(1));
+    }
+
+    #[test]
+    fn back_compat_legacy_json_without_new_fields() {
+        // Settings.json escrito antes de esta feature: solo tiene root y un par de
+        // campos viejos. Debe deserializar sin error y con los campos nuevos en None.
+        let legacy = r#"{"root":"/home/u/Novelas","editorFontSize":18}"#;
+        let s: Settings = serde_json::from_str(legacy).unwrap();
+        assert_eq!(s.root.as_deref(), Some("/home/u/Novelas"));
+        assert_eq!(s.editor_font_size, Some(18));
+        assert!(s.last_session.is_none());
+        assert!(s.tree_expanded.is_none());
+        assert!(s.tree_extras_expanded.is_none());
+        assert!(s.tree_extras_dirs_expanded.is_none());
+        assert!(s.tree_exports_expanded.is_none());
+    }
+
+    #[test]
+    fn serialization_skips_none_new_fields() {
+        // Confirma que JSON con todos los campos None NO incluye las keys nuevas
+        // (mantiene los settings.json viejos minimalistas).
+        let s = Settings::default();
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(!json.contains("lastSession"));
+        assert!(!json.contains("treeExpanded"));
+        assert!(!json.contains("treeExtrasExpanded"));
+        assert!(!json.contains("treeExtrasDirsExpanded"));
+        assert!(!json.contains("treeExportsExpanded"));
+    }
 }

@@ -16,6 +16,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
 import { Markdown } from 'tiptap-markdown';
 import { PaneId } from '../core/chapter-service';
+import { CursorRestoreService } from '../core/cursor-restore-service';
 import { NoteService } from '../core/note-service';
 import { SearchService } from '../core/search-service';
 import { highlightFirstMatch } from '../core/search-highlight';
@@ -69,6 +70,7 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
   protected settings = inject(SettingsService);
   private ctxMenu = inject(ContextMenuService);
   private search = inject(SearchService);
+  private cursorRestore = inject(CursorRestoreService);
 
   readonly paneId = input<PaneId>(0);
 
@@ -129,6 +131,23 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
       }
       this.lastLoadedAt = at;
       this.refreshState();
+
+      // Restaurar cursor (solo pane 0) si bootstrap encoló un pedido. Antes
+      // del highlight de Ctrl+F — el search prevalece cuando el usuario llega
+      // via search.
+      if (target?.path && this.paneId() === 0 && this.tiptap) {
+        const restore = this.cursorRestore.consume(target.path);
+        if (restore) {
+          const docSize = this.tiptap.state.doc.content.size;
+          const pos = Math.max(0, Math.min(restore.pmPos, Math.max(0, docSize - 1)));
+          this.tiptap
+            .chain()
+            .focus()
+            .setTextSelection({ from: pos, to: pos })
+            .scrollIntoView()
+            .run();
+        }
+      }
 
       // Highlight pendiente desde Ctrl+F: salta al primer match.
       if (target?.path) {
@@ -310,5 +329,13 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
       canUndo: e.can().undo(),
       canRedo: e.can().redo(),
     });
+    // Persist sesión: solo pane 0 — paridad con Editor. Sin esto la nota
+    // abierta como lastSession no se acuerda del cursor entre boots.
+    if (this.paneId() === 0) {
+      const node = this.pane().active();
+      if (node?.path) {
+        this.settings.setLastSession(node.path, from);
+      }
+    }
   }
 }

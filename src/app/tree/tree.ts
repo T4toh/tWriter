@@ -115,6 +115,8 @@ export class Tree implements OnDestroy {
   private readonly exportsExpanded = signal<Set<string>>(new Set());
 
   private dragUnlisten: (() => void) | null = null;
+  /** Guard para que la hidratación desde settings corra una sola vez al boot. */
+  private hydratedFromSettings = false;
 
   constructor() {
     void this.bindDragDrop();
@@ -128,6 +130,36 @@ export class Tree implements OnDestroy {
       this.rootFontsExpanded.set(false);
       this.themesExpanded.set(false);
     });
+    // Hidrar estado de expansión desde settings.json (paths persistidos en la
+    // sesión anterior). Una sola vez, después de que SettingsService.load()
+    // termine — antes los signals son strings vacíos y limpiar acá pisaría
+    // potenciales toggles que el usuario haga durante el boot.
+    effect(() => {
+      if (!this.settings.loaded() || this.hydratedFromSettings) return;
+      this.hydratedFromSettings = true;
+      const expanded = this.settings.treeExpanded();
+      if (expanded.size > 0) {
+        const m = new Map<string, boolean>();
+        for (const path of expanded) m.set(path, true);
+        this.explicit.set(m);
+      }
+      const extras = this.settings.treeExtrasExpanded();
+      if (extras.size > 0) this.extrasExpanded.set(new Set(extras));
+      const extrasDirs = this.settings.treeExtrasDirsExpanded();
+      if (extrasDirs.size > 0) this.extrasDirsExpanded.set(new Set(extrasDirs));
+      const exports = this.settings.treeExportsExpanded();
+      if (exports.size > 0) this.exportsExpanded.set(new Set(exports));
+    });
+  }
+
+  /** Persiste el subset del Map `explicit` con value=true como lista de paths.
+   *  Excluye paths con value=false (collapse explícito sobre default expandido). */
+  private persistExpanded(): void {
+    const expanded = new Set<string>();
+    for (const [path, value] of this.explicit().entries()) {
+      if (value) expanded.add(path);
+    }
+    this.settings.setTreeExpanded(expanded);
   }
 
   ngOnDestroy(): void {
@@ -156,6 +188,7 @@ export class Tree implements OnDestroy {
       else next.add(key);
       return next;
     });
+    this.settings.setTreeExtrasDirsExpanded(this.extrasDirsExpanded());
   }
 
   protected hasLoadedExtras(scopePath: string): boolean {
@@ -182,6 +215,7 @@ export class Tree implements OnDestroy {
       else next.add(scopePath);
       return next;
     });
+    this.settings.setTreeExtrasExpanded(this.extrasExpanded());
     if (!expanded && !this.extras.hasLoaded(scopePath)) {
       void this.refreshExtras(scopePath);
     }
@@ -207,6 +241,7 @@ export class Tree implements OnDestroy {
       else next.add(bookPath);
       return next;
     });
+    this.settings.setTreeExportsExpanded(this.exportsExpanded());
     if (!expanded && !this.exports.hasLoaded(bookPath)) {
       void this.refreshExports(bookPath);
     }
@@ -564,6 +599,7 @@ export class Tree implements OnDestroy {
       next.set(node.path, !wasExpanded);
       return next;
     });
+    this.persistExpanded();
   }
 
   protected collapseAll(): void {
@@ -571,11 +607,15 @@ export class Tree implements OnDestroy {
     this.forceState.set('collapsed');
     this.extrasExpanded.set(new Set());
     this.exportsExpanded.set(new Set());
+    this.persistExpanded();
+    this.settings.setTreeExtrasExpanded(new Set());
+    this.settings.setTreeExportsExpanded(new Set());
   }
 
   protected expandAll(): void {
     this.explicit.set(new Map());
     this.forceState.set('expanded');
+    this.persistExpanded();
   }
 
   protected async select(node: TreeNode, event?: MouseEvent): Promise<void> {

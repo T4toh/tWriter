@@ -18,6 +18,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
 import TextAlign from '@tiptap/extension-text-align';
 import { ChapterService, PaneId } from '../core/chapter-service';
+import { CursorRestoreService } from '../core/cursor-restore-service';
 import { SagaContextService } from '../core/saga-context-service';
 import { DebugService } from '../core/debug-service';
 import { GrammarService } from '../core/grammar-service';
@@ -97,6 +98,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private fontsService = inject(FontsService);
   private ctxMenu = inject(ContextMenuService);
   private search = inject(SearchService);
+  private cursorRestore = inject(CursorRestoreService);
   private debug = inject(DebugService);
 
   /** Pane que renderiza este editor. Default 0 = principal. 1 = secundario (split). */
@@ -383,6 +385,24 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.hostRef.nativeElement.scrollTop = 0;
       this.lastLoadedAt = at;
       this.refreshState();
+
+      // Restaurar cursor (solo pane 0) si bootstrap encoló un pedido para este
+      // path. Va antes del highlight de Ctrl+F: el highlight prevalece sobre la
+      // posición guardada cuando el usuario llega via search.
+      if (node?.path && this.paneId() === 0) {
+        const restore = this.cursorRestore.consume(node.path);
+        if (restore && this.tiptap) {
+          const docSize = this.tiptap.state.doc.content.size;
+          // Clamp si el cap se acortó entre sesiones (editado en otra PC).
+          const pos = Math.max(0, Math.min(restore.pmPos, Math.max(0, docSize - 1)));
+          this.tiptap
+            .chain()
+            .focus()
+            .setTextSelection({ from: pos, to: pos })
+            .scrollIntoView()
+            .run();
+        }
+      }
 
       // Si hay un highlight pendiente para este capítulo (viene de Ctrl+F),
       // saltar al primer match. setTimeout 0 para esperar el flush del DOM.
@@ -1109,6 +1129,15 @@ export class Editor implements AfterViewInit, OnDestroy {
       canRedo: e.can().redo(),
     });
     this.cursorPos.set(computeCursorPos(e));
+    // Persist sesión: solo pane 0 (split secundario no se restaura al boot).
+    // SettingsService debounce 500ms + early-return-if-equal mantiene el costo
+    // bajo aun con onSelectionUpdate + onTransaction disparando seguido.
+    if (this.paneId() === 0) {
+      const node = this.pane().active();
+      if (node?.path) {
+        this.settings.setLastSession(node.path, from);
+      }
+    }
   }
 }
 

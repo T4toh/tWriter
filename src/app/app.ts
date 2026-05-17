@@ -1,5 +1,7 @@
 import { Component, ViewChild, computed, effect, HostListener, inject, signal } from '@angular/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ChapterService } from './core/chapter-service';
+import { CursorRestoreService } from './core/cursor-restore-service';
 import { DebugService } from './core/debug-service';
 import { FontPreviewService } from './core/font-preview-service';
 import { MarkdownReaderService } from './core/markdown-reader-service';
@@ -64,6 +66,7 @@ export class App {
   protected settings = inject(SettingsService);
   protected chapter = inject(ChapterService);
   protected note = inject(NoteService);
+  private cursorRestore = inject(CursorRestoreService);
   protected git = inject(GitService);
   protected storage = inject(StorageService);
   protected storageHelp = inject(StorageHelpService);
@@ -109,6 +112,7 @@ export class App {
   constructor() {
     inject(RustLogBridge);
     void this.bootstrap();
+    void this.bindCloseFlush();
     effect(() => {
       const e = this.chapter.panes[0].error() ?? this.chapter.panes[1].error();
       if (e && e !== this.lastChapterErr) this.debug.error('chapter', e);
@@ -182,8 +186,60 @@ export class App {
     await this.settings.load();
     if (this.settings.root()) {
       await this.project.loadTree();
+      await this.restoreLastSession();
     }
     setTimeout(() => void this.updater.chequear(), 5000);
+  }
+
+  /** Abre el último cap/nota del pane 0 y encola el cursor restore para el
+   *  editor / notes-editor que lo va a recibir. Si el path quedó dangling
+   *  (cap borrado/renombrado entre sesiones), limpia el slot. */
+  private async restoreLastSession(): Promise<void> {
+    const ls = this.settings.lastSession();
+    if (!ls) return;
+    const tree = this.project.tree();
+    if (!tree) return;
+    const node = findNodeByPath(tree, ls.chapterPath);
+    if (!node || (node.kind !== 'chapter' && node.kind !== 'note')) {
+      this.settings.clearLastSession();
+      return;
+    }
+    if (node.kind === 'chapter' && !node.editable) {
+      // .docx/.odt sin .html sibling — no se puede abrir hasta importar.
+      this.settings.clearLastSession();
+      return;
+    }
+    // Encolar restore ANTES de abrir: el effect del editor consume el slot
+    // recién después del setContent del cap.
+    this.cursorRestore.request(ls.chapterPath, ls.pmPos);
+    if (node.kind === 'chapter') {
+      await this.chapter.openInPane(node, 0);
+    } else {
+      await this.note.openInPane({ path: node.path, name: node.name }, 0);
+    }
+  }
+
+  /** Flushea persist pendiente del SettingsService al cierre de ventana para
+   *  no perder el último cursor pos del debounce 500ms. Sin esto, cerrar la
+   *  app inmediatamente después de mover el cursor lo guarda al pos anterior. */
+  private async bindCloseFlush(): Promise<void> {
+    try {
+      const win = getCurrentWindow();
+      let closing = false;
+      await win.onCloseRequested(async (event) => {
+        if (closing) return;
+        closing = true;
+        event.preventDefault();
+        try {
+          await this.settings.flushPending();
+        } catch {
+          // Si falla, igual cerramos — no bloqueamos al usuario por un settings write.
+        }
+        await win.destroy();
+      });
+    } catch {
+      // En SSR / no-Tauri (tests), el listener no se setea.
+    }
   }
 
   protected refresh(): void {
