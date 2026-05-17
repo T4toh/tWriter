@@ -44,6 +44,65 @@ export class SearchPanel implements AfterViewInit {
   protected readonly reindexing = this.svc.reindexing;
   protected readonly reindexProgress = this.svc.reindexProgress;
   protected readonly count = computed(() => this.results().length);
+  /** Agrupa hits por `path` preservando el orden de primera aparición. Por
+   *  archivo: 1 grupo con `hits[]`, `kind`, `title`, y `defaultOpen` (true si
+   *  el grupo tiene ≤10 hits — para 'Archivo actual' con 30+ matches por
+   *  capítulo, default colapsado evita pared de texto). */
+  protected readonly groups = computed<Array<{
+    path: string;
+    kind: string;
+    title: string;
+    hits: SearchHit[];
+    defaultOpen: boolean;
+  }>>(() => {
+    const byPath = new Map<string, { path: string; kind: string; title: string; hits: SearchHit[] }>();
+    for (const hit of this.results()) {
+      const existing = byPath.get(hit.path);
+      if (existing) {
+        existing.hits.push(hit);
+      } else {
+        byPath.set(hit.path, {
+          path: hit.path,
+          kind: hit.kind,
+          title: this.displayTitleFor(hit),
+          hits: [hit],
+        });
+      }
+    }
+    const out: Array<{ path: string; kind: string; title: string; hits: SearchHit[]; defaultOpen: boolean }> = [];
+    for (const g of byPath.values()) {
+      out.push({ ...g, defaultOpen: g.hits.length <= 10 });
+    }
+    return out;
+  });
+
+  /** Construye un título legible para el header del grupo. Capítulos con
+   *  meta.titulo vacío vienen con `hit.title = '5'` (file stem), lo cual
+   *  parece "Capítulo 5" pero pegado al badge `1` (count) se lee como
+   *  "Capítulo 1". Solución: cuando el título es solo el stem numérico,
+   *  prepender el dir contenedor (sección o libro). */
+  private displayTitleFor(hit: SearchHit): string {
+    const raw = (hit.title || '').trim();
+    if (hit.kind !== 'chapter') {
+      return raw || hit.path.split('/').pop() || hit.path;
+    }
+    // Si el título no es solo un número, asumir que es titulo real del meta.
+    if (raw && !/^\d+$/.test(raw)) return raw;
+    // Stem numérico: agregar dir padre para contexto. Path típico:
+    //   /.../<libro>/<sección o nada>/<n>.html
+    // Devolvemos `<padre> — <n>` o `<abuelo> · <padre> — <n>` si padre es
+    // genérico (un número). Strip prefijos "1 - ", "07 - " para limpiar.
+    const parts = hit.path.split('/');
+    const file = parts.pop() || '';
+    const stem = file.replace(/\.html$/i, '') || raw;
+    const parent = stripOrderPrefix(parts.pop() || '');
+    const grand = stripOrderPrefix(parts.pop() || '');
+    if (parent && /^\d+$/.test(parent) && grand) {
+      return `${grand} · ${parent} — ${stem}`;
+    }
+    if (parent) return `${parent} — ${stem}`;
+    return stem;
+  }
   protected readonly scope = this.settings.searchScope;
   protected readonly searchDebug = this.settings.searchDebug;
   protected readonly scopeNeedsContext = this.svc.scopeNeedsContext;
@@ -54,6 +113,7 @@ export class SearchPanel implements AfterViewInit {
     { value: 'book', label: 'Libro actual' },
     { value: 'chapters', label: 'Solo capítulos' },
     { value: 'notes', label: 'Solo notas' },
+    { value: 'current', label: 'Archivo actual' },
   ];
 
   protected readonly operatorsHelp = [
@@ -102,7 +162,8 @@ export class SearchPanel implements AfterViewInit {
       value !== 'saga' &&
       value !== 'book' &&
       value !== 'notes' &&
-      value !== 'chapters'
+      value !== 'chapters' &&
+      value !== 'current'
     ) {
       return;
     }
@@ -180,6 +241,13 @@ export class SearchPanel implements AfterViewInit {
 
   protected async openHit(hit: SearchHit, event?: MouseEvent): Promise<void> {
     if (hit.kind === 'chapter') {
+      // Si ya está abierto en pane 0, no recargues — perderías marcas y
+      // tendrías que esperar el read del disco. Solo encolá el highlight; el
+      // editor reacciona al pendingHighlight aunque el archivo ya esté abierto.
+      if (this.chapter.panes[0].active()?.path === hit.path) {
+        this.svc.requestHighlight(hit.path);
+        return;
+      }
       const node = findNodeByPath(this.project.tree(), hit.path);
       if (node) {
         const parent = hit.path.replace(/\/[^/]+$/, '');
@@ -194,10 +262,12 @@ export class SearchPanel implements AfterViewInit {
       const name = hit.title || hit.path.split('/').pop() || hit.path;
       this.svc.requestHighlight(hit.path);
       if (event?.shiftKey) {
-        // Shift+click: abrir en notes-editor central (mismo patrón que el tree).
+        // Shift+click: abrir en notes-editor central. Si ya está, no recargues.
+        if (this.note.panes[0].active()?.path === hit.path) return;
         await this.openNoteInEditor(hit.path, name);
       } else {
-        // Click normal: reader read-only en panel derecho.
+        // Click normal: reader read-only en panel derecho. Idem guard.
+        if (this.mdReader.viewing()?.path === hit.path) return;
         await this.mdReader.open({ path: hit.path, name });
       }
       return;
@@ -239,6 +309,11 @@ export class SearchPanel implements AfterViewInit {
     const escaped = escapeHtml(snippet);
     return escaped.replace(re, '<mark>$1</mark>');
   }
+}
+
+/** "07 - Vuelta" → "Vuelta". Mantiene el nombre limpio para el header. */
+function stripOrderPrefix(name: string): string {
+  return name.replace(/^\d+\s*[-·]\s*/, '').trim();
 }
 
 function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {

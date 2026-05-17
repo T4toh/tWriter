@@ -8,7 +8,7 @@ export type ParagraphSpacing = 'tight' | 'normal' | 'loose';
 export type RightPanelWidth = 'compact' | 'normal' | 'wide' | 'full';
 /** Scope del panel de búsqueda (Ctrl+F). `saga`/`book` se resuelven contra
  *  el capítulo activo del pane principal; si no hay cap, caen a `all`. */
-export type SearchScope = 'all' | 'saga' | 'book' | 'notes' | 'chapters';
+export type SearchScope = 'all' | 'saga' | 'book' | 'notes' | 'chapters' | 'current';
 /** Los 4 keywords de preset siguen siendo válidos como valor. Cualquier otro
  *  string se interpreta como nombre de familia (OS o pool del repo). */
 export type EditorFontPreset = 'serif' | 'sans' | 'mono' | 'system';
