@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { SettingsService } from './settings-service';
-import { TreeNode } from './types';
+import { NodeKind, TreeNode } from './types';
 import { DebugService } from './debug-service';
 
 @Injectable({ providedIn: 'root' })
@@ -48,4 +48,37 @@ export class ProjectService {
     for (const c of n.children ?? []) total += this.countNodes(c);
     return total;
   }
+
+  /**
+   * Devuelve el ancestro del path indicado cuyo `kind` matchea, o null. Útil
+   * para resolver "saga/libro actual" a partir del capítulo abierto.
+   * El backend usa `directory name` como id de saga/book — devolvemos `name`
+   * del nodo, que es exactamente el nombre del directorio.
+   */
+  findAncestorByKind(path: string, kind: NodeKind): TreeNode | null {
+    const tree = this.tree();
+    if (!tree || !path) return null;
+    const chain: TreeNode[] = [];
+    if (!collectAncestors(tree, path, chain)) return null;
+    // chain[0] = root, chain[last] = el nodo mismo. Buscar del más cercano al más lejano.
+    for (let i = chain.length - 1; i >= 0; i--) {
+      if (chain[i].kind === kind) return chain[i];
+    }
+    return null;
+  }
+}
+
+/**
+ * Walk DFS apilando ancestros hasta encontrar `target`. Devuelve true si lo
+ * encontró; `out` queda poblado con la cadena root → … → target. Si no lo
+ * encuentra, `out` queda restaurado al estado pre-call.
+ */
+function collectAncestors(node: TreeNode, target: string, out: TreeNode[]): boolean {
+  out.push(node);
+  if (node.path === target) return true;
+  for (const c of node.children ?? []) {
+    if (collectAncestors(c, target, out)) return true;
+  }
+  out.pop();
+  return false;
 }

@@ -6,6 +6,9 @@ import { GrammarMode } from './types';
 export type EditorWidth = 'narrow' | 'wide' | 'full';
 export type ParagraphSpacing = 'tight' | 'normal' | 'loose';
 export type RightPanelWidth = 'compact' | 'normal' | 'wide' | 'full';
+/** Scope del panel de búsqueda (Ctrl+F). `saga`/`book` se resuelven contra
+ *  el capítulo activo del pane principal; si no hay cap, caen a `all`. */
+export type SearchScope = 'all' | 'saga' | 'book' | 'notes' | 'chapters';
 /** Los 4 keywords de preset siguen siendo válidos como valor. Cualquier otro
  *  string se interpreta como nombre de familia (OS o pool del repo). */
 export type EditorFontPreset = 'serif' | 'sans' | 'mono' | 'system';
@@ -16,6 +19,7 @@ const FONT_MAX = 28;
 const FONT_DEFAULT = 17;
 const SPACING_DEFAULT: ParagraphSpacing = 'tight';
 const RIGHT_PANEL_DEFAULT: RightPanelWidth = 'normal';
+const SEARCH_SCOPE_DEFAULT: SearchScope = 'all';
 const FONT_FAMILY_DEFAULT: EditorFontPreset = 'serif';
 const FONT_RECENTS_MAX = 5;
 
@@ -78,6 +82,10 @@ interface Settings {
   grammarAutoDisabled?: boolean;
   raeAutoDisabled?: boolean;
   rightPanelWidth?: RightPanelWidth;
+  searchScope?: SearchScope;
+  /** Si está true, cada hit del panel de búsqueda muestra su score BM25 debajo
+   *  del título — útil para diagnosticar ranking. Off por default. */
+  searchDebug?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -99,6 +107,8 @@ export class SettingsService {
   /** Auto-check del validador RAE desactivado por el usuario. Persiste cross-session. */
   readonly raeAutoDisabled = signal<boolean>(false);
   readonly rightPanelWidth = signal<RightPanelWidth>(RIGHT_PANEL_DEFAULT);
+  readonly searchScope = signal<SearchScope>(SEARCH_SCOPE_DEFAULT);
+  readonly searchDebug = signal<boolean>(false);
   readonly focusMode = signal<boolean>(false);
   readonly loaded = signal<boolean>(false);
 
@@ -121,6 +131,8 @@ export class SettingsService {
       this.grammarAutoDisabled.set(s.grammarAutoDisabled ?? false);
       this.raeAutoDisabled.set(s.raeAutoDisabled ?? false);
       this.rightPanelWidth.set(s.rightPanelWidth ?? RIGHT_PANEL_DEFAULT);
+      this.searchScope.set(s.searchScope ?? SEARCH_SCOPE_DEFAULT);
+      this.searchDebug.set(s.searchDebug ?? false);
     } catch {
       this.root.set(null);
     } finally {
@@ -210,6 +222,16 @@ export class SettingsService {
     this.focusMode.update((v) => !v);
   }
 
+  async setSearchScope(scope: SearchScope): Promise<void> {
+    this.searchScope.set(scope);
+    await this.persist();
+  }
+
+  async setSearchDebug(enabled: boolean): Promise<void> {
+    this.searchDebug.set(enabled);
+    await this.persist();
+  }
+
   private async persist(): Promise<void> {
     const settings: Settings = {
       root: this.root(),
@@ -226,6 +248,8 @@ export class SettingsService {
       grammarAutoDisabled: this.grammarAutoDisabled(),
       raeAutoDisabled: this.raeAutoDisabled(),
       rightPanelWidth: this.rightPanelWidth(),
+      searchScope: this.searchScope(),
+      searchDebug: this.searchDebug() || undefined,
     };
     await invoke('set_settings', { settings });
   }
