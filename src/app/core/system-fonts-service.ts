@@ -20,13 +20,17 @@ export interface SystemFont {
 export class SystemFontsService {
   readonly fonts = signal<SystemFont[]>([]);
   readonly loading = signal<boolean>(false);
+  /** Reactivo. True una vez completada la primera enumeración (incluso si el
+   *  resultado es vacío). Permite a la UI distinguir "no cargado todavía" de
+   *  "cargado, no hay match" — ej. el badge "fuente faltante" del editor no
+   *  debe aparecer mientras la lista está vacía por no haber corrido aún. */
+  readonly loaded = signal<boolean>(false);
 
-  private loaded = false;
   private inflight: Promise<void> | null = null;
   private readonly loadedFaces = new Set<string>();
 
   async ensureLoaded(): Promise<void> {
-    if (this.loaded) return;
+    if (this.loaded()) return;
     if (this.inflight) {
       await this.inflight;
       return;
@@ -36,7 +40,7 @@ export class SystemFontsService {
       try {
         const list = await invoke<SystemFont[]>('list_system_fonts');
         this.fonts.set(list);
-        this.loaded = true;
+        this.loaded.set(true);
       } finally {
         this.loading.set(false);
         this.inflight = null;
@@ -52,7 +56,7 @@ export class SystemFontsService {
     try {
       const list = await invoke<SystemFont[]>('refresh_system_fonts');
       this.fonts.set(list);
-      this.loaded = true;
+      this.loaded.set(true);
     } finally {
       this.loading.set(false);
     }

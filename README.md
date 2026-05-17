@@ -496,6 +496,30 @@ paru -S twriter-bin
   comillas, filtros `kind:note`, `kind:chapter`). Hoy el default es AND
   implícito sobre todos los términos; sumar sintaxis para que el usuario
   pueda forzar OR, frases exactas o filtrar por tipo de documento.
+- **Búsqueda con scope por saga / libro / novela / solo notas**: hoy el
+  panel Ctrl+F corre sobre todo el repo (capítulos + notas + títulos).
+  Sumar selector en el header del panel — `Todo / Saga actual / Libro
+  actual / Solo notas / Solo capítulos` — y persistir la última elección
+  en `settings.json`. Útil cuando hay múltiples sagas y un término común
+  spamea hits de otras novelas.
+- **Resultados irrelevantes ("marca cualquier cosa")**: hits del panel
+  Ctrl+F que parecen no tener relación con el query — probable issue del
+  tokenizer + falta de stopwords ES en `search.rs::search_query_impl`.
+  Sumar stopwords (`el/la/los/las/de/que/y/un/una/...`), evaluar field
+  boosts (título > heading > body) y exponer el score BM25 en modo debug
+  para diagnosticar caso por caso.
+- **Editar notas inline en el panel derecho**: hoy el markdown reader es
+  read-only y el botón ✏️ promueve la nota al editor central, lo que
+  desplaza al capítulo activo. Sumar modo edit en el reader (TipTap
+  notes-editor reusable dentro del slot derecho) para tocar la nota sin
+  perder el capítulo de contexto.
+- **Marcador huérfano post jump-to-term**: el highlight naranja de
+  `requestHighlight` (search → click resultado) o de la selección nativa
+  del jump queda pegado sobre el carácter (típicamente un em-dash) aún
+  después de mover el cursor. Repro: search → click hit → click en otra
+  parte del párrafo → el highlight persiste. La limpieza por mouseup /
+  keydown se está escapando para algún path (chapter editor, no notes
+  reader). Revisar el cleanup en `editor.ts` que monta el `TreeWalker`.
 
 ### Tree / Importer
 
@@ -522,6 +546,20 @@ paru -S twriter-bin
 - Changelog screen in-app: panel/modal accesible desde el header (junto a 🐛) parseando `CHANGELOG.md` o release notes de GitHub. Útil para gente nueva post-AUR.
 - Guía in-app de primer uso: tour con flechas la primera vez que se abre la app (tree explorer, idioma, RAE, gramática, sync). Persiste flag en `settings.json`.
 - Botón "Abrir en terminal" dentro del modal storage-help (`xdg-open` / `konsole` / `gnome-terminal` / `wt`).
+- **Sincronizar `settings.json` entre PCs**: hoy la config vive en
+  `app_config_dir` local (Linux: `~/.config/twriter/`) — cada PC arranca
+  con su propio tema, idioma, font recents, grammar mode, diccionario,
+  rightPanelWidth, etc. Opciones a evaluar: (a) mover a
+  `<root>/.twriter/settings.json` para que vaya por git/cloud junto al
+  repo de novelas, (b) sumar export/import manual, (c) sync explícito
+  por gist/Dropbox. La (a) es la más seamless pero mezcla preferencias
+  per-PC (font recents) con per-repo (tema, idioma).
+- **Recordar posición del cursor entre sesiones**: el auto-load del
+  último capítulo ya funciona, pero abre siempre en `P. 1 · Col 0`.
+  Sumar persistencia de `(chapterPath, pmPos, scrollTop)` en
+  `settings.json::lastCursor` y restaurar al boot. Cuidado con el
+  reset-scroll del commit `0e97af8` — sólo aplica al cambiar de
+  capítulo, no al boot inicial.
 
 ### Observabilidad / Stats
 

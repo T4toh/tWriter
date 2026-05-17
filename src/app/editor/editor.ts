@@ -172,6 +172,12 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly fontMissing = computed<string | null>(() => {
     const v = this.fontFamily();
     if (isEditorFontPreset(v)) return null;
+    // Esperar a que ambos catálogos estén cargados antes de declarar la
+    // fuente como faltante. Sin esto, al abrir el editor aparecía el badge
+    // hasta que el dropdown se abriera y disparara el lazy-load.
+    if (!this.systemFonts.loaded()) return null;
+    const root = this.settings.root();
+    if (root && !this.fontsService.hasLoaded(root)) return null;
     if (this.systemFonts.has(v)) return null;
     if (this.poolFamilies().some((p) => p.family === v)) return null;
     return v;
@@ -491,6 +497,14 @@ export class Editor implements AfterViewInit, OnDestroy {
   ngAfterViewInit(): void {
     this.viewReady.set(true);
     void this.grammar.ping();
+    // Eager load del catálogo de fuentes (OS + pool del root) para que
+    // `fontMissing` resuelva al boot sin esperar a que el usuario abra el
+    // dropdown. Sin esto, el badge "⚠ fuente" aparecía hasta el primer open.
+    void this.systemFonts.ensureLoaded();
+    const root = this.settings.root();
+    if (root && !this.fontsService.hasLoaded(root)) {
+      void this.fontsService.refresh(root);
+    }
   }
 
   ngOnDestroy(): void {
