@@ -7,16 +7,11 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { invoke } from '@tauri-apps/api/core';
 import { BookConfig, BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
+import { CoverCache } from '../core/cover-cache';
 import { TreeNode } from '../core/types';
 import { Spinner } from '../shared/spinner';
-
-interface ImageData {
-  mime: string;
-  base64: string;
-}
 
 @Component({
   selector: 'app-book-card',
@@ -27,6 +22,7 @@ interface ImageData {
 export class BookCard {
   private cfgService = inject(BookConfigService);
   private chapter = inject(ChapterService);
+  private coverCache = inject(CoverCache);
 
   readonly node = input.required<TreeNode>();
   readonly select = output<TreeNode>();
@@ -138,8 +134,8 @@ export class BookCard {
     }
     const fullPath = tapa.startsWith('/') ? tapa : `${bookPath}/${tapa}`;
     try {
-      const img = await invoke<ImageData>('read_image', { path: fullPath });
-      this.coverDataUrl.set(`data:${img.mime};base64,${img.base64}`);
+      const url = await this.coverCache.urlFor(fullPath, this.cfgService.savedAt());
+      this.coverDataUrl.set(url);
     } catch {
       this.coverDataUrl.set(null);
     }

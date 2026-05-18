@@ -33,12 +33,16 @@
   border-radius: 3px;
   background: var(--bg-soft);
   border: 1px solid var(--border);
+  contain: paint;
 
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
+    transform: translateZ(0);
+    will-change: transform;
+    backface-visibility: hidden;
   }
 }
 
