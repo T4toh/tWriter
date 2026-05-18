@@ -13,6 +13,7 @@ import { NoteService, NoteTarget } from '../core/note-service';
 import { ProjectService } from '../core/project-service';
 import { SagaConfigService } from '../core/saga-config-service';
 import { SettingsService } from '../core/settings-service';
+import { SplitChapterService } from '../core/split-chapter-service';
 import { ThemesService } from '../core/themes-service';
 import { ToastService } from '../core/toast-service';
 import { FontEntry, ThemeMeta, TreeNode } from '../core/types';
@@ -42,6 +43,7 @@ export class NodeActionsService {
   private toast = inject(ToastService);
   private modal = inject(ModalService);
   private dialogs = inject(NativeDialogsService);
+  private splitSvc = inject(SplitChapterService);
 
   // ───── Builders ─────
 
@@ -144,6 +146,22 @@ export class NodeActionsService {
           onClick: () => this.deleteOriginal(node),
         });
       }
+      if (this.isFlatSplittableChapter(node)) {
+        if (entries.length > 0) entries.push({ kind: 'separator' });
+        entries.push({
+          label: 'Reestructurar en partes…',
+          kbd: '📂',
+          onClick: () => this.splitChapter(node),
+        });
+      }
+      if (this.isNumericedPart(node)) {
+        if (entries.length > 0) entries.push({ kind: 'separator' });
+        entries.push({
+          label: 'Agregar parte nueva',
+          kbd: '+1',
+          onClick: () => this.insertPartAfter(node),
+        });
+      }
       if (moveable) {
         if (entries.length > 0) entries.push({ kind: 'separator' });
         entries.push(
@@ -226,6 +244,16 @@ export class NodeActionsService {
         danger: true,
         onClick: () => this.cleanupBulk(node),
       });
+    }
+    if (!isExcluded && node.kind === 'book') {
+      const splittable = this.collectSplittable(node);
+      if (splittable.length > 0) {
+        entries.push({
+          label: 'Reestructurar libro entero…',
+          kbd: String(splittable.length),
+          onClick: () => this.splitBookBulk(node),
+        });
+      }
     }
 
     if (canMove) {
@@ -863,6 +891,48 @@ export class NodeActionsService {
       }
     });
     return out;
+  }
+
+  isFlatSplittableChapter(node: TreeNode): boolean {
+    if (node.kind !== 'chapter') return false;
+    const ext = (node.ext ?? '').toLowerCase();
+    if (ext !== 'docx' && ext !== 'odt' && ext !== 'html') return false;
+    const tree = this.project.tree();
+    if (!tree) return false;
+    const parent = findParent(tree, node);
+    return parent?.kind === 'book';
+  }
+
+  collectSplittable(book: TreeNode): TreeNode[] {
+    if (book.kind !== 'book') return [];
+    return book.children.filter((c) => {
+      if (c.kind !== 'chapter') return false;
+      const ext = (c.ext ?? '').toLowerCase();
+      return ext === 'docx' || ext === 'odt' || ext === 'html';
+    });
+  }
+
+  async splitChapter(node: TreeNode): Promise<void> {
+    await this.splitSvc.startSingle(node.path);
+  }
+
+  async insertPartAfter(node: TreeNode): Promise<void> {
+    await this.chapter.insertPartAfter(node.path);
+  }
+
+  isNumericedPart(node: TreeNode): boolean {
+    if (node.kind !== 'chapter' || node.ext !== 'html') return false;
+    if (!/^\d+$/.test(node.name)) return false;
+    const tree = this.project.tree();
+    if (!tree) return false;
+    const parent = findParent(tree, node);
+    return parent?.kind === 'section';
+  }
+
+  async splitBookBulk(book: TreeNode): Promise<void> {
+    const splittable = this.collectSplittable(book);
+    if (splittable.length === 0) return;
+    await this.splitSvc.startBulk(splittable.map((c) => c.path));
   }
 
   hasHtmlSibling(node: TreeNode, scope: TreeNode | null = this.project.tree()): boolean {

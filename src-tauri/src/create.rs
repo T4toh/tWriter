@@ -61,6 +61,141 @@ fn create_chapter_impl(
     Ok(CreateResult { path: path_str })
 }
 
+/// Inserta una parte nueva (vacía) inmediatamente después de la parte cuyo
+/// path se pasa. Las partes existentes con número mayor se renumeran +1
+/// (`<n>.html` → `<n+1>.html`, idem `.meta.json`, y `orden` en meta).
+///
+/// Requiere stem numérico (`<N>.html`). Shift hecho en orden descendente
+/// para evitar colisiones intermedias. Si falla mid-shift, revierte los
+/// renames hechos hasta el punto de falla.
+#[tauri::command]
+pub async fn insert_part_after(part_path: String) -> Result<CreateResult, String> {
+    tauri::async_runtime::spawn_blocking(move || insert_part_after_impl(&part_path))
+        .await
+        .map_err(|e| format!("task: {}", e))?
+}
+
+fn insert_part_after_impl(part_path: &str) -> Result<CreateResult, String> {
+    let src = PathBuf::from(part_path);
+    let parent = src
+        .parent()
+        .ok_or_else(|| "sin directorio padre".to_string())?
+        .to_path_buf();
+    let stem = src
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| "path sin filename".to_string())?;
+    let current_num: u32 = stem
+        .parse()
+        .map_err(|_| format!("no es parte numerada: {}", stem))?;
+    let new_num = current_num + 1;
+
+    // Listar partes con número mayor al actual, ordenadas DESC para shift.
+    let mut to_shift: Vec<u32> = fs::read_dir(&parent)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let p = e.path();
+            if p.extension().and_then(|x| x.to_str()) != Some("html") {
+                return None;
+            }
+            let s = p.file_stem().and_then(|x| x.to_str())?;
+            let n: u32 = s.parse().ok()?;
+            if n > current_num { Some(n) } else { None }
+        })
+        .collect();
+    to_shift.sort_by(|a, b| b.cmp(a));
+
+    let new_html = parent.join(format!("{}.html", new_num));
+    let new_meta = parent.join(format!("{}.meta.json", new_num));
+
+    // Tracking de renames hechos para revertir en caso de error.
+    let mut renames: Vec<(PathBuf, PathBuf)> = Vec::new();
+
+    for n in &to_shift {
+        let old_html = parent.join(format!("{}.html", n));
+        let new_html_dst = parent.join(format!("{}.html", n + 1));
+        let old_meta = parent.join(format!("{}.meta.json", n));
+        let new_meta_dst = parent.join(format!("{}.meta.json", n + 1));
+
+        if let Err(e) = fs::rename(&old_html, &new_html_dst) {
+            revert_renames(&renames);
+            return Err(format!(
+                "renombrar {}: {}",
+                old_html.display(),
+                e
+            ));
+        }
+        renames.push((old_html, new_html_dst));
+
+        if old_meta.is_file() {
+            if let Err(e) = fs::rename(&old_meta, &new_meta_dst) {
+                revert_renames(&renames);
+                return Err(format!(
+                    "renombrar {}: {}",
+                    old_meta.display(),
+                    e
+                ));
+            }
+            renames.push((old_meta, new_meta_dst.clone()));
+
+            // Actualizar `orden` en meta movida.
+            if let Err(e) = bump_orden_in_meta(&new_meta_dst, n + 1) {
+                revert_renames(&renames);
+                return Err(e);
+            }
+        }
+    }
+
+    // Crear la parte nueva (vacía) heredando idioma del entorno.
+    let idioma = crate::import::inherit_idioma(&parent).unwrap_or_else(|| "es".to_string());
+    if let Err(e) = fs::write(&new_html, "<p></p>\n") {
+        revert_renames(&renames);
+        return Err(format!("escribir {}: {}", new_html.display(), e));
+    }
+    let meta_json = serde_json::json!({
+        "orden": new_num,
+        "titulo": new_num.to_string(),
+        "status": "draft",
+        "idioma": idioma,
+    });
+    if let Err(e) = fs::write(
+        &new_meta,
+        serde_json::to_string_pretty(&meta_json).unwrap_or_default(),
+    ) {
+        let _ = fs::remove_file(&new_html);
+        revert_renames(&renames);
+        return Err(format!("escribir {}: {}", new_meta.display(), e));
+    }
+
+    let path_str = new_html.to_string_lossy().into_owned();
+    tracing::info!(target: "create", path = %new_html.display(), shifted = to_shift.len(), "parte insertada");
+    search::index_path_best_effort(&path_str, "chapter");
+    Ok(CreateResult { path: path_str })
+}
+
+fn revert_renames(renames: &[(PathBuf, PathBuf)]) {
+    for (from, to) in renames.iter().rev() {
+        let _ = fs::rename(to, from);
+    }
+}
+
+fn bump_orden_in_meta(meta_path: &Path, new_orden: u32) -> Result<(), String> {
+    let raw = fs::read_to_string(meta_path)
+        .map_err(|e| format!("leer {}: {}", meta_path.display(), e))?;
+    let mut v: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|e| format!("parse {}: {}", meta_path.display(), e))?;
+    if let Some(obj) = v.as_object_mut() {
+        obj.insert(
+            "orden".to_string(),
+            serde_json::Value::Number(new_orden.into()),
+        );
+    }
+    let out = serde_json::to_string_pretty(&v).unwrap_or(raw);
+    fs::write(meta_path, out).map_err(|e| format!("escribir {}: {}", meta_path.display(), e))?;
+    Ok(())
+}
+
 /// Crea un directorio dentro de `parent_dir` con `name`.
 /// Si `numbered` es true y los hermanos siguen el patrón "N - Nombre",
 /// prepende el próximo número. Si no, usa name tal cual.
@@ -277,4 +412,88 @@ fn next_dir_num(parent: &std::path::Path) -> Result<u32, String> {
         }
     }
     Ok(max + 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn write_part(dir: &Path, n: u32, body: &str) {
+        fs::write(dir.join(format!("{}.html", n)), body).unwrap();
+        fs::write(
+            dir.join(format!("{}.meta.json", n)),
+            format!(
+                r#"{{"orden":{},"titulo":"{}","status":"draft","idioma":"es"}}"#,
+                n, n
+            ),
+        )
+        .unwrap();
+    }
+
+    fn read_orden(dir: &Path, n: u32) -> Option<u64> {
+        let raw = fs::read_to_string(dir.join(format!("{}.meta.json", n))).ok()?;
+        let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+        v.get("orden").and_then(|x| x.as_u64())
+    }
+
+    #[test]
+    fn insert_part_after_shifts_subsequent() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
+        write_part(dir, 1, "<p>uno</p>");
+        write_part(dir, 2, "<p>dos</p>");
+        write_part(dir, 3, "<p>tres</p>");
+
+        let part2 = dir.join("2.html");
+        let res = insert_part_after_impl(part2.to_str().unwrap()).unwrap();
+        assert!(res.path.ends_with("3.html"));
+
+        assert_eq!(fs::read_to_string(dir.join("1.html")).unwrap(), "<p>uno</p>");
+        assert_eq!(fs::read_to_string(dir.join("2.html")).unwrap(), "<p>dos</p>");
+        assert_eq!(
+            fs::read_to_string(dir.join("3.html")).unwrap().trim(),
+            "<p></p>"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.join("4.html")).unwrap(),
+            "<p>tres</p>"
+        );
+
+        assert_eq!(read_orden(dir, 4), Some(4));
+        assert_eq!(read_orden(dir, 3), Some(3));
+        assert_eq!(read_orden(dir, 2), Some(2));
+    }
+
+    #[test]
+    fn insert_part_after_last_no_shift() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
+        write_part(dir, 1, "<p>uno</p>");
+        write_part(dir, 2, "<p>dos</p>");
+
+        let part2 = dir.join("2.html");
+        let res = insert_part_after_impl(part2.to_str().unwrap()).unwrap();
+        assert!(res.path.ends_with("3.html"));
+
+        assert_eq!(fs::read_to_string(dir.join("1.html")).unwrap(), "<p>uno</p>");
+        assert_eq!(fs::read_to_string(dir.join("2.html")).unwrap(), "<p>dos</p>");
+        assert_eq!(
+            fs::read_to_string(dir.join("3.html")).unwrap().trim(),
+            "<p></p>"
+        );
+        assert_eq!(read_orden(dir, 3), Some(3));
+    }
+
+    #[test]
+    fn insert_part_after_non_numeric_fails() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
+        let weird = dir.join("intro.html");
+        fs::write(&weird, "<p>x</p>").unwrap();
+
+        let res = insert_part_after_impl(weird.to_str().unwrap());
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("no es parte numerada"));
+    }
 }

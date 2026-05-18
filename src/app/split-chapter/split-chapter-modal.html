@@ -1,0 +1,120 @@
+@if (editing(); as s) {
+  <div class="sc-backdrop" (click)="close()"></div>
+  <div class="sc-modal" (click)="$event.stopPropagation()">
+    <header class="sc-header">
+      <div class="sc-title-row">
+        <h2>Reestructurar en partes</h2>
+        @if (bulkMode()) {
+          <span class="sc-queue-pos">Capítulo {{ s.queueIndex + 1 }} de {{ s.queueTotal }}</span>
+        }
+      </div>
+      <p class="sc-path">{{ s.preview.source_path }}</p>
+    </header>
+
+    @if (loading()) {
+      <div class="sc-loading">Cargando preview…</div>
+    } @else {
+      <div class="sc-body">
+        <div class="sc-config">
+          <label class="sc-folder-name">
+            <span>Nombre de la carpeta</span>
+            <input
+              type="text"
+              [ngModel]="s.folderName"
+              (ngModelChange)="onFolderNameChange($event)"
+              placeholder="Ej: 1 - Shin - 1"
+            />
+          </label>
+          <div class="sc-summary">
+            <strong>{{ partsSummary().length }}</strong> parte(s):
+            <ul>
+              @for (p of partsSummary(); track p.number) {
+                <li>
+                  <button
+                    type="button"
+                    class="sc-part-jump"
+                    (click)="scrollToPart(p.startIndex)"
+                    [title]="'Saltar a parte ' + p.number"
+                  >
+                    <span class="sc-part-num">{{ p.number }}</span>
+                    <span class="sc-part-meta">{{ p.blockCount }} bloques</span>
+                    <span class="sc-part-preview">{{ p.firstBlockText }}</span>
+                  </button>
+                </li>
+              }
+            </ul>
+          </div>
+        </div>
+
+        <div class="sc-blocks" #blocksContainer>
+          @for (block of s.preview.blocks; let i = $index; track block.id) {
+            @if (i > 0) {
+              <button
+                type="button"
+                class="sc-boundary"
+                [class.active]="s.boundaries[i]"
+                (click)="toggleBoundary(i)"
+                [title]="s.boundaries[i] ? 'Quitar split aquí' : 'Partir acá'"
+              >
+                @if (s.boundaries[i]) {
+                  ▼ Parte nueva
+                } @else {
+                  ─ ─ ─ partir acá ─ ─ ─
+                }
+              </button>
+            }
+            <div
+              class="sc-block"
+              [attr.data-block-index]="i"
+              [class.candidate]="block.is_candidate"
+              [class.boundary-start]="s.boundaries[i] || i === 0"
+            >
+              @if (block.is_candidate) {
+                <span class="sc-badge" [title]="block.candidate_reason ?? ''">{{ candidateBadge(block.candidate_reason) }}</span>
+              }
+              <div class="sc-block-html" [innerHTML]="block.html"></div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <footer class="sc-footer">
+        @if (lastResult(); as r) {
+          <span class="sc-post-summary">Dividido en {{ r.parts_written }} parte(s).</span>
+          @if (bulkMode()) {
+            <button type="button" class="btn btn-secondary" (click)="abortRest()" [disabled]="applying()">Cancelar resto</button>
+          }
+          @if (canApplyRae()) {
+            <button type="button" class="btn btn-primary" (click)="applyRae()" [disabled]="applying()">
+              @if (applying()) {
+                Aplicando RAE…
+              } @else {
+                Aplicar RAE a partes
+              }
+            </button>
+          }
+          <button type="button" class="btn btn-secondary" (click)="continueWithoutRae()" [disabled]="applying()">
+            @if (bulkMode()) {
+              Continuar
+            } @else {
+              Listo
+            }
+          </button>
+        } @else {
+          <button type="button" class="btn btn-secondary" (click)="close()" [disabled]="applying()">Cancelar</button>
+          @if (bulkMode()) {
+            <button type="button" class="btn btn-secondary" (click)="abortRest()" [disabled]="applying()">Cancelar resto</button>
+            <button type="button" class="btn btn-secondary" (click)="skip()" [disabled]="applying()">Skip</button>
+          }
+          <button type="button" class="btn btn-primary" (click)="apply()" [disabled]="!canApply()">
+            @if (applying()) {
+              Aplicando…
+            } @else {
+              Aplicar
+            }
+          </button>
+        }
+      </footer>
+    }
+  </div>
+}

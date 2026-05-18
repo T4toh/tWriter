@@ -104,6 +104,13 @@ Reglas:
 - Context menu: crear, mover, renombrar, importar, exportar EPUB, configurar libro, excluir del EPUB. Para notas: abrir, renombrar, borrar. Para carpetas libres: nueva nota, nueva carpeta, renombrar, borrar.
 - Right-click en área vacía del tree → "Crear saga / novela", "Nueva carpeta…" (📁 libre), "Nueva nota…" (`.md` suelta).
 - Reorder vía drag & drop (sagas, libros, secciones, capítulos, notas) + mover cross-parent (capítulo entre secciones, sección entre libros, libro entre sagas). Context menu ↑/↓ sigue disponible. Sagas/libros/secciones sin prefijo numérico se migran a `1..N` automáticamente en el primer DnD.
+- **Insertar parte intermedia**: right-click sobre una parte numerada
+  (`<N>.html` dentro de una sección) → "Agregar parte nueva" inserta un
+  `<N+1>.html` vacío y shiftea las siguientes (`N+1` → `N+2`, `N+2` →
+  `N+3`, …) renombrando los `.html` + `.meta.json` en orden descendente
+  para evitar colisiones y actualizando el campo `orden` en cada meta
+  movida. Comando Rust `insert_part_after` con revert on error (si falla
+  mid-shift, deshace los renames hechos).
 - Archivos no-chapter visibles en el tree con íconos por tipo (🖼 imagen, 📄 documento, 📝 texto, 📦 otro). Notas con 📝 y badge `.md`.
 - Template inicial precargado (saga/libro/capítulo dummy) al crear sagas/libros nuevos.
 - Badge "excluido" para `.twriter-ignore`.
@@ -260,6 +267,24 @@ viejo, validador los detecta correctamente con `paragraph-collapsed`.
 ### Importer
 
 - Pandoc CLI shell-out (`.docx`/`.odt` → HTML subset). Single chapter o bulk.
+- **Reestructurar capítulo plano en partes** (right-click → "Reestructurar
+  en partes…"): convierte un `.docx`/`.odt`/`.html` viejo (cada capítulo
+  era un solo archivo con las partes adentro, separadas por headings o
+  labels `1`/`Parte 2`/`III`) a la estructura moderna (folder por
+  capítulo con `<N>.html` + `<N>.meta.json` por parte). El modal muestra
+  los bloques parseados con candidates (`H1`/`H2`/`HR`/`#`) y el usuario
+  toggea boundaries; default pre-marca los splits razonables y respeta
+  un primer bloque tipo título como arranque de parte 1. Al apply:
+  `strip_label_blocks` descarta el primer bloque de parte 1 si parece
+  título (heading o `<p>` ≤4 palabras no numérico — pandoc convierte
+  títulos ODT a `<p>` planos) y los labels `short-numeric` al inicio de
+  cada parte (el folder name guarda el título, el filename guarda el
+  número). El `.odt`/`.docx` original se archiva en `_originales/` por
+  si hace falta volver atrás. Modo bulk "Reestructurar libro entero…"
+  (botón derecho sobre el libro) procesa todos los capítulos planos en
+  cola. Post-apply, si `idioma=es`, aparece el botón **"Aplicar RAE a
+  partes"** que corre el converter D1–D5 sobre cada parte recién
+  creada y reescribe los HTML modificados (toast con el conteo).
 - Wizard de importación de saga/novela (📥 en header): trae carpeta externa al repo con detección heurística de estructura, decisión per-carpeta sobre conversión, metadata de saga + libros (nombre / autor / idioma / imprenta), normalización de tapas y extras, progress bar con eventos. La presentación EPUB (template, dropcap, prefijo y numeración de capítulos) **no** se pregunta acá — vive en el tema (`theme.json` + `saga.json::theme.overrides` / `book.json::theme.overrides`) y se edita desde el theme editor. `SagaConfig`/`BookConfig` mantienen los 6 campos legacy como `Option<…>` y `theme.rs::resolve_theme` los lee de root para repos viejos (backcompat read-side intacta).
 - **Captura de extras con estructura**: subcarpetas sin `.docx`/`.odt` (ej. `versiones viejas/`) y subcarpetas dentro de secciones (`convertidos/`, `original/`, `Revisiones/`) se importan como extras preservando subpath, no se vuelven fake sections ni se pierden silenciosamente. Skip-list del importer separado del walker del tree (`fs.rs::SKIP_DIRS`) — el tree oculta `convertidos/` para no llenar la navegación; el importer lo agarra igual y lo guarda como backup. Wizard expone cada extra (incluyendo subpath) con su target path completo en el step "estructura".
 - **Toggle "Centralizar extras en `<saga>/extras/`"** (default ON, visible en step `saga-config`): redirige todos los extras (book + section + subpath) a la carpeta `extras/` de la saga preservando estructura `<book>/<section>/<subpath>/<file>`. El TOC de cada libro queda limpio (solo caps + book.json + cover). OFF mantiene comportamiento legacy con extras adentro de cada libro/sección.
@@ -489,7 +514,6 @@ paru -S twriter-bin
 ### Editor / UX
 
 - Más variantes de divisor de escena (más allá del `* * *`).
-- Divisor automático de partes (reglas confusas, hoy lo hace a mano).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
 - **Marcador huérfano post jump-to-term**: el highlight naranja de
