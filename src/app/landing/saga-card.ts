@@ -7,14 +7,9 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { invoke } from '@tauri-apps/api/core';
 import { BookConfigService } from '../core/book-config-service';
+import { CoverCache } from '../core/cover-cache';
 import { TreeNode } from '../core/types';
-
-interface ImageData {
-  mime: string;
-  base64: string;
-}
 
 interface BookThumb {
   node: TreeNode;
@@ -32,6 +27,7 @@ const MAX_THUMBS = 6;
 })
 export class SagaCard {
   private cfgService = inject(BookConfigService);
+  private coverCache = inject(CoverCache);
 
   readonly node = input.required<TreeNode>();
   readonly select = output<TreeNode>();
@@ -86,28 +82,29 @@ export class SagaCard {
 
   private async loadThumbs(saga: TreeNode): Promise<void> {
     const books = saga.children.filter((c) => c.kind === 'book').slice(0, MAX_THUMBS);
-    const out: BookThumb[] = [];
-    for (const book of books) {
-      const title = book.name.replace(/^\d+\s*-\s*/, '');
-      let cover: string | null = null;
-      try {
-        const cfg = await this.cfgService.load(book.path);
-        if (cfg.tapa && cfg.tapa.trim()) {
-          const fullPath = cfg.tapa.startsWith('/')
-            ? cfg.tapa
-            : `${book.path}/${cfg.tapa}`;
-          try {
-            const img = await invoke<ImageData>('read_image', { path: fullPath });
-            cover = `data:${img.mime};base64,${img.base64}`;
-          } catch {
-            cover = null;
+    const version = this.cfgService.savedAt();
+    const out = await Promise.all(
+      books.map(async (book): Promise<BookThumb> => {
+        const title = book.name.replace(/^\d+\s*-\s*/, '');
+        let cover: string | null = null;
+        try {
+          const cfg = await this.cfgService.load(book.path);
+          if (cfg.tapa && cfg.tapa.trim()) {
+            const fullPath = cfg.tapa.startsWith('/')
+              ? cfg.tapa
+              : `${book.path}/${cfg.tapa}`;
+            try {
+              cover = await this.coverCache.urlFor(fullPath, version);
+            } catch {
+              cover = null;
+            }
           }
+        } catch {
+          // sin config — solo placeholder
         }
-      } catch {
-        // sin config — solo placeholder
-      }
-      out.push({ node: book, title, cover });
-    }
+        return { node: book, title, cover };
+      }),
+    );
     this.thumbs.set(out);
   }
 }

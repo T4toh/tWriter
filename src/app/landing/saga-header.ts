@@ -6,15 +6,10 @@ import {
   input,
   signal,
 } from '@angular/core';
-import { invoke } from '@tauri-apps/api/core';
 import { BookConfigService } from '../core/book-config-service';
+import { CoverCache } from '../core/cover-cache';
 import { SagaConfig, SagaConfigService } from '../core/saga-config-service';
 import { TreeNode } from '../core/types';
-
-interface ImageData {
-  mime: string;
-  base64: string;
-}
 
 @Component({
   selector: 'app-saga-header',
@@ -25,6 +20,7 @@ interface ImageData {
 export class SagaHeader {
   private cfgService = inject(SagaConfigService);
   private bookCfgService = inject(BookConfigService);
+  private coverCache = inject(CoverCache);
 
   readonly node = input.required<TreeNode>();
 
@@ -81,11 +77,13 @@ export class SagaHeader {
   }
 
   private async loadCover(saga: TreeNode, tapa: string | null): Promise<void> {
+    const sagaVer = this.cfgService.savedAt();
+    const bookVer = this.bookCfgService.savedAt();
     if (tapa && tapa.trim()) {
       const fullPath = tapa.startsWith('/') ? tapa : `${saga.path}/${tapa}`;
       try {
-        const img = await invoke<ImageData>('read_image', { path: fullPath });
-        this.coverDataUrl.set(`data:${img.mime};base64,${img.base64}`);
+        const url = await this.coverCache.urlFor(fullPath, sagaVer);
+        this.coverDataUrl.set(url);
         this.coverFromBook.set(false);
         return;
       } catch {
@@ -100,8 +98,8 @@ export class SagaHeader {
         const btapa = bcfg.tapa;
         if (btapa && btapa.trim()) {
           const fullPath = btapa.startsWith('/') ? btapa : `${child.path}/${btapa}`;
-          const img = await invoke<ImageData>('read_image', { path: fullPath });
-          this.coverDataUrl.set(`data:${img.mime};base64,${img.base64}`);
+          const url = await this.coverCache.urlFor(fullPath, bookVer);
+          this.coverDataUrl.set(url);
           this.coverFromBook.set(true);
           return;
         }
