@@ -850,7 +850,7 @@ fn collect_chapters(
         let dir_name = d.file_name().and_then(|s| s.to_str()).unwrap_or("");
         let ch_title = strip_numeric_prefix(dir_name);
         let mut parts = collect_html_parts(d)?;
-        parts.sort();
+        sort_parts(&mut parts);
         if parts.is_empty() {
             continue;
         }
@@ -869,7 +869,7 @@ fn collect_chapters(
     // Si no había secciones, tratamos el libro entero como un solo capítulo
     if chapters.is_empty() && epilogo.is_none() {
         let mut direct = collect_html_parts(book_dir)?;
-        direct.sort();
+        sort_parts(&mut direct);
         if !direct.is_empty() {
             let title = strip_numeric_prefix(
                 book_dir.file_name().and_then(|s| s.to_str()).unwrap_or(""),
@@ -913,6 +913,14 @@ fn read_part_meta_title(html_path: &Path) -> Option<String> {
         return None;
     }
     Some(t)
+}
+
+fn sort_parts(parts: &mut [PathBuf]) {
+    parts.sort_by(|a, b| {
+        let sa = a.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let sb = b.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        leading_num(sa).cmp(&leading_num(sb)).then_with(|| sa.cmp(sb))
+    });
 }
 
 fn collect_html_parts(dir: &Path) -> Result<Vec<PathBuf>, String> {

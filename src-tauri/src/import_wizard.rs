@@ -113,10 +113,21 @@ fn classify_source(p: &Path) -> SourceKind {
     if p.join("book.json").is_file() {
         return SourceKind::Book;
     }
-    // Heurística: si tiene caps directos → book. Si solo subdirs y al menos uno
-    // contiene caps → saga. Default → book.
-    let mut has_chapters = false;
-    let mut book_like_subdirs = 0u32;
+    // Heurística según estilo del autor:
+    //  - Viejo: saga/libro/cap.docx (cap = file único, nombre descriptivo
+    //    "1 - Ihsahan - 1.docx").
+    //  - Nuevo: saga/libro/cap-folder/parte.odt (parte = file con stem
+    //    numérico puro "1.odt", "2.odt").
+    // Cada subdir directo de root se clasifica en uno de tres roles:
+    //  - book_with_subbooks: tiene sub-subdirs con capítulos (libro estilo
+    //    nuevo, o saga con sub-saga). Marker fuerte de saga si hay 2+.
+    //  - flat_book: archivos directos con stems descriptivos → libro plano.
+    //  - chapter_folder: archivos directos con stems puramente numéricos →
+    //    carpeta-de-capítulo del estilo nuevo, dentro de un libro.
+    let mut has_direct_chapters_at_root = false;
+    let mut book_with_subbooks = 0u32;
+    let mut flat_books = 0u32;
+    let mut chapter_folders = 0u32;
     if let Ok(entries) = fs::read_dir(p) {
         for e in entries.flatten() {
             let path = e.path();
@@ -125,19 +136,105 @@ fn classify_source(p: &Path) -> SourceKind {
                 continue;
             }
             if path.is_file() && is_chapter_file(&path) {
-                has_chapters = true;
-            } else if path.is_dir() && dir_has_chapters_recursive(&path, 2) {
-                book_like_subdirs += 1;
+                has_direct_chapters_at_root = true;
+            } else if path.is_dir() {
+                if subdir_has_chapter_bearing_subdir(&path) {
+                    book_with_subbooks += 1;
+                } else {
+                    match classify_chapter_dir(&path) {
+                        ChapterDirRole::FlatBook => flat_books += 1,
+                        ChapterDirRole::ChapterFolder => chapter_folders += 1,
+                        ChapterDirRole::Empty => {}
+                    }
+                }
             }
         }
     }
-    if has_chapters {
-        SourceKind::Book
-    } else if book_like_subdirs > 0 {
-        SourceKind::Saga
-    } else {
-        SourceKind::Book
+    // 2+ libros con sub-secciones → saga (estilo mixto o nuevo).
+    if book_with_subbooks >= 2 {
+        return SourceKind::Saga;
     }
+    // 2+ libros planos → saga estilo viejo.
+    if flat_books >= 2 {
+        return SourceKind::Saga;
+    }
+    // 1 libro con sub-secciones + libros planos sueltos → saga mixta.
+    if book_with_subbooks >= 1 && flat_books >= 1 {
+        return SourceKind::Saga;
+    }
+    // chapter_folders dominantes → estilo nuevo, root es un libro.
+    if chapter_folders > 0 && flat_books == 0 && book_with_subbooks == 0 {
+        return SourceKind::Book;
+    }
+    if has_direct_chapters_at_root {
+        return SourceKind::Book;
+    }
+    // Edge: solo 1 flat_book sin nada más → ambiguo, default a Book (wrapper).
+    SourceKind::Book
+}
+
+enum ChapterDirRole {
+    FlatBook,
+    ChapterFolder,
+    Empty,
+}
+
+/// Clasifica un subdir SIN sub-subdirs-con-caps:
+///  - archivos con stem numérico puro ("1.odt", "2.html") → ChapterFolder.
+///  - archivos con stem descriptivo ("1 - Ihsahan - 1.docx") → FlatBook.
+///  - sin capítulos → Empty.
+fn classify_chapter_dir(p: &Path) -> ChapterDirRole {
+    let Ok(entries) = fs::read_dir(p) else {
+        return ChapterDirRole::Empty;
+    };
+    let mut numeric_stems = 0u32;
+    let mut descriptive_stems = 0u32;
+    for e in entries.flatten() {
+        let path = e.path();
+        if !path.is_file() || !is_chapter_file(&path) {
+            continue;
+        }
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .trim();
+        if stem.is_empty() {
+            continue;
+        }
+        if stem.chars().all(|c| c.is_ascii_digit()) {
+            numeric_stems += 1;
+        } else {
+            descriptive_stems += 1;
+        }
+    }
+    if numeric_stems + descriptive_stems == 0 {
+        ChapterDirRole::Empty
+    } else if descriptive_stems == 0 {
+        ChapterDirRole::ChapterFolder
+    } else {
+        ChapterDirRole::FlatBook
+    }
+}
+
+fn subdir_has_chapter_bearing_subdir(p: &Path) -> bool {
+    let Ok(entries) = fs::read_dir(p) else {
+        return false;
+    };
+    for e in entries.flatten() {
+        let path = e.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let name = e.file_name().to_string_lossy().into_owned();
+        if should_skip_dir(&name) {
+            continue;
+        }
+        if dir_has_chapters_recursive(&path, 2) {
+            return true;
+        }
+    }
+    false
 }
 
 fn dir_has_chapters_recursive(p: &Path, max_depth: u32) -> bool {
