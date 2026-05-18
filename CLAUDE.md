@@ -115,7 +115,8 @@ genere conflictos entre PCs. Errores del CLI git se categorizan en
 - **Sprint 2** ✓ integración git (auto-commit + push) con `git2`, status polling 30s, auto-commit 5 min
 - **Sprint 3** ✓ importer Pandoc shell-out, port TS de D1–D5, UI de conversión con diff
 - **Sprint 4** ✓ EPUB builder en Rust con `zip` + `uuid`, CSS subset Reedsy, manifest+spine+nav
-- **Sprint 5**: LanguageTool, templates 6×9"/5×8"/A5, polish
+- **Sprint 5** ✓ LanguageTool, templates 6×9"/5×8"/A5, polish
+- **Sprint 6** ✓ reestructurar capítulo plano en folder con partes (`split_chapter.rs` + modal con preview de bloques + strip auto de título/labels + bulk libro entero), insertar parte intermedia con shift (`insert_part_after`), "Aplicar RAE a partes" post-split
 
 ## Verificación end-to-end (al completar MVP)
 

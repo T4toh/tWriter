@@ -15,6 +15,12 @@ export class SplitChapterModal {
   protected readonly loading = this.svc.loading;
   protected readonly applying = this.svc.applying;
   protected readonly bulkMode = this.svc.bulkMode;
+  protected readonly lastResult = this.svc.lastResult;
+
+  protected readonly canApplyRae = computed(() => {
+    const s = this.editing();
+    return !!this.lastResult() && s?.preview.idioma === 'es' && !this.applying();
+  });
 
   protected readonly blocksContainer = viewChild<ElementRef<HTMLElement>>('blocksContainer');
 
@@ -63,6 +69,14 @@ export class SplitChapterModal {
 
   protected async apply(): Promise<void> {
     await this.svc.apply();
+  }
+
+  protected async applyRae(): Promise<void> {
+    await this.svc.applyRaeToParts();
+  }
+
+  protected async continueWithoutRae(): Promise<void> {
+    await this.svc.continueWithoutRae();
   }
 
   protected async skip(): Promise<void> {

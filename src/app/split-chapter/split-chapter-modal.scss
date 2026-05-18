@@ -282,6 +282,13 @@
   display: flex;
   gap: 0.6rem;
   justify-content: flex-end;
+  align-items: center;
+
+  .sc-post-summary {
+    margin-right: auto;
+    color: var(--text-muted, #aaa);
+    font-size: 0.9rem;
+  }
 
   .btn {
     padding: 0.5rem 1rem;

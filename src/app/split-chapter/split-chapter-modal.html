@@ -79,18 +79,41 @@
       </div>
 
       <footer class="sc-footer">
-        <button type="button" class="btn btn-secondary" (click)="close()" [disabled]="applying()">Cancelar</button>
-        @if (bulkMode()) {
-          <button type="button" class="btn btn-secondary" (click)="abortRest()" [disabled]="applying()">Cancelar resto</button>
-          <button type="button" class="btn btn-secondary" (click)="skip()" [disabled]="applying()">Skip</button>
-        }
-        <button type="button" class="btn btn-primary" (click)="apply()" [disabled]="!canApply()">
-          @if (applying()) {
-            Aplicando…
-          } @else {
-            Aplicar
+        @if (lastResult(); as r) {
+          <span class="sc-post-summary">Dividido en {{ r.parts_written }} parte(s).</span>
+          @if (bulkMode()) {
+            <button type="button" class="btn btn-secondary" (click)="abortRest()" [disabled]="applying()">Cancelar resto</button>
           }
-        </button>
+          @if (canApplyRae()) {
+            <button type="button" class="btn btn-primary" (click)="applyRae()" [disabled]="applying()">
+              @if (applying()) {
+                Aplicando RAE…
+              } @else {
+                Aplicar RAE a partes
+              }
+            </button>
+          }
+          <button type="button" class="btn btn-secondary" (click)="continueWithoutRae()" [disabled]="applying()">
+            @if (bulkMode()) {
+              Continuar
+            } @else {
+              Listo
+            }
+          </button>
+        } @else {
+          <button type="button" class="btn btn-secondary" (click)="close()" [disabled]="applying()">Cancelar</button>
+          @if (bulkMode()) {
+            <button type="button" class="btn btn-secondary" (click)="abortRest()" [disabled]="applying()">Cancelar resto</button>
+            <button type="button" class="btn btn-secondary" (click)="skip()" [disabled]="applying()">Skip</button>
+          }
+          <button type="button" class="btn btn-primary" (click)="apply()" [disabled]="!canApply()">
+            @if (applying()) {
+              Aplicando…
+            } @else {
+              Aplicar
+            }
+          </button>
+        }
       </footer>
     }
   </div>

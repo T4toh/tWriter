@@ -31,7 +31,7 @@ mod util;
 use audit::list_chapters_for_audit;
 use book_config::{get_book_config, mark_as_epilogo, set_book_config};
 use saga_config::{find_saga_dir, get_saga_config, set_saga_config};
-use create::{create_book, create_chapter, create_directory};
+use create::{create_book, create_chapter, create_directory, insert_part_after};
 use demo_template::generate_demo_template;
 use dialogs::{pick_file, pick_folder};
 use epub::{export_book, list_exports};
@@ -57,7 +57,7 @@ use reorder::{move_node, relocate_node};
 use search::{search_query, search_reindex};
 use secrets::{lt_api_key_save, lt_api_key_status};
 use settings::{get_settings, set_settings};
-use split_chapter::{split_chapter_apply, split_chapter_preview};
+use split_chapter::{list_part_paths, split_chapter_apply, split_chapter_preview};
 use stats::write_chapter_stats;
 use storage::detect_storage_backend;
 use system_fonts::{list_system_fonts, refresh_system_fonts};
@@ -125,6 +125,7 @@ pub fn run() {
             create_chapter,
             create_directory,
             create_book,
+            insert_part_after,
             read_note,
             write_note,
             create_note,
@@ -153,6 +154,7 @@ pub fn run() {
             import_wizard_apply,
             split_chapter_preview,
             split_chapter_apply,
+            list_part_paths,
             generate_demo_template,
             list_extras,
             has_extras,

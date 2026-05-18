@@ -309,6 +309,26 @@ export class ChapterService {
     }
   }
 
+  /** Inserta una parte vacía después de la dada, shifteando las siguientes. */
+  async insertPartAfter(partPath: string): Promise<string | null> {
+    try {
+      const result = await invoke<{ path: string }>('insert_part_after', { partPath });
+      this.debug.info('create', `Parte insertada: ${result.path}`);
+      await this.project.loadTree();
+      void this.git.refreshStatus();
+      const newNode = this.findNode(this.project.tree(), result.path);
+      if (newNode) {
+        await this.open(newNode);
+      }
+      this.toast.success('Parte insertada.');
+      return result.path;
+    } catch (err) {
+      this.debug.error('create', String(err));
+      this.toast.error(`No se pudo insertar parte: ${err}`);
+      return null;
+    }
+  }
+
   /** Exporta una novela a EPUB. Path debe ser un dir tipo book. */
   async exportEpub(node: TreeNode): Promise<string | null> {
     if (node.kind !== 'book') return null;

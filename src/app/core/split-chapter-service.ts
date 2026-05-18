@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
+import { convert } from '../dialogos/converter';
 import { ProjectService } from './project-service';
 import { ToastService } from './toast-service';
 
@@ -48,6 +49,8 @@ export class SplitChapterService {
   readonly editing = signal<SplitEditingState | null>(null);
   readonly loading = signal(false);
   readonly applying = signal(false);
+  /** Resultado del último split aplicado (folder + partes). Habilita el botón "Aplicar RAE a partes" post-apply. Se limpia al cerrar o avanzar al próximo capítulo en bulk. */
+  readonly lastResult = signal<SplitResult | null>(null);
   /** Cola de paths pendientes (solo modo bulk). El path actual ya fue removido de la cola. */
   private queue = signal<string[]>([]);
   private totalInBatch = signal(0);
@@ -131,8 +134,8 @@ export class SplitChapterService {
     try {
       const result = await invoke<SplitResult>('split_chapter_apply', { plan });
       this.toast.success(`Capítulo dividido en ${result.parts_written} parte(s).`);
+      this.lastResult.set(result);
       await this.project.loadTree();
-      await this.advanceOrClose();
     } catch (e) {
       this.toast.error(`No se pudo aplicar: ${e}`);
     } finally {
@@ -140,7 +143,48 @@ export class SplitChapterService {
     }
   }
 
+  /** Aplica el converter RAE (D1–D5) sobre cada parte del último split. Silencioso: solo toast con conteo final. */
+  async applyRaeToParts(): Promise<void> {
+    const result = this.lastResult();
+    if (!result) return;
+    this.applying.set(true);
+    try {
+      const partPaths = await invoke<string[]>('list_part_paths', {
+        folder: result.folder_created,
+      });
+      let partsChanged = 0;
+      for (const p of partPaths) {
+        const html = await invoke<string>('read_chapter', { path: p });
+        const conv = convert(html);
+        if (conv.changes > 0) {
+          await invoke('write_chapter', { path: p, html: conv.text });
+          partsChanged++;
+        }
+      }
+      if (partsChanged === 0) {
+        this.toast.info('RAE: sin cambios.');
+      } else {
+        this.toast.success(
+          `RAE: ${partsChanged} parte${partsChanged === 1 ? '' : 's'} modificada${partsChanged === 1 ? '' : 's'}.`,
+        );
+      }
+      this.lastResult.set(null);
+      await this.advanceOrClose();
+    } catch (e) {
+      this.toast.error(`RAE: ${e}`);
+    } finally {
+      this.applying.set(false);
+    }
+  }
+
   async skip(): Promise<void> {
+    this.lastResult.set(null);
+    await this.advanceOrClose();
+  }
+
+  /** Avanza al próximo capítulo de la cola sin aplicar RAE. */
+  async continueWithoutRae(): Promise<void> {
+    this.lastResult.set(null);
     await this.advanceOrClose();
   }
 
@@ -152,6 +196,7 @@ export class SplitChapterService {
 
   close(): void {
     this.editing.set(null);
+    this.lastResult.set(null);
     this.queue.set([]);
     this.totalInBatch.set(0);
   }

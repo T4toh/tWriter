@@ -154,6 +154,14 @@ export class NodeActionsService {
           onClick: () => this.splitChapter(node),
         });
       }
+      if (this.isNumericedPart(node)) {
+        if (entries.length > 0) entries.push({ kind: 'separator' });
+        entries.push({
+          label: 'Agregar parte nueva',
+          kbd: '+1',
+          onClick: () => this.insertPartAfter(node),
+        });
+      }
       if (moveable) {
         if (entries.length > 0) entries.push({ kind: 'separator' });
         entries.push(
@@ -906,6 +914,19 @@ export class NodeActionsService {
 
   async splitChapter(node: TreeNode): Promise<void> {
     await this.splitSvc.startSingle(node.path);
+  }
+
+  async insertPartAfter(node: TreeNode): Promise<void> {
+    await this.chapter.insertPartAfter(node.path);
+  }
+
+  isNumericedPart(node: TreeNode): boolean {
+    if (node.kind !== 'chapter' || node.ext !== 'html') return false;
+    if (!/^\d+$/.test(node.name)) return false;
+    const tree = this.project.tree();
+    if (!tree) return false;
+    const parent = findParent(tree, node);
+    return parent?.kind === 'section';
   }
 
   async splitBookBulk(book: TreeNode): Promise<void> {

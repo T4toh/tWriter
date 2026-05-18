@@ -52,6 +52,35 @@ pub async fn split_chapter_apply(plan: SplitPlan) -> Result<SplitResult, String>
         .map_err(|e| format!("task: {}", e))?
 }
 
+/// Lista los paths de las partes (`<N>.html` con stem numérico) dentro de
+/// un folder, ordenados por número ascendente. Usado por el botón
+/// "Aplicar RAE a partes" para iterar las partes recién creadas.
+#[tauri::command]
+pub async fn list_part_paths(folder: String) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let dir = PathBuf::from(&folder);
+        if !dir.is_dir() {
+            return Err(format!("no es directorio: {}", folder));
+        }
+        let mut parts: Vec<(u32, String)> = Vec::new();
+        for entry in fs::read_dir(&dir).map_err(|e| e.to_string())? {
+            let p = entry.map_err(|e| e.to_string())?.path();
+            if p.extension().and_then(|e| e.to_str()) != Some("html") {
+                continue;
+            }
+            if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                if let Ok(n) = stem.parse::<u32>() {
+                    parts.push((n, p.to_string_lossy().into_owned()));
+                }
+            }
+        }
+        parts.sort_by_key(|(n, _)| *n);
+        Ok(parts.into_iter().map(|(_, p)| p).collect())
+    })
+    .await
+    .map_err(|e| format!("task: {}", e))?
+}
+
 fn preview_impl(path: &str) -> Result<SplitPreview, String> {
     let src = PathBuf::from(path);
     if !src.is_file() {
@@ -105,6 +134,7 @@ fn apply_impl(plan: SplitPlan) -> Result<SplitResult, String> {
     let html = load_as_cleaned_html(&src)?;
     let blocks = parse_blocks(&html);
     let parts = compute_parts(&blocks, &plan.split_indices)?;
+    let parts = strip_label_blocks(parts);
     let idioma = plan.idioma.clone().or_else(|| inherit_idioma(parent));
 
     fs::create_dir(&folder).map_err(|e| format!("crear carpeta: {}", e))?;
@@ -140,6 +170,9 @@ fn write_parts(folder: &Path, parts: &[Vec<String>], idioma: Option<&str>) -> Re
     for (i, part_blocks) in parts.iter().enumerate() {
         let n = (i + 1) as u32;
         let mut content = part_blocks.join("\n");
+        if content.trim().is_empty() {
+            content = "<p></p>".to_string();
+        }
         if !content.ends_with('\n') {
             content.push('\n');
         }
@@ -330,6 +363,49 @@ fn compute_parts(
     Ok(parts)
 }
 
+/// Limpia bloques redundantes al inicio de cada parte: títulos sueltos
+/// (solo en parte 1) y labels numéricos tipo "1" / "Parte 2" / "III" (en
+/// cualquier parte). El título del capítulo vive en el folder name; el
+/// número de parte vive en el filename. Mantener esos bloques duplica
+/// información y suele ser ruido heredado del docx/odt original.
+fn strip_label_blocks(mut parts: Vec<Vec<String>>) -> Vec<Vec<String>> {
+    for (part_idx, blocks) in parts.iter_mut().enumerate() {
+        if blocks.is_empty() {
+            continue;
+        }
+        // Rule A — solo parte 1: strip primer bloque si parece título.
+        if part_idx == 0 && looks_like_title_block(&blocks[0]) {
+            blocks.remove(0);
+        }
+        // Rule B — cualquier parte: strip primer bloque short-numeric.
+        if !blocks.is_empty()
+            && detect_candidate(&blocks[0]).as_deref() == Some("short-numeric")
+        {
+            blocks.remove(0);
+        }
+    }
+    parts
+}
+
+fn looks_like_title_block(block: &str) -> bool {
+    let t = block.trim_start();
+    if t.starts_with("<h1") || t.starts_with("<h2") || t.starts_with("<h3") {
+        return true;
+    }
+    if !t.starts_with("<p") {
+        return false;
+    }
+    let text = strip_tags(t);
+    let inner = text.trim();
+    let wc = inner.split_whitespace().count();
+    if wc == 0 || wc > 4 {
+        return false;
+    }
+    // Si ya matchea short-numeric, NO contar como título — lo agarra Rule B.
+    let re = regex::Regex::new(r"(?i)^(parte\s+)?[ivxlcdm\d]+\s*\.?\s*$").unwrap();
+    !re.is_match(inner)
+}
+
 fn archive_to_originales(src: &Path, originales_dir: &Path) -> Result<PathBuf, String> {
     let filename = src
         .file_name()
@@ -509,7 +585,15 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let parent = tmp.path();
         let src = parent.join("1.html");
-        fs::write(&src, "<p>uno</p>\n<p>dos</p>\n<p>tres</p>\n").unwrap();
+        // Párrafos suficientemente largos para no ser confundidos con título
+        // por strip_label_blocks (>4 palabras cada uno).
+        fs::write(
+            &src,
+            "<p>Aedan caminaba por el bosque oscuro de Selas.</p>\n\
+             <p>La caballera estaba dormida sobre su pecho.</p>\n\
+             <p>El alquimista preparaba el desayuno tranquilamente.</p>\n",
+        )
+        .unwrap();
         let meta = parent.join("1.meta.json");
         fs::write(
             &meta,
@@ -539,8 +623,8 @@ mod tests {
         assert!(!src.exists());
 
         let p1 = fs::read_to_string(parent.join("1 - Test/1.html")).unwrap();
-        assert!(p1.contains("<p>uno</p>"));
-        assert!(!p1.contains("dos"));
+        assert!(p1.contains("Aedan caminaba"));
+        assert!(!p1.contains("caballera estaba"));
 
         let m1_raw = fs::read_to_string(parent.join("1 - Test/1.meta.json")).unwrap();
         let m1: serde_json::Value = serde_json::from_str(&m1_raw).unwrap();
@@ -548,6 +632,257 @@ mod tests {
         assert_eq!(m1["titulo"].as_str(), Some("1"));
         assert_eq!(m1["status"].as_str(), Some("imported"));
         assert_eq!(m1["idioma"].as_str(), Some("es"));
+    }
+
+    // ───── Tests de strip_label_blocks ─────
+
+    #[test]
+    fn strips_pandoc_paragraph_title_and_numeric_label_part_1() {
+        // Caso real de Princesa: <p>Realeza</p>\n<p>1</p>\n<p>cuerpo...</p>
+        let blocks = vec![
+            HtmlBlock {
+                id: 0,
+                html: "<p>Realeza</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+            HtmlBlock {
+                id: 1,
+                html: "<p>1</p>".to_string(),
+                is_candidate: true,
+                candidate_reason: Some("short-numeric".to_string()),
+            },
+            HtmlBlock {
+                id: 2,
+                html: "<p>Yiri venía caminando a su lado por el bosque.</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+        ];
+        let parts = compute_parts(&blocks, &[]).unwrap();
+        let cleaned = strip_label_blocks(parts);
+        assert_eq!(cleaned.len(), 1);
+        assert_eq!(cleaned[0].len(), 1);
+        assert!(cleaned[0][0].contains("Yiri venía caminando"));
+    }
+
+    #[test]
+    fn strips_numeric_label_at_start_of_part_2_onward() {
+        let blocks = vec![
+            HtmlBlock {
+                id: 0,
+                html: "<p>Realeza</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+            HtmlBlock {
+                id: 1,
+                html: "<p>1</p>".to_string(),
+                is_candidate: true,
+                candidate_reason: Some("short-numeric".to_string()),
+            },
+            HtmlBlock {
+                id: 2,
+                html: "<p>Contenido largo de la primera parte aquí.</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+            HtmlBlock {
+                id: 3,
+                html: "<p>2</p>".to_string(),
+                is_candidate: true,
+                candidate_reason: Some("short-numeric".to_string()),
+            },
+            HtmlBlock {
+                id: 4,
+                html: "<p>Contenido largo de la segunda parte aquí.</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+        ];
+        let parts = compute_parts(&blocks, &[3]).unwrap();
+        let cleaned = strip_label_blocks(parts);
+        assert_eq!(cleaned.len(), 2);
+        assert_eq!(cleaned[0].len(), 1);
+        assert!(cleaned[0][0].contains("primera parte"));
+        assert_eq!(cleaned[1].len(), 1);
+        assert!(cleaned[1][0].contains("segunda parte"));
+    }
+
+    #[test]
+    fn strips_h1_title_from_part_1() {
+        let blocks = vec![
+            HtmlBlock {
+                id: 0,
+                html: "<h1>Capítulo 1</h1>".to_string(),
+                is_candidate: true,
+                candidate_reason: Some("heading-1".to_string()),
+            },
+            HtmlBlock {
+                id: 1,
+                html: "<p>Cuerpo del capítulo de prueba.</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+        ];
+        let parts = compute_parts(&blocks, &[]).unwrap();
+        let cleaned = strip_label_blocks(parts);
+        assert_eq!(cleaned.len(), 1);
+        assert_eq!(cleaned[0].len(), 1);
+        assert!(cleaned[0][0].contains("Cuerpo del capítulo"));
+    }
+
+    #[test]
+    fn strips_two_word_paragraph_title() {
+        let blocks = vec![
+            HtmlBlock {
+                id: 0,
+                html: "<p>Laguna Escondida</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+            HtmlBlock {
+                id: 1,
+                html: "<p>Contenido largo del capítulo aquí.</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+        ];
+        let parts = compute_parts(&blocks, &[]).unwrap();
+        let cleaned = strip_label_blocks(parts);
+        assert_eq!(cleaned[0].len(), 1);
+        assert!(cleaned[0][0].contains("Contenido largo"));
+    }
+
+    #[test]
+    fn keeps_long_paragraph_in_part_1() {
+        let blocks = vec![
+            HtmlBlock {
+                id: 0,
+                html: "<p>El sol caía sobre el horizonte como una moneda de cobre.</p>"
+                    .to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+            HtmlBlock {
+                id: 1,
+                html: "<p>Más contenido aquí mismo.</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+        ];
+        let parts = compute_parts(&blocks, &[]).unwrap();
+        let cleaned = strip_label_blocks(parts);
+        assert_eq!(cleaned[0].len(), 2);
+        assert!(cleaned[0][0].contains("El sol caía"));
+    }
+
+    #[test]
+    fn keeps_short_paragraph_in_part_2() {
+        // Rule A no aplica fuera de parte 1: un párrafo corto no numérico al
+        // arrancar parte 2 se considera contenido legítimo (scene-setter).
+        let blocks = vec![
+            HtmlBlock {
+                id: 0,
+                html: "<p>Contenido largo de parte 1 aquí.</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+            HtmlBlock {
+                id: 1,
+                html: "<p>Tres días después.</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+            HtmlBlock {
+                id: 2,
+                html: "<p>Resto del contenido de parte 2.</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+        ];
+        let parts = compute_parts(&blocks, &[1]).unwrap();
+        let cleaned = strip_label_blocks(parts);
+        assert_eq!(cleaned.len(), 2);
+        assert_eq!(cleaned[1].len(), 2);
+        assert!(cleaned[1][0].contains("Tres días"));
+    }
+
+    #[test]
+    fn roman_numeral_stripped_anywhere() {
+        let blocks = vec![
+            HtmlBlock {
+                id: 0,
+                html: "<p>Contenido largo de parte 1 aquí mismo.</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+            HtmlBlock {
+                id: 1,
+                html: "<p>III</p>".to_string(),
+                is_candidate: true,
+                candidate_reason: Some("short-numeric".to_string()),
+            },
+            HtmlBlock {
+                id: 2,
+                html: "<p>Contenido largo de parte 2 aquí mismo.</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+        ];
+        let parts = compute_parts(&blocks, &[1]).unwrap();
+        let cleaned = strip_label_blocks(parts);
+        assert_eq!(cleaned[1].len(), 1);
+        assert!(cleaned[1][0].contains("parte 2"));
+    }
+
+    #[test]
+    fn bold_title_stripped() {
+        let blocks = vec![
+            HtmlBlock {
+                id: 0,
+                html: "<p><strong>Realeza</strong></p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+            HtmlBlock {
+                id: 1,
+                html: "<p>Contenido del capítulo va acá.</p>".to_string(),
+                is_candidate: false,
+                candidate_reason: None,
+            },
+        ];
+        let parts = compute_parts(&blocks, &[]).unwrap();
+        let cleaned = strip_label_blocks(parts);
+        assert_eq!(cleaned[0].len(), 1);
+        assert!(cleaned[0][0].contains("Contenido"));
+    }
+
+    #[test]
+    fn empty_part_after_strip_gets_placeholder() {
+        let tmp = TempDir::new().unwrap();
+        let parent = tmp.path();
+        let src = parent.join("1.html");
+        // Parte 1 = solo título + número, nada de cuerpo → tras strip queda vacía
+        // y debe escribirse como <p></p>\n
+        fs::write(
+            &src,
+            "<p>Realeza</p>\n<p>1</p>\n<p>Contenido largo de la parte dos acá.</p>\n",
+        )
+        .unwrap();
+
+        let plan = SplitPlan {
+            source_path: src.to_string_lossy().into_owned(),
+            folder_name: "1 - Empty".to_string(),
+            split_indices: vec![2],
+            idioma: Some("es".to_string()),
+        };
+        let result = apply_impl(plan).unwrap();
+        assert_eq!(result.parts_written, 2);
+        let p1 = fs::read_to_string(parent.join("1 - Empty/1.html")).unwrap();
+        assert_eq!(p1.trim(), "<p></p>");
+        let p2 = fs::read_to_string(parent.join("1 - Empty/2.html")).unwrap();
+        assert!(p2.contains("Contenido largo"));
     }
 
     #[test]
