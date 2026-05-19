@@ -1,4 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import {
+  LucideCircleAlert,
+  LucideCircleX,
+  LucideDynamicIcon,
+  LucideRuler,
+  LucideX,
+  type LucideIcon,
+} from '@lucide/angular';
 import { ChapterService } from '../core/chapter-service';
 import { NavigationService } from '../core/navigation-service';
 import { ProjectService } from '../core/project-service';
@@ -9,6 +17,7 @@ import { SearchService } from '../core/search-service';
 @Component({
   selector: 'app-rae-audit-panel',
   standalone: true,
+  imports: [LucideDynamicIcon, LucideRuler, LucideX],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './rae-audit-panel.html',
   styleUrl: './rae-audit-panel.scss',
@@ -48,8 +57,8 @@ export class RaeAuditPanel {
     }
   }
 
-  protected severityIcon(s: RaeViolation['severity']): string {
-    return s === 'error' ? '✖' : '⚠';
+  protected severityIcon(s: RaeViolation['severity']): LucideIcon {
+    return s === 'error' ? LucideCircleX : LucideCircleAlert;
   }
 
   protected snippet(chapter: ChapterViolations, v: RaeViolation): string {

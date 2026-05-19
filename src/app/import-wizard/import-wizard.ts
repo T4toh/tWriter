@@ -7,6 +7,13 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
+  LucideArrowDown,
+  LucideArrowUp,
+  LucideCheck,
+  LucideChevronDown,
+  LucideChevronRight,
+} from '@lucide/angular';
+import {
   DEMO_DEFAULT_NAME_EN,
   DEMO_DEFAULT_NAME_ES,
   DemoLang,
@@ -24,7 +31,10 @@ import { Select, SelectOption } from '../shared/select';
 @Component({
   selector: 'app-import-wizard',
   standalone: true,
-  imports: [FormsModule, Select],
+  imports: [
+    FormsModule, Select,
+    LucideArrowDown, LucideArrowUp, LucideCheck, LucideChevronDown, LucideChevronRight,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './import-wizard.html',
   styleUrl: './import-wizard.scss',

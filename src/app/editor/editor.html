@@ -129,7 +129,7 @@
           (click)="toggleAutoRae()"
           title="Validador RAE inline: marca violaciones mientras escribís"
         >
-          ✓RAE
+          <span class="rae-auto-label">RAE</span>
         </button>
       }
     }
@@ -205,7 +205,7 @@
       (click)="cycleParagraphSpacing()"
       [title]="'Espaciado entre párrafos: ' + paragraphSpacingLabel()"
     >
-      <span class="ico" [attr.data-spacing]="paragraphSpacing()">{{ paragraphSpacingIcon() }}</span>
+      <svg class="ico" [attr.data-spacing]="paragraphSpacing()" [lucideIcon]="paragraphSpacingIcon()" [size]="14"></svg>
     </button>
 
     <button
@@ -214,7 +214,7 @@
       (click)="cycleWidth()"
       [title]="'Ancho: ' + widthLabel()"
     >
-      <span class="ico">{{ widthIcon() }}</span>
+      <svg class="ico" [lucideIcon]="widthIcon()" [size]="14"></svg>
     </button>
   </div>
 }
@@ -312,7 +312,10 @@
       <span
         class="font-missing-badge"
         [title]="'Fuente «' + miss + '» no instalada en esta PC. Editor cae a serif default; el valor sigue guardado para otras PCs.'"
-      >⚠ {{ miss }}</span>
+      >
+        <svg lucideCircleAlert [size]="12"></svg>
+        {{ miss }}
+      </span>
     }
     @if (chapterError(); as err) {
       <span class="indicator error">{{ err }}</span>

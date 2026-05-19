@@ -72,11 +72,15 @@
               @if (v.sanitized) {
                 Se guardará como <strong>{{ v.value }}</strong>
               } @else {
-                ✓ Lista para agregar
+                <svg lucideCheck [size]="12"></svg>
+                Lista para agregar
               }
             </p>
           } @else {
-            <p class="hint hint-err">✗ {{ v.reason }}</p>
+            <p class="hint hint-err">
+              <svg lucideX [size]="12"></svg>
+              {{ v.reason }}
+            </p>
           }
         }
 

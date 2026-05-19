@@ -41,7 +41,7 @@
       (click)="openConfig($event)"
       title="Configurar novela"
     >
-      ⚙
+      <svg lucideSettings [size]="16"></svg>
     </button>
     <button
       type="button"
@@ -53,7 +53,7 @@
       @if (exporting()) {
         <app-spinner [size]="14" />
       } @else {
-        ⤓
+        <svg lucideArrowDownToLine [size]="16"></svg>
       }
     </button>
   </div>

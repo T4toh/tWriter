@@ -142,7 +142,7 @@
       (click)="cycleWidth()"
       [title]="'Ancho: ' + widthLabel()"
     >
-      <span class="ico">{{ widthIcon() }}</span>
+      <svg class="ico" [lucideIcon]="widthIcon()" [size]="14"></svg>
     </button>
   </div>
 }
@@ -168,7 +168,10 @@
 
 <footer class="status-bar">
   @if (active(); as a) {
-    <span class="title">📝 {{ a.name }}</span>
+    <span class="title">
+      <svg lucideFilePen [size]="14"></svg>
+      {{ a.name }}
+    </span>
     <span class="badge">Nota</span>
     @if (dirty()) {
       <span class="indicator dirty">sin guardar</span>

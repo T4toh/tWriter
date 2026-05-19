@@ -120,7 +120,10 @@
               [attr.data-backend]="storage.backend()"
               [title]="'Backend de almacenamiento: ' + storage.label()"
             >
-              {{ storage.icon() }} {{ storage.label() }}
+              @if (storage.icon(); as icon) {
+                <svg [lucideIcon]="icon" [size]="14"></svg>
+              }
+              {{ storage.label() }}
             </span>
             <button
               type="button"

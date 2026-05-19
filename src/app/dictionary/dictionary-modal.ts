@@ -1,12 +1,13 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { LucideCheck, LucideX } from '@lucide/angular';
 import { DictionaryService } from '../core/dictionary-service';
 import { ToastService } from '../core/toast-service';
 import { validateWord } from './word-validator';
 
 @Component({
   selector: 'app-dictionary-modal',
-  imports: [FormsModule],
+  imports: [FormsModule, LucideCheck, LucideX],
   templateUrl: './dictionary-modal.html',
   styleUrl: './dictionary-modal.scss',
 })

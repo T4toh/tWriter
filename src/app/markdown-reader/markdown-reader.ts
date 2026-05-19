@@ -11,6 +11,19 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import {
+  LucideBookOpen,
+  LucideCheck,
+  LucideDynamicIcon,
+  LucideFilePen,
+  LucideMaximize,
+  LucidePanelLeft,
+  LucidePanelRight,
+  LucidePencil,
+  LucideSquare,
+  LucideX,
+  type LucideIcon,
+} from '@lucide/angular';
 import { Editor as TipTapEditor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
@@ -54,6 +67,7 @@ const EMPTY_STATE: ToolbarState = {
 
 @Component({
   selector: 'app-markdown-reader',
+  imports: [LucideCheck, LucideDynamicIcon, LucidePencil, LucideX],
   templateUrl: './markdown-reader.html',
   styleUrl: './markdown-reader.scss',
 })
@@ -73,18 +87,21 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
   protected readonly saving = this.svc.saving;
   protected readonly rightPanelWidth = this.settings.rightPanelWidth;
   protected readonly state = signal<ToolbarState>(EMPTY_STATE);
-  protected readonly widthIcon = computed(() => {
+  protected readonly widthIcon = computed<LucideIcon>(() => {
     switch (this.rightPanelWidth()) {
       case 'compact':
-        return '◧';
+        return LucidePanelLeft;
       case 'normal':
-        return '▢';
+        return LucideSquare;
       case 'wide':
-        return '◨';
+        return LucidePanelRight;
       case 'full':
-        return '⛶';
+        return LucideMaximize;
     }
   });
+  // Expuestos para el template (LucideDynamicIcon en mr-icon).
+  protected readonly LucideFilePen = LucideFilePen;
+  protected readonly LucideBookOpen = LucideBookOpen;
   protected readonly widthLabel = computed(() => {
     switch (this.rightPanelWidth()) {
       case 'compact':

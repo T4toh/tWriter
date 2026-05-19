@@ -1,9 +1,10 @@
 import { Component, EventEmitter, Output, inject } from '@angular/core';
+import { LucideCamera, LucideCheck, LucideX } from '@lucide/angular';
 import { DebugEntry, DebugLevel, DebugService } from '../core/debug-service';
 
 @Component({
   selector: 'app-debug-panel',
-  imports: [],
+  imports: [LucideCamera, LucideCheck, LucideX],
   templateUrl: './debug-panel.html',
   styleUrl: './debug-panel.scss',
 })

@@ -1,10 +1,11 @@
 import { Component, ElementRef, computed, inject, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { LucideChevronDown } from '@lucide/angular';
 import { SplitChapterService } from '../core/split-chapter-service';
 
 @Component({
   selector: 'app-split-chapter-modal',
-  imports: [FormsModule],
+  imports: [FormsModule, LucideChevronDown],
   templateUrl: './split-chapter-modal.html',
   styleUrl: './split-chapter-modal.scss',
 })

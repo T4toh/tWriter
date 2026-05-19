@@ -1,5 +1,5 @@
 <header class="mr-header">
-  <span class="mr-icon">{{ editing() ? '📝' : '📖' }}</span>
+  <svg class="mr-icon" [lucideIcon]="editing() ? LucideFilePen : LucideBookOpen" [size]="14"></svg>
   <span class="mr-title" [title]="viewing()?.path">{{ viewing()?.name }}</span>
   <button
     type="button"
@@ -7,7 +7,7 @@
     (click)="cycleWidth()"
     [title]="'Ancho: ' + widthLabel()"
   >
-    <span class="ico">{{ widthIcon() }}</span>
+    <svg class="ico" [lucideIcon]="widthIcon()" [size]="14"></svg>
   </button>
   <button
     type="button"
@@ -16,7 +16,11 @@
     (click)="toggleEdit()"
     [title]="editing() ? 'Salir de edición (Esc)' : 'Editar nota'"
   >
-    <span class="ico">{{ editing() ? '✓' : '✏️' }}</span>
+    @if (editing()) {
+      <svg class="ico" lucideCheck [size]="14"></svg>
+    } @else {
+      <svg class="ico" lucidePencil [size]="14"></svg>
+    }
   </button>
   <button
     type="button"
@@ -24,7 +28,7 @@
     (click)="close()"
     title="Cerrar (Esc)"
   >
-    ×
+    <svg lucideX [size]="14"></svg>
   </button>
 </header>
 @if (editing()) {

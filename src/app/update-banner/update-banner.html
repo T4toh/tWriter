@@ -5,7 +5,7 @@
     </span>
     <div class="actions">
       <button type="button" class="apply" (click)="aplicar()">Actualizar</button>
-      <button type="button" class="dismiss" (click)="descartar()" title="Descartar">✕</button>
+      <button type="button" class="dismiss" (click)="descartar()" title="Descartar"><svg lucideX [size]="14"></svg></button>
     </div>
   </div>
 } @else if (updater.estado() === 'downloading') {
@@ -21,6 +21,6 @@
 } @else if (updater.estado() === 'error') {
   <div class="update-banner error">
     <span class="msg">Error al actualizar: {{ updater.error() }}</span>
-    <button type="button" class="dismiss" (click)="descartar()">✕</button>
+    <button type="button" class="dismiss" (click)="descartar()"><svg lucideX [size]="14"></svg></button>
   </div>
 }

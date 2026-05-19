@@ -1,4 +1,12 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import {
+  LucideCloud,
+  LucideGitBranch,
+  LucideHardDrive,
+  LucidePackage,
+  LucideRefreshCw,
+  type LucideIcon,
+} from '@lucide/angular';
 import { invoke } from '@tauri-apps/api/core';
 import { SettingsService } from './settings-service';
 
@@ -29,18 +37,18 @@ const LABELS: Record<StorageBackend, string> = {
   unknown: '—',
 };
 
-const ICONS: Record<StorageBackend, string> = {
-  git: '⎇',
-  dropbox: '📦',
-  pcloud: '☁️',
-  nextcloud: '☁️',
-  onedrive: '☁️',
-  gdrive: '☁️',
-  icloud: '☁️',
-  sync: '🔄',
-  mega: '☁️',
-  local: '💾',
-  unknown: '·',
+const ICONS: Record<StorageBackend, LucideIcon | null> = {
+  git: LucideGitBranch,
+  dropbox: LucidePackage,
+  pcloud: LucideCloud,
+  nextcloud: LucideCloud,
+  onedrive: LucideCloud,
+  gdrive: LucideCloud,
+  icloud: LucideCloud,
+  sync: LucideRefreshCw,
+  mega: LucideCloud,
+  local: LucideHardDrive,
+  unknown: null,
 };
 
 @Injectable({ providedIn: 'root' })
@@ -50,7 +58,7 @@ export class StorageService {
   readonly backend = signal<StorageBackend>('unknown');
   readonly isGit = computed(() => this.backend() === 'git');
   readonly label = computed<string>(() => LABELS[this.backend()]);
-  readonly icon = computed<string>(() => ICONS[this.backend()]);
+  readonly icon = computed<LucideIcon | null>(() => ICONS[this.backend()]);
 
   constructor() {
     effect(() => {

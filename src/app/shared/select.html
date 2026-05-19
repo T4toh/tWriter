@@ -11,7 +11,7 @@
   (keydown)="onTriggerKeydown($event)"
 >
   <span class="sel-label">{{ selectedLabel() || placeholder() }}</span>
-  <span class="sel-caret" aria-hidden="true">▾</span>
+  <svg class="sel-caret" lucideChevronDown [size]="12" aria-hidden="true"></svg>
 </button>
 
 <div

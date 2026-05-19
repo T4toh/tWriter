@@ -9,6 +9,21 @@ import {
   inject,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import {
+  LucideBookMarked,
+  LucideBug,
+  LucideDynamicIcon,
+  LucideFile,
+  LucideFilePen,
+  LucideFolder,
+  LucideLibrary,
+  LucideList,
+  LucideNotebook,
+  LucideRefreshCw,
+  LucideSearch,
+  LucideX,
+  type LucideIcon,
+} from '@lucide/angular';
 import { ChapterService } from '../core/chapter-service';
 import { MarkdownReaderService } from '../core/markdown-reader-service';
 import { NavigationService } from '../core/navigation-service';
@@ -21,7 +36,10 @@ import { TreeNode } from '../core/types';
 
 @Component({
   selector: 'app-search-panel',
-  imports: [FormsModule, Select],
+  imports: [
+    FormsModule, Select,
+    LucideBug, LucideDynamicIcon, LucideRefreshCw, LucideSearch, LucideX,
+  ],
   templateUrl: './search-panel.html',
   styleUrl: './search-panel.scss',
 })
@@ -197,24 +215,24 @@ export class SearchPanel implements AfterViewInit {
     event.preventDefault();
   }
 
-  protected iconFor(kind: string): string {
+  protected iconFor(kind: string): LucideIcon | null {
     switch (kind) {
       case 'chapter':
-        return '◆';
+        return LucideFile;
       case 'note':
-        return '📝';
+        return LucideFilePen;
       case 'notes':
-        return '📒';
+        return LucideNotebook;
       case 'folder':
-        return '📁';
+        return LucideFolder;
       case 'saga':
-        return '📚';
+        return LucideLibrary;
       case 'book':
-        return '📖';
+        return LucideBookMarked;
       case 'section':
-        return '▤';
+        return LucideList;
       default:
-        return '·';
+        return null;
     }
   }
 

@@ -15,6 +15,14 @@ import { Editor as TipTapEditor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
 import { Markdown } from 'tiptap-markdown';
+import {
+  LucideDynamicIcon,
+  LucideFilePen,
+  LucideRectangleHorizontal,
+  LucideRectangleVertical,
+  LucideSquare,
+  type LucideIcon,
+} from '@lucide/angular';
 import { PaneId } from '../core/chapter-service';
 import { CursorRestoreService } from '../core/cursor-restore-service';
 import { NoteService } from '../core/note-service';
@@ -70,6 +78,7 @@ const EMPTY_STATE: ToolbarState = {
 
 @Component({
   selector: 'app-notes-editor',
+  imports: [LucideDynamicIcon, LucideFilePen],
   templateUrl: './notes-editor.html',
   styleUrl: './notes-editor.scss',
 })
@@ -106,14 +115,14 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
         return 'lleno';
     }
   });
-  protected readonly widthIcon = computed(() => {
+  protected readonly widthIcon = computed<LucideIcon>(() => {
     switch (this.width()) {
       case 'narrow':
-        return '▯';
+        return LucideRectangleVertical;
       case 'wide':
-        return '▭';
+        return LucideRectangleHorizontal;
       case 'full':
-        return '▬';
+        return LucideSquare;
     }
   });
 
