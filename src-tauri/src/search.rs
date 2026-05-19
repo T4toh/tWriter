@@ -812,6 +812,34 @@ pub async fn search_reindex(app: AppHandle, root: String) -> Result<u64, String>
     .map_err(|e| format!("task: {e}"))?
 }
 
+/// Aplica un cambio de path al índice tras un pull. `kind` ∈
+/// `"added"|"modified"|"renamed"|"deleted"`. Para `deleted` (o si el path
+/// dejó de existir) hace remove; en el resto indexa. Infiere el `kind` del
+/// índice (chapter/note) por extensión: `.html` ⇒ chapter, `.md` ⇒ note.
+/// Otros archivos (meta.json, book.json, fonts) se ignoran silenciosamente.
+#[tauri::command]
+pub fn search_apply_path_change(path: String, kind: String) -> Result<(), String> {
+    let p = PathBuf::from(&path);
+    let ext = p
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase());
+    let doc_kind = match ext.as_deref() {
+        Some("html") => "chapter",
+        Some("md") => "note",
+        _ => return Ok(()),
+    };
+    let deleted = kind == "deleted" || !p.exists();
+    if deleted {
+        if let Err(e) = remove_document(&p) {
+            tracing::warn!(target: "search", path = %path, error = %e, "remove tras pull falló (best-effort)");
+        }
+    } else if let Err(e) = index_document(&p, doc_kind) {
+        tracing::warn!(target: "search", path = %path, error = %e, "index tras pull falló (best-effort)");
+    }
+    Ok(())
+}
+
 /// Helper para hooks de write: ejecuta indexación best-effort sin propagar errores.
 pub fn index_path_best_effort(path: &str, kind: &str) {
     let p = PathBuf::from(path);

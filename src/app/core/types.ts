@@ -84,6 +84,13 @@ export interface FontEntry {
   style: string;
 }
 
+export type PullChangeKind = 'added' | 'modified' | 'deleted' | 'renamed';
+
+export interface PullPathChange {
+  path: string;
+  kind: PullChangeKind;
+}
+
 export type GrammarMode = 'public' | 'local' | 'custom';
 
 export interface GrammarMatch {

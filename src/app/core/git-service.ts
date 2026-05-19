@@ -1,7 +1,8 @@
-import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { Injectable, Injector, computed, effect, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { SettingsService } from './settings-service';
 import { StorageService } from './storage-service';
+import type { PullPathChange } from './types';
 
 export interface GitError {
   /** Mensaje corto y amigable en español, mostrado en la status bar. */
@@ -96,6 +97,10 @@ const AUTO_COMMIT_MS = 5 * 60_000;
 export class GitService {
   private settings = inject(SettingsService);
   private storage = inject(StorageService);
+  // Lazy: ChapterService → GitService → ChapterService es un ciclo de DI.
+  // Resolvemos on-demand para coordinar el refresh post-pull sin reorganizar
+  // toda la jerarquía de services.
+  private injector = inject(Injector);
 
   readonly status = signal<GitStatus | null>(null);
   readonly currentOp = signal<'sync' | 'pull' | null>(null);
@@ -244,8 +249,9 @@ export class GitService {
         this.status.set(s);
       }
       const cmd = s.ahead > 0 || s.has_changes ? 'git_pull_rebase' : 'git_pull';
-      await invoke(cmd, { repoPath: root });
+      const changes = await invoke<PullPathChange[]>(cmd, { repoPath: root });
       await this.refreshStatus();
+      await this.applyPullChanges(changes);
       this.resetThrottle();
     } catch (err) {
       this.error.set(toGitError(err));
@@ -266,10 +272,11 @@ export class GitService {
       // archivo. Sin dirty + ahead===0, ff-only sigue siendo lo más liviano.
       const needsRebase = s.ahead > 0 || s.has_changes;
       const cmd = needsRebase ? 'git_pull_rebase' : 'git_pull';
-      await invoke(cmd, { repoPath: root });
+      const changes = await invoke<PullPathChange[]>(cmd, { repoPath: root });
       this.resetThrottle();
       this.error.set(null);
       await this.refreshStatus();
+      await this.applyPullChanges(changes);
     } catch (err) {
       const e = toGitError(err);
       const raw = String(err);
@@ -285,6 +292,39 @@ export class GitService {
       }
     } finally {
       this.autoPullInflight = false;
+    }
+  }
+
+  /** Tras un pull exitoso, refresca el árbol, recarga el cap abierto si su
+   *  contenido en disco cambió, e indexa los paths tocados. Import lazy de
+   *  ProjectService / ChapterService / SearchService para esquivar el ciclo
+   *  ChapterService → GitService. Best-effort: errores individuales se
+   *  ignoran para no romper el flujo de pull. */
+  private async applyPullChanges(changes: PullPathChange[]): Promise<void> {
+    if (!changes?.length) return;
+    // Imports lazy adentro para evitar el ciclo de DI estático.
+    const [{ ProjectService }, { ChapterService }, { SearchService }] = await Promise.all([
+      import('./project-service'),
+      import('./chapter-service'),
+      import('./search-service'),
+    ]);
+    try {
+      const project = this.injector.get(ProjectService);
+      await project.loadTree();
+    } catch (err) {
+      console.warn('post-pull loadTree falló', err);
+    }
+    try {
+      const chapter = this.injector.get(ChapterService);
+      await chapter.reloadIfChanged(changes);
+    } catch (err) {
+      console.warn('post-pull reloadIfChanged falló', err);
+    }
+    try {
+      const search = this.injector.get(SearchService);
+      void search.applyPathChanges(changes);
+    } catch (err) {
+      console.warn('post-pull applyPathChanges falló', err);
     }
   }
 
