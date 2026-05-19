@@ -1,4 +1,4 @@
-use git2::{BranchType, IndexAddOption, Repository, Signature, StatusOptions};
+use git2::{BranchType, Delta, IndexAddOption, Oid, Repository, Signature, StatusOptions};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
@@ -33,6 +33,12 @@ pub struct GitCommitResult {
 }
 
 #[derive(Serialize, Debug, Clone)]
+pub struct PullPathChange {
+    pub path: String,
+    pub kind: String,
+}
+
+#[derive(Serialize, Debug, Clone)]
 pub struct EnsureResult {
     pub gitignore_updated: bool,
     pub untracked_files: u32,
@@ -59,12 +65,12 @@ pub async fn git_push(repo_path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn git_pull(repo_path: String) -> Result<(), String> {
+pub async fn git_pull(repo_path: String) -> Result<Vec<PullPathChange>, String> {
     run_blocking(move || git_pull_impl(&repo_path)).await
 }
 
 #[tauri::command]
-pub async fn git_pull_rebase(repo_path: String) -> Result<(), String> {
+pub async fn git_pull_rebase(repo_path: String) -> Result<Vec<PullPathChange>, String> {
     run_blocking(move || git_pull_rebase_impl(&repo_path)).await
 }
 
@@ -234,7 +240,8 @@ fn set_upstream(repo_path: &str, branch: &str) {
     }
 }
 
-fn git_pull_impl(repo_path: &str) -> Result<(), String> {
+fn git_pull_impl(repo_path: &str) -> Result<Vec<PullPathChange>, String> {
+    let pre_oid = head_oid(repo_path);
     let branch = current_branch_name(repo_path);
     let needs_upstream = branch.is_some() && !has_upstream(repo_path);
 
@@ -260,7 +267,8 @@ fn git_pull_impl(repo_path: &str) -> Result<(), String> {
         }
     }
     tracing::info!(target: "git", "pull --ff-only ok");
-    Ok(())
+    let post_oid = head_oid(repo_path);
+    Ok(changed_paths_since(repo_path, pre_oid, post_oid))
 }
 
 pub(crate) fn git_ensure_twriter_ignored_impl(repo_path: &str) -> Result<EnsureResult, String> {
@@ -325,7 +333,8 @@ pub(crate) fn git_ensure_twriter_ignored_impl(repo_path: &str) -> Result<EnsureR
     })
 }
 
-pub(crate) fn git_pull_rebase_impl(repo_path: &str) -> Result<(), String> {
+pub(crate) fn git_pull_rebase_impl(repo_path: &str) -> Result<Vec<PullPathChange>, String> {
+    let pre_oid = head_oid(repo_path);
     let branch = current_branch_name(repo_path);
     let needs_upstream = branch.is_some() && !has_upstream(repo_path);
 
@@ -343,7 +352,8 @@ pub(crate) fn git_pull_rebase_impl(repo_path: &str) -> Result<(), String> {
             }
         }
         tracing::info!(target: "git", "pull --rebase --autostash ok");
-        return Ok(());
+        let post_oid = head_oid(repo_path);
+        return Ok(changed_paths_since(repo_path, pre_oid, post_oid));
     }
     let _ = run_git(repo_path, &["rebase", "--abort"]);
     let stderr_lc = out.stderr.to_lowercase();
@@ -354,6 +364,91 @@ pub(crate) fn git_pull_rebase_impl(repo_path: &str) -> Result<(), String> {
     };
     tracing::error!(target: "git", error = %msg, "pull --rebase falló");
     Err(msg)
+}
+
+fn head_oid(repo_path: &str) -> Option<Oid> {
+    let repo = Repository::open(repo_path).ok()?;
+    let head = repo.head().ok()?;
+    let commit = head.peel_to_commit().ok()?;
+    Some(commit.id())
+}
+
+/// Devuelve los paths absolutos cambiados entre dos commits del repo. Si
+/// alguno de los oids es None (repo recién inicializado, HEAD detached
+/// inválido) o si son iguales, devuelve vec vacío. Errores intermedios se
+/// logean y devuelven vec vacío — el caller trata el refresh como best-effort.
+fn changed_paths_since(
+    repo_path: &str,
+    from_oid: Option<Oid>,
+    to_oid: Option<Oid>,
+) -> Vec<PullPathChange> {
+    let (from, to) = match (from_oid, to_oid) {
+        (Some(f), Some(t)) => (f, t),
+        _ => return Vec::new(),
+    };
+    if from == to {
+        return Vec::new();
+    }
+    let repo = match Repository::open(repo_path) {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!(target: "git", error = %e, "changed_paths: no se pudo abrir repo");
+            return Vec::new();
+        }
+    };
+    let workdir = match repo.workdir() {
+        Some(w) => w.to_path_buf(),
+        None => return Vec::new(),
+    };
+    let from_tree = match repo.find_commit(from).and_then(|c| c.tree()) {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::warn!(target: "git", error = %e, "changed_paths: from_commit/tree falló");
+            return Vec::new();
+        }
+    };
+    let to_tree = match repo.find_commit(to).and_then(|c| c.tree()) {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::warn!(target: "git", error = %e, "changed_paths: to_commit/tree falló");
+            return Vec::new();
+        }
+    };
+    let diff = match repo.diff_tree_to_tree(Some(&from_tree), Some(&to_tree), None) {
+        Ok(d) => d,
+        Err(e) => {
+            tracing::warn!(target: "git", error = %e, "changed_paths: diff falló");
+            return Vec::new();
+        }
+    };
+    let mut out: Vec<PullPathChange> = Vec::new();
+    let _ = diff.foreach(
+        &mut |delta, _| {
+            let kind = match delta.status() {
+                Delta::Added | Delta::Copied => "added",
+                Delta::Deleted => "deleted",
+                Delta::Modified | Delta::Typechange => "modified",
+                Delta::Renamed => "renamed",
+                _ => return true,
+            };
+            let rel = delta
+                .new_file()
+                .path()
+                .or_else(|| delta.old_file().path());
+            if let Some(rel) = rel {
+                let abs = workdir.join(rel);
+                out.push(PullPathChange {
+                    path: abs.to_string_lossy().into_owned(),
+                    kind: kind.to_string(),
+                });
+            }
+            true
+        },
+        None,
+        None,
+        None,
+    );
+    out
 }
 
 // ─────────────── Helpers ───────────────

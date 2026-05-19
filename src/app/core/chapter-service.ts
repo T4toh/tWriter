@@ -6,7 +6,7 @@ import { ExportsService } from './exports-service';
 import { GitService } from './git-service';
 import { ProjectService } from './project-service';
 import { ToastService } from './toast-service';
-import { ChapterMeta, EMPTY_META, TreeNode } from './types';
+import { ChapterMeta, EMPTY_META, PullPathChange, TreeNode } from './types';
 
 const AUTOSAVE_MS = 1500;
 
@@ -212,6 +212,42 @@ export class ChapterService {
       if (this.panes[i].active()?.path === path) return i;
     }
     return null;
+  }
+
+  /** Tras un pull, recarga buffers cuyos paths cambiaron en disco. Silencioso
+   *  si el buffer no está dirty (re-lee del disco); toast warn si está dirty
+   *  (preserva la edición en curso del usuario). Para `deleted`: cierra el
+   *  pane si no está dirty, warn si sí. */
+  async reloadIfChanged(changes: ReadonlyArray<PullPathChange>): Promise<void> {
+    if (!changes.length) return;
+    const byPath = new Map<string, PullPathChange>();
+    for (const c of changes) byPath.set(c.path, c);
+    for (const i of PANE_IDS) {
+      const node = this.panes[i].active();
+      if (!node) continue;
+      const change = byPath.get(node.path);
+      if (!change) continue;
+      const dirty = this.panes[i].dirty();
+      const name = node.name + (node.ext ? '.' + node.ext : '');
+      if (change.kind === 'deleted') {
+        if (dirty) {
+          this.toast.warn(
+            `«${name}» fue borrado en remoto, pero tu copia tiene cambios sin guardar.`,
+          );
+        } else {
+          this.closeInPane(i);
+        }
+        continue;
+      }
+      // added | modified | renamed → recargar contenido desde disco.
+      if (dirty) {
+        this.toast.warn(
+          `Cambios remotos en «${name}» ignorados — guardá o descartá antes de pullear de nuevo.`,
+        );
+      } else {
+        await this.openInPane(node, i);
+      }
+    }
   }
 
   // ──────── Operaciones globales (sin pane) ────────

@@ -2,6 +2,7 @@ import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { ChapterService } from './chapter-service';
+import type { PullPathChange } from './types';
 import { DebugService } from './debug-service';
 import { MarkdownReaderService } from './markdown-reader-service';
 import { NoteService } from './note-service';
@@ -364,6 +365,24 @@ export class SearchService {
     if (!pending || pending.path !== path) return null;
     this.pendingHighlight.set(null);
     return pending;
+  }
+
+  /** Aplica cambios incrementales al índice tras un pull. Best-effort por path
+   *  (errores se logean, no se propagan) y filtra a `.html` / `.md` — el resto
+   *  (meta.json, book.json, fonts, etc.) no está indexado. */
+  async applyPathChanges(changes: ReadonlyArray<PullPathChange>): Promise<void> {
+    if (!changes.length) return;
+    for (const c of changes) {
+      const lower = c.path.toLowerCase();
+      if (!lower.endsWith('.html') && !lower.endsWith('.md')) continue;
+      try {
+        await invoke('search_apply_path_change', { path: c.path, kind: c.kind });
+      } catch (err) {
+        this.debug.warn('search', `apply ${c.kind} en ${c.path} falló: ${err}`);
+      }
+    }
+    // Re-correr query actual si hay una, para que la UI muestre el delta.
+    if (this.query().trim()) await this.runSearch();
   }
 
   async reindex(): Promise<void> {

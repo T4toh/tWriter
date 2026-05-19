@@ -56,6 +56,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Git / Sync
 
+- [x] **Refresh post-pull (tree + editor + search index)**: tras `git_pull` / `git_pull_rebase`, los commands ahora retornan `Vec<PullPathChange>` (diff de trees pre→post HEAD). `GitService` dispara `project.loadTree()`, `chapter.reloadIfChanged()` (silencioso si el buffer no está dirty; toast warn si sí, preservando la edición) y `search.applyPathChanges()` (incremental sobre `.html` / `.md`). Resuelve el bug de "el árbol y el diccionario no se actualizaron tras pullear desde otra PC".
 - **Fetch silencioso al abrir + pre-push**: que la app traiga refs remotos al cargar el root y antes de cada auto-push, en vez de depender del recovery por non-FF rejection. Espejo de `git_pull_impl` con `["fetch", "--prune"]` + hook en el effect de `GitService` después de `git_ensure_twriter_ignored` y al inicio de `syncNow()`. Filosofía: "no te hagas el lindo" — fallar silencioso si no hay agent SSH, el editor sigue offline-funcional.
 - **Endurecer `run_git` contra cuelgues sin TTY** (independiente, valioso por sí mismo): sumar `GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"` al `Command` en `git.rs:179-193`. Garantiza que ningún git op cuelgue forever si la app abre sin `SSH_AUTH_SOCK` o sin key cargada. También refactorizar `git_pull_impl` a usar `run_git` (hoy lanza `Command::new("git")` crudo y se le escapa el endurecimiento).
 

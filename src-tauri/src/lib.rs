@@ -54,7 +54,7 @@ use import_notes::{joplin_import_apply, joplin_scan};
 use import_wizard::{import_wizard_apply, scan_import_source};
 use notes::{create_folder, create_note, delete_note, read_note, write_note};
 use reorder::{move_node, relocate_node};
-use search::{search_query, search_reindex};
+use search::{search_apply_path_change, search_query, search_reindex};
 use secrets::{lt_api_key_save, lt_api_key_status};
 use settings::{get_settings, set_settings};
 use split_chapter::{list_part_paths, split_chapter_apply, split_chapter_preview};
@@ -186,6 +186,7 @@ pub fn run() {
             pick_file,
             search_query,
             search_reindex,
+            search_apply_path_change,
             joplin_scan,
             joplin_import_apply,
             lt_api_key_status,
