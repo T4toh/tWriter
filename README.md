@@ -128,7 +128,7 @@ Reglas:
   - `"casa encantada"` → frase exacta.
   - `-trampa duendes` → excluye `trampa`.
   - `kind:note duendes`, `kind:chapter duendes` → filtra por tipo.
-  El botón `?` del header lista la sintaxis en tooltip.
+    El botón `?` del header lista la sintaxis en tooltip.
 - **Scope persistido** (selector debajo del input): `Todo el repo / Saga actual / Libro actual / Solo capítulos / Solo notas`. `Saga actual` y `Libro actual` se resuelven contra el capítulo abierto en el pane principal (la app walkea ancestros saga/book del path activo). Si no hay cap activo, el scope cae a `Todo el repo` y aparece un hint sutil `⚠ sin cap activo`. La elección persiste en `settings.json::searchScope`.
 - **Ranking ES**: tokenizer custom `es_text` (`SimpleTokenizer + RemoveLongFilter(40) + LowerCaser + StopWordFilter::Spanish`) aplicado a `title` y `content`. Stopwords ES estándar (`el/la/los/las/de/del/que/y/o/...`, vía snowball embebido en tantivy `feature = "stopwords"`) no entran al índice — buscar `de` solo devuelve 0 hits y queries multi-término no ranquean por basura conectora. Field boost `title × 2.5` (`parser.set_field_boost`): un match en título ranquea sobre el body.
 - **Modo debug BM25** (toggle 🐞 en header, persistido en `settings.json::searchDebug`): muestra `BM25 X.XX` debajo del título de cada hit para diagnosticar el ranking. Off por default.
