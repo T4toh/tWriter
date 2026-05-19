@@ -59,7 +59,14 @@
       class="row chapter"
       [class.active]="node.path === activePath()"
       [class.disabled]="!node.editable"
-      [title]="node.editable ? 'Arrastrá al centro para abrir en split' : 'Importar antes de editar (.' + node.ext + ')'"
+      [class.most-recent]="node.path === mostRecentPath()"
+      [title]="
+        node.editable
+          ? (node.modifiedMs
+              ? 'Editado: ' + absoluteTime(node.modifiedMs) + ' — arrastrá al centro para abrir en split'
+              : 'Arrastrá al centro para abrir en split')
+          : 'Importar antes de editar (.' + node.ext + ')'
+      "
       [style.padding-left.px]="8 + depth * 14"
       [attr.draggable]="node.editable ? 'true' : null"
       (click)="select(node, $event)"
@@ -71,6 +78,8 @@
       <span class="name">{{ node.name }}</span>
       @if (node.ext && node.ext !== 'html') {
         <span class="ext">.{{ node.ext }}</span>
+      } @else if (node.editable && node.modifiedMs) {
+        <span class="modified">{{ relativeTime(node.modifiedMs) }}</span>
       }
     </button>
   } @else if (node.kind === 'note') {

@@ -1,12 +1,26 @@
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::search;
 use crate::stats::{self, StatsMap};
+
+/// Colapsa whitespace que contiene un newline entre tags adyacentes.
+/// TipTap `getHTML()` no emite `\n` entre block tags; disco importado vía
+/// Pandoc sí los tiene. Sin normalizar, abrir un cap marca `dirty` aunque
+/// el usuario no edite nada (TipTap parsea, serializa sin `\n`, comparación
+/// raw falla). La regex solo matchea cuando hay `\n` real — preserva
+/// espacios significativos entre inlines (`<em>x</em> <strong>y</strong>`).
+fn normalize_chapter_html(html: &str) -> String {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| Regex::new(r">\s*\n\s*<").unwrap());
+    re.replace_all(html.trim_end(), "><").into_owned()
+}
 
 thread_local! {
     /// Contexto del walk de `get_tree`: root + stats cargados una vez por call.
@@ -147,7 +161,9 @@ pub fn read_chapter(path: String) -> Result<String, String> {
         return Err(format!("No es archivo: {}", path));
     }
     match p.extension().and_then(|e| e.to_str()) {
-        Some("html") => fs::read_to_string(&p).map_err(|e| e.to_string()),
+        Some("html") => fs::read_to_string(&p)
+            .map(|s| normalize_chapter_html(&s))
+            .map_err(|e| e.to_string()),
         Some(other) => Err(format!(".{other} no editable directo — importar primero")),
         None => Err("Sin extensión".to_string()),
     }
@@ -872,4 +888,39 @@ pub(crate) fn chapter_exts() -> &'static [&'static str] {
 
 pub(crate) fn note_exts() -> &'static [&'static str] {
     NOTE_EXTS
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_chapter_html;
+
+    #[test]
+    fn colapsa_newlines_entre_block_tags() {
+        let disk = "<p>uno</p>\n<p>dos</p>\n<p>tres</p>\n";
+        assert_eq!(normalize_chapter_html(disk), "<p>uno</p><p>dos</p><p>tres</p>");
+    }
+
+    #[test]
+    fn preserva_espacios_entre_inlines() {
+        // TipTap preserva el espacio entre inlines; no debemos colapsarlo.
+        let html = "<p><em>foo</em> <strong>bar</strong></p>";
+        assert_eq!(normalize_chapter_html(html), html);
+    }
+
+    #[test]
+    fn idempotente_sobre_html_ya_normalizado() {
+        let canon = "<p>a</p><p>b</p>";
+        assert_eq!(normalize_chapter_html(canon), canon);
+    }
+
+    #[test]
+    fn newline_entre_inlines_se_colapsa() {
+        // Caso raro pero posible: tras normalizar, el navegador inserta el
+        // espacio implícito del salto. Asumimos pérdida tolerable.
+        let html = "<p><em>foo</em>\n<strong>bar</strong></p>";
+        assert_eq!(
+            normalize_chapter_html(html),
+            "<p><em>foo</em><strong>bar</strong></p>"
+        );
+    }
 }

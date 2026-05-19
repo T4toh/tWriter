@@ -469,6 +469,30 @@ export class Editor implements AfterViewInit, OnDestroy {
       if (this.canCheckGrammar()) void this.checkGrammar();
     });
 
+    // Re-filtrado en vivo cuando el diccionario de la saga cambia. Caso
+    // típico: al abrir un cap, `checkGrammar` corre antes de que
+    // `SagaContextService.resolve` termine de cargar `saga.json`, así que
+    // palabras propias del mundo aparecen marcadas como typo aunque estén
+    // en el diccionario. Cuando el dict resuelve (o el usuario agrega una
+    // palabra nueva), filtramos los TYPOS actuales contra el dict nuevo
+    // sin volver a pegarle a LanguageTool.
+    effect(() => {
+      const dict = this.sagaCtx.dictionary();
+      if (!this.viewReady() || !this.tiptap) return;
+      const current = untracked(() => this.grammarMatches());
+      if (current.length === 0) return;
+      const editor = this.tiptap;
+      const filtered = current.filter((m) => {
+        if (m.category !== 'TYPOS') return true;
+        const word = editor.state.doc.textBetween(m.from, m.to, ' ').trim();
+        return !dict.has(word.toLowerCase());
+      });
+      if (filtered.length !== current.length) {
+        this.grammarMatches.set(filtered);
+        this.applyDecorations(filtered);
+      }
+    });
+
     // Tema activo del chapter: cuando cambia el path del capítulo activo,
     // resuelve las fuentes heredadas (root theme + saga overrides + book
     // overrides) y las expone vía signal `themeFonts` para que el dropdown
