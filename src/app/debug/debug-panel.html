@@ -26,12 +26,20 @@
         />
       </div>
 
-      <button type="button" class="link" (click)="requestSnapshot()" title="Snapshot del estado actual">📸</button>
+      <button type="button" class="link" (click)="requestSnapshot()" title="Snapshot del estado actual">
+        <svg lucideCamera [size]="14"></svg>
+      </button>
       <button type="button" class="link" (click)="copy()" title="Copiar entradas filtradas">
-        {{ copyOk ? '✓' : 'Copiar' }}
+        @if (copyOk) {
+          <svg lucideCheck [size]="14"></svg>
+        } @else {
+          Copiar
+        }
       </button>
       <button type="button" class="link" (click)="clear()">Limpiar</button>
-      <button type="button" class="link" (click)="close()" title="Cerrar">×</button>
+      <button type="button" class="link" (click)="close()" title="Cerrar">
+        <svg lucideX [size]="14"></svg>
+      </button>
     </header>
     <ul class="log">
       @for (entry of filtered(); track trackEntry($index, entry)) {

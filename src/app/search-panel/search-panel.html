@@ -1,5 +1,5 @@
 <header class="sp-header">
-  <span class="sp-icon">🔍</span>
+  <svg class="sp-icon" lucideSearch [size]="16"></svg>
   <input
     #input
     type="search"
@@ -26,11 +26,11 @@
     [title]="searchDebug() ? 'Modo debug ON — muestra BM25 por hit' : 'Modo debug OFF — muestra BM25 por hit'"
     aria-label="Toggle debug BM25"
   >
-    <span class="ico">🐞</span>
+    <svg class="ico" lucideBug [size]="14"></svg>
   </button>
   @if (query()) {
     <button type="button" class="sp-btn" (click)="clear()" title="Limpiar (Esc)">
-      <span class="ico">×</span>
+      <svg class="ico" lucideX [size]="14"></svg>
     </button>
   }
   <button
@@ -40,9 +40,11 @@
     [disabled]="reindexing()"
     [title]="reindexing() ? 'Reindexando…' : 'Reindexar todo el repo'"
   >
-    <span class="ico">{{ reindexing() ? '⟳' : '↻' }}</span>
+    <svg class="ico" lucideRefreshCw [size]="14"></svg>
   </button>
-  <button type="button" class="sp-close" (click)="close()" title="Cerrar (Esc)">×</button>
+  <button type="button" class="sp-close" (click)="close()" title="Cerrar (Esc)">
+    <svg lucideX [size]="14"></svg>
+  </button>
 </header>
 
 <div class="sp-scope-row">
@@ -55,7 +57,7 @@
   />
   @if (scopeNeedsContext()) {
     <span class="sp-scope-hint" title="Abrí un capítulo o nota para usar este scope">
-      ⚠ sin archivo activo
+      sin archivo activo
     </span>
   }
 </div>
@@ -86,7 +88,9 @@
         <li class="sp-group">
           <details class="sp-group-details" [attr.open]="group.defaultOpen ? '' : null">
             <summary class="sp-group-head" [title]="group.path">
-              <span class="sp-hit-icon">{{ iconFor(group.kind) }}</span>
+              @if (iconFor(group.kind); as icon) {
+                <svg class="sp-hit-icon" [lucideIcon]="icon" [size]="14"></svg>
+              }
               <span class="sp-hit-title">{{ group.title }}</span>
               @if (group.hits.length > 1) {
                 <span class="sp-group-count" [title]="group.hits.length + ' coincidencias'">

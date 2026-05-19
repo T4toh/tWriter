@@ -16,7 +16,7 @@
             (click)="openImportWizard()"
             title="Importar saga / novela desde otra carpeta"
           >
-            📥
+            <svg lucideDownload [size]="16"></svg>
           </button>
           <button
             type="button"
@@ -25,7 +25,7 @@
             (click)="openImportJoplin()"
             title="Importar notas (Joplin)"
           >
-            📝
+            <svg lucideNotebookPen [size]="16"></svg>
           </button>
           <button
             type="button"
@@ -35,7 +35,7 @@
             (click)="toggleSearch()"
             title="Buscar (Ctrl+F)"
           >
-            🔍
+            <svg lucideSearch [size]="16"></svg>
           </button>
           <button
             type="button"
@@ -43,7 +43,7 @@
             (click)="openGrammarSettings()"
             title="Configurar gramática (LanguageTool)"
           >
-            ⚙
+            <svg lucideSettings [size]="16"></svg>
           </button>
           <button
             type="button"
@@ -52,7 +52,7 @@
             (click)="toggleDebug()"
             title="Panel de debug"
           >
-            🐛
+            <svg lucideBug [size]="16"></svg>
           </button>
         </div>
       </div>
@@ -120,7 +120,10 @@
               [attr.data-backend]="storage.backend()"
               [title]="'Backend de almacenamiento: ' + storage.label()"
             >
-              {{ storage.icon() }} {{ storage.label() }}
+              @if (storage.icon(); as icon) {
+                <svg [lucideIcon]="icon" [size]="14"></svg>
+              }
+              {{ storage.label() }}
             </span>
             <button
               type="button"
@@ -128,7 +131,7 @@
               (click)="storageHelp.openHelp()"
               title="Cómo usar git con esta carpeta"
             >
-              ❓
+              <svg lucideCircleQuestionMark [size]="14"></svg>
             </button>
             <span class="path" [title]="r">{{ r }}</span>
           </div>
@@ -150,7 +153,7 @@
             @if (git.currentOp() === 'sync') {
               <app-spinner />
             } @else {
-              ⇅
+              <svg lucideArrowUpDown [size]="16"></svg>
             }
           </button>
           <button
@@ -163,7 +166,7 @@
             @if (git.currentOp() === 'pull') {
               <app-spinner />
             } @else {
-              ⤓
+              <svg lucideArrowDownToLine [size]="16"></svg>
             }
           </button>
         }
@@ -174,7 +177,7 @@
           [disabled]="!root()"
           title="Recargar árbol"
         >
-          ↻
+          <svg lucideRefreshCw [size]="16"></svg>
         </button>
         <button
           type="button"
@@ -183,7 +186,7 @@
           [disabled]="!root()"
           title="Crear saga / novela"
         >
-          ＋
+          <svg lucidePlus [size]="16"></svg>
         </button>
         <button
           type="button"
@@ -191,7 +194,7 @@
           (click)="pickFolder()"
           title="Cambiar carpeta"
         >
-          📁
+          <svg lucideFolder [size]="16"></svg>
         </button>
       </div>
     </footer>
@@ -232,7 +235,11 @@
             (click)="paneSplit.toggleOrientation()"
             [title]="paneSplit.orientation() === 'horizontal' ? 'Cambiar a split vertical' : 'Cambiar a split horizontal'"
           >
-            {{ paneSplit.orientation() === 'horizontal' ? '⬍' : '⬌' }}
+            @if (paneSplit.orientation() === 'horizontal') {
+              <svg lucideMoveVertical [size]="14"></svg>
+            } @else {
+              <svg lucideMoveHorizontal [size]="14"></svg>
+            }
           </button>
           <button
             type="button"
@@ -240,7 +247,7 @@
             (click)="closeSecondaryPane()"
             title="Cerrar pane secundario"
           >
-            ×
+            <svg lucideX [size]="14"></svg>
           </button>
         </div>
       </section>

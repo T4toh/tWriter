@@ -57,7 +57,7 @@
                 [title]="s.boundaries[i] ? 'Quitar split aquí' : 'Partir acá'"
               >
                 @if (s.boundaries[i]) {
-                  ▼ Parte nueva
+                  <svg lucideChevronDown [size]="12"></svg> Parte nueva
                 } @else {
                   ─ ─ ─ partir acá ─ ─ ─
                 }

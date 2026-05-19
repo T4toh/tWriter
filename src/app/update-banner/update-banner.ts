@@ -1,9 +1,10 @@
 import { Component, inject } from '@angular/core';
+import { LucideX } from '@lucide/angular';
 import { UpdaterService } from '../core/updater-service';
 
 @Component({
   selector: 'app-update-banner',
-  imports: [],
+  imports: [LucideX],
   templateUrl: './update-banner.html',
   styleUrl: './update-banner.scss',
 })

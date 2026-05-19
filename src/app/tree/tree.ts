@@ -22,6 +22,26 @@ import { ModalService } from '../shared/modal-service';
 import { ContextMenuService } from '../shared/context-menu-service';
 import { NodeActionsService } from '../shared/node-actions-service';
 import { formatAbsoluteTime, formatRelativeTime } from '../core/relative-time';
+import {
+  LucideBookMarked,
+  LucideChevronDown,
+  LucideChevronRight,
+  LucideChevronsDown,
+  LucideChevronsUp,
+  LucideEraser,
+  LucideFile,
+  LucideFilePen,
+  LucideFileText,
+  LucideFolder,
+  LucideImage,
+  LucideLibrary,
+  LucideMerge,
+  LucideNotebook,
+  LucidePackage,
+  LucidePalette,
+  LucideType,
+  LucideTypeOutline,
+} from '@lucide/angular';
 
 const FONT_EXT_RE = /\.(ttf|otf|woff|woff2)$/i;
 type DropScope =
@@ -37,7 +57,12 @@ interface DropListData {
 
 @Component({
   selector: 'app-tree',
-  imports: [NgTemplateOutlet, CdkDropList, CdkDrag],
+  imports: [
+    NgTemplateOutlet, CdkDropList, CdkDrag,
+    LucideBookMarked, LucideChevronDown, LucideChevronRight, LucideChevronsDown, LucideChevronsUp,
+    LucideEraser, LucideFile, LucideFilePen, LucideFileText, LucideFolder, LucideImage, LucideLibrary,
+    LucideMerge, LucideNotebook, LucidePackage, LucidePalette, LucideType, LucideTypeOutline,
+  ],
   templateUrl: './tree.html',
   styleUrl: './tree.scss',
 })

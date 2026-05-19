@@ -186,20 +186,26 @@
                     [disabled]="i === 0"
                     (click)="moveBook(i, -1)"
                     title="Subir"
-                  >▲</button>
+                  ><svg lucideArrowUp [size]="14"></svg></button>
                   <button
                     type="button"
                     class="iw-icon-btn"
                     [disabled]="i === wizard.books().length - 1"
                     (click)="moveBook(i, 1)"
                     title="Bajar"
-                  >▼</button>
+                  ><svg lucideArrowDown [size]="14"></svg></button>
                   <button
                     type="button"
                     class="iw-icon-btn"
                     (click)="toggleBook(i)"
                     title="Expandir"
-                  >{{ expandedBookIdx() === i ? '▾' : '▸' }}</button>
+                  >
+                    @if (expandedBookIdx() === i) {
+                      <svg lucideChevronDown [size]="14"></svg>
+                    } @else {
+                      <svg lucideChevronRight [size]="14"></svg>
+                    }
+                  </button>
                 </header>
                 <div class="book-card-flags">
                   <label class="iw-check inline">
@@ -257,7 +263,13 @@
                             class="iw-icon-btn"
                             (click)="toggleSectionExpand(sec.source_path)"
                             title="Expandir"
-                          >{{ isSectionExpanded(sec.source_path) ? '▾' : '▸' }}</button>
+                          >
+                            @if (isSectionExpanded(sec.source_path)) {
+                              <svg lucideChevronDown [size]="12"></svg>
+                            } @else {
+                              <svg lucideChevronRight [size]="12"></svg>
+                            }
+                          </button>
                         </header>
                         @if (isSectionExpanded(sec.source_path) && sec.include) {
                           <ul class="files-list">
@@ -316,7 +328,13 @@
                             class="iw-icon-btn"
                             (click)="toggleSectionExpand(book.source_path + '#direct')"
                             title="Expandir"
-                          >{{ isSectionExpanded(book.source_path + '#direct') ? '▾' : '▸' }}</button>
+                          >
+                            @if (isSectionExpanded(book.source_path + '#direct')) {
+                              <svg lucideChevronDown [size]="12"></svg>
+                            } @else {
+                              <svg lucideChevronRight [size]="12"></svg>
+                            }
+                          </button>
                         </header>
                         @if (isSectionExpanded(book.source_path + '#direct')) {
                           <ul class="files-list">
@@ -355,7 +373,13 @@
                             class="iw-icon-btn"
                             (click)="toggleSectionExpand(book.source_path + '#extras')"
                             title="Expandir"
-                          >{{ isSectionExpanded(book.source_path + '#extras') ? '▾' : '▸' }}</button>
+                          >
+                            @if (isSectionExpanded(book.source_path + '#extras')) {
+                              <svg lucideChevronDown [size]="12"></svg>
+                            } @else {
+                              <svg lucideChevronRight [size]="12"></svg>
+                            }
+                          </button>
                         </header>
                         @if (isSectionExpanded(book.source_path + '#extras')) {
                           <ul class="files-list">
@@ -520,13 +544,13 @@
           </p>
           @if (wizard.summary(); as s) {
             <div class="resumen">
-              <p>✓ {{ s.created_dirs }} carpetas creadas</p>
+              <p><svg lucideCheck [size]="12"></svg> {{ s.created_dirs }} carpetas creadas</p>
               @if (wizard.tipo() === 'demo') {
-                <p>✓ {{ s.copied_chapters }} archivos generados</p>
+                <p><svg lucideCheck [size]="12"></svg> {{ s.copied_chapters }} archivos generados</p>
               } @else {
-                <p>✓ {{ s.converted_chapters }} capítulos convertidos a HTML</p>
-                <p>✓ {{ s.copied_chapters }} capítulos copiados sin convertir</p>
-                <p>✓ {{ s.copied_extras }} archivos extras copiados</p>
+                <p><svg lucideCheck [size]="12"></svg> {{ s.converted_chapters }} capítulos convertidos a HTML</p>
+                <p><svg lucideCheck [size]="12"></svg> {{ s.copied_chapters }} capítulos copiados sin convertir</p>
+                <p><svg lucideCheck [size]="12"></svg> {{ s.copied_extras }} archivos extras copiados</p>
               }
               @if (s.failed.length > 0) {
                 <details class="failed-details" open>

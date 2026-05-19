@@ -6,6 +6,7 @@ import {
   input,
   signal,
 } from '@angular/core';
+import { LucideBookOpen, LucideSettings } from '@lucide/angular';
 import { BookConfigService } from '../core/book-config-service';
 import { CoverCache } from '../core/cover-cache';
 import { DictionaryService } from '../core/dictionary-service';
@@ -14,7 +15,7 @@ import { TreeNode } from '../core/types';
 
 @Component({
   selector: 'app-saga-header',
-  imports: [],
+  imports: [LucideBookOpen, LucideSettings],
   templateUrl: './saga-header.html',
   styleUrl: './saga-header.scss',
 })

@@ -6,7 +6,9 @@
   <div class="chips">
     @for (c of chips(); track c.path) {
       <span class="chip" [attr.data-kind]="c.kind">
-        <span class="icon">{{ c.icon }}</span>
+        @if (c.icon) {
+          <svg class="icon" [lucideIcon]="c.icon" [size]="12"></svg>
+        }
         <span class="chip-name">{{ c.name }}</span>
       </span>
     }

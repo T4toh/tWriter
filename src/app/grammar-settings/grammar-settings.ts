@@ -6,6 +6,16 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import {
+  LucideBan,
+  LucideCheck,
+  LucideCircle,
+  LucideCircleAlert,
+  LucideEye,
+  LucideEyeOff,
+  LucideLock,
+  LucideX,
+} from '@lucide/angular';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { GrammarService, LtDockerStatus, SecretStatus } from '../core/grammar-service';
@@ -23,7 +33,11 @@ interface LtProgressEvent {
 @Component({
   selector: 'app-grammar-settings',
   standalone: true,
-  imports: [FormsModule, Select],
+  imports: [
+    FormsModule, Select,
+    LucideBan, LucideCheck, LucideCircle, LucideCircleAlert, LucideEye, LucideEyeOff,
+    LucideLock, LucideX,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './grammar-settings.html',
   styleUrl: './grammar-settings.scss',

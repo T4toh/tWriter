@@ -27,7 +27,9 @@
           (click)="run(item)"
         >
           <span class="ctx-label">{{ item.label }}</span>
-          @if (item.kbd) {
+          @if (item.icon) {
+            <svg class="ctx-icon" [lucideIcon]="item.icon" [size]="14"></svg>
+          } @else if (item.kbd) {
             <span class="ctx-kbd">{{ item.kbd }}</span>
           }
         </button>

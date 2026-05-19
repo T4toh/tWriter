@@ -7,6 +7,7 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { LucideArrowDownToLine, LucideSettings } from '@lucide/angular';
 import { BookConfig, BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { CoverCache } from '../core/cover-cache';
@@ -15,7 +16,7 @@ import { Spinner } from '../shared/spinner';
 
 @Component({
   selector: 'app-book-card',
-  imports: [Spinner],
+  imports: [Spinner, LucideArrowDownToLine, LucideSettings],
   templateUrl: './book-card.html',
   styleUrl: './book-card.scss',
 })

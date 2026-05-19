@@ -7,7 +7,6 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
-- **Reemplazar emojis (📖 ⚙ 📥 📝 🐛 ✏️ 👁 📐) por un set de íconos copado** — lucide, phosphor, tabler o tipo SF Symbols. Hoy los emojis renderean inconsistente entre OSes (color en Linux, monocromo en algunos themes) y no escalan bien con el font-size del UI. Decisión a tomar: SVG inline (peso menor, control fino de stroke/color via `currentColor`) vs icon font (más simple de cambiar set). Iconos a auditar: tree (📁 saga, 📕 book, 📃 chapter), context menus (👁 ver, ✏️ editar, 📐 RAE, 📖 dicc.), headers (⚙ config, 📥 import, 📝 notas, 🐛 debug).
 - **Marcador huérfano post jump-to-term**: el highlight naranja de
   `requestHighlight` (search → click resultado) o de la selección nativa
   del jump queda pegado sobre el carácter (típicamente un em-dash) aún

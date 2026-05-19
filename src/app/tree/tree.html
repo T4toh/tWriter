@@ -1,13 +1,13 @@
 @if (root()) {
   <div class="tree-toolbar">
     <button type="button" class="tt-btn" (click)="collapseAll()" title="Colapsar todo">
-      <span class="ico">⇧</span>
+      <svg lucideChevronsUp [size]="14"></svg>
     </button>
     <button type="button" class="tt-btn" (click)="expandAll()" title="Expandir todo">
-      <span class="ico">⇩</span>
+      <svg lucideChevronsDown [size]="14"></svg>
     </button>
     <button type="button" class="tt-btn" (click)="createTheme()" title="Crear tema">
-      <span class="ico">🎨</span>
+      <svg lucidePalette [size]="14"></svg>
     </button>
   </div>
 }
@@ -74,7 +74,13 @@
       (dragstart)="onNodeDragStart($event, node)"
       (dragend)="onNodeDragEnd()"
     >
-      <span class="icon">{{ node.editable ? '◆' : '◇' }}</span>
+      <span class="icon">
+        @if (node.editable) {
+          <svg lucideFileText [size]="14"></svg>
+        } @else {
+          <svg lucideFile [size]="14"></svg>
+        }
+      </span>
       <span class="name">{{ node.name }}</span>
       @if (node.ext && node.ext !== 'html') {
         <span class="ext">.{{ node.ext }}</span>
@@ -96,7 +102,9 @@
       (dragstart)="onNodeDragStart($event, node)"
       (dragend)="onNodeDragEnd()"
     >
-      <span class="icon">📝</span>
+      <span class="icon">
+        <svg lucideFilePen [size]="14"></svg>
+      </span>
       <span class="name">{{ node.name }}</span>
       <span class="ext">.{{ node.ext || 'md' }}</span>
     </button>
@@ -112,8 +120,16 @@
       (contextmenu)="onContextMenu($event, node)"
       [title]="'Notas (excluidas del EPUB)'"
     >
-      <span class="chevron">{{ isExpanded(node) ? '▾' : '▸' }}</span>
-      <span class="icon">📒</span>
+      <span class="chevron">
+        @if (isExpanded(node)) {
+          <svg lucideChevronDown [size]="12"></svg>
+        } @else {
+          <svg lucideChevronRight [size]="12"></svg>
+        }
+      </span>
+      <span class="icon">
+        <svg lucideNotebook [size]="14"></svg>
+      </span>
       <span class="name">{{ node.name }}</span>
       @if (node.children.length > 0) {
         <span class="ext">{{ node.children.length }}</span>
@@ -159,8 +175,16 @@
       (contextmenu)="onContextMenu($event, node)"
       [title]="node.path"
     >
-      <span class="chevron">{{ isExpanded(node) ? '▾' : '▸' }}</span>
-      <span class="icon">📁</span>
+      <span class="chevron">
+        @if (isExpanded(node)) {
+          <svg lucideChevronDown [size]="12"></svg>
+        } @else {
+          <svg lucideChevronRight [size]="12"></svg>
+        }
+      </span>
+      <span class="icon">
+        <svg lucideFolder [size]="14"></svg>
+      </span>
       <span class="name">{{ node.name }}</span>
       @if (node.children.length > 0) {
         <span class="ext">{{ node.children.length }}</span>
@@ -208,7 +232,15 @@
       (click)="toggle(node)"
       (contextmenu)="onContextMenu($event, node)"
     >
-      <span class="chevron">{{ node.excluded ? '·' : (isExpanded(node) ? '▾' : '▸') }}</span>
+      <span class="chevron">
+        @if (node.excluded) {
+          <span class="chevron-dot">·</span>
+        } @else if (isExpanded(node)) {
+          <svg lucideChevronDown [size]="12"></svg>
+        } @else {
+          <svg lucideChevronRight [size]="12"></svg>
+        }
+      </span>
       <span class="name">{{ displayName(node) }}</span>
       @if (node.excluded) {
         <span class="excluded-badge" title="Excluido del export EPUB">excluido</span>
@@ -273,8 +305,16 @@
     [style.padding-left.px]="8 + depth * 14"
     (click)="toggleExports(bookPath)"
   >
-    <span class="chevron">{{ isExportsExpanded(bookPath) ? '▾' : '▸' }}</span>
-    <span class="icon">📚</span>
+    <span class="chevron">
+      @if (isExportsExpanded(bookPath)) {
+        <svg lucideChevronDown [size]="12"></svg>
+      } @else {
+        <svg lucideChevronRight [size]="12"></svg>
+      }
+    </span>
+    <span class="icon">
+      <svg lucideLibrary [size]="14"></svg>
+    </span>
     <span class="name">Exportados</span>
     @if (hasLoadedExports(bookPath) && getExports(bookPath).length > 0) {
       <span class="ext">{{ getExports(bookPath).length }}</span>
@@ -296,7 +336,9 @@
           (click)="openExportEntry(entry)"
           [title]="entry.path"
         >
-          <span class="icon">📕</span>
+          <span class="icon">
+            <svg lucideBookMarked [size]="14"></svg>
+          </span>
           <span class="name">{{ entry.name }}</span>
           <span class="export-badge">epub</span>
         </button>
@@ -314,8 +356,16 @@
     [style.padding-left.px]="8 + depth * 14"
     (click)="toggleExtras(scopePath)"
   >
-    <span class="chevron">{{ isExtrasExpanded(scopePath) ? '▾' : '▸' }}</span>
-    <span class="icon">📁</span>
+    <span class="chevron">
+      @if (isExtrasExpanded(scopePath)) {
+        <svg lucideChevronDown [size]="12"></svg>
+      } @else {
+        <svg lucideChevronRight [size]="12"></svg>
+      }
+    </span>
+    <span class="icon">
+      <svg lucideFolder [size]="14"></svg>
+    </span>
     <span class="name">Extras</span>
     @if (hasLoadedExtras(scopePath); as _loaded) {
       @if (getExtras(scopePath).length > 0) {
@@ -349,8 +399,16 @@
       (click)="toggleExtrasDir(scopePath, node.relativePath)"
       [title]="node.relativePath"
     >
-      <span class="chevron">{{ isExtrasDirExpanded(scopePath, node.relativePath) ? '▾' : '▸' }}</span>
-      <span class="icon">📁</span>
+      <span class="chevron">
+        @if (isExtrasDirExpanded(scopePath, node.relativePath)) {
+          <svg lucideChevronDown [size]="12"></svg>
+        } @else {
+          <svg lucideChevronRight [size]="12"></svg>
+        }
+      </span>
+      <span class="icon">
+        <svg lucideFolder [size]="14"></svg>
+      </span>
       <span class="name">{{ node.name }}</span>
       <span class="ext">{{ node.children.length }}</span>
     </button>
@@ -372,12 +430,22 @@
       (contextmenu)="onExtraContextMenu($event, scopePath, node.entry)"
       [title]="node.entry.relative_path"
     >
-      <span class="icon">{{
-        node.entry.kind === 'image' ? '🖼' :
-        node.entry.kind === 'document' ? '📄' :
-        node.entry.kind === 'text' ? '📝' :
-        '📦'
-      }}</span>
+      <span class="icon">
+        @switch (node.entry.kind) {
+          @case ('image') {
+            <svg lucideImage [size]="14"></svg>
+          }
+          @case ('document') {
+            <svg lucideFileText [size]="14"></svg>
+          }
+          @case ('text') {
+            <svg lucideFilePen [size]="14"></svg>
+          }
+          @default {
+            <svg lucidePackage [size]="14"></svg>
+          }
+        }
+      </span>
       <span class="name">{{ node.name }}</span>
       <span class="extra-badge">extra</span>
     </button>
@@ -390,8 +458,16 @@
     class="row themes-header"
     (click)="toggleThemes()"
   >
-    <span class="chevron">{{ isThemesExpanded() ? '▾' : '▸' }}</span>
-    <span class="icon">🎨</span>
+    <span class="chevron">
+      @if (isThemesExpanded()) {
+        <svg lucideChevronDown [size]="12"></svg>
+      } @else {
+        <svg lucideChevronRight [size]="12"></svg>
+      }
+    </span>
+    <span class="icon">
+      <svg lucidePalette [size]="14"></svg>
+    </span>
     <span class="name">Temas</span>
     @if (themesList().length > 0) {
       <span class="ext">{{ themesList().length }}</span>
@@ -400,7 +476,7 @@
   @if (isThemesExpanded()) {
     @if (themesList().length === 0) {
       <p class="status" style="padding-left: 22px">
-        Sin temas. Click en 🎨 arriba para crear uno.
+        Sin temas. Click en el ícono de paleta arriba para crear uno.
       </p>
     } @else {
       @for (theme of themesList(); track theme.id) {
@@ -414,7 +490,9 @@
           (contextmenu)="onThemeContextMenu($event, theme)"
           [title]="theme.id"
         >
-          <span class="icon">🎨</span>
+          <span class="icon">
+            <svg lucidePalette [size]="14"></svg>
+          </span>
           <span class="name">{{ theme.nombre || theme.id }}</span>
         </button>
       }
@@ -431,8 +509,16 @@
       [attr.data-extra-scope]="rootPath"
       (click)="toggleRootFonts()"
     >
-      <span class="chevron">{{ isRootFontsExpanded() ? '▾' : '▸' }}</span>
-      <span class="icon">🔤</span>
+      <span class="chevron">
+        @if (isRootFontsExpanded()) {
+          <svg lucideChevronDown [size]="12"></svg>
+        } @else {
+          <svg lucideChevronRight [size]="12"></svg>
+        }
+      </span>
+      <span class="icon">
+        <svg lucideType [size]="14"></svg>
+      </span>
       <span class="name">Fuentes</span>
       @if (hasLoadedRootFonts() && getRootFonts().length > 0) {
         <span class="ext">{{ getRootFonts().length }}</span>
@@ -445,7 +531,9 @@
           (click)="cleanupUnusedFonts($event)"
           (keydown.enter)="cleanupUnusedFonts($event)"
           [title]="'Borrar ' + unusedRootFontsCount() + ' fuente(s) que ningún tema/saga/libro usa'"
-        >🧹</span>
+        >
+          <svg lucideEraser [size]="14"></svg>
+        </span>
       }
       <span
         class="consolidate-btn"
@@ -454,7 +542,9 @@
         (click)="consolidateFonts($event)"
         (keydown.enter)="consolidateFonts($event)"
         title="Consolidar: mueve fuentes de temas/sagas/libros al pool global"
-      >⇲</span>
+      >
+        <svg lucideMerge [size]="14"></svg>
+      </span>
     </button>
     @if (isRootFontsExpanded()) {
       @if (!hasLoadedRootFonts()) {
@@ -475,7 +565,13 @@
             (contextmenu)="onFontContextMenu($event, rootPath, entry)"
             [title]="isFontUsed(entry) ? entry.relative_path + ' — en uso' : entry.relative_path + ' — sin uso (ningún tema/saga/libro la referencia)'"
           >
-            <span class="icon">{{ isFontUsed(entry) ? '🔤' : '🔇' }}</span>
+            <span class="icon">
+              @if (isFontUsed(entry)) {
+                <svg lucideType [size]="14"></svg>
+              } @else {
+                <svg lucideTypeOutline [size]="14"></svg>
+              }
+            </span>
             <span class="name">{{ entry.name }}</span>
             <span class="font-badge">{{ entry.family }}{{ entry.weight === 700 ? ' B' : '' }}{{ entry.style === 'italic' ? ' I' : '' }}</span>
           </button>

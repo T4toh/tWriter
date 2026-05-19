@@ -112,7 +112,8 @@
                   </div>
                 } @else if (ds.container_running && ds.api_responding) {
                   <div class="docker-status ok">
-                    ● LanguageTool corriendo en localhost:8081
+                    <svg lucideCircle [size]="10"></svg>
+                    LanguageTool corriendo en localhost:8081
                   </div>
                   <button
                     type="button"
@@ -220,13 +221,18 @@
                     @if (st.present && !clearKeyOnSave()) {
                       <span class="gs-key-badge ok">
                         @if (st.backend === 'keyring') {
-                          🔐 Guardada en keyring del sistema
+                          <svg lucideLock [size]="12"></svg>
+                          Guardada en keyring del sistema
                         } @else {
-                          ⚠ Guardada en plaintext (sin keyring disponible)
+                          <svg lucideCircleAlert [size]="12"></svg>
+                          Guardada en plaintext (sin keyring disponible)
                         }
                       </span>
                     } @else if (clearKeyOnSave()) {
-                      <span class="gs-key-badge warn">⊘ se borra al aplicar</span>
+                      <span class="gs-key-badge warn">
+                        <svg lucideBan [size]="12"></svg>
+                        se borra al aplicar
+                      </span>
                     }
                   }
                 </span>
@@ -248,7 +254,11 @@
                     (click)="toggleApiKeyVisibility()"
                     [title]="showApiKey() ? 'Ocultar API key' : 'Mostrar API key'"
                   >
-                    {{ showApiKey() ? '🙈' : '👁' }}
+                    @if (showApiKey()) {
+                      <svg lucideEyeOff [size]="14"></svg>
+                    } @else {
+                      <svg lucideEye [size]="14"></svg>
+                    }
                   </button>
                 </div>
 
@@ -273,11 +283,11 @@
 
               <p class="gs-muted-note">
                 @if (apiKeyStatus()?.keyring_available) {
-                  <strong>🔐 Keyring del sistema disponible</strong> —
+                  <strong>Keyring del sistema disponible</strong> —
                   el API key se guarda encriptado en libsecret / KWallet /
                   Keychain / Credential Manager, no en disco.
                 } @else {
-                  <strong>⚠ Sin keyring del sistema</strong> — caemos a
+                  <strong>Sin keyring del sistema</strong> — caemos a
                   fallback plaintext en <code>secrets-fallback.json</code>
                   (carpeta de config de Tauri, permisos 0600, fuera de git).
                   Si querés cifrado real, activá <code>gnome-keyring-daemon</code>
@@ -339,9 +349,15 @@
         {{ testing() ? 'Probando…' : 'Probar conexión' }}
       </button>
       @if (testResult() === 'ok') {
-        <span class="test-ok">✓ conectado</span>
+        <span class="test-ok">
+          <svg lucideCheck [size]="14"></svg>
+          conectado
+        </span>
       } @else if (testResult() === 'fail') {
-        <span class="test-fail">✗ no responde</span>
+        <span class="test-fail">
+          <svg lucideX [size]="14"></svg>
+          no responde
+        </span>
       }
       <span class="spacer"></span>
       <button type="button" class="btn btn-secondary" (click)="close()">Cancelar</button>

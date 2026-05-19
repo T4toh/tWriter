@@ -1,18 +1,28 @@
 import { Component, computed, input, output } from '@angular/core';
+import {
+  LucideBookMarked,
+  LucideDynamicIcon,
+  LucideFile,
+  LucideFilePen,
+  LucideFolder,
+  LucideLibrary,
+  LucideNotebook,
+  type LucideIcon,
+} from '@lucide/angular';
 import { TreeNode } from '../core/types';
 
 interface Chip {
   path: string;
   name: string;
   kind: string;
-  icon: string;
+  icon: LucideIcon | null;
 }
 
 const MAX_CHIPS = 8;
 
 @Component({
   selector: 'app-folder-card',
-  imports: [],
+  imports: [LucideDynamicIcon],
   templateUrl: './folder-card.html',
   styleUrl: './folder-card.scss',
 })
@@ -65,15 +75,14 @@ export class FolderCard {
   }
 }
 
-function iconFor(kind: string): string {
+function iconFor(kind: string): LucideIcon | null {
   switch (kind) {
-    case 'note': return '📝';
-    case 'notes': return '📒';
-    case 'folder': return '📁';
-    case 'chapter': return '◆';
-    case 'section': return '§';
-    case 'book': return '📕';
-    case 'saga': return '📚';
-    default: return '•';
+    case 'note': return LucideFilePen;
+    case 'notes': return LucideNotebook;
+    case 'folder': return LucideFolder;
+    case 'chapter': return LucideFile;
+    case 'book': return LucideBookMarked;
+    case 'saga': return LucideLibrary;
+    default: return null;
   }
 }

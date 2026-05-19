@@ -9,6 +9,7 @@ import {
   viewChild,
   AfterViewChecked,
 } from '@angular/core';
+import { LucideDynamicIcon } from '@lucide/angular';
 import {
   ContextMenuService,
   CtxMenuEntry,
@@ -17,7 +18,7 @@ import {
 
 @Component({
   selector: 'app-context-menu-host',
-  imports: [],
+  imports: [LucideDynamicIcon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './context-menu-host.html',
   styleUrl: './context-menu-host.scss',

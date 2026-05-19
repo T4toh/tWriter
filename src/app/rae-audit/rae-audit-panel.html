@@ -1,7 +1,7 @@
 @if (scope(); as s) {
   <header class="rae-panel-head">
     <div class="rae-panel-title">
-      <span class="rae-panel-icon">📐</span>
+      <svg class="rae-panel-icon" lucideRuler [size]="16"></svg>
       <div class="rae-panel-labels">
         <span class="rae-panel-scope">RAE — {{ s.name }}</span>
         <span class="rae-panel-sub">
@@ -25,7 +25,7 @@
       </div>
     </div>
     <button type="button" class="rae-panel-close" (click)="close()" title="Cerrar">
-      ×
+      <svg lucideX [size]="14"></svg>
     </button>
   </header>
 
@@ -51,12 +51,13 @@
           @for (v of chapter.violations; track $index) {
             <li class="rae-violation-row" (click)="openChapterAt(chapter, v)">
               <div class="rae-violation-meta">
-                <span
+                <svg
                   class="rae-violation-sev"
                   [class.rae-violation-sev--error]="v.severity === 'error'"
                   [class.rae-violation-sev--warning]="v.severity === 'warning'"
-                  >{{ severityIcon(v.severity) }}</span
-                >
+                  [lucideIcon]="severityIcon(v.severity)"
+                  [size]="12"
+                ></svg>
                 <span class="rae-violation-cat">{{ categoryLabel(v.category) }}</span>
                 <span class="rae-violation-rule">{{ v.ruleId }}</span>
               </div>

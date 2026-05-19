@@ -38,7 +38,7 @@
       (click)="openDictionary($event)"
       [title]="hasDictionary() ? 'Diccionario (' + dictSize() + ')' : 'Diccionario'"
     >
-      📖
+      <svg lucideBookOpen [size]="16"></svg>
     </button>
     <button
       type="button"
@@ -46,7 +46,7 @@
       (click)="openConfig($event)"
       title="Configurar saga"
     >
-      ⚙
+      <svg lucideSettings [size]="16"></svg>
     </button>
   </div>
 </div>

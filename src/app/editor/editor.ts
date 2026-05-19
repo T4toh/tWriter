@@ -12,6 +12,17 @@ import {
   untracked,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import {
+  LucideCheck,
+  LucideCircleAlert,
+  LucideDynamicIcon,
+  LucideMenu,
+  LucideRectangleHorizontal,
+  LucideRectangleVertical,
+  LucideSquare,
+  LucideTextAlignJustify,
+  type LucideIcon,
+} from '@lucide/angular';
 import { invoke } from '@tauri-apps/api/core';
 import { Editor as TipTapEditor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -91,7 +102,10 @@ const EMPTY_STATE: ToolbarState = {
 
 @Component({
   selector: 'app-editor',
-  imports: [Landing, GrammarPopover, RaePopover, Select, FormsModule],
+  imports: [
+    Landing, GrammarPopover, RaePopover, Select, FormsModule,
+    LucideCircleAlert, LucideDynamicIcon,
+  ],
   templateUrl: './editor.html',
   styleUrl: './editor.scss',
 })
@@ -310,11 +324,11 @@ export class Editor implements AfterViewInit, OnDestroy {
       case 'full': return 'lleno';
     }
   });
-  protected readonly widthIcon = computed(() => {
+  protected readonly widthIcon = computed<LucideIcon>(() => {
     switch (this.width()) {
-      case 'narrow': return '▯';
-      case 'wide': return '▭';
-      case 'full': return '▬';
+      case 'narrow': return LucideRectangleVertical;
+      case 'wide': return LucideRectangleHorizontal;
+      case 'full': return LucideSquare;
     }
   });
   protected readonly paragraphSpacingLabel = computed(() => {
@@ -324,11 +338,11 @@ export class Editor implements AfterViewInit, OnDestroy {
       case 'loose': return 'amplio';
     }
   });
-  protected readonly paragraphSpacingIcon = computed(() => {
+  protected readonly paragraphSpacingIcon = computed<LucideIcon>(() => {
     switch (this.paragraphSpacing()) {
-      case 'tight': return '≣';
-      case 'normal': return '≡';
-      case 'loose': return '☰';
+      case 'tight': return LucideTextAlignJustify;
+      case 'normal': return LucideTextAlignJustify;
+      case 'loose': return LucideMenu;
     }
   });
 
@@ -810,7 +824,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected openVariantPicker(event: MouseEvent): void {
     const current = this.resolvedVariant();
     const entries: CtxMenuEntry[] = Editor.VARIANT_PICKER_OPTIONS.map((opt) => ({
-      label: opt.label + (opt.code === current ? '  ✓' : ''),
+      label: opt.label,
+      icon: opt.code === current ? LucideCheck : undefined,
       onClick: () => this.pickVariant(opt.code),
     }));
     this.ctxMenu.open(event, entries);
