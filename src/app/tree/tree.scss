@@ -162,6 +162,38 @@
   white-space: nowrap;
 }
 
+.modified {
+  margin-left: auto;
+  font-size: 0.7em;
+  font-family: var(--font-mono);
+  opacity: 0.45;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.row.chapter.active .modified {
+  opacity: 0.75;
+  color: inherit;
+}
+
+.row.chapter.most-recent {
+  box-shadow: inset 3px 0 0 var(--accent);
+
+  .modified {
+    opacity: 0.85;
+    color: var(--accent);
+    font-weight: 600;
+  }
+}
+
+.row.chapter.most-recent.active {
+  box-shadow: inset 3px 0 0 var(--bg);
+
+  .modified {
+    color: var(--bg);
+  }
+}
+
 .ext {
   margin-left: auto;
   font-size: 0.75em;

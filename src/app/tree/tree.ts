@@ -21,6 +21,7 @@ import { FontEntry, ThemeMeta, TreeNode } from '../core/types';
 import { ModalService } from '../shared/modal-service';
 import { ContextMenuService } from '../shared/context-menu-service';
 import { NodeActionsService } from '../shared/node-actions-service';
+import { formatAbsoluteTime, formatRelativeTime } from '../core/relative-time';
 
 const FONT_EXT_RE = /\.(ttf|otf|woff|woff2)$/i;
 type DropScope =
@@ -164,6 +165,10 @@ export class Tree implements OnDestroy {
 
   ngOnDestroy(): void {
     this.dragUnlisten?.();
+    if (this.nowTimer) {
+      clearInterval(this.nowTimer);
+      this.nowTimer = null;
+    }
   }
 
   // ───── Extras / exports (left-click + UI state) ─────
@@ -569,6 +574,40 @@ export class Tree implements OnDestroy {
   }
 
   // ───── Tree expansion / navigation ─────
+
+  /** Path del capítulo con `modifiedMs` más alto en todo el proyecto. */
+  protected readonly mostRecentPath = computed<string | null>(() => {
+    const r = this.root();
+    if (!r) return null;
+    let bestPath: string | null = null;
+    let bestMs = 0;
+    const walk = (n: TreeNode): void => {
+      if (n.kind === 'chapter' && n.editable && n.modifiedMs && n.modifiedMs > bestMs) {
+        bestMs = n.modifiedMs;
+        bestPath = n.path;
+      }
+      for (const c of n.children) walk(c);
+    };
+    walk(r);
+    return bestPath;
+  });
+
+  /** Tick que se incrementa cada minuto para refrescar los strings de
+   *  tiempo relativo sin esperar a que el árbol re-renderice por otro motivo. */
+  private readonly nowTick = signal(0);
+  private nowTimer: ReturnType<typeof setInterval> | null = setInterval(
+    () => this.nowTick.update((n) => n + 1),
+    60_000,
+  );
+
+  protected relativeTime(ms: number | undefined): string {
+    this.nowTick(); // crea dependencia para que el binding recompute
+    return formatRelativeTime(ms);
+  }
+
+  protected absoluteTime(ms: number | undefined): string {
+    return formatAbsoluteTime(ms);
+  }
 
   protected displayName(node: TreeNode): string {
     return node.kind === 'saga'

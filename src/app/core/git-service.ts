@@ -228,9 +228,9 @@ export class GitService {
     }
   }
 
-  /** Pull manual. Antes usaba siempre `--ff-only` y fallaba cuando había
-   *  commits locales; ahora replica la lógica del auto-pull: si `ahead===0`
-   *  usa ff-only, si no usa rebase --autostash. */
+  /** Pull manual. Usa ff-only solo si no hay commits locales ni working
+   *  tree dirty; en cualquier otro caso `--rebase --autostash` para sobrevivir
+   *  el race típico con el editor. */
   async pull(): Promise<void> {
     const root = this.settings.root();
     if (!root || this.syncing()) return;
@@ -243,7 +243,7 @@ export class GitService {
         s = await invoke<GitStatus>('git_status', { repoPath: root });
         this.status.set(s);
       }
-      const cmd = s.ahead > 0 ? 'git_pull_rebase' : 'git_pull';
+      const cmd = s.ahead > 0 || s.has_changes ? 'git_pull_rebase' : 'git_pull';
       await invoke(cmd, { repoPath: root });
       await this.refreshStatus();
       this.resetThrottle();
@@ -259,11 +259,14 @@ export class GitService {
     if (!root) return;
     this.autoPullInflight = true;
     try {
-      if (s.ahead === 0) {
-        await invoke('git_pull', { repoPath: root });
-      } else {
-        await invoke('git_pull_rebase', { repoPath: root });
-      }
+      // ff-only aborta si hay working tree dirty solapado con el remoto.
+      // Cuando hay cambios locales (sin commitear o commits propios), pull
+      // con --rebase --autostash es el único modo que sobrevive el race
+      // típico: editor abre cap mientras llega un commit remoto del mismo
+      // archivo. Sin dirty + ahead===0, ff-only sigue siendo lo más liviano.
+      const needsRebase = s.ahead > 0 || s.has_changes;
+      const cmd = needsRebase ? 'git_pull_rebase' : 'git_pull';
+      await invoke(cmd, { repoPath: root });
       this.resetThrottle();
       this.error.set(null);
       await this.refreshStatus();
