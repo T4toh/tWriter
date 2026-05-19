@@ -6,63 +6,94 @@ Las novelas viven en un repo privado aparte (HTML + JSON). Esta app es solo el e
 
 **Stack**: Tauri 2 + Angular 21 + TipTap. Backend Rust, frontend signals.
 
-## Layout de archivos
+## Tabla de contenidos
 
-Cada saga/libro en el repo de novelas sigue una convención canónica para
-distinguir capítulos (lo que va al EPUB) de extras (manuscritos viejos, mapas,
-glosarios, tapas alternativas) y notas (research / worldbuilding).
+- [Instalación](#instalación)
+  - [Arch / CachyOS](#arch--cachyos)
+  - [Debian / Ubuntu](#debian--ubuntu)
+  - [Windows](#windows)
+  - [macOS](#macos)
+  - [Dependencias opcionales](#dependencias-opcionales)
+- [Features](#features)
+  - [Editor](#editor)
+  - [Notas (Markdown)](#notas-markdown)
+  - [Tree explorer](#tree-explorer)
+  - [Búsqueda (Ctrl+F)](#búsqueda-ctrlf)
+  - [Conversor RAE](#conversor-rae)
+  - [Validador RAE (inline + batch)](#validador-rae-inline--batch)
+  - [Gramática + ortografía (LanguageTool)](#gramática--ortografía-languagetool)
+  - [Importer](#importer)
+  - [Extras + covers](#extras--covers)
+  - [Export EPUB](#export-epub)
+  - [Temas + fuentes embebidas](#temas--fuentes-embebidas)
+  - [Debug / observabilidad](#debug--observabilidad)
+  - [Storage backend (git / cloud / local)](#storage-backend-git--cloud--local)
+  - [Git auto-sync](#git-auto-sync-cuando-backend--git)
+- [Configuración avanzada](#configuración-avanzada)
+  - [LanguageTool (3 backends)](#languagetool-3-backends)
+- [Para desarrollar](#para-desarrollar)
+  - [Layout de archivos del repo de novelas](#layout-de-archivos-del-repo-de-novelas)
+  - [Setup local](#setup-local)
+  - [Comandos](#comandos)
+  - [Distribución](#distribución)
+- [TODO](#todo)
+- [Licencia](#licencia)
 
+## Instalación
+
+Releases en <https://github.com/T4toh/tWriter/releases>.
+
+### Arch / CachyOS
+
+**Opción A: AUR** (cuando esté publicado, ver "Publicar a AUR" abajo):
+
+```bash
+yay -S twriter-bin     # o paru, pikaur, etc
 ```
-<root>/
-  README.md                        # opcional, visible en GitHub, oculto en la app
-  themes/                          # opcional, temas reutilizables
-    <id>/
-      theme.json                   # { body_font, body_size, heading_font, heading_size, line_height, page_margin }
-      fonts/                       # .ttf/.otf/.woff/.woff2
-  <carpeta-libre>/                 # opcional, kind: folder — notas y subcarpetas sueltas
-    <cualquier-archivo>.md         # notas markdown
-    <subcarpeta>/                  # recursivo
-  <cualquier-archivo>.md           # opcional, notas sueltas en root
-  <saga>/
-    saga.json
-    cover.{jpg,png,jpeg,webp}      # opcional, tapa de la serie
-    extras/                        # opcional, mapas/glosarios saga-level
-      <cualquier-archivo>
-    fonts/                         # opcional, override de fuentes per-saga
-    notas/                         # opcional, notas saga-level (📒)
-    <libro>/
-      book.json
-      cover.{jpg,png,jpeg,webp}    # opcional
-      back-cover.{jpg,png,jpeg,webp} # opcional, contratapa
-      extras/                      # opcional, manuscritos/refs book-level
-        <cualquier-archivo>
-      fonts/                       # opcional, override de fuentes per-libro
-      notas/                       # opcional, notas book-level
-      <n>.html + <n>.meta.json     # capítulos
-      <sección>?/<n>.html          # capítulos en secciones
+
+**Opción B: PKGBUILD local** (uso actual del autor):
+
+```bash
+git clone https://github.com/T4toh/tWriter
+cd tWriter
+./packaging/aur/test.sh
 ```
 
-Reglas:
+Requiere `pacman-contrib` (`updpkgsums`) y `base-devel`. Para actualizar:
 
-- `cover.*` y `back-cover.*` son archivos directos en la raíz del nivel. Si no
-  los tenés explícitos en `book.json`/`saga.json`, la app los autodetecta del
-  filesystem.
-- `extras/` es flat. Podés crear subcarpetas si querés; la app no impone
-  taxonomía. Cualquier tipo de archivo entra (imagen, docx, odt, txt, md, pdf).
-- `extras/`, `notas/`, `fonts/`, `themes/` y `.twriter/` (índice de búsqueda)
-  quedan auto-excluidos del export EPUB y del walk del tree. No necesitan
-  `.twriter-ignore`.
-- `README.md` y `.gitignore` en root tampoco aparecen en el tree (sirven para
-  GitHub, no para la app).
-- Carpetas en root sin `saga.json`/`book.json` y sin capítulos `.html`/`.odt`/`.docx`
-  se tratan como **carpetas libres** (`kind: folder`, 📁). Contienen notas `.md`
-  y subcarpetas recursivas para organización libre (worldbuilding, research, etc.).
-  No participan del TOC ni del EPUB.
-- Para libros standalone (sin saga padre), el layout del libro es idéntico —
-  `<book>/cover.*`, `<book>/extras/`, `<book>/fonts/`, etc.
-- `themes/` vive solo en la raíz del repo. Cada tema es autocontenido (su
-  propio `theme.json` + carpeta `fonts/`). Sagas y libros referencian un tema
-  por id en `saga.json::theme.base` / `book.json::theme.base`.
+```bash
+git pull
+./packaging/aur/test.sh <version>     # e.g. 0.2.0
+```
+
+### Debian / Ubuntu
+
+Descargar el `.deb` del último release e instalar:
+
+```bash
+wget https://github.com/T4toh/tWriter/releases/latest/download/twriter_*_amd64.deb
+sudo apt install ./twriter_*_amd64.deb
+```
+
+Sin auto-update — recheckear releases manualmente.
+
+### Windows
+
+Descargar de releases:
+
+- `.msi` (instalador limpio, recomendado para uso normal), **o**
+- `.exe` (NSIS, instalador alternativo)
+
+Auto-update Tauri-native: la app chequea `releases/latest/download/latest.json` y muestra banner in-app cuando hay versión nueva. Aceptar el banner descarga e instala sin pasar por el browser.
+
+### macOS
+
+Diferido hasta que el autor arregle la pantalla del MacBook Pro. Mientras tanto, build manual desde fuente — ver [Setup local](#setup-local).
+
+### Dependencias opcionales
+
+- **Pandoc** (para importar `.docx`/`.odt`): `sudo pacman -S pandoc` / `sudo apt install pandoc` / [pandoc.org](https://pandoc.org/installing.html) en Windows. Sin Pandoc, el importer queda inhabilitado pero el resto de la app funciona.
+- **Docker** (para LanguageTool local): ver [LanguageTool](#languagetool-3-backends). Sin Docker, la app usa el API público de LT por default.
 
 ## Features
 
@@ -246,7 +277,7 @@ viejo, validador los detecta correctamente con `paragraph-collapsed`.
 
 ### Gramática + ortografía (LanguageTool)
 
-- 3 modos: público (`api.languagetool.org`), local (Docker), custom URL (self-hosted o LT Premium).
+- 3 modos: público (`api.languagetool.org`), local (Docker), custom URL (self-hosted o LT Premium). Ver [Configuración avanzada → LanguageTool](#languagetool-3-backends) para detalles de cada uno.
 - Underlines diferenciados: orto (rojo sólido), gramática (rojo wavy), estilo (amarillo wavy).
 - Popover con sugerencias clickeables + atribución LT.
 - Rate-limit client-side (18 req/min, 70KB/min) + chunking >20KB transparente.
@@ -265,7 +296,7 @@ viejo, validador los detecta correctamente con `paragraph-collapsed`.
 - Diccionario per-saga: "+ diccionario" en popover de TYPOS filtra matches. **Re-filtrado reactivo**: `SagaContextService.dictionary()` es un signal — un effect en `editor.ts` lo observa y re-filtra los `grammarMatches` actuales sin pegarle de nuevo a LT. Cubre el race típico (el saga.json carga async después del primer `checkGrammar`, así que palabras del mundo aparecían marcadas hasta cerrar/reabrir el cap) y el agregar palabra desde el popover (limpia el squiggle on the spot).
 - **Vista dedicada del diccionario** (botón 📖 en saga-header de landing + item "Editar diccionario…" en context menu de saga): modal con contador, búsqueda live, lista alfabética (Intl.Collator), agregar con validación en vivo, borrar con confirm inline, banner opt-in "Limpiar" cuando detecta entradas problemáticas (puntuación al borde, duplicados case-insensitive, solo dígitos, fuera de los límites 2–64). El validador (`dictionary/word-validator.ts`) sanea los bordes (`.`, `,`, `…`, comillas, paréntesis…) y se aplica también en el path "+ diccionario" del popover para que no se cuelen entradas con punto al final. Persiste por acción (cada add/remove escribe `saga.json`); el archivo en disco sigue siendo `Option<Vec<String>>` plano, sin migración.
 - **UX Docker explicativa**: stepper visual con fases `checking → pulling → starting → loading → ready` durante el arranque + bloque "Por qué Docker" con links a docker.com, languagetool.org, el repo oficial de LT y la imagen `erikvl87/languagetool` que usamos. Eventos `languagetool-progress` emitidos desde Rust con `tauri::Emitter`.
-- **LT Premium / self-hosted con auth**: en modo Custom URL podés pegar tu username + apiKey. El apiKey va al **keyring del OS** (libsecret/Keychain/Credential Manager) vía el módulo `secrets`. Detalle abajo.
+- **LT Premium / self-hosted con auth**: en modo Custom URL podés pegar tu username + apiKey. El apiKey va al **keyring del OS** (libsecret/Keychain/Credential Manager) vía el módulo `secrets`. Ver [Configuración avanzada → LanguageTool](#languagetool-3-backends) para el detalle del keyring.
 
 ### Importer
 
@@ -399,6 +430,213 @@ ni saber qué es `git pull --rebase`.
   ya no dispara sobre la carpeta nueva con el backend viejo.
 - Botón "sync ahora" (⇅) en header.
 
+## Configuración avanzada
+
+### LanguageTool (3 backends)
+
+tWriter soporta 3 backends de LanguageTool. Todos hablan el mismo endpoint
+HTTP (`/v2/check`); cambia dónde corre y cómo se autentica.
+
+#### API público (default)
+
+`api.languagetool.org` — gratis, sin instalación. Limitado a 20 req/min,
+75KB/min, 20KB/req. El texto se envía a servidores LT.
+
+- Solo chequeo on-demand (sin auto-recheck mientras escribís — el ToS lo prohíbe).
+- Banner naranja avisa la primera vez que activás la feature en una sesión.
+
+#### Local (Docker)
+
+Para uso intensivo y privacidad total. La app puede levantarlo desde el
+modal de gramática (⚙ del header → "Local (Docker)" → "Levantar LanguageTool"),
+o por CLI:
+
+```bash
+./scripts/start-languagetool.sh   # primera vez tarda ~30s en cargar modelos
+./scripts/stop-languagetool.sh
+```
+
+Detalles bajo el hood:
+
+- Imagen [erikvl87/languagetool](https://hub.docker.com/r/erikvl87/languagetool)
+  ([repo](https://github.com/Erikvl87/docker-languagetool)) — Java 17 + LT
+  - hunspell, expone `:8010` que mapeamos a `localhost:8081`.
+- ~2GB RAM en runtime, ~300MB de imagen on disk. Hunspell incluido cubre
+  ES/EN — no necesitás diccionario aparte.
+- Auto-check on-by-default cuando el ping responde. Toggle persiste en
+  `settings.json::grammarAutoDisabled`.
+- El backend Rust emite eventos `languagetool-progress` con fases
+  `checking → pulling → starting → loading → ready`; el modal muestra
+  un stepper en vivo.
+
+#### URL custom — self-hosted o LT Premium
+
+Para apuntar a un endpoint LT propio (proxy / instancia interna) o a
+**LanguageTool Premium** (`api.languagetoolplus.com`).
+
+Premium requiere `username` + `apiKey` en cada POST a `/v2/check`:
+
+- **Username** queda en `settings.json` (no es sensible — es un email).
+- **API key** va al **keyring del OS**:
+  - Linux: libsecret / Secret Service API → resuelven `gnome-keyring`,
+    `kwalletd6` (Plasma 6+) u otros.
+  - macOS: Keychain.
+  - Windows: Credential Manager.
+  - El crate Rust [`keyring`](https://crates.io/crates/keyring) v3 abstrae
+    los tres.
+- Si el OS no expone un Secret Service (sistema sin DE, daemon caído),
+  caemos a `secrets-fallback.json` en `app_config_dir` con permisos `0600`
+  y un warning visible en el modal (`⚠ Plaintext (sin keyring disponible)`).
+
+El apiKey **nunca cruza el bridge JS → Rust** en operación normal: el
+backend la lee del keyring server-side cuando arma el form POST. El
+módulo `secrets` solo expone `lt_api_key_status` (devuelve `{present,
+backend, keyring_available}`) y `lt_api_key_save(value)` (escribir o
+borrar). El struct `GrammarConfig` tiene un `impl Debug` manual que
+enmascara el campo apiKey como `***` para que no aparezca jamás en logs,
+tracing ni snapshots del panel 🐛.
+
+Para sacar key de LT Premium: <https://languagetool.org/proofreading-api>.
+
+## Para desarrollar
+
+### Layout de archivos del repo de novelas
+
+Cada saga/libro en el repo de novelas sigue una convención canónica para
+distinguir capítulos (lo que va al EPUB) de extras (manuscritos viejos, mapas,
+glosarios, tapas alternativas) y notas (research / worldbuilding).
+
+```
+<root>/
+  README.md                        # opcional, visible en GitHub, oculto en la app
+  themes/                          # opcional, temas reutilizables
+    <id>/
+      theme.json                   # { body_font, body_size, heading_font, heading_size, line_height, page_margin }
+      fonts/                       # .ttf/.otf/.woff/.woff2
+  <carpeta-libre>/                 # opcional, kind: folder — notas y subcarpetas sueltas
+    <cualquier-archivo>.md         # notas markdown
+    <subcarpeta>/                  # recursivo
+  <cualquier-archivo>.md           # opcional, notas sueltas en root
+  <saga>/
+    saga.json
+    cover.{jpg,png,jpeg,webp}      # opcional, tapa de la serie
+    extras/                        # opcional, mapas/glosarios saga-level
+      <cualquier-archivo>
+    fonts/                         # opcional, override de fuentes per-saga
+    notas/                         # opcional, notas saga-level (📒)
+    <libro>/
+      book.json
+      cover.{jpg,png,jpeg,webp}    # opcional
+      back-cover.{jpg,png,jpeg,webp} # opcional, contratapa
+      extras/                      # opcional, manuscritos/refs book-level
+        <cualquier-archivo>
+      fonts/                       # opcional, override de fuentes per-libro
+      notas/                       # opcional, notas book-level
+      <n>.html + <n>.meta.json     # capítulos
+      <sección>?/<n>.html          # capítulos en secciones
+```
+
+Reglas:
+
+- `cover.*` y `back-cover.*` son archivos directos en la raíz del nivel. Si no
+  los tenés explícitos en `book.json`/`saga.json`, la app los autodetecta del
+  filesystem.
+- `extras/` es flat. Podés crear subcarpetas si querés; la app no impone
+  taxonomía. Cualquier tipo de archivo entra (imagen, docx, odt, txt, md, pdf).
+- `extras/`, `notas/`, `fonts/`, `themes/` y `.twriter/` (índice de búsqueda)
+  quedan auto-excluidos del export EPUB y del walk del tree. No necesitan
+  `.twriter-ignore`.
+- `README.md` y `.gitignore` en root tampoco aparecen en el tree (sirven para
+  GitHub, no para la app).
+- Carpetas en root sin `saga.json`/`book.json` y sin capítulos `.html`/`.odt`/`.docx`
+  se tratan como **carpetas libres** (`kind: folder`, 📁). Contienen notas `.md`
+  y subcarpetas recursivas para organización libre (worldbuilding, research, etc.).
+  No participan del TOC ni del EPUB.
+- Para libros standalone (sin saga padre), el layout del libro es idéntico —
+  `<book>/cover.*`, `<book>/extras/`, `<book>/fonts/`, etc.
+- `themes/` vive solo en la raíz del repo. Cada tema es autocontenido (su
+  propio `theme.json` + carpeta `fonts/`). Sagas y libros referencian un tema
+  por id en `saga.json::theme.base` / `book.json::theme.base`.
+
+### Setup local
+
+Instrucciones para **Arch / CachyOS** desde cero. En otros distros adaptar los gestores de paquetes.
+
+#### 1. Toolchain Rust
+
+Usar `rustup` (toolchain manager oficial), no el paquete `rust` de Arch.
+
+```bash
+sudo pacman -S rustup
+rustup default stable
+```
+
+#### 2. Node.js + pnpm
+
+```bash
+sudo pacman -S nodejs pnpm
+```
+
+#### 3. System libs (Tauri 2 + WebKit)
+
+```bash
+sudo pacman -S --needed \
+  webkit2gtk-4.1 \
+  librsvg \
+  libayatana-appindicator \
+  base-devel \
+  openssl \
+  gtk3 \
+  file
+```
+
+`base-devel` trae `gcc`, `make`, `pkg-config` (necesarios para compilar crates nativas como `git2`).
+
+#### 4. Pandoc (importer .docx/.odt)
+
+```bash
+sudo pacman -S pandoc
+```
+
+#### 5. Docker (opcional, para LanguageTool local)
+
+```bash
+sudo pacman -S docker
+sudo systemctl start docker        # arrancar on-demand, no enable
+sudo usermod -aG docker $USER     # logout/login para que tome efecto
+```
+
+Sin Docker la app igual anda — usa el API público de LanguageTool por default.
+
+#### 6. Clonar e instalar
+
+```bash
+git clone <repo-url> tWriter
+cd tWriter
+pnpm install
+pnpm tauri dev
+```
+
+Primera build de Rust ~5 min (compila `git2`, `webkit`, `zip`, etc.). Después es incremental.
+
+### Comandos
+
+```bash
+pnpm tauri dev      # frontend :1420 + backend Rust
+pnpm build          # solo Angular
+pnpm tauri build    # paquete (.AppImage / .deb)
+ng test             # Karma tests (Angular)
+cargo test --manifest-path src-tauri/Cargo.toml   # tests Rust
+```
+
+En **Arch / CachyOS** (system libs con secciones ELF `.relr.dyn`) el `strip` que linuxdeploy embebe falla. Workaround para `tauri build`:
+
+```bash
+NO_STRIP=true pnpm tauri build
+```
+
+CI (Ubuntu 22.04) no necesita este flag — system libs ahí son ELF clásico.
+
 ### Distribución
 
 - CI: `.github/workflows/release.yml`. Trigger: `git push --tags v*.*.*`. Linux job buildea `.deb`, Windows job buildea `.msi` + `.exe`. Ambos firmados ed25519.
@@ -500,7 +738,7 @@ Setup inicial (una sola vez):
    git push origin master
    ```
 
-Cada release nueva: usar `./packaging/aur/test.sh` + `./packaging/aur/publish.sh` (ver _Flujo completo de una release_ arriba). Los scripts encapsulan el bump del `pkgver`, `updpkgsums`, `makepkg -si`, regeneración de `.SRCINFO` y push al remoto `aur@aur.archlinux.org`.
+Cada release nueva: usar `./packaging/aur/test.sh` + `./packaging/aur/publish.sh` (ver _Cortar release_ arriba). Los scripts encapsulan el bump del `pkgver`, `updpkgsums`, `makepkg -si`, regeneración de `.SRCINFO` y push al remoto `aur@aur.archlinux.org`.
 
 Bumpear `pkgrel` (no `pkgver`) si cambia el PKGBUILD pero no la versión de tWriter — editar a mano `packaging/aur/PKGBUILD` y correr `publish.sh` directo (saltea `test.sh` si el .deb del release ya está vivo).
 
@@ -515,207 +753,6 @@ paru -S twriter-bin
 ## TODO
 
 Ver [TODO.md](TODO.md) — pendientes, bugs conocidos y mejoras planificadas, agrupados por área (Editor / UX, Tree, EPUB, Validador RAE, Git, etc.).
-
-## Gramática (LanguageTool)
-
-tWriter soporta 3 backends de LanguageTool. Todos hablan el mismo endpoint
-HTTP (`/v2/check`); cambia dónde corre y cómo se autentica.
-
-### 1. API público (default)
-
-`api.languagetool.org` — gratis, sin instalación. Limitado a 20 req/min,
-75KB/min, 20KB/req. El texto se envía a servidores LT.
-
-- Solo chequeo on-demand (sin auto-recheck mientras escribís — el ToS lo prohíbe).
-- Banner naranja avisa la primera vez que activás la feature en una sesión.
-
-### 2. Local (Docker)
-
-Para uso intensivo y privacidad total. La app puede levantarlo desde el
-modal de gramática (⚙ del header → "Local (Docker)" → "Levantar LanguageTool"),
-o por CLI:
-
-```bash
-./scripts/start-languagetool.sh   # primera vez tarda ~30s en cargar modelos
-./scripts/stop-languagetool.sh
-```
-
-Detalles bajo el hood:
-
-- Imagen [erikvl87/languagetool](https://hub.docker.com/r/erikvl87/languagetool)
-  ([repo](https://github.com/Erikvl87/docker-languagetool)) — Java 17 + LT
-  - hunspell, expone `:8010` que mapeamos a `localhost:8081`.
-- ~2GB RAM en runtime, ~300MB de imagen on disk. Hunspell incluido cubre
-  ES/EN — no necesitás diccionario aparte.
-- Auto-check on-by-default cuando el ping responde. Toggle persiste en
-  `settings.json::grammarAutoDisabled`.
-- El backend Rust emite eventos `languagetool-progress` con fases
-  `checking → pulling → starting → loading → ready`; el modal muestra
-  un stepper en vivo.
-
-### 3. URL custom — self-hosted o LT Premium
-
-Para apuntar a un endpoint LT propio (proxy / instancia interna) o a
-**LanguageTool Premium** (`api.languagetoolplus.com`).
-
-Premium requiere `username` + `apiKey` en cada POST a `/v2/check`:
-
-- **Username** queda en `settings.json` (no es sensible — es un email).
-- **API key** va al **keyring del OS**:
-  - Linux: libsecret / Secret Service API → resuelven `gnome-keyring`,
-    `kwalletd6` (Plasma 6+) u otros.
-  - macOS: Keychain.
-  - Windows: Credential Manager.
-  - El crate Rust [`keyring`](https://crates.io/crates/keyring) v3 abstrae
-    los tres.
-- Si el OS no expone un Secret Service (sistema sin DE, daemon caído),
-  caemos a `secrets-fallback.json` en `app_config_dir` con permisos `0600`
-  y un warning visible en el modal (`⚠ Plaintext (sin keyring disponible)`).
-
-El apiKey **nunca cruza el bridge JS → Rust** en operación normal: el
-backend la lee del keyring server-side cuando arma el form POST. El
-módulo `secrets` solo expone `lt_api_key_status` (devuelve `{present,
-backend, keyring_available}`) y `lt_api_key_save(value)` (escribir o
-borrar). El struct `GrammarConfig` tiene un `impl Debug` manual que
-enmascara el campo apiKey como `***` para que no aparezca jamás en logs,
-tracing ni snapshots del panel 🐛.
-
-Para sacar key de LT Premium: <https://languagetool.org/proofreading-api>.
-
-## Instalación
-
-Releases en <https://github.com/T4toh/tWriter/releases>.
-
-### Arch / CachyOS
-
-**Opción A: AUR** (cuando esté publicado, ver "Publicar a AUR" arriba):
-
-```bash
-yay -S twriter-bin     # o paru, pikaur, etc
-```
-
-**Opción B: PKGBUILD local** (uso actual del autor):
-
-```bash
-git clone https://github.com/T4toh/tWriter
-cd tWriter
-./packaging/aur/test.sh
-```
-
-Requiere `pacman-contrib` (`updpkgsums`) y `base-devel`. Para actualizar:
-
-```bash
-git pull
-./packaging/aur/test.sh <version>     # e.g. 0.2.0
-```
-
-### Debian / Ubuntu
-
-Descargar el `.deb` del último release e instalar:
-
-```bash
-wget https://github.com/T4toh/tWriter/releases/latest/download/twriter_*_amd64.deb
-sudo apt install ./twriter_*_amd64.deb
-```
-
-Sin auto-update — recheckear releases manualmente.
-
-### Windows
-
-Descargar de releases:
-
-- `.msi` (instalador limpio, recomendado para uso normal), **o**
-- `.exe` (NSIS, instalador alternativo)
-
-Auto-update Tauri-native: la app chequea `releases/latest/download/latest.json` y muestra banner in-app cuando hay versión nueva. Aceptar el banner descarga e instala sin pasar por el browser.
-
-### macOS
-
-Diferido hasta que el autor arregle la pantalla del MacBook Pro. Mientras tanto, build manual desde fuente — ver "Setup de desarrollo" abajo.
-
-### Dependencias opcionales
-
-- **Pandoc** (para importar `.docx`/`.odt`): `sudo pacman -S pandoc` / `sudo apt install pandoc` / [pandoc.org](https://pandoc.org/installing.html) en Windows. Sin Pandoc, el importer queda inhabilitado pero el resto de la app funciona.
-- **Docker** (para LanguageTool local): ver sección "Gramática" arriba. Sin Docker, la app usa el API público de LT por default.
-
-## Setup de desarrollo
-
-Instrucciones para **Arch / CachyOS** desde cero. En otros distros adaptar los gestores de paquetes.
-
-### 1. Toolchain Rust
-
-Usar `rustup` (toolchain manager oficial), no el paquete `rust` de Arch.
-
-```bash
-sudo pacman -S rustup
-rustup default stable
-```
-
-### 2. Node.js + pnpm
-
-```bash
-sudo pacman -S nodejs pnpm
-```
-
-### 3. System libs (Tauri 2 + WebKit)
-
-```bash
-sudo pacman -S --needed \
-  webkit2gtk-4.1 \
-  librsvg \
-  libayatana-appindicator \
-  base-devel \
-  openssl \
-  gtk3 \
-  file
-```
-
-`base-devel` trae `gcc`, `make`, `pkg-config` (necesarios para compilar crates nativas como `git2`).
-
-### 4. Pandoc (importer .docx/.odt)
-
-```bash
-sudo pacman -S pandoc
-```
-
-### 5. Docker (opcional, para LanguageTool local)
-
-```bash
-sudo pacman -S docker
-sudo systemctl start docker        # arrancar on-demand, no enable
-sudo usermod -aG docker $USER     # logout/login para que tome efecto
-```
-
-Sin Docker la app igual anda — usa el API público de LanguageTool por default.
-
-### 6. Clonar e instalar
-
-```bash
-git clone <repo-url> tWriter
-cd tWriter
-pnpm install
-pnpm tauri dev
-```
-
-Primera build de Rust ~5 min (compila `git2`, `webkit`, `zip`, etc.). Después es incremental.
-
-## Desarrollo
-
-```bash
-pnpm tauri dev      # frontend :1420 + backend Rust
-pnpm build          # solo Angular
-pnpm tauri build    # paquete (.AppImage / .deb)
-ng test             # Karma tests (Angular)
-cargo test --manifest-path src-tauri/Cargo.toml   # tests Rust
-```
-
-En **Arch / CachyOS** (system libs con secciones ELF `.relr.dyn`) el `strip` que linuxdeploy embebe falla. Workaround para `tauri build`:
-
-```bash
-NO_STRIP=true pnpm tauri build
-```
-
-CI (Ubuntu 22.04) no necesita este flag — system libs ahí son ELF clásico.
 
 ## Licencia
 
