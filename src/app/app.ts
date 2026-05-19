@@ -27,6 +27,7 @@ import { NotesEditor } from './notes-editor/notes-editor';
 import { DebugPanel } from './debug/debug-panel';
 import { BookConfigModal } from './book-config/book-config-modal';
 import { SagaConfigModal } from './saga-config/saga-config-modal';
+import { DictionaryModal } from './dictionary/dictionary-modal';
 import { SplitChapterModal } from './split-chapter/split-chapter-modal';
 import { ThemeEditorModal } from './theme-editor/theme-editor-modal';
 import { ImageViewer } from './image-viewer/image-viewer';
@@ -49,7 +50,7 @@ import { TreeNode } from './core/types';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, SplitChapterModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, ToastContainer, GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, Spinner, ModalHost, ContextMenuHost],
+  imports: [Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, DictionaryModal, SplitChapterModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, ToastContainer, GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, Spinner, ModalHost, ContextMenuHost],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

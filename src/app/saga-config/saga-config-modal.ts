@@ -26,7 +26,6 @@ export class SagaConfigModal {
 
   protected readonly editing = this.svc.editing;
   protected readonly config = signal<SagaConfig | null>(null);
-  protected readonly diccionarioText = signal<string>('');
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly sagaPath = computed(() => this.editing()?.path ?? null);
@@ -126,7 +125,6 @@ export class SagaConfigModal {
       const node = this.editing();
       if (!node) {
         this.config.set(null);
-        this.diccionarioText.set('');
         this.resetTheme();
         return;
       }
@@ -217,7 +215,6 @@ export class SagaConfigModal {
         formato_parte: cfg.formato_parte ?? null,
         finalizada: cfg.finalizada ?? false,
       });
-      this.diccionarioText.set((cfg.diccionario ?? []).join('\n'));
       this.hydrateTheme(cfg.theme ?? null);
     } catch (err) {
       this.error.set(String(err));
@@ -241,10 +238,6 @@ export class SagaConfigModal {
     this.config.set({ ...cur, [key]: value });
   }
 
-  protected updateDiccionarioText(value: string): void {
-    this.diccionarioText.set(value);
-  }
-
   protected async save(): Promise<void> {
     const path = this.sagaPath();
     const cfg = this.config();
@@ -252,10 +245,6 @@ export class SagaConfigModal {
     this.saving.set(true);
     this.error.set(null);
     try {
-      const palabras = this.diccionarioText()
-        .split('\n')
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
       const cleaned: SagaConfig = {
         nombre: cfg.nombre,
         autor: blank(cfg.autor),
@@ -263,7 +252,9 @@ export class SagaConfigModal {
         variante_es: cfg.variante_es ?? null,
         variante_en: cfg.variante_en ?? null,
         tapa: blank(cfg.tapa),
-        diccionario: palabras.length > 0 ? palabras : null,
+        // El diccionario se administra en su modal dedicado; preservamos el
+        // valor cargado en memoria para no perder palabras en el round-trip.
+        diccionario: cfg.diccionario && cfg.diccionario.length > 0 ? cfg.diccionario : null,
         imprenta: blank(cfg.imprenta),
         template: cfg.template ?? null,
         mostrar_titulo_capitulo: cfg.mostrar_titulo_capitulo ?? null,

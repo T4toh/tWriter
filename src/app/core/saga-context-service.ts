@@ -1,5 +1,6 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
+import { existsCaseInsensitive, validateWord } from '../dictionary/word-validator';
 import { ChapterService } from './chapter-service';
 
 export interface SagaConfig {
@@ -82,16 +83,32 @@ export class SagaContextService {
     this.config.set(next);
   }
 
-  async addToDictionary(word: string): Promise<void> {
+  async addToDictionary(word: string): Promise<{ ok: boolean; reason?: string }> {
     const path = this.sagaPath();
     const cfg = this.config();
-    if (!path || !cfg) return;
-    const trimmed = word.trim();
-    if (!trimmed) return;
+    if (!path || !cfg) return { ok: false, reason: 'No hay saga activa' };
+    const result = validateWord(word);
+    if (!result.ok) return { ok: false, reason: result.reason };
     const existing = cfg.diccionario ?? [];
-    if (existing.some((w) => w.toLowerCase() === trimmed.toLowerCase())) return;
-    const next: SagaConfig = { ...cfg, diccionario: [...existing, trimmed] };
-    await invoke('set_saga_config', { sagaPath: path, config: next });
-    this.config.set(next);
+    if (existsCaseInsensitive(existing, result.value)) {
+      return { ok: false, reason: 'Ya existe en el diccionario' };
+    }
+    const next: SagaConfig = { ...cfg, diccionario: [...existing, result.value] };
+    try {
+      await invoke('set_saga_config', { sagaPath: path, config: next });
+      this.config.set(next);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, reason: String(err) };
+    }
+  }
+
+  /** Reemplaza solo la lista de palabras del diccionario in-memory. Usado por
+   *  DictionaryService después de persistir cambios desde el modal dedicado,
+   *  para que el live-filter del editor reaccione sin recargar el capítulo. */
+  updateDictionary(words: string[]): void {
+    const cur = this.config();
+    if (!cur) return;
+    this.config.set({ ...cur, diccionario: words.length > 0 ? words : null });
   }
 }

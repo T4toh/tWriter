@@ -263,6 +263,7 @@ viejo, validador los detecta correctamente con `paragraph-collapsed`.
 - Auto-check auto-on en modo local/custom tras ping ok. Toggle persistido (`settings.json::grammarAutoDisabled`). Público queda off por ToS.
 - Variantes regionales (es-AR, es-ES, en-US, en-GB…) globales + override per-saga (`saga.json::variante_es`/`variante_en`). Click en badge del footer abre dropdown.
 - Diccionario per-saga: "+ diccionario" en popover de TYPOS filtra matches. **Re-filtrado reactivo**: `SagaContextService.dictionary()` es un signal — un effect en `editor.ts` lo observa y re-filtra los `grammarMatches` actuales sin pegarle de nuevo a LT. Cubre el race típico (el saga.json carga async después del primer `checkGrammar`, así que palabras del mundo aparecían marcadas hasta cerrar/reabrir el cap) y el agregar palabra desde el popover (limpia el squiggle on the spot).
+- **Vista dedicada del diccionario** (botón 📖 en saga-header de landing + item "Editar diccionario…" en context menu de saga): modal con contador, búsqueda live, lista alfabética (Intl.Collator), agregar con validación en vivo, borrar con confirm inline, banner opt-in "Limpiar" cuando detecta entradas problemáticas (puntuación al borde, duplicados case-insensitive, solo dígitos, fuera de los límites 2–64). El validador (`dictionary/word-validator.ts`) sanea los bordes (`.`, `,`, `…`, comillas, paréntesis…) y se aplica también en el path "+ diccionario" del popover para que no se cuelen entradas con punto al final. Persiste por acción (cada add/remove escribe `saga.json`); el archivo en disco sigue siendo `Option<Vec<String>>` plano, sin migración.
 - **UX Docker explicativa**: stepper visual con fases `checking → pulling → starting → loading → ready` durante el arranque + bloque "Por qué Docker" con links a docker.com, languagetool.org, el repo oficial de LT y la imagen `erikvl87/languagetool` que usamos. Eventos `languagetool-progress` emitidos desde Rust con `tauri::Emitter`.
 - **LT Premium / self-hosted con auth**: en modo Custom URL podés pegar tu username + apiKey. El apiKey va al **keyring del OS** (libsecret/Keychain/Credential Manager) vía el módulo `secrets`. Detalle abajo.
 
@@ -518,6 +519,8 @@ paru -S twriter-bin
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
+- **Bug: el editor de notas del panel lateral sincroniza posición de scroll/cursor con el editor principal**. Si el mismo doc (o uno distinto) se abre en notes-editor del lateral mientras hay un cap activo en el centro, el scroll/cursor se mueven juntos. Esperable: paneles independientes. Sospechar effect cruzado en `notes-editor` o algún `effect()` que mira `chapter.active()` y dispara scroll del otro pane.
+- **Reemplazar emojis (📖 ⚙ 📥 📝 🐛 ✏️ 👁 📐) por un set de íconos copado** — lucide, phosphor, tabler o tipo SF Symbols. Hoy los emojis renderean inconsistente entre OSes (color en Linux, monocromo en algunos themes) y no escalan bien con el font-size del UI. Decisión a tomar: SVG inline (peso menor, control fino de stroke/color via `currentColor`) vs icon font (más simple de cambiar set). Iconos a auditar: tree (📁 saga, 📕 book, 📃 chapter), context menus (👁 ver, ✏️ editar, 📐 RAE, 📖 dicc.), headers (⚙ config, 📥 import, 📝 notas, 🐛 debug).
 - **Marcador huérfano post jump-to-term**: el highlight naranja de
   `requestHighlight` (search → click resultado) o de la selección nativa
   del jump queda pegado sobre el carácter (típicamente un em-dash) aún
@@ -529,8 +532,8 @@ paru -S twriter-bin
 ### Tree / Importer
 
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
-- Borrar entradas individuales del diccionario per-saga desde UI (hoy se editan en bloque vía textarea del modal de configuración; agregar funciona desde el popover de typos).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
+- **Bug: el árbol no refresca el timestamp de "última edición"** de los archivos sin recargar la app. El badge de "recién editado" (FS scan + comparación con `ultima_edicion` del meta.json) parece estar cacheado por sesión; tras escribir desde el editor, el tree sigue mostrando el valor viejo. Sospecha: falta invalidación de la fuente de datos del badge cuando `chapter-service` guarda. Verificar dónde se computa la mtime mostrada (`tree.ts` o un service) y disparar refresh on `chapter.saving() → false` (o el `savedAt` equivalente).
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
 
 ### EPUB

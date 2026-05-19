@@ -11,6 +11,7 @@ import { RaeAuditService } from '../core/rae-audit-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
 import { NoteService, NoteTarget } from '../core/note-service';
 import { ProjectService } from '../core/project-service';
+import { DictionaryService } from '../core/dictionary-service';
 import { SagaConfigService } from '../core/saga-config-service';
 import { SettingsService } from '../core/settings-service';
 import { SplitChapterService } from '../core/split-chapter-service';
@@ -34,6 +35,7 @@ export class NodeActionsService {
   private settings = inject(SettingsService);
   private bookCfg = inject(BookConfigService);
   private sagaCfg = inject(SagaConfigService);
+  private dictSvc = inject(DictionaryService);
   private extras = inject(ExtrasService);
   private fonts = inject(FontsService);
   private themesSvc = inject(ThemesService);
@@ -293,6 +295,11 @@ export class NodeActionsService {
     if (canConfigSaga) {
       entries.push({ kind: 'separator' });
       entries.push({
+        label: 'Editar diccionario…',
+        kbd: '📖',
+        onClick: () => this.openDictionary(node),
+      });
+      entries.push({
         label: 'Configurar saga…',
         kbd: 'saga.json',
         onClick: () => this.configSaga(node),
@@ -526,6 +533,10 @@ export class NodeActionsService {
 
   configSaga(node: TreeNode): void {
     this.sagaCfg.openFor(node);
+  }
+
+  openDictionary(node: TreeNode): void {
+    void this.dictSvc.openFor(node);
   }
 
   async renameNode(node: TreeNode): Promise<void> {

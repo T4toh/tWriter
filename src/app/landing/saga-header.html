@@ -35,6 +35,14 @@
     <button
       type="button"
       class="card-btn"
+      (click)="openDictionary($event)"
+      [title]="hasDictionary() ? 'Diccionario (' + dictSize() + ')' : 'Diccionario'"
+    >
+      📖
+    </button>
+    <button
+      type="button"
+      class="card-btn"
       (click)="openConfig($event)"
       title="Configurar saga"
     >
