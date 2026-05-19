@@ -47,10 +47,33 @@ import { ModalService } from './shared/modal-service';
 import { ContextMenuHost } from './shared/context-menu-host';
 import { ContextMenuService } from './shared/context-menu-service';
 import { TreeNode } from './core/types';
+import {
+  LucideArrowDownToLine,
+  LucideArrowUpDown,
+  LucideBug,
+  LucideCircleQuestionMark,
+  LucideDownload,
+  LucideFolder,
+  LucideMoveHorizontal,
+  LucideMoveVertical,
+  LucideNotebookPen,
+  LucidePlus,
+  LucideRefreshCw,
+  LucideSearch,
+  LucideSettings,
+  LucideX,
+} from '@lucide/angular';
 
 @Component({
   selector: 'app-root',
-  imports: [Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, DictionaryModal, SplitChapterModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, ToastContainer, GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, Spinner, ModalHost, ContextMenuHost],
+  imports: [
+    Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, DictionaryModal, SplitChapterModal,
+    ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, ToastContainer,
+    GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, Spinner, ModalHost, ContextMenuHost,
+    LucideArrowDownToLine, LucideArrowUpDown, LucideBug, LucideCircleQuestionMark, LucideDownload, LucideFolder,
+    LucideMoveHorizontal, LucideMoveVertical, LucideNotebookPen, LucidePlus, LucideRefreshCw, LucideSearch,
+    LucideSettings, LucideX,
+  ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

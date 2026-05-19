@@ -1,6 +1,17 @@
 import { Injectable, inject } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { openPath } from '@tauri-apps/plugin-opener';
+import {
+  LucideArrowDown,
+  LucideArrowUp,
+  LucideBookOpen,
+  LucideEye,
+  LucideFolder,
+  LucideFolderOpen,
+  LucideNotebook,
+  LucidePencil,
+  LucideRuler,
+} from '@lucide/angular';
 import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { ExtraEntry, ExtrasService } from '../core/extras-service';
@@ -54,12 +65,12 @@ export class NodeActionsService {
       return [
         {
           label: 'Abrir',
-          kbd: '👁',
+          icon: LucideEye,
           onClick: () => this.openMdInReader({ path: node.path, name: node.name }),
         },
         {
           label: 'Editar nota',
-          kbd: '✏️',
+          icon: LucidePencil,
           onClick: () => this.openNote(node),
         },
         { label: 'Renombrar…', kbd: 'F2', onClick: () => this.renameNode(node) },
@@ -85,7 +96,7 @@ export class NodeActionsService {
         },
         {
           label: 'Nueva carpeta…',
-          kbd: '📒',
+          icon: LucideNotebook,
           onClick: () => this.createFolderIn(node.path),
         },
         { kind: 'separator' },
@@ -116,7 +127,7 @@ export class NodeActionsService {
         },
         {
           label: 'Nueva carpeta…',
-          kbd: '📁',
+          icon: LucideFolder,
           onClick: () => this.createFolderIn(node.path),
         },
         { kind: 'separator' },
@@ -152,7 +163,7 @@ export class NodeActionsService {
         if (entries.length > 0) entries.push({ kind: 'separator' });
         entries.push({
           label: 'Reestructurar en partes…',
-          kbd: '📂',
+          icon: LucideFolderOpen,
           onClick: () => this.splitChapter(node),
         });
       }
@@ -167,8 +178,8 @@ export class NodeActionsService {
       if (moveable) {
         if (entries.length > 0) entries.push({ kind: 'separator' });
         entries.push(
-          { label: 'Subir', kbd: '▲', onClick: () => this.moveUp(node) },
-          { label: 'Bajar', kbd: '▼', onClick: () => this.moveDown(node) },
+          { label: 'Subir', icon: LucideArrowUp, onClick: () => this.moveUp(node) },
+          { label: 'Bajar', icon: LucideArrowDown, onClick: () => this.moveDown(node) },
         );
       }
       entries.push(
@@ -261,8 +272,8 @@ export class NodeActionsService {
     if (canMove) {
       entries.push({ kind: 'separator' });
       entries.push(
-        { label: 'Subir', kbd: '▲', onClick: () => this.moveUp(node) },
-        { label: 'Bajar', kbd: '▼', onClick: () => this.moveDown(node) },
+        { label: 'Subir', icon: LucideArrowUp, onClick: () => this.moveUp(node) },
+        { label: 'Bajar', icon: LucideArrowDown, onClick: () => this.moveDown(node) },
       );
     }
 
@@ -296,7 +307,7 @@ export class NodeActionsService {
       entries.push({ kind: 'separator' });
       entries.push({
         label: 'Editar diccionario…',
-        kbd: '📖',
+        icon: LucideBookOpen,
         onClick: () => this.openDictionary(node),
       });
       entries.push({
@@ -321,7 +332,7 @@ export class NodeActionsService {
       entries.push({ kind: 'separator' });
       entries.push({
         label: 'Revisar RAE',
-        kbd: '📐',
+        icon: LucideRuler,
         onClick: () => this.auditRae(node),
       });
     }
@@ -357,12 +368,12 @@ export class NodeActionsService {
       entries.push(
         {
           label: 'Abrir',
-          kbd: '👁',
+          icon: LucideEye,
           onClick: () => this.openMdInReader({ path: entry.path, name: entry.name }),
         },
         {
           label: 'Editar nota',
-          kbd: '✏️',
+          icon: LucidePencil,
           onClick: () => this.openExtra(scopePath, entry),
         },
       );
@@ -385,7 +396,7 @@ export class NodeActionsService {
       { kind: 'separator' },
       {
         label: 'Nueva carpeta…',
-        kbd: '📁',
+        icon: LucideFolder,
         onClick: () => this.createFolderIn(root),
       },
       {

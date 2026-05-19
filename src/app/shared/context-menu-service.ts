@@ -1,10 +1,13 @@
 import { Injectable, signal } from '@angular/core';
+import type { LucideIcon } from '@lucide/angular';
 
 export interface CtxMenuItem {
   kind?: 'item';
   label: string;
   /** Texto opcional a la derecha (atajo, hint o badge). */
   kbd?: string;
+  /** Ícono Lucide opcional a la derecha (alternativa decorativa a `kbd`). */
+  icon?: LucideIcon;
   /** Pinta el item en rojo. */
   danger?: boolean;
   disabled?: boolean;
