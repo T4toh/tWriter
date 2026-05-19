@@ -66,6 +66,17 @@ export class ProjectService {
     }
     return null;
   }
+
+  /** Actualiza `modifiedMs` del nodo con `path` indicado dentro del signal
+   *  `tree`. No-op si el nodo no existe. Usado por `chapter-service` tras
+   *  guardar para que el badge "recién editado" del árbol refleje la edición
+   *  sin esperar a un `loadTree()` completo. */
+  touchNodeModifiedMs(path: string, modifiedMs: number): void {
+    this.tree.update((root) => {
+      if (!root) return root;
+      return patchNodeMtime(root, path, modifiedMs);
+    });
+  }
 }
 
 /**
@@ -81,4 +92,24 @@ function collectAncestors(node: TreeNode, target: string, out: TreeNode[]): bool
   }
   out.pop();
   return false;
+}
+
+/**
+ * Devuelve una copia del subtree con `modifiedMs` parcheado en el nodo cuyo
+ * `path` coincide. Si no encuentra el path, devuelve la referencia original
+ * (no muta ni crea copia) — así el signal `tree` queda igual y los OnPush
+ * downstream no se invalidan al pedo.
+ */
+function patchNodeMtime(node: TreeNode, path: string, modifiedMs: number): TreeNode {
+  if (node.path === path) {
+    return { ...node, modifiedMs };
+  }
+  const children = node.children ?? [];
+  let mutated = false;
+  const next = children.map((c) => {
+    const patched = patchNodeMtime(c, path, modifiedMs);
+    if (patched !== c) mutated = true;
+    return patched;
+  });
+  return mutated ? { ...node, children: next } : node;
 }

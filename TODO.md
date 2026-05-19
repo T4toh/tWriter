@@ -7,7 +7,6 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
-- **Bug: el editor de notas del panel lateral sincroniza posición de scroll/cursor con el editor principal**. Si el mismo doc (o uno distinto) se abre en notes-editor del lateral mientras hay un cap activo en el centro, el scroll/cursor se mueven juntos. Esperable: paneles independientes. Sospechar effect cruzado en `notes-editor` o algún `effect()` que mira `chapter.active()` y dispara scroll del otro pane.
 - **Reemplazar emojis (📖 ⚙ 📥 📝 🐛 ✏️ 👁 📐) por un set de íconos copado** — lucide, phosphor, tabler o tipo SF Symbols. Hoy los emojis renderean inconsistente entre OSes (color en Linux, monocromo en algunos themes) y no escalan bien con el font-size del UI. Decisión a tomar: SVG inline (peso menor, control fino de stroke/color via `currentColor`) vs icon font (más simple de cambiar set). Iconos a auditar: tree (📁 saga, 📕 book, 📃 chapter), context menus (👁 ver, ✏️ editar, 📐 RAE, 📖 dicc.), headers (⚙ config, 📥 import, 📝 notas, 🐛 debug).
 - **Marcador huérfano post jump-to-term**: el highlight naranja de
   `requestHighlight` (search → click resultado) o de la selección nativa
@@ -21,7 +20,6 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
-- **Bug: el árbol no refresca el timestamp de "última edición"** de los archivos sin recargar la app. El badge de "recién editado" (FS scan + comparación con `ultima_edicion` del meta.json) parece estar cacheado por sesión; tras escribir desde el editor, el tree sigue mostrando el valor viejo. Sospecha: falta invalidación de la fuente de datos del badge cuando `chapter-service` guarda. Verificar dónde se computa la mtime mostrada (`tree.ts` o un service) y disparar refresh on `chapter.saving() → false` (o el `savedAt` equivalente).
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
 
 ## EPUB

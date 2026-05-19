@@ -526,20 +526,18 @@ export class Editor implements AfterViewInit, OnDestroy {
 
     // Resalto de todas las ocurrencias de la query mientras el panel de
     // búsqueda esté abierto. Reactivo a query + active path + edits del
-    // doc (loadedAt + cualquier transacción remapea las decoraciones).
+    // doc (loadedAt + cualquier transacción remapea las decoraciones). Solo
+    // pinta si el search apunta a este pane (vía `activeFile().path`) — si el
+    // usuario abrió Ctrl+F desde otro pane, este no se mueve ni decora.
     effect(() => {
       const terms = this.search.highlightTerms();
       const node = this.active();
       // Touch loadedAt para re-aplicar cuando se reemplaza el contenido.
       this.pane().loadedAt();
       if (!this.viewReady() || !this.tiptap) return;
-      if (this.paneId() !== 0 && !this.search.pendingHighlight()) {
-        // Solo el pane 0 resalta automáticamente — el split secundario
-        // no responde a la query global. (Si el usuario edita el cap del
-        // split y el path coincide, sigue sin pintar; la prioridad es
-        // mantener el contexto del editor principal.)
-      }
-      if (!terms || !node) {
+      const activeFile = this.search.activeFile();
+      const matchesPane = !!node && !!activeFile && activeFile.path === node.path;
+      if (!terms || !node || !matchesPane) {
         this.applySearchDecorations([]);
         return;
       }

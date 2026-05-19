@@ -179,8 +179,13 @@ export class ChapterService {
           ultimaEdicion: new Date().toISOString(),
         });
       }
+      const savedAt = Date.now();
       pane.dirty.set(false);
-      pane.lastSavedAt.set(Date.now());
+      pane.lastSavedAt.set(savedAt);
+      // Patch puntual del nodo en el signal `tree` para que el badge "recién
+      // editado" del árbol refleje el save sin esperar a un `loadTree()`
+      // completo (que reescaneaba FS y parpadeaba la selección).
+      this.project.touchNodeModifiedMs(node.path, savedAt);
     } catch (err) {
       pane.error.set(String(err));
     } finally {
