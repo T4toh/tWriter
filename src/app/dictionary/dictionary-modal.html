@@ -1,0 +1,160 @@
+@if (editing(); as target) {
+  <div class="dict-backdrop" (click)="onBackdropClick()"></div>
+  <div
+    class="dict-modal"
+    (click)="$event.stopPropagation()"
+    (keydown)="onModalKeydown($event)"
+    tabindex="-1"
+  >
+    <header class="dict-header">
+      <div>
+        <h2>Diccionario</h2>
+        <p class="saga-name">{{ target.nombre }}</p>
+      </div>
+      <div class="counter">
+        <span class="count">{{ count() }}</span>
+        <span class="count-label">{{ count() === 1 ? 'palabra' : 'palabras' }}</span>
+      </div>
+    </header>
+
+    @if (loading()) {
+      <div class="dict-body">
+        <p class="loading">Cargando…</p>
+      </div>
+    } @else if (error(); as err) {
+      <div class="dict-body">
+        <p class="err">{{ err }}</p>
+      </div>
+    } @else {
+      @if (problematic().length > 0) {
+        <div class="banner-warn">
+          <div class="banner-content">
+            <strong>{{ problematic().length }}</strong>
+            <span>
+              {{ problematic().length === 1 ? 'entrada tiene' : 'entradas tienen' }} problemas
+              (puntuación al borde, duplicados o caracteres inválidos)
+            </span>
+          </div>
+          <button
+            type="button"
+            class="btn-clean"
+            [disabled]="cleaning()"
+            (click)="cleanProblematic()"
+          >
+            {{ cleaning() ? 'Limpiando…' : 'Limpiar' }}
+          </button>
+        </div>
+      }
+
+      <div class="dict-body">
+        <div class="add-row">
+          <input
+            type="text"
+            class="add-input"
+            placeholder="Agregar palabra (ej: Krilar, Aelindor)"
+            [ngModel]="newWord()"
+            (ngModelChange)="updateNewWord($event)"
+            (keydown)="onAddKeydown($event)"
+            autofocus
+          />
+          <button
+            type="button"
+            class="btn-add"
+            [disabled]="!canAdd()"
+            (click)="addWord()"
+          >
+            Agregar
+          </button>
+        </div>
+        @if (newWordValidation(); as v) {
+          @if (v.ok) {
+            <p class="hint hint-ok">
+              @if (v.sanitized) {
+                Se guardará como <strong>{{ v.value }}</strong>
+              } @else {
+                ✓ Lista para agregar
+              }
+            </p>
+          } @else {
+            <p class="hint hint-err">✗ {{ v.reason }}</p>
+          }
+        }
+
+        <div class="search-row">
+          <input
+            type="text"
+            class="search-input"
+            placeholder="Buscar palabra…"
+            [ngModel]="searchText()"
+            (ngModelChange)="updateSearch($event)"
+          />
+          @if (searchText()) {
+            <button
+              type="button"
+              class="btn-clear"
+              (click)="updateSearch('')"
+              title="Limpiar búsqueda"
+            >
+              ×
+            </button>
+          }
+        </div>
+
+        @if (words().length === 0) {
+          <div class="empty">
+            <p>Sin palabras todavía.</p>
+            <p class="empty-hint">
+              Agregá nombres propios, neologismos, o términos del mundo de tu saga.
+            </p>
+          </div>
+        } @else if (filteredWords().length === 0) {
+          <div class="empty">
+            <p>Sin resultados para "{{ searchText() }}".</p>
+          </div>
+        } @else {
+          <ul class="word-list">
+            @for (word of filteredWords(); track word) {
+              <li class="word-row" [class.confirming]="confirmDelete() === word">
+                <span class="word">{{ word }}</span>
+                @if (confirmDelete() === word) {
+                  <div class="row-actions">
+                    <span class="confirm-prompt">¿Borrar?</span>
+                    <button
+                      type="button"
+                      class="btn-confirm"
+                      (click)="confirmRemove(word)"
+                      title="Confirmar borrado"
+                    >
+                      Sí
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-cancel"
+                      (click)="cancelRemove()"
+                      title="Cancelar"
+                    >
+                      No
+                    </button>
+                  </div>
+                } @else {
+                  <button
+                    type="button"
+                    class="btn-delete"
+                    (click)="askRemove(word)"
+                    title="Borrar palabra"
+                  >
+                    ×
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    }
+
+    <footer class="dict-actions">
+      <button type="button" class="btn-close" (click)="close()">Cerrar</button>
+    </footer>
+  </div>
+}

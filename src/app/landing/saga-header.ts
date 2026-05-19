@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { BookConfigService } from '../core/book-config-service';
 import { CoverCache } from '../core/cover-cache';
+import { DictionaryService } from '../core/dictionary-service';
 import { SagaConfig, SagaConfigService } from '../core/saga-config-service';
 import { TreeNode } from '../core/types';
 
@@ -20,6 +21,7 @@ import { TreeNode } from '../core/types';
 export class SagaHeader {
   private cfgService = inject(SagaConfigService);
   private bookCfgService = inject(BookConfigService);
+  private dictSvc = inject(DictionaryService);
   private coverCache = inject(CoverCache);
 
   readonly node = input.required<TreeNode>();
@@ -63,6 +65,11 @@ export class SagaHeader {
   protected openConfig(event: MouseEvent): void {
     event.stopPropagation();
     this.cfgService.openFor(this.node());
+  }
+
+  protected openDictionary(event: MouseEvent): void {
+    event.stopPropagation();
+    void this.dictSvc.openFor(this.node());
   }
 
   private async load(node: TreeNode): Promise<void> {

@@ -23,6 +23,7 @@ import { SagaContextService } from '../core/saga-context-service';
 import { DebugService } from '../core/debug-service';
 import { GrammarService } from '../core/grammar-service';
 import { SearchService } from '../core/search-service';
+import { ToastService } from '../core/toast-service';
 import {
   findAllMatchesInPlain,
   highlightFirstMatch,
@@ -105,6 +106,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private search = inject(SearchService);
   private cursorRestore = inject(CursorRestoreService);
   private debug = inject(DebugService);
+  private toast = inject(ToastService);
 
   /** Pane que renderiza este editor. Default 0 = principal. 1 = secundario (split). */
   readonly paneId = input<PaneId>(0);
@@ -938,7 +940,12 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!popover || !this.tiptap) return;
     const word = this.tiptap.state.doc.textBetween(popover.from, popover.to, ' ').trim();
     if (!word) return;
-    await this.sagaCtx.addToDictionary(word);
+    const result = await this.sagaCtx.addToDictionary(word);
+    if (!result.ok) {
+      this.toast.error(result.reason ?? 'No se pudo agregar al diccionario');
+      this.grammarPopover.set(null);
+      return;
+    }
     this.grammarMatches.update((list) =>
       list.filter((m) => {
         if (m.category !== 'TYPOS') return true;
