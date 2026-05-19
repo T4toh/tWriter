@@ -137,6 +137,12 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
         this.tiptap.commands.setContent(md, { emitUpdate: false });
         this.tiptap.setEditable(editable);
       }
+      // Reset scroll al tope al cargar una nota — el host (.editor-host)
+      // conserva `scrollTop` entre cargas si no se lo limpia explícitamente,
+      // lo que daba la falsa impresión de que el lateral "seguía" el scroll
+      // del editor principal. Si hay un pending highlight de Ctrl+F, el
+      // setTimeout de abajo scrollea al match después.
+      this.hostRef.nativeElement.scrollTop = 0;
       this.lastLoadedAt = at;
       this.refreshState();
 
@@ -169,13 +175,18 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
     });
 
     // Resalto de todas las ocurrencias de la query mientras el panel esté
-    // abierto. Reactivo a query + nota activa + loadedAt.
+    // abierto. Reactivo a query + nota activa + loadedAt. Solo aplica si el
+    // search apunta a la nota de ESTE pane (vía `activeFile().path`); si el
+    // usuario abrió Ctrl+F desde el editor principal, el lateral no pinta ni
+    // scrollea.
     effect(() => {
       const terms = this.search.highlightTerms();
       const target = this.active();
       this.pane().loadedAt();
       if (!this.viewReady() || !this.tiptap) return;
-      if (!terms || !target) {
+      const activeFile = this.search.activeFile();
+      const matchesPane = !!target && !!activeFile && activeFile.path === target.path;
+      if (!terms || !target || !matchesPane) {
         this.applySearchDecorations([]);
         return;
       }
@@ -331,7 +342,12 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
       ],
       content,
       editable,
-      autofocus: editable ? 'end' : false,
+      // Solo el pane principal autofocusea — el lateral abre al tope sin
+      // mover el cursor. Pane 0 además tiene cursor-restore que sobreescribe
+      // el 'end' si había posición guardada para el path. Si autofocus 'end'
+      // se aplicara al lateral, scrolleaba al final async DESPUÉS del
+      // scrollTop=0 del effect de carga.
+      autofocus: editable && this.paneId() === 0 ? 'end' : false,
       onUpdate: ({ editor }) => {
         const storage = (editor.storage as { markdown?: { getMarkdown: () => string } }).markdown;
         const md = storage ? storage.getMarkdown() : '';

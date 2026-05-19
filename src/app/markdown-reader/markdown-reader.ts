@@ -138,6 +138,12 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
         this.currentEditable = wantEditable;
       }
 
+      // Reset scroll al tope solo al cargar una nota nueva (no al togglear
+      // edit mode, que preserva la posición de lectura). El host conserva
+      // scrollTop entre instancias de TipTap si no se lo limpia.
+      if (reloaded) {
+        this.hostRef.nativeElement.scrollTop = 0;
+      }
       this.lastLoadedAt = at;
       this.refreshState();
 
@@ -153,13 +159,18 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
       }
     });
 
-    // Resalto de todas las ocurrencias mientras el panel esté abierto.
+    // Resalto de todas las ocurrencias mientras el panel esté abierto. Solo
+    // aplica si el search apunta a ESTA superficie (vía `activeFile().path`);
+    // si el usuario abrió Ctrl+F desde el capítulo central, el reader no
+    // pinta ni scrollea.
     effect(() => {
       const terms = this.search.highlightTerms();
       const target = this.viewing();
       this.svc.loadedAt();
       if (!this.viewReady() || !this.tiptap) return;
-      if (!terms || !target) {
+      const activeFile = this.search.activeFile();
+      const matchesSurface = !!target && !!activeFile && activeFile.path === target.path;
+      if (!terms || !target || !matchesSurface) {
         this.applySearchDecorations([]);
         return;
       }
@@ -261,7 +272,11 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
       ],
       content,
       editable,
-      autofocus: editable ? 'end' : false,
+      // Sin autofocus: el reader siempre abre al tope de la nota, sin mover
+      // cursor. Con `'end'` TipTap scrolleaba al final async después del
+      // mount, dando la sensación de que el lateral seguía el scroll del
+      // editor principal cuando ambos coincidían en "estar al final".
+      autofocus: false,
       onUpdate: ({ editor }) => {
         if (!editable) return;
         const storage = (editor.storage as { markdown?: { getMarkdown: () => string } }).markdown;
