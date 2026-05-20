@@ -78,7 +78,7 @@
       @if (root(); as r) {
         @if (storage.isGit()) {
           <div class="path-row" [title]="syncTitle()">
-            <span class="dot" [attr.data-state]="git.state()"></span>
+            <span class="dot" [attr.data-state]="effectiveSyncState()"></span>
             <span class="path" [title]="r">{{ r }}</span>
           </div>
           @if (git.error(); as gerr) {
@@ -88,7 +88,7 @@
             </details>
           } @else if (git.grouped(); as g) {
             <details class="sync-summary">
-              <summary>{{ git.summary() }}</summary>
+              <summary>{{ effectiveSyncSummary() }}</summary>
               <ul class="sync-files">
                 @for (c of g.chapters; track c.primary) {
                   <li>
@@ -111,7 +111,7 @@
               </ul>
             </details>
           } @else {
-            <div class="sync-summary">{{ git.summary() }}</div>
+            <div class="sync-summary">{{ effectiveSyncSummary() }}</div>
           }
         } @else {
           <div class="path-row">
@@ -147,7 +147,7 @@
             type="button"
             class="icon-btn"
             (click)="syncNow()"
-            [disabled]="!root() || git.syncing() || git.state() === 'clean'"
+            [disabled]="!root() || git.syncing() || effectiveSyncState() === 'clean'"
             [title]="syncTitle()"
           >
             @if (git.currentOp() === 'sync') {
@@ -298,3 +298,12 @@
 <app-update-banner />
 <app-modal-host />
 <app-context-menu-host />
+
+@if (closing()) {
+  <div class="closing-overlay" aria-live="polite" role="status">
+    <div class="closing-box">
+      <app-spinner [size]="28" />
+      <span>{{ closingMessage() }}</span>
+    </div>
+  </div>
+}

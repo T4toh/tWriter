@@ -90,8 +90,14 @@ export interface GroupedSummary {
   total: number;
 }
 
-const STATUS_REFRESH_MS = 30_000;
+/** Poll de seguridad: si el usuario nunca pierde foco (sesión larga sin blur)
+ *  igual queremos auto-commit cada N minutos. Los eventos de focus/blur/close
+ *  cubren las transiciones naturales; este timer es la red de seguridad. */
 const AUTO_COMMIT_MS = 5 * 60_000;
+/** Poll suave de status (mucho menos agresivo que los 30s viejos). Detecta
+ *  cambios externos al editor: terminal commits, cambios fuera de la app,
+ *  etc. El refresh reactivo post-autosave cubre el flujo normal de edición. */
+const STATUS_REFRESH_MS = 60_000;
 
 @Injectable({ providedIn: 'root' })
 export class GitService {
@@ -109,8 +115,17 @@ export class GitService {
   readonly lastSyncAt = signal<number | null>(null);
   readonly lastCommitInfo = signal<string | null>(null);
 
+  /** Refleja `navigator.onLine`. Cuando es false, el state computed se fuerza
+   *  a 'offline' aún si hay cambios pendientes — la UI muestra el ícono
+   *  correspondiente sin disparar errores que serían imposibles de resolver
+   *  sin red. */
+  private onlineState = signal<boolean>(
+    typeof navigator !== 'undefined' ? navigator.onLine : true,
+  );
+
   readonly state = computed<SyncState>(() => {
     if (this.syncing()) return 'syncing';
+    if (!this.onlineState()) return 'offline';
     if (this.error()) return 'error';
     const s = this.status();
     if (!s) return 'unknown';
@@ -145,8 +160,18 @@ export class GitService {
   private autoPauseTimer: ReturnType<typeof setTimeout> | null = null;
   private autoPullInflight = false;
   private ensuredForRoot: string | null = null;
+  /** Timestamp del último push exitoso. Usado por el blur-handler para
+   *  evitar disparar push si ya hubo uno hace <2min (cooldown). */
+  private lastPushAt: number | null = null;
+
+  /** Timestamp del último push exitoso (ms epoch) o null si todavía no hubo
+   *  ninguno en esta sesión. Consumido por el blur-debounce en app.ts. */
+  get lastPush(): number | null {
+    return this.lastPushAt;
+  }
 
   constructor() {
+    this.bindOnlineHandlers();
     effect(() => {
       const root = this.settings.root();
       // Leemos `backend()` directo (no `isGit()`) para distinguir 'unknown'
@@ -171,20 +196,84 @@ export class GitService {
         this.ensuredForRoot = null;
         return;
       }
-      if (this.ensuredForRoot !== root) {
+      const isFirstBootstrap = this.ensuredForRoot !== root;
+      if (isFirstBootstrap) {
         this.ensuredForRoot = root;
-        void invoke('git_ensure_twriter_ignored', { repoPath: root }).catch((err) => {
-          console.warn('git_ensure_twriter_ignored failed', err);
-        });
       }
-      void this.refreshStatus();
+      void this.bootstrapSync(root, isFirstBootstrap);
       this.startTimers();
     });
   }
 
+  /** Bootstrap del sync al detectar un repo git: ensure .gitignore + fetch
+   *  silencioso + refresh status (que dispara auto-pull si behind > 0). En
+   *  re-runs del effect sobre el mismo root, `ensure` se saltea y solo se
+   *  hace fetch + status. */
+  private async bootstrapSync(root: string, runEnsure: boolean): Promise<void> {
+    if (this.syncing()) return;
+    if (runEnsure) {
+      try {
+        await invoke('git_ensure_twriter_ignored', { repoPath: root });
+      } catch (err) {
+        console.warn('git_ensure_twriter_ignored failed', err);
+      }
+    }
+    try {
+      await invoke('git_fetch', { repoPath: root });
+    } catch (err) {
+      console.debug('initial fetch failed (best-effort)', err);
+    }
+    await this.refreshStatus();
+  }
+
+  private bindOnlineHandlers(): void {
+    if (typeof window === 'undefined') return;
+    window.addEventListener('online', () => {
+      this.onlineState.set(true);
+      // Reanudar sync: si tenemos repo git, re-bootstrapeamos para traer
+      // refs que se hayan quedado afuera mientras estábamos offline.
+      const root = this.settings.root();
+      if (root && this.storage.backend() === 'git' && !this.syncing()) {
+        void this.bootstrapSync(root, false);
+      }
+    });
+    window.addEventListener('offline', () => {
+      this.onlineState.set(false);
+    });
+  }
+
+  /** Fetch silencioso + refresh status. Usado por el focus-handler para
+   *  detectar cambios remotos al volver a la ventana. No-op si no es un
+   *  repo git o si ya hay un sync en vuelo. */
+  async fetchAndRefresh(): Promise<void> {
+    const root = this.settings.root();
+    if (!root || this.storage.backend() !== 'git' || this.syncing()) return;
+    try {
+      await invoke('git_fetch', { repoPath: root });
+    } catch (err) {
+      console.debug('focus fetch failed (best-effort)', err);
+    }
+    await this.refreshStatus();
+  }
+
+  /** Flushea autosave de todos los panes (capítulos + notas) y luego corre
+   *  `syncNow`. Re-throwea el error de syncNow para que callers como el
+   *  close-handler puedan reaccionar. Lazy import para esquivar el ciclo
+   *  ChapterService → GitService. */
+  async flushAndSync(): Promise<void> {
+    const [{ ChapterService }, { NoteService }] = await Promise.all([
+      import('./chapter-service'),
+      import('./note-service'),
+    ]);
+    const chapter = this.injector.get(ChapterService);
+    const note = this.injector.get(NoteService);
+    await Promise.all([chapter.flushAllDirty(), note.flushAllDirty()]);
+    await this.syncNow();
+  }
+
   async refreshStatus(): Promise<void> {
     const root = this.settings.root();
-    if (!root) return;
+    if (!root || this.storage.backend() !== 'git') return;
     try {
       const s = await invoke<GitStatus>('git_status', { repoPath: root });
       this.status.set(s);
@@ -203,13 +292,35 @@ export class GitService {
     }
   }
 
-  /** commit + push si hay cambios o commits locales pendientes. */
+  /** Flujo fetch-first: fetch silencioso → status → si behind pull/rebase →
+   *  commit → push si ahead > 0 → status final. Throwea el error original
+   *  (después de poblar `this.error`) para que callers como `flushAndSync`
+   *  puedan reaccionar al fallo. Los callers que no quieran propagar deben
+   *  envolver en `.catch(() => {})`. */
   async syncNow(message?: string): Promise<void> {
     const root = this.settings.root();
     if (!root || this.syncing()) return;
     this.currentOp.set('sync');
     this.error.set(null);
     try {
+      // 1. Fetch silencioso (best-effort).
+      try {
+        await invoke('git_fetch', { repoPath: root });
+      } catch (err) {
+        console.debug('fetch en sync falló (best-effort)', err);
+      }
+      // 2. Refresh post-fetch para conocer behind/ahead reales.
+      await this.refreshStatus();
+      // 3. Si behind, pull/rebase primero — evita el dance de push rejected.
+      let s = this.status();
+      if (s && s.behind > 0) {
+        const cmd = s.ahead > 0 || s.has_changes ? 'git_pull_rebase' : 'git_pull';
+        const changes = await invoke<PullPathChange[]>(cmd, { repoPath: root });
+        await this.applyPullChanges(changes);
+        await this.refreshStatus();
+        s = this.status();
+      }
+      // 4. Commit local si hay dirty.
       const msg = message ?? this.defaultMessage();
       const commitRes = await invoke<GitCommitResult>('git_commit_all', {
         repoPath: root,
@@ -219,15 +330,18 @@ export class GitService {
         this.lastCommitInfo.set(`${commitRes.files} archivo${commitRes.files === 1 ? '' : 's'}`);
       }
       await this.refreshStatus();
-      const s = this.status();
+      s = this.status();
+      // 5. Push si ahead > 0.
       if (s && s.ahead > 0) {
         await invoke('git_push', { repoPath: root });
+        this.lastPushAt = Date.now();
       }
       await this.refreshStatus();
       this.lastSyncAt.set(Date.now());
       this.resetThrottle();
     } catch (err) {
       this.error.set(toGitError(err));
+      throw err;
     } finally {
       this.currentOp.set(null);
     }
@@ -344,12 +458,19 @@ export class GitService {
     this.autoPaused = false;
   }
 
+  /** Arranca: (1) poll suave de status cada 60s para detectar cambios
+   *  externos (terminal, otras herramientas); (2) commit-timer de 5min
+   *  como red de seguridad para sesiones largas sin transiciones de foco.
+   *  El refresh reactivo post-autosave (en ChapterService/NoteService) y
+   *  los eventos focus/online cubren el flujo normal de edición. */
   private startTimers(): void {
     this.statusTimer = setInterval(() => void this.refreshStatus(), STATUS_REFRESH_MS);
     this.commitTimer = setInterval(() => {
       const s = this.status();
       if (s && (s.has_changes || s.ahead > 0)) {
-        void this.syncNow();
+        void this.syncNow().catch(() => {
+          // Error ya queda en this.error vía toGitError.
+        });
       }
     }, AUTO_COMMIT_MS);
   }

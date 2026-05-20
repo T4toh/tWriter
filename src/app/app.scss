@@ -513,3 +513,30 @@
   border-color: var(--accent);
   color: var(--fg);
 }
+
+// Overlay del close-handler mientras corre flushAndSync. z-index 250 está
+// por encima de la UI normal pero debajo del modal-host (300) — así el
+// modal "¿Cerrar igual?" se renderiza sobre el overlay si el sync falla.
+.closing-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 250;
+  backdrop-filter: blur(2px);
+}
+
+.closing-box {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  font-size: 14px;
+}

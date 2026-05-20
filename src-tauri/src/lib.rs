@@ -42,7 +42,8 @@ use fs::{
     write_chapter, write_meta,
 };
 use git::{
-    git_commit_all, git_ensure_twriter_ignored, git_pull, git_pull_rebase, git_push, git_status,
+    git_commit_all, git_ensure_twriter_ignored, git_fetch, git_pull, git_pull_rebase, git_push,
+    git_status,
 };
 use grammar::{
     check_grammar, check_grammar_available, languagetool_docker_start, languagetool_docker_status,
@@ -118,6 +119,7 @@ pub fn run() {
             git_pull,
             git_pull_rebase,
             git_ensure_twriter_ignored,
+            git_fetch,
             detect_storage_backend,
             import_chapter,
             delete_chapter_file,

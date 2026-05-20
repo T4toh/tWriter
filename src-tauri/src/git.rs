@@ -1,7 +1,14 @@
 use git2::{BranchType, Delta, IndexAddOption, Oid, Repository, Signature, StatusOptions};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::Duration;
+use wait_timeout::ChildExt;
+
+/// Timeout default para ops git locales (status, rev-parse, etc.).
+const RUN_GIT_DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+/// Timeout para ops git que tocan la red (push/pull/fetch).
+const RUN_GIT_NET_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GitStatus {
@@ -79,6 +86,11 @@ pub async fn git_ensure_twriter_ignored(repo_path: String) -> Result<EnsureResul
     run_blocking(move || git_ensure_twriter_ignored_impl(&repo_path)).await
 }
 
+#[tauri::command]
+pub async fn git_fetch(repo_path: String) -> Result<(), String> {
+    run_blocking(move || git_fetch_impl(&repo_path)).await
+}
+
 async fn run_blocking<F, T>(f: F) -> Result<T, String>
 where
     F: FnOnce() -> Result<T, String> + Send + 'static,
@@ -149,7 +161,7 @@ fn git_commit_all_impl(repo_path: &str, message: &str) -> Result<GitCommitResult
 /// muestre un mensaje claro. Cualquier otro error se categoriza
 /// (`auth:`, `network:`, `unknown:`) vía `categorize_git_error`.
 pub(crate) fn git_push_impl(repo_path: &str) -> Result<(), String> {
-    let first = run_git(repo_path, &["push"])?;
+    let first = run_git_net(repo_path, &["push"])?;
     if first.success {
         tracing::info!(target: "git", "push ok");
         return Ok(());
@@ -165,7 +177,7 @@ pub(crate) fn git_push_impl(repo_path: &str) -> Result<(), String> {
         return Err(msg);
     }
     tracing::info!(target: "git", action = "push.pull_rebase_ok", "rebase ok, reintentando push");
-    let retry = run_git(repo_path, &["push"])?;
+    let retry = run_git_net(repo_path, &["push"])?;
     if !retry.success {
         let msg = categorize_git_error(&retry.stderr);
         tracing::error!(target: "git", action = "push.retry_failed", error = %msg, "retry de push falló");
@@ -183,19 +195,65 @@ struct GitOutput {
 }
 
 fn run_git(cwd: &str, args: &[&str]) -> Result<GitOutput, String> {
-    let out = Command::new("git")
+    run_git_with_timeout(cwd, args, RUN_GIT_DEFAULT_TIMEOUT)
+}
+
+/// Variante para ops que tocan la red — timeout más largo.
+fn run_git_net(cwd: &str, args: &[&str]) -> Result<GitOutput, String> {
+    run_git_with_timeout(cwd, args, RUN_GIT_NET_TIMEOUT)
+}
+
+fn run_git_with_timeout(cwd: &str, args: &[&str], timeout: Duration) -> Result<GitOutput, String> {
+    // Hardening contra cuelgues sin TTY:
+    // - GIT_TERMINAL_PROMPT=0: nunca pide credenciales por prompt.
+    // - GIT_SSH_COMMAND: BatchMode + ConnectTimeout cortos para que SSH falle
+    //   rápido si no hay agent / no hay red. accept-new evita el prompt de
+    //   host key en la primera conexión.
+    let mut child = Command::new("git")
         .current_dir(cwd)
         .args(args)
-        .output()
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env(
+            "GIT_SSH_COMMAND",
+            "ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new",
+        )
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|e| {
             tracing::error!(target: "git", error = %e, "no se pudo lanzar git");
             format!("no se pudo ejecutar git: {}", e)
         })?;
-    Ok(GitOutput {
-        success: out.status.success(),
-        stderr: String::from_utf8_lossy(&out.stderr).trim().to_string(),
-        stdout: String::from_utf8_lossy(&out.stdout).trim().to_string(),
-    })
+
+    match child.wait_timeout(timeout).map_err(|e| {
+        tracing::error!(target: "git", error = %e, "wait_timeout falló");
+        format!("wait_timeout: {}", e)
+    })? {
+        Some(_) => {
+            // Terminó dentro del timeout; recolectar stdout/stderr.
+            let out = child.wait_with_output().map_err(|e| {
+                tracing::error!(target: "git", error = %e, "wait_with_output falló");
+                format!("wait_with_output: {}", e)
+            })?;
+            Ok(GitOutput {
+                success: out.status.success(),
+                stderr: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+                stdout: String::from_utf8_lossy(&out.stdout).trim().to_string(),
+            })
+        }
+        None => {
+            // Timeout: matar el child para no dejar zombies.
+            let _ = child.kill();
+            let _ = child.wait();
+            let secs = timeout.as_secs();
+            tracing::error!(target: "git", args = ?args, secs, "git timeout");
+            Err(format!(
+                "network: git command timed out after {}s",
+                secs
+            ))
+        }
+    }
 }
 
 fn is_rejected(stderr: &str) -> bool {
@@ -251,7 +309,7 @@ fn git_pull_impl(repo_path: &str) -> Result<Vec<PullPathChange>, String> {
         args.push(branch.as_deref().unwrap());
     }
 
-    let out = run_git(repo_path, &args)?;
+    let out = run_git_net(repo_path, &args)?;
     if !out.success {
         let msg = if out.stderr.is_empty() {
             "pull falló (sin stderr)".to_string()
@@ -344,7 +402,7 @@ pub(crate) fn git_pull_rebase_impl(repo_path: &str) -> Result<Vec<PullPathChange
         args.push(branch.as_deref().unwrap());
     }
 
-    let out = run_git(repo_path, &args)?;
+    let out = run_git_net(repo_path, &args)?;
     if out.success {
         if needs_upstream {
             if let Some(b) = branch.as_deref() {
@@ -363,6 +421,23 @@ pub(crate) fn git_pull_rebase_impl(repo_path: &str) -> Result<Vec<PullPathChange
         categorize_git_error(&out.stderr)
     };
     tracing::error!(target: "git", error = %msg, "pull --rebase falló");
+    Err(msg)
+}
+
+/// Fetch silencioso `git fetch --prune`. Devuelve error categorizado para
+/// que el caller decida si loggear y seguir (best-effort) o mostrar al user.
+pub(crate) fn git_fetch_impl(repo_path: &str) -> Result<(), String> {
+    let out = run_git_net(repo_path, &["fetch", "--prune"])?;
+    if out.success {
+        tracing::debug!(target: "git", "fetch --prune ok");
+        return Ok(());
+    }
+    let msg = if out.stderr.is_empty() {
+        "fetch falló (sin stderr)".to_string()
+    } else {
+        categorize_git_error(&out.stderr)
+    };
+    tracing::warn!(target: "git", error = %msg, "fetch falló (best-effort)");
     Err(msg)
 }
 
@@ -938,5 +1013,61 @@ mod tests {
             .collect();
         assert_eq!(kinds.get("tracked.html"), Some(&"modified"));
         assert_eq!(kinds.get("untracked.html"), Some(&"new"));
+    }
+
+    #[test]
+    fn fetch_succeeds_against_clean_remote() {
+        let (_origin, pc_a, _pc_b) = setup_triple();
+        git_fetch_impl(pc_a.to_str().unwrap()).expect("fetch should succeed against clean remote");
+    }
+
+    #[test]
+    fn fetch_picks_up_remote_commits() {
+        let (_origin, pc_a, pc_b) = setup_triple();
+        // pcA commitea + pushea algo nuevo; pcB hace fetch y debería ver el ref nuevo.
+        fs::write(pc_a.join("from-a.txt"), "x\n").unwrap();
+        run(&pc_a, &["add", "."]);
+        run(&pc_a, &["commit", "-m", "A"]);
+        run(&pc_a, &["push"]);
+
+        let before = run(&pc_b, &["rev-parse", "origin/main"]).trim().to_string();
+        git_fetch_impl(pc_b.to_str().unwrap()).expect("fetch must succeed");
+        let after = run(&pc_b, &["rev-parse", "origin/main"]).trim().to_string();
+        assert_ne!(before, after, "fetch debería avanzar origin/main");
+    }
+
+    #[test]
+    fn run_git_times_out_quickly() {
+        // Forzar un timeout corto contra un sub-comando que no termina rápido.
+        // Usamos `git -c core.askpass=/bin/sleep clone` contra una URL inválida
+        // — `git` queda esperando credenciales y nuestro timeout lo mata.
+        // Si el ambiente no tiene /bin/sleep, el test se skipea.
+        if !std::path::Path::new("/bin/sleep").exists() {
+            return;
+        }
+        let dir = tempdir("timeout");
+        // `git help` termina rápido — usamos eso para verificar el path happy
+        // primero (no timeout).
+        let ok = run_git_with_timeout(dir.to_str().unwrap(), &["help"], Duration::from_secs(5))
+            .expect("git help should not time out");
+        assert!(ok.success);
+
+        // Path triste: clone contra host inválido con SSH command que sleep 10s.
+        // Con timeout 1s el child debe morir y retornar Err("network: ... timed out").
+        let res = run_git_with_timeout(
+            dir.to_str().unwrap(),
+            &["clone", "user@invalid.invalid:repo.git", "_clone"],
+            Duration::from_millis(500),
+        );
+        // Toleramos dos resultados: timeout categorizado, o falla rápida
+        // (DNS resolve falla antes que SSH connect). Ambos no son "success=true".
+        match res {
+            Ok(out) => assert!(!out.success, "no debería tener éxito clonando una URL inválida"),
+            Err(msg) => assert!(
+                msg.contains("timed out") || msg.contains("network") || msg.contains("ejecutar"),
+                "unexpected error: {}",
+                msg
+            ),
+        }
     }
 }

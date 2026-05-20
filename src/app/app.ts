@@ -106,6 +106,19 @@ export class App {
 
   protected readonly dragOverCenter = signal<boolean>(false);
 
+  /** Activo mientras corre el flushAndSync del close-handler. Cuando es true
+   *  el overlay "Subiendo cambios…" tapa la UI. */
+  protected readonly closing = signal<boolean>(false);
+  protected readonly closingMessage = signal<string>('Subiendo cambios…');
+
+  /** Debounce del blur: solo dispara push si el blur dura >30s. Si el user
+   *  vuelve a la ventana antes, se cancela. */
+  private blurDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly BLUR_DEBOUNCE_MS = 30_000;
+  /** Cooldown: tras un push exitoso, no re-pushear por blur durante 2min
+   *  (evita ruido por alt-tab corto + push reciente). */
+  private readonly BLUR_PUSH_COOLDOWN_MS = 120_000;
+
   protected readonly saving = computed(
     () =>
       this.chapter.panes[0].saving() ||
@@ -121,15 +134,49 @@ export class App {
   private lastGitErr: GitError | null = null;
 
   protected readonly root = this.project.root;
+
+  /** True si cualquier pane del editor (capítulos o notas) tiene dirty=true,
+   *  o sea hay cambios tipeados todavía sin escribir al disco. Permite al
+   *  dot del header reaccionar al primer keystroke sin esperar al autosave
+   *  (1.5s) + refresh post-write. */
+  protected readonly anyEditorDirty = computed<boolean>(
+    () =>
+      this.chapter.panes[0].dirty() ||
+      this.chapter.panes[1].dirty() ||
+      this.note.panes[0].dirty() ||
+      this.note.panes[1].dirty(),
+  );
+
+  /** Estado efectivo que ve la UI. Mezcla `git.state()` con el dirty del
+   *  editor: si git dice clean pero hay buffer dirty, mostramos pending
+   *  para que el indicador no mienta entre keystroke y autosave. */
+  protected readonly effectiveSyncState = computed(() => {
+    const gs = this.git.state();
+    if (gs === 'clean' && this.anyEditorDirty()) return 'pending';
+    return gs;
+  });
+
+  /** Resumen para el header. Cuando hay dirty editor pero git todavía no se
+   *  enteró (entre keystroke y refresh post-autosave), mostrar "cambios sin
+   *  guardar" en vez de "sincronizado". */
+  protected readonly effectiveSyncSummary = computed(() => {
+    const gs = this.git.state();
+    if (gs === 'clean' && this.anyEditorDirty()) {
+      return 'cambios sin guardar';
+    }
+    return this.git.summary();
+  });
+
   protected readonly syncTitle = computed(() => {
-    const s = this.git.state();
-    const summary = this.git.summary();
+    const s = this.effectiveSyncState();
+    const summary = this.effectiveSyncSummary();
     const err = this.git.error();
     if (err) return `Error: ${err.friendly}`;
     switch (s) {
       case 'syncing': return 'Sincronizando…';
       case 'pending': return summary + ' — click para sincronizar';
       case 'clean': return summary;
+      case 'offline': return 'Sin conexión — los cambios quedan locales';
       case 'error': return `Error: ${err ? (err as GitError).friendly : 'desconocido'}`;
       default: return 'Estado desconocido';
     }
@@ -139,6 +186,7 @@ export class App {
     inject(RustLogBridge);
     void this.bootstrap();
     void this.bindCloseFlush();
+    void this.bindFocusSync();
     effect(() => {
       const e = this.chapter.panes[0].error() ?? this.chapter.panes[1].error();
       if (e && e !== this.lastChapterErr) this.debug.error('chapter', e);
@@ -245,23 +293,109 @@ export class App {
     }
   }
 
-  /** Flushea persist pendiente del SettingsService al cierre de ventana para
-   *  no perder el último cursor pos del debounce 500ms. Sin esto, cerrar la
-   *  app inmediatamente después de mover el cursor lo guarda al pos anterior. */
+  /** Handler de cierre de ventana. Flushea settings + flushAndSync de git
+   *  con un timeout de 10s. Si el sync falla (auth/network/conflict), modal
+   *  de confirmación "¿Cerrar igual?". Si timea o sale OK, cierra. */
   private async bindCloseFlush(): Promise<void> {
     try {
       const win = getCurrentWindow();
       let closing = false;
+      const CLOSE_PUSH_TIMEOUT_MS = 10_000;
       await win.onCloseRequested(async (event) => {
         if (closing) return;
         closing = true;
         event.preventDefault();
+        this.closing.set(true);
+        // Cancelar blur debounce si estaba corriendo.
+        if (this.blurDebounceTimer) {
+          clearTimeout(this.blurDebounceTimer);
+          this.blurDebounceTimer = null;
+        }
+        // Settings flush (cheap, no necesita race).
         try {
           await this.settings.flushPending();
         } catch {
-          // Si falla, igual cerramos — no bloqueamos al usuario por un settings write.
+          // Si falla, igual seguimos — no bloqueamos por un settings write.
         }
-        await win.destroy();
+        // Si no es repo git, no hay nada que pushear — flush autosave y listo.
+        if (this.storage.backend() !== 'git') {
+          try {
+            await this.chapter.flushAllDirty();
+            await this.note.flushAllDirty();
+          } catch {
+            // ignore
+          }
+          this.closing.set(false);
+          await win.destroy();
+          return;
+        }
+        // Race entre flushAndSync y timeout de 10s.
+        type Outcome = 'ok' | 'timeout' | { error: unknown };
+        const timeout = new Promise<Outcome>((resolve) =>
+          setTimeout(() => resolve('timeout'), CLOSE_PUSH_TIMEOUT_MS),
+        );
+        const sync: Promise<Outcome> = this.git
+          .flushAndSync()
+          .then<Outcome>(() => 'ok')
+          .catch<Outcome>((err) => ({ error: err }));
+        const outcome = await Promise.race([sync, timeout]);
+        this.closing.set(false);
+        if (outcome === 'ok' || outcome === 'timeout') {
+          // OK o timeout: cerrar. El timeout es best-effort; el próximo boot
+          // recupera el estado vía bootstrapSync (fetch + auto-pull si behind).
+          await win.destroy();
+          return;
+        }
+        // Error real (auth/conflict/network): preguntar al usuario.
+        const friendly = this.git.error()?.friendly ?? 'Error al sincronizar con git.';
+        const ok = await this.modal.confirm({
+          title: 'No se pudo subir',
+          message: `${friendly}\n\n¿Querés cerrar igual? Los cambios quedan guardados localmente.`,
+          okLabel: 'Cerrar igual',
+          cancelLabel: 'Cancelar',
+        });
+        if (ok) {
+          await win.destroy();
+        } else {
+          // Permitir reintentar el close (el user puede arreglar auth/red y volver a cerrar).
+          closing = false;
+        }
+      });
+    } catch {
+      // En SSR / no-Tauri (tests), el listener no se setea.
+    }
+  }
+
+  /** Listener de focus/blur de la ventana Tauri.
+   *  - Focus: fetch silencioso + refresh status para detectar pushes desde
+   *    otra PC mientras estábamos fuera.
+   *  - Blur: arranca debounce 30s. Si el blur dura ese tiempo Y el último
+   *    push fue hace >2min Y no hay otro sync en vuelo, flushea autosave +
+   *    commit + push. Si vuelve el foco antes, se cancela. */
+  private async bindFocusSync(): Promise<void> {
+    try {
+      const win = getCurrentWindow();
+      await win.onFocusChanged(({ payload: focused }) => {
+        if (focused) {
+          if (this.blurDebounceTimer) {
+            clearTimeout(this.blurDebounceTimer);
+            this.blurDebounceTimer = null;
+          }
+          void this.git.fetchAndRefresh();
+        } else {
+          if (this.blurDebounceTimer) clearTimeout(this.blurDebounceTimer);
+          this.blurDebounceTimer = setTimeout(() => {
+            this.blurDebounceTimer = null;
+            const last = this.git.lastPush;
+            const elapsed = last === null ? Number.POSITIVE_INFINITY : Date.now() - last;
+            if (elapsed < this.BLUR_PUSH_COOLDOWN_MS) return;
+            if (this.git.syncing() || this.closing()) return;
+            if (this.storage.backend() !== 'git') return;
+            void this.git.flushAndSync().catch((err) => {
+              console.debug('blur flushAndSync falló (silencioso)', err);
+            });
+          }, this.BLUR_DEBOUNCE_MS);
+        }
       });
     } catch {
       // En SSR / no-Tauri (tests), el listener no se setea.
@@ -277,7 +411,9 @@ export class App {
   }
 
   protected syncNow(): void {
-    void this.git.syncNow();
+    // syncNow ahora throwea el error post-set en this.error. La UI consume
+    // this.error directo; aquí solo lo silenciamos para evitar unhandled.
+    void this.git.syncNow().catch(() => {});
   }
 
   protected pull(): void {
