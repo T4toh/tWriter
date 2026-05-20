@@ -186,6 +186,10 @@ export class ChapterService {
       // editado" del árbol refleje el save sin esperar a un `loadTree()`
       // completo (que reescaneaba FS y parpadeaba la selección).
       this.project.touchNodeModifiedMs(node.path, savedAt);
+      // Refresh reactivo del status git para que el dot del header y el
+      // count de "X capítulos modificados" reflejen el cambio sin esperar
+      // al próximo poll de 60s o al commit-timer de 5min. fire-and-forget.
+      void this.git.refreshStatus();
     } catch (err) {
       pane.error.set(String(err));
     } finally {
@@ -604,6 +608,12 @@ export class ChapterService {
     } else {
       this.cancelAutosaveInPane(paneId);
     }
+  }
+
+  /** Flushea autosave de TODOS los panes con dirty. No-op si ningún pane
+   *  está dirty. Usado por GitService.flushAndSync antes de commit+push. */
+  async flushAllDirty(): Promise<void> {
+    await Promise.all(PANE_IDS.map((id) => this.flushPendingInPane(id)));
   }
 }
 

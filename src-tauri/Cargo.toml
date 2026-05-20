@@ -42,6 +42,9 @@ fontdb = { version = "0.23", default-features = false, features = ["fontconfig",
 # Wallet/keyring del sistema para secretos sensibles (apiKey de LT Premium).
 # Linux: libsecret (gnome-keyring / KWallet6+). macOS: Keychain. Windows: Credential Manager.
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+# Timeout sobre `Command::spawn()` para que ningún `git` cuelgue forever
+# si la app abre sin SSH agent / sin TTY. Plataformas: Linux/macOS/Windows.
+wait-timeout = "0.2"
 
 [dev-dependencies]
 tempfile = "3"

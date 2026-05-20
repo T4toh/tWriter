@@ -125,6 +125,9 @@ export class NoteService {
       await invoke('write_note', { path: target.path, content: pane.content() });
       pane.dirty.set(false);
       pane.lastSavedAt.set(Date.now());
+      // Refresh reactivo del status git para mantener el indicador honesto
+      // (ver chapter-service.saveInPane para el rationale).
+      void this.git.refreshStatus();
     } catch (err) {
       pane.error.set(String(err));
       this.debug.error('note', String(err));
@@ -218,5 +221,11 @@ export class NoteService {
     } else {
       this.cancelAutosaveInPane(paneId);
     }
+  }
+
+  /** Flushea autosave de TODOS los panes con dirty. No-op si ningún pane
+   *  está dirty. Usado por GitService.flushAndSync antes de commit+push. */
+  async flushAllDirty(): Promise<void> {
+    await Promise.all(PANE_IDS.map((id) => this.flushPendingInPane(id)));
   }
 }
