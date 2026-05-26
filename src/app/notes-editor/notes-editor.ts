@@ -158,6 +158,8 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
       // Restaurar cursor (solo pane 0) si bootstrap encoló un pedido. Antes
       // del highlight de Ctrl+F — el search prevalece cuando el usuario llega
       // via search.
+      // NOTA: NO scrollIntoView — vista siempre arranca arriba (scrollTop=0
+      // ya seteado). Cursor mantiene posición guardada para futuras flechas.
       if (target?.path && this.paneId() === 0 && this.tiptap) {
         const restore = this.cursorRestore.consume(target.path);
         if (restore) {
@@ -165,10 +167,10 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
           const pos = Math.max(0, Math.min(restore.pmPos, Math.max(0, docSize - 1)));
           this.tiptap
             .chain()
-            .focus()
+            .focus(undefined, { scrollIntoView: false })
             .setTextSelection({ from: pos, to: pos })
-            .scrollIntoView()
             .run();
+          this.hostRef.nativeElement.scrollTop = 0;
         }
       }
 

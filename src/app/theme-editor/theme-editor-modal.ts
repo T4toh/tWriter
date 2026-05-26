@@ -1,4 +1,5 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
+import { ScrollingModule } from '@angular/cdk/scrolling';
 import { FormsModule } from '@angular/forms';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { FontsService } from '../core/fonts-service';
@@ -7,7 +8,7 @@ import { SettingsService } from '../core/settings-service';
 import { ThemesService } from '../core/themes-service';
 import { ToastService } from '../core/toast-service';
 import { FontEntry, Theme } from '../core/types';
-import { Select, SelectOption } from '../shared/select';
+import { Select, SelectGroup, SelectOption } from '../shared/select';
 
 interface EditableTheme {
   nombre: string;
@@ -17,9 +18,6 @@ interface EditableTheme {
   heading_size: string;
   line_height: string;
   page_margin: string;
-  body_font_italic: string;
-  body_font_bold: string;
-  body_font_bold_italic: string;
   editorial_body_font: string;
   editorial_heading_font: string;
   chapter_title_position: string;
@@ -29,17 +27,28 @@ interface EditableTheme {
   mostrar_numero_parte: boolean;
   formato_parte: string;
   template: string;
+  italic_oblique_deg: string;
+  italic_weight: string;
+  bold_weight: string;
 }
 
-/** Genera nombre CSS único per-modal-instance para no chocar con otras
- *  declaraciones del DOM. Mismo nombre que se usa en el preview. */
+type Tab = 'tipografia' | 'capitulos' | 'editoriales' | 'pagina' | 'fuentes';
+
+interface PoolItem {
+  entry: FontEntry;
+  /** CSS family name único para registrar la FontFace de este archivo. */
+  family: string;
+  /** Etiqueta legible (familia + Bold/Italic). */
+  label: string;
+}
+
 function previewFamilyName(slot: string, idx: number): string {
   return `tw-preview-${slot}-${idx}`;
 }
 
 @Component({
   selector: 'app-theme-editor-modal',
-  imports: [FormsModule, Select],
+  imports: [FormsModule, ScrollingModule, Select],
   templateUrl: './theme-editor-modal.html',
   styleUrl: './theme-editor-modal.scss',
 })
@@ -52,7 +61,14 @@ export class ThemeEditorModal {
 
   protected readonly editing = this.svc.editing;
   protected readonly form = signal<EditableTheme | null>(null);
-  /** Fuentes del pool global. Las lee del FontsService cuando hay root y modal abierto. */
+  protected readonly activeTab = signal<Tab>('tipografia');
+  protected readonly tabs: ReadonlyArray<{ id: Tab; label: string }> = [
+    { id: 'tipografia', label: 'Tipografía' },
+    { id: 'capitulos', label: 'Capítulos' },
+    { id: 'editoriales', label: 'Editoriales' },
+    { id: 'pagina', label: 'Página' },
+    { id: 'fuentes', label: 'Fuentes' },
+  ];
   protected readonly fonts = computed<FontEntry[]>(() => {
     const root = this.settings.root();
     return root ? this.fontsSvc.get(root) : [];
@@ -60,39 +76,69 @@ export class ThemeEditorModal {
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  /** Generación incremental de family name para evitar caché entre selecciones. */
+  /** Generación incremental para invalidar caché del browser entre selecciones. */
   private previewGen = signal(0);
 
-  /** Familias únicas detectadas en las fuentes del tema, para sugerir en los selects. */
-  protected readonly availableFamilies = computed(() => {
-    const set = new Set<string>();
-    for (const f of this.fonts()) {
-      if (f.family) set.add(f.family);
+  /** Familias únicas con path del regular (o primer face encontrado) para
+   *  los selects de cuerpo/títulos/editoriales. */
+  private readonly familyPaths = computed<Map<string, string>>(() => {
+    const seen = new Map<string, string>();
+    const fonts = this.fonts();
+    // Pass 1: regular faces.
+    for (const fe of fonts) {
+      if (!seen.has(fe.family) && fe.weight === 400 && fe.style === 'normal') {
+        seen.set(fe.family, fe.path);
+      }
     }
-    return Array.from(set).sort();
+    // Pass 2: cualquier otro face de familias sin regular.
+    for (const fe of fonts) {
+      if (!seen.has(fe.family)) seen.set(fe.family, fe.path);
+    }
+    return seen;
   });
 
-  /** Lista de stems disponibles para los selectores de per-style faces. */
-  protected readonly availableStems = computed(() => {
-    return this.fonts()
-      .map((f) => ({
-        stem: stripExt(f.name),
-        label: this.formatStyle(f),
-        family: f.family,
-        weight: f.weight,
-        style: f.style,
-      }))
-      .sort((a, b) => a.stem.localeCompare(b.stem));
+  /** Groups para `<app-select>` de fuentes — pool + personalizado (familias
+   *  referenciadas por el theme actual pero ausentes del pool). */
+  protected readonly fontGroups = computed<SelectGroup[]>(() => {
+    const families = this.familyPaths();
+    const f = this.form();
+    const pool: SelectOption[] = Array.from(families.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([family, path]) => ({
+        value: family,
+        label: family,
+        data: { fontFamily: family, path },
+      }));
+    const groups: SelectGroup[] = [];
+    if (pool.length > 0) groups.push({ label: 'Pool del repo', options: pool });
+
+    if (f) {
+      const poolLower = new Set(Array.from(families.keys()).map((s) => s.toLowerCase()));
+      const custom = new Set<string>();
+      for (const fam of [
+        f.body_font,
+        f.heading_font,
+        f.editorial_body_font,
+        f.editorial_heading_font,
+      ]) {
+        const t = fam.trim();
+        if (t && !poolLower.has(t.toLowerCase())) custom.add(t);
+      }
+      if (custom.size > 0) {
+        groups.push({
+          label: 'Personalizado (no en pool)',
+          options: Array.from(custom)
+            .sort()
+            .map((v) => ({ value: v, label: v, data: { fontFamily: v } })),
+        });
+      }
+    }
+    return groups;
   });
 
-  /** Opciones para los <app-select> de body_font_italic / bold / bold_italic. */
-  protected readonly stemSelectOptions = computed<SelectOption[]>(() => {
-    const stems = this.availableStems();
-    return [
-      { value: '', label: 'Auto (de body_font)' },
-      ...stems.map((s) => ({ value: s.stem, label: `${s.stem} — ${s.label}` })),
-    ];
-  });
+  /** Familias ya registradas como FontFace global con su family name real
+   *  (no `tw-pool-*`). Idempotente. */
+  private readonly familyLoaded = new Set<string>();
 
   protected readonly chapterTitlePositionOptions: SelectOption[] = [
     { value: '', label: 'Centrado (default)' },
@@ -119,61 +165,187 @@ export class ThemeEditorModal {
     { value: 'a5', label: 'A5 (148 × 210 mm)' },
   ];
 
-  /** Familias CSS que el preview tiene cargadas. Se rotan via previewGen. */
-  protected readonly previewFamilies = computed(() => {
+  /** CSS family names para cada slot del preview. Rotan via previewGen. */
+  private readonly previewFamilies = computed(() => {
     const f = this.form();
     if (!f) return null;
     const gen = this.previewGen();
     return {
-      body: f.body_font ? `${previewFamilyName('body', gen)}` : null,
-      italic: f.body_font_italic ? previewFamilyName('italic', gen) : null,
-      bold: f.body_font_bold ? previewFamilyName('bold', gen) : null,
-      boldItalic: f.body_font_bold_italic
-        ? previewFamilyName('bolditalic', gen)
+      body: f.body_font ? previewFamilyName('body', gen) : null,
+      heading: f.heading_font ? previewFamilyName('heading', gen) : null,
+      editorialBody: f.editorial_body_font
+        ? previewFamilyName('edbody', gen)
+        : null,
+      editorialHeading: f.editorial_heading_font
+        ? previewFamilyName('edhead', gen)
         : null,
     };
   });
 
   protected readonly previewBodyStyle = computed(() => {
+    const f = this.form();
+    const fams = this.previewFamilies();
+    if (!f || !fams) return '';
+    const stack: string[] = [];
+    if (fams.body) stack.push(`"${fams.body}"`);
+    stack.push('serif');
+    const parts: string[] = [`font-family: ${stack.join(', ')}`];
+    if (f.body_size) parts.push(`font-size: ${f.body_size}`);
+    if (f.line_height) parts.push(`line-height: ${f.line_height}`);
+    return parts.join('; ') + ';';
+  });
+
+  protected readonly previewHeadingStyle = computed(() => {
+    const f = this.form();
+    const fams = this.previewFamilies();
+    if (!f || !fams) return '';
+    const stack: string[] = [];
+    if (fams.heading) stack.push(`"${fams.heading}"`);
+    stack.push('sans-serif');
+    const parts: string[] = [`font-family: ${stack.join(', ')}`];
+    if (f.heading_size) parts.push(`font-size: ${f.heading_size}`);
+    return parts.join('; ') + ';';
+  });
+
+  protected readonly previewEditorialBodyStyle = computed(() => {
     const fams = this.previewFamilies();
     if (!fams) return '';
     const stack: string[] = [];
-    if (fams.body) stack.push(`"${fams.body}"`);
+    if (fams.editorialBody) stack.push(`"${fams.editorialBody}"`);
+    else if (fams.body) stack.push(`"${fams.body}"`);
     stack.push('serif');
     return `font-family: ${stack.join(', ')};`;
   });
 
-  protected readonly previewItalicStyle = computed(() => {
-    const fams = this.previewFamilies();
-    if (!fams) return '';
-    const stack: string[] = [];
-    if (fams.italic) stack.push(`"${fams.italic}"`);
-    if (fams.body) stack.push(`"${fams.body}"`);
-    stack.push('serif');
-    return `font-family: ${stack.join(', ')}; font-style: italic;`;
+  /** Parsea peso (100-900) o devuelve null. */
+  private clampWeight(s: string): number | null {
+    const t = s.trim();
+    if (!t || !/^\d+$/.test(t)) return null;
+    return Math.max(100, Math.min(900, parseInt(t, 10)));
+  }
+
+  /** Estilo inline para spans italic. font-style desde `italic_oblique_deg`
+   *  (o `italic` clásico). font-weight cascade: italic_weight → bold_weight
+   *  (cuando italic no se distingue de regular, subir bold también levanta italic). */
+  protected readonly previewItalicSpanStyle = computed(() => {
+    const f = this.form();
+    if (!f) return 'font-style: italic;';
+    const deg = f.italic_oblique_deg.trim();
+    const parts: string[] = [];
+    if (deg && !Number.isNaN(Number(deg))) {
+      parts.push(`font-style: oblique ${deg}deg`);
+    } else {
+      parts.push('font-style: italic');
+    }
+    const w = this.clampWeight(f.italic_weight) ?? this.clampWeight(f.bold_weight);
+    if (w != null) parts.push(`font-weight: ${w}`);
+    return parts.join('; ') + ';';
   });
 
-  protected readonly previewBoldStyle = computed(() => {
-    const fams = this.previewFamilies();
-    if (!fams) return '';
-    const stack: string[] = [];
-    if (fams.bold) stack.push(`"${fams.bold}"`);
-    if (fams.body) stack.push(`"${fams.body}"`);
-    stack.push('serif');
-    return `font-family: ${stack.join(', ')}; font-weight: bold;`;
+  /** Estilo inline para spans bold. `bold_weight` set → ese peso; sino `bold`. */
+  protected readonly previewBoldSpanStyle = computed(() => {
+    const f = this.form();
+    if (!f) return 'font-weight: bold;';
+    const w = this.clampWeight(f.bold_weight);
+    return w != null ? `font-weight: ${w};` : 'font-weight: bold;';
   });
 
-  protected readonly previewBoldItalicStyle = computed(() => {
+  /** Combo bold+italic: italic angle + bold_weight (bold gana sobre italic_weight). */
+  protected readonly previewBoldItalicSpanStyle = computed(() => {
+    const f = this.form();
+    if (!f) return 'font-style: italic; font-weight: bold;';
+    const deg = f.italic_oblique_deg.trim();
+    const parts: string[] = [];
+    if (deg && !Number.isNaN(Number(deg))) {
+      parts.push(`font-style: oblique ${deg}deg`);
+    } else {
+      parts.push('font-style: italic');
+    }
+    const w = this.clampWeight(f.bold_weight);
+    parts.push(w != null ? `font-weight: ${w}` : 'font-weight: bold');
+    return parts.join('; ') + ';';
+  });
+
+  protected readonly previewEditorialHeadingStyle = computed(() => {
     const fams = this.previewFamilies();
     if (!fams) return '';
     const stack: string[] = [];
-    if (fams.boldItalic) stack.push(`"${fams.boldItalic}"`);
-    if (fams.body) stack.push(`"${fams.body}"`);
-    stack.push('serif');
-    return `font-family: ${stack.join(', ')}; font-weight: bold; font-style: italic;`;
+    if (fams.editorialHeading) stack.push(`"${fams.editorialHeading}"`);
+    else if (fams.heading) stack.push(`"${fams.heading}"`);
+    stack.push('sans-serif');
+    return `font-family: ${stack.join(', ')};`;
   });
+
+  /** Etiqueta de prefijo según el setting actual. Capítulo 5 como ejemplo. */
+  protected readonly chapterPrefixLabel = computed(() => {
+    const f = this.form();
+    if (!f) return null;
+    switch (f.prefijo_capitulo) {
+      case 'decimal':
+        return 'Capítulo 5';
+      case 'roman':
+        return 'Capítulo V';
+      default:
+        return null;
+    }
+  });
+
+  /** Etiqueta de parte según formato_parte. Parte 2 como ejemplo. */
+  protected readonly partLabel = computed(() => {
+    const f = this.form();
+    if (!f || !f.mostrar_numero_parte) return null;
+    switch (f.formato_parte) {
+      case 'parte':
+        return 'Parte 2';
+      case 'punto':
+        return '2.';
+      case 'raw':
+      default:
+        return '2';
+    }
+  });
+
+  /** Clase CSS para el mock de página según template (aspect-ratio + padding). */
+  protected readonly pageMockClass = computed(() => {
+    const tpl = this.form()?.template || '6x9';
+    return `page-mock tpl-${tpl}`;
+  });
+
+  /** Clase CSS para el mock de página de título standalone, según
+   *  `chapter_title_position`: top / center (default) / bottom. */
+  protected readonly chapterTitlePageClass = computed(() => {
+    const f = this.form();
+    const tpl = f?.template || '6x9';
+    const pos = f?.chapter_title_position || 'center';
+    return `page-mock tpl-${tpl} ctp-${pos}`;
+  });
+
+  /** Pool ordenado, con un family CSS único por archivo. Cada item se
+   *  renderiza con su propia tipografía en la lista. */
+  protected readonly pool = computed<PoolItem[]>(() => {
+    return this.fonts().map((entry) => ({
+      entry,
+      family: `tw-pool-${slugify(entry.relative_path)}`,
+      label: this.formatStyle(entry),
+    }));
+  });
+
+  /** Familias del pool ya registradas en document.fonts. Idempotente. */
+  private readonly poolLoaded = new Set<string>();
 
   constructor() {
+    // Bloquea scroll del body mientras el modal está abierto. overscroll-behavior
+    // solo evita chain dentro de un scroller; con la rueda sobre backdrop el
+    // documento de fondo seguía scrolleando. Esto lo congela.
+    effect((onCleanup) => {
+      if (!this.editing()) return;
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      onCleanup(() => {
+        document.body.style.overflow = prev;
+      });
+    });
+
     effect(() => {
       const id = this.editing();
       if (!id) {
@@ -185,17 +357,24 @@ export class ThemeEditorModal {
       if (root) void this.fontsSvc.refresh(root);
     });
 
-    // Re-load preview FontFaces cuando cambian los slots o el body_font.
     effect(() => {
       const f = this.form();
       const fonts = this.fonts();
       if (!f || fonts.length === 0) return;
-      // Tracking de los stems específicos para invalidar correctamente.
       void f.body_font;
-      void f.body_font_italic;
-      void f.body_font_bold;
-      void f.body_font_bold_italic;
+      void f.heading_font;
+      void f.editorial_body_font;
+      void f.editorial_heading_font;
       void this.reloadPreviewFonts(f, fonts);
+    });
+
+    // Pre-carga todas las FontFace del pool (eager). El virtual scroll de la
+    // lista da el "paginado" en el render, pero las fuentes ya están listas
+    // cuando los items entran en viewport.
+    effect(() => {
+      for (const item of this.pool()) {
+        void this.loadPoolFace(item);
+      }
     });
   }
 
@@ -211,9 +390,6 @@ export class ThemeEditorModal {
         heading_size: t.heading_size ?? '',
         line_height: t.line_height ?? '',
         page_margin: t.page_margin ?? '',
-        body_font_italic: t.body_font_italic ?? '',
-        body_font_bold: t.body_font_bold ?? '',
-        body_font_bold_italic: t.body_font_bold_italic ?? '',
         editorial_body_font: t.editorial_body_font ?? '',
         editorial_heading_font: t.editorial_heading_font ?? '',
         chapter_title_position: t.chapter_title_position ?? '',
@@ -223,71 +399,108 @@ export class ThemeEditorModal {
         mostrar_numero_parte: t.mostrar_numero_parte ?? false,
         formato_parte: t.formato_parte ?? '',
         template: t.template ?? '',
+        italic_oblique_deg:
+          t.italic_oblique_deg != null ? String(t.italic_oblique_deg) : '',
+        italic_weight: t.italic_weight != null ? String(t.italic_weight) : '',
+        bold_weight: t.bold_weight != null ? String(t.bold_weight) : '',
       });
     } catch (err) {
       this.error.set(String(err));
     }
   }
 
-  private async reloadPreviewFonts(f: EditableTheme, fonts: FontEntry[]): Promise<void> {
+  /** Carga FontFace para los slots del preview. Solo familia regular —
+   *  italic/bold se sintetizan via CSS desde la misma face. */
+  private async reloadPreviewFonts(
+    f: EditableTheme,
+    fonts: FontEntry[],
+  ): Promise<void> {
     this.previewGen.update((g) => g + 1);
     const gen = this.previewGen();
 
-    const findByStem = (stem: string) =>
-      fonts.find((fe) => stripExt(fe.name).toLowerCase() === stem.toLowerCase());
-
-    const findRegularOfFamily = (family: string) =>
+    const findRegular = (family: string): FontEntry | undefined =>
       fonts.find(
         (fe) =>
           fe.family.toLowerCase() === family.toLowerCase() &&
           fe.weight === 400 &&
           fe.style === 'normal',
-      ) ??
-      fonts.find((fe) => fe.family.toLowerCase() === family.toLowerCase());
+      ) ?? fonts.find((fe) => fe.family.toLowerCase() === family.toLowerCase());
 
-    const slots: Array<{
-      slot: string;
-      face: FontEntry | undefined;
-      desc: { weight: string; style: string };
-    }> = [
-      {
-        slot: 'body',
-        face: f.body_font ? findRegularOfFamily(f.body_font) : undefined,
-        desc: { weight: 'normal', style: 'normal' },
-      },
-      {
-        slot: 'italic',
-        face: f.body_font_italic ? findByStem(f.body_font_italic) : undefined,
-        desc: { weight: 'normal', style: 'italic' },
-      },
-      {
-        slot: 'bold',
-        face: f.body_font_bold ? findByStem(f.body_font_bold) : undefined,
-        desc: { weight: 'bold', style: 'normal' },
-      },
-      {
-        slot: 'bolditalic',
-        face: f.body_font_bold_italic ? findByStem(f.body_font_bold_italic) : undefined,
-        desc: { weight: 'bold', style: 'italic' },
-      },
-    ];
+    const slots: Array<{ slot: string; family: string }> = [];
+    if (f.body_font) slots.push({ slot: 'body', family: f.body_font });
+    if (f.heading_font) slots.push({ slot: 'heading', family: f.heading_font });
+    if (f.editorial_body_font)
+      slots.push({ slot: 'edbody', family: f.editorial_body_font });
+    if (f.editorial_heading_font)
+      slots.push({ slot: 'edhead', family: f.editorial_heading_font });
 
-    for (const { slot, face, desc } of slots) {
+    for (const { slot, family } of slots) {
+      const face = findRegular(family);
       if (!face) continue;
-      const url = convertFileSrc(face.path);
       const familyName = previewFamilyName(slot, gen);
       try {
-        const ff = new FontFace(familyName, `url("${url}")`, desc);
+        const ff = new FontFace(familyName, `url("${convertFileSrc(face.path)}")`);
         await ff.load();
         document.fonts.add(ff);
       } catch {
-        // Preview falla silencioso — no rompe el modal.
+        // silent — preview no debe romper el modal
       }
     }
   }
 
-  /** Abre el file picker, sube fuentes al pool global `<root>/fonts/` y refresca.
-   *  Mismo flujo que arrastrar al árbol — atajo desde el editor de temas. */
+  /** Registra una FontFace con el family real (compartido entre faces). Idempotente.
+   *  Se invoca al hover sobre un item del dropdown de fuentes para preview. */
+  protected onFontItemHover(opt: SelectOption): void {
+    const data = opt.data as { fontFamily?: string; path?: string } | undefined;
+    if (!data?.fontFamily || !data.path) return;
+    const key = data.fontFamily.toLowerCase();
+    if (this.familyLoaded.has(key)) return;
+    this.familyLoaded.add(key);
+    void (async () => {
+      try {
+        const ff = new FontFace(data.fontFamily!, `url("${convertFileSrc(data.path!)}")`);
+        await ff.load();
+        document.fonts.add(ff);
+      } catch {
+        // silent
+      }
+    })();
+  }
+
+  /** Registra la FontFace de un item del pool con su `family` único. Idempotente.
+   *  Se invoca al renderizar cada item visible en el virtual scroll. Además
+   *  registra la familia real (`item.entry.family`) la primera vez que se ve
+   *  para que el `<app-select>` pueda renderear cada opción en su tipografía. */
+  protected async loadPoolFace(item: PoolItem): Promise<void> {
+    if (!this.poolLoaded.has(item.family)) {
+      this.poolLoaded.add(item.family);
+      try {
+        const ff = new FontFace(
+          item.family,
+          `url("${convertFileSrc(item.entry.path)}")`,
+        );
+        await ff.load();
+        document.fonts.add(ff);
+      } catch {
+        // silent
+      }
+    }
+    const famKey = item.entry.family.toLowerCase();
+    if (!this.familyLoaded.has(famKey)) {
+      this.familyLoaded.add(famKey);
+      try {
+        const ff = new FontFace(
+          item.entry.family,
+          `url("${convertFileSrc(item.entry.path)}")`,
+        );
+        await ff.load();
+        document.fonts.add(ff);
+      } catch {
+        // silent
+      }
+    }
+  }
+
   protected async pickFont(): Promise<void> {
     const root = this.settings.root();
     if (!root) {
@@ -343,9 +556,6 @@ export class ThemeEditorModal {
         heading_size: blank(cur.heading_size),
         line_height: blank(cur.line_height),
         page_margin: blank(cur.page_margin),
-        body_font_italic: blank(cur.body_font_italic),
-        body_font_bold: blank(cur.body_font_bold),
-        body_font_bold_italic: blank(cur.body_font_bold_italic),
         editorial_body_font: blank(cur.editorial_body_font),
         editorial_heading_font: blank(cur.editorial_heading_font),
         chapter_title_position: blank(cur.chapter_title_position),
@@ -355,6 +565,9 @@ export class ThemeEditorModal {
         mostrar_numero_parte: cur.mostrar_numero_parte,
         formato_parte: blank(cur.formato_parte),
         template: blank(cur.template),
+        italic_oblique_deg: parseFloatOrNull(cur.italic_oblique_deg),
+        italic_weight: parseIntOrNull(cur.italic_weight),
+        bold_weight: parseIntOrNull(cur.bold_weight),
       };
       await this.svc.save(id, theme);
       this.svc.closeEditor();
@@ -367,6 +580,10 @@ export class ThemeEditorModal {
 
   protected close(): void {
     this.svc.closeEditor();
+  }
+
+  protected trackByPath(_idx: number, item: PoolItem): string {
+    return item.entry.relative_path;
   }
 
   protected formatStyle(font: FontEntry): string {
@@ -384,8 +601,20 @@ function blank(s: string | null | undefined): string | null {
   return t.length ? t : null;
 }
 
-function stripExt(name: string): string {
-  const idx = name.lastIndexOf('.');
-  if (idx <= 0) return name;
-  return name.slice(0, idx);
+function slugify(s: string): string {
+  return s.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function parseFloatOrNull(s: string): number | null {
+  const t = s.trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseIntOrNull(s: string): number | null {
+  const t = s.trim();
+  if (!t) return null;
+  const n = parseInt(t, 10);
+  return Number.isFinite(n) ? n : null;
 }

@@ -466,7 +466,7 @@ fn entry_for_theme_font(base: &Path, file: &Path) -> Result<ThemeFontEntry, Stri
     })
 }
 
-/// Set de familias + stems referenciados por algún tema, saga o libro del repo.
+/// Set de familias referenciadas por algún tema, saga o libro del repo.
 /// Sirve para marcar qué fuentes del pool global están en uso vs. cuáles son
 /// candidatas a borrar.
 #[derive(Serialize, Debug, Default)]
@@ -474,13 +474,10 @@ pub struct FontUsage {
     /// Familias referenciadas en `body_font` / `heading_font` / `editorial_*`.
     /// Comparación case-insensitive contra `FontEntry.family`.
     pub families: Vec<String>,
-    /// Stems referenciados en `body_font_italic` / `body_font_bold` / `body_font_bold_italic`.
-    /// Comparación case-insensitive contra el filename stem.
-    pub stems: Vec<String>,
 }
 
-/// Walka temas + saga/book overrides para juntar todas las familias y stems
-/// referenciados. Read-only, no toca disco.
+/// Walka temas + saga/book overrides para juntar todas las familias
+/// referenciadas. Read-only, no toca disco.
 #[tauri::command]
 pub fn list_font_usage(root_path: String) -> Result<FontUsage, String> {
     let root = PathBuf::from(&root_path);
@@ -488,7 +485,6 @@ pub fn list_font_usage(root_path: String) -> Result<FontUsage, String> {
         return Err(format!("root no es directorio: {}", root_path));
     }
     let mut families: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    let mut stems: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
 
     // 1. Temas en <root>/themes/<id>/theme.json
     let themes_dir = root.join("themes");
@@ -500,18 +496,17 @@ pub fn list_font_usage(root_path: String) -> Result<FontUsage, String> {
                     continue;
                 }
                 if let Some(t) = read_theme_json(&p) {
-                    collect_from_theme(&t, &mut families, &mut stems);
+                    collect_from_theme(&t, &mut families);
                 }
             }
         }
     }
 
     // 2. saga.json + book.json (overrides) en root + subdirs (depth 2).
-    walk_configs(&root, 2, &mut families, &mut stems);
+    walk_configs(&root, 2, &mut families);
 
     Ok(FontUsage {
         families: families.into_iter().collect(),
-        stems: stems.into_iter().collect(),
     })
 }
 
@@ -530,7 +525,6 @@ fn read_theme_ref_from(path: &Path) -> Option<ThemeRef> {
 fn collect_from_theme(
     t: &Theme,
     families: &mut std::collections::BTreeSet<String>,
-    stems: &mut std::collections::BTreeSet<String>,
 ) {
     for fam in [
         &t.body_font,
@@ -542,22 +536,12 @@ fn collect_from_theme(
             families.insert(s.to_ascii_lowercase());
         }
     }
-    for stem in [
-        &t.body_font_italic,
-        &t.body_font_bold,
-        &t.body_font_bold_italic,
-    ] {
-        if let Some(s) = stem.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
-            stems.insert(s.to_ascii_lowercase());
-        }
-    }
 }
 
 fn walk_configs(
     dir: &Path,
     depth: u32,
     families: &mut std::collections::BTreeSet<String>,
-    stems: &mut std::collections::BTreeSet<String>,
 ) {
     for cfg in ["saga.json", "book.json"] {
         let p = dir.join(cfg);
@@ -566,7 +550,7 @@ fn walk_configs(
         }
         if let Some(tref) = read_theme_ref_from(&p) {
             if let Some(t) = tref.overrides.as_ref() {
-                collect_from_theme(t, families, stems);
+                collect_from_theme(t, families);
             }
         }
     }
@@ -592,7 +576,7 @@ fn walk_configs(
             | "convertidos" | "Revisiones" | "zTapas" => continue,
             _ => {}
         }
-        walk_configs(&p, depth - 1, families, stems);
+        walk_configs(&p, depth - 1, families);
     }
 }
 

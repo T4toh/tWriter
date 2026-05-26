@@ -38,9 +38,6 @@ export class SagaConfigModal {
   protected readonly ovHeadingSize = signal<string>('');
   protected readonly ovLineHeight = signal<string>('');
   protected readonly ovPageMargin = signal<string>('');
-  protected readonly ovBodyFontItalic = signal<string>('');
-  protected readonly ovBodyFontBold = signal<string>('');
-  protected readonly ovBodyFontBoldItalic = signal<string>('');
   protected readonly ovEditorialBodyFont = signal<string>('');
   protected readonly ovEditorialHeadingFont = signal<string>('');
   protected readonly ovChapterTitlePosition = signal<string>('');
@@ -63,16 +60,6 @@ export class SagaConfigModal {
     return Array.from(set).sort();
   });
 
-  /** Stems disponibles en saga/fonts/ para los selectores de per-style. */
-  protected readonly availableStems = computed(() => {
-    const path = this.sagaPath();
-    if (!path) return [];
-    return this.fontsSvc
-      .get(path)
-      .map((f) => stripExt(f.name))
-      .sort();
-  });
-
   protected readonly idiomaOptions: SelectOption[] = [
     { value: 'es', label: 'Español' },
     { value: 'en', label: 'Inglés' },
@@ -91,21 +78,6 @@ export class SagaConfigModal {
     { value: '', label: 'Sin tema' },
     ...this.availableThemes().map((t) => ({ value: t.id, label: t.nombre || t.id })),
   ]);
-  private stemFaceOptions(inherited: string | null | undefined): SelectOption[] {
-    return [
-      { value: '', label: inherited || 'Heredar' },
-      ...this.availableStems().map((s) => ({ value: s, label: s })),
-    ];
-  }
-  protected readonly italicFaceOptions = computed<SelectOption[]>(() =>
-    this.stemFaceOptions(this.selectedBaseTheme()?.body_font_italic),
-  );
-  protected readonly boldFaceOptions = computed<SelectOption[]>(() =>
-    this.stemFaceOptions(this.selectedBaseTheme()?.body_font_bold),
-  );
-  protected readonly boldItalicFaceOptions = computed<SelectOption[]>(() =>
-    this.stemFaceOptions(this.selectedBaseTheme()?.body_font_bold_italic),
-  );
   protected readonly chapterTitlePositionOptions = computed<SelectOption[]>(() => [
     { value: '', label: this.selectedBaseTheme()?.chapter_title_position || 'Heredar (centrado)' },
     { value: 'top', label: 'Arriba' },
@@ -142,9 +114,6 @@ export class SagaConfigModal {
     this.ovHeadingSize.set('');
     this.ovLineHeight.set('');
     this.ovPageMargin.set('');
-    this.ovBodyFontItalic.set('');
-    this.ovBodyFontBold.set('');
-    this.ovBodyFontBoldItalic.set('');
     this.ovEditorialBodyFont.set('');
     this.ovEditorialHeadingFont.set('');
     this.ovChapterTitlePosition.set('');
@@ -159,9 +128,6 @@ export class SagaConfigModal {
     this.ovHeadingSize.set(ov?.heading_size ?? '');
     this.ovLineHeight.set(ov?.line_height ?? '');
     this.ovPageMargin.set(ov?.page_margin ?? '');
-    this.ovBodyFontItalic.set(ov?.body_font_italic ?? '');
-    this.ovBodyFontBold.set(ov?.body_font_bold ?? '');
-    this.ovBodyFontBoldItalic.set(ov?.body_font_bold_italic ?? '');
     this.ovEditorialBodyFont.set(ov?.editorial_body_font ?? '');
     this.ovEditorialHeadingFont.set(ov?.editorial_heading_font ?? '');
     this.ovChapterTitlePosition.set(ov?.chapter_title_position ?? '');
@@ -176,9 +142,6 @@ export class SagaConfigModal {
       heading_size: blank(this.ovHeadingSize()),
       line_height: blank(this.ovLineHeight()),
       page_margin: blank(this.ovPageMargin()),
-      body_font_italic: blank(this.ovBodyFontItalic()),
-      body_font_bold: blank(this.ovBodyFontBold()),
-      body_font_bold_italic: blank(this.ovBodyFontBoldItalic()),
       editorial_body_font: blank(this.ovEditorialBodyFont()),
       editorial_heading_font: blank(this.ovEditorialHeadingFont()),
       chapter_title_position: blank(this.ovChapterTitlePosition()),
@@ -290,8 +253,3 @@ function blank(s: string | null | undefined): string | null {
   return t.length ? t : null;
 }
 
-function stripExt(name: string): string {
-  const idx = name.lastIndexOf('.');
-  if (idx <= 0) return name;
-  return name.slice(0, idx);
-}

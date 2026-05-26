@@ -35,12 +35,6 @@ export interface Theme {
   heading_size?: string | null;
   line_height?: string | null;
   page_margin?: string | null;
-  /** Filename stem del face explícito para `<em>`/`<i>`. Pisa auto-pick. */
-  body_font_italic?: string | null;
-  /** Filename stem del face explícito para `<strong>`/`<b>`. */
-  body_font_bold?: string | null;
-  /** Filename stem del face explícito para combinaciones bold+italic. */
-  body_font_bold_italic?: string | null;
   /** Familia para texto de páginas editoriales (TOC, copyright, dedicatoria,
    *  title page, sobre el autor). Auto-pick por sufijo igual que body_font. */
   editorial_body_font?: string | null;
@@ -62,6 +56,12 @@ export interface Theme {
   formato_parte?: string | null;
   /** Tamaño de página EPUB: `6x9` | `5x8` | `a5`. Default: `6x9`. */
   template?: string | null;
+  /** Ángulo (deg) para la oblique sintética de `<em>`/`<i>`. None = `italic` (default UA). */
+  italic_oblique_deg?: number | null;
+  /** Peso para `<em>`/`<i>` (100-900). None = peso del regular. */
+  italic_weight?: number | null;
+  /** Peso para `<strong>`/`<b>` (100-900). None = `bold` (700). */
+  bold_weight?: number | null;
 }
 
 export interface ThemeRef {

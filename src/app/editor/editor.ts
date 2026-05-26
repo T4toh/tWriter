@@ -410,6 +410,9 @@ export class Editor implements AfterViewInit, OnDestroy {
       // Restaurar cursor (solo pane 0) si bootstrap encoló un pedido para este
       // path. Va antes del highlight de Ctrl+F: el highlight prevalece sobre la
       // posición guardada cuando el usuario llega via search.
+      // NOTA: NO scrollIntoView — la vista arranca arriba (scrollTop=0 ya seteado).
+      // Si cerrabas con el cursor al final, antes el cap reabría al final.
+      // Ahora cursor preserva posición pero la vista muestra el inicio.
       if (node?.path && this.paneId() === 0) {
         const restore = this.cursorRestore.consume(node.path);
         if (restore && this.tiptap) {
@@ -418,10 +421,12 @@ export class Editor implements AfterViewInit, OnDestroy {
           const pos = Math.max(0, Math.min(restore.pmPos, Math.max(0, docSize - 1)));
           this.tiptap
             .chain()
-            .focus()
+            .focus(undefined, { scrollIntoView: false })
             .setTextSelection({ from: pos, to: pos })
-            .scrollIntoView()
             .run();
+          // Re-asegurar el reset (el focus puede haber gatillado scroll del browser
+          // si el cursor cayó fuera del viewport visible).
+          this.hostRef.nativeElement.scrollTop = 0;
         }
       }
 
