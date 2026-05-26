@@ -6,274 +6,450 @@
       <p class="path">{{ id }}</p>
     </header>
 
+    <nav class="te-tabs">
+      @for (t of tabs; track t.id) {
+        <button
+          type="button"
+          class="te-tab"
+          [class.is-active]="activeTab() === t.id"
+          (click)="activeTab.set(t.id)"
+        >
+          {{ t.label }}
+        </button>
+      }
+    </nav>
+
     @if (form(); as f) {
       <div class="te-body">
-        <div class="row">
-          <label>
-            <span>Nombre</span>
-            <input
-              type="text"
-              [ngModel]="f.nombre"
-              (ngModelChange)="update('nombre', $event)"
-              placeholder="Nombre legible del tema"
-            />
-          </label>
-        </div>
+        <ng-template #fontItemTpl let-opt>
+          <span
+            class="font-item"
+            [style.font-family]="opt.data?.fontFamily ? '\'' + opt.data.fontFamily + '\', serif' : null"
+          >{{ opt.label }}</span>
+        </ng-template>
 
-        <div class="row section-divider">
-          <span class="section-label">Tipografía</span>
-        </div>
-        <div class="row split">
-          <label>
-            <span>Fuente cuerpo</span>
-            <input
-              type="text"
-              [attr.list]="'te-fams-' + id"
-              [ngModel]="f.body_font"
-              (ngModelChange)="update('body_font', $event)"
-              placeholder="Ej: Merriweather"
-            />
-          </label>
-          <label>
-            <span>Tamaño cuerpo</span>
-            <input
-              type="text"
-              [ngModel]="f.body_size"
-              (ngModelChange)="update('body_size', $event)"
-              placeholder="11pt"
-            />
-          </label>
-        </div>
-        <div class="row split">
-          <label>
-            <span>Fuente títulos</span>
-            <input
-              type="text"
-              [attr.list]="'te-fams-' + id"
-              [ngModel]="f.heading_font"
-              (ngModelChange)="update('heading_font', $event)"
-              placeholder="Ej: Lato"
-            />
-          </label>
-          <label>
-            <span>Tamaño títulos</span>
-            <input
-              type="text"
-              [ngModel]="f.heading_size"
-              (ngModelChange)="update('heading_size', $event)"
-              placeholder="2em"
-            />
-          </label>
-        </div>
-        <div class="row split">
-          <label>
-            <span>Line-height</span>
-            <input
-              type="text"
-              [ngModel]="f.line_height"
-              (ngModelChange)="update('line_height', $event)"
-              placeholder="1.6"
-            />
-          </label>
-          <label>
-            <span>Margen de página</span>
-            <input
-              type="text"
-              [ngModel]="f.page_margin"
-              (ngModelChange)="update('page_margin', $event)"
-              placeholder="0.75in"
-            />
-          </label>
-        </div>
+        @switch (activeTab()) {
+          @case ('tipografia') {
+            <div class="te-split">
+              <section class="te-controls">
+                <div class="ctrl-group">
+                  <span class="group-label">Identidad</span>
+                  <div class="row">
+                    <label>
+                      <span>Nombre</span>
+                      <input
+                        type="text"
+                        [ngModel]="f.nombre"
+                        (ngModelChange)="update('nombre', $event)"
+                        placeholder="Nombre legible del tema"
+                      />
+                    </label>
+                  </div>
+                </div>
 
-        <datalist [attr.id]="'te-fams-' + id">
-          @for (fam of availableFamilies(); track fam) {
-            <option [value]="fam"></option>
+                <div class="ctrl-group">
+                  <span class="group-label">Cuerpo</span>
+                  <div class="row split">
+                    <label>
+                      <span>Fuente</span>
+                      <app-select
+                        [groups]="fontGroups()"
+                        [itemTemplate]="fontItemTpl"
+                        [ngModel]="f.body_font"
+                        (ngModelChange)="update('body_font', $event)"
+                        (itemHover)="onFontItemHover($event)"
+                        placeholder="Elegí una fuente del pool"
+                      />
+                    </label>
+                    <label>
+                      <span>Tamaño</span>
+                      <input
+                        type="text"
+                        [ngModel]="f.body_size"
+                        (ngModelChange)="update('body_size', $event)"
+                        placeholder="11pt"
+                      />
+                    </label>
+                  </div>
+                  <div class="row">
+                    <label>
+                      <span>Line-height</span>
+                      <input
+                        type="text"
+                        [ngModel]="f.line_height"
+                        (ngModelChange)="update('line_height', $event)"
+                        placeholder="1.6"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="ctrl-group">
+                  <span class="group-label">Títulos</span>
+                  <div class="row split">
+                    <label>
+                      <span>Fuente</span>
+                      <app-select
+                        [groups]="fontGroups()"
+                        [itemTemplate]="fontItemTpl"
+                        [ngModel]="f.heading_font"
+                        (ngModelChange)="update('heading_font', $event)"
+                        (itemHover)="onFontItemHover($event)"
+                        placeholder="Elegí una fuente del pool"
+                      />
+                    </label>
+                    <label>
+                      <span>Tamaño</span>
+                      <input
+                        type="text"
+                        [ngModel]="f.heading_size"
+                        (ngModelChange)="update('heading_size', $event)"
+                        placeholder="2em"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="ctrl-group">
+                  <span class="group-label">Italic sintético</span>
+                  <p class="hint-soft">
+                    Ángulo vacío = <code>italic</code> default. Peso vacío
+                    hereda del bold (útil cuando la italic se confunde con
+                    la regular — subís bold y la italic también).
+                  </p>
+                  <div class="row split">
+                    <label>
+                      <span>Ángulo (deg)</span>
+                      <input
+                        type="text"
+                        [ngModel]="f.italic_oblique_deg"
+                        (ngModelChange)="update('italic_oblique_deg', $event)"
+                        placeholder="auto · ej: 14"
+                      />
+                    </label>
+                    <label>
+                      <span>Peso (100-900)</span>
+                      <input
+                        type="text"
+                        [ngModel]="f.italic_weight"
+                        (ngModelChange)="update('italic_weight', $event)"
+                        placeholder="auto · hereda bold"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="ctrl-group">
+                  <span class="group-label">Bold sintético</span>
+                  <p class="hint-soft">
+                    Vacío = <code>bold</code> (700). Set también levanta el
+                    italic si éste no tiene peso propio.
+                  </p>
+                  <div class="row">
+                    <label>
+                      <span>Peso (100-900)</span>
+                      <input
+                        type="text"
+                        [ngModel]="f.bold_weight"
+                        (ngModelChange)="update('bold_weight', $event)"
+                        placeholder="auto · ej: 800"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <section class="te-preview">
+                <div class="prev-card">
+                  <h3 class="prev-title">Cuerpo</h3>
+                  <div class="prev-body-block" [attr.style]="previewBodyStyle()">
+                    <p>
+                      La quietud de la noche envolvía el callejón.
+                      <span [attr.style]="previewItalicSpanStyle()">Una palabra en italic</span>,
+                      <span [attr.style]="previewBoldSpanStyle()">otra en bold</span>
+                      y
+                      <span [attr.style]="previewBoldItalicSpanStyle()">
+                        una más en bold + italic
+                      </span>
+                      cierran la cadencia.
+                    </p>
+                    <p>
+                      El segundo párrafo confirma el ritmo de lectura con un
+                      poco más de texto, así se aprecia el line-height.
+                    </p>
+                  </div>
+                </div>
+                <div class="prev-card">
+                  <h3 class="prev-title">Títulos</h3>
+                  <h1 class="prev-heading-sample" [attr.style]="previewHeadingStyle()">
+                    Capítulo I — La hora del lobo
+                  </h1>
+                </div>
+              </section>
+            </div>
           }
-        </datalist>
 
-        <div class="row section-divider">
-          <span class="section-label">Páginas editoriales (opcional)</span>
-        </div>
-        <p class="hint-soft">
-          Fuentes dedicadas para TOC, copyright, dedicatoria, title page y
-          sobre el autor. Si no las setés, esas páginas heredan la fuente
-          cuerpo y la fuente títulos del tema.
-        </p>
-        <div class="row split">
-          <label>
-            <span>Fuente cuerpo editorial</span>
-            <input
-              type="text"
-              [attr.list]="'te-fams-' + id"
-              [ngModel]="f.editorial_body_font"
-              (ngModelChange)="update('editorial_body_font', $event)"
-              placeholder="Ej: Cormorant Garamond"
-            />
-          </label>
-          <label>
-            <span>Fuente títulos editorial</span>
-            <input
-              type="text"
-              [attr.list]="'te-fams-' + id"
-              [ngModel]="f.editorial_heading_font"
-              (ngModelChange)="update('editorial_heading_font', $event)"
-              placeholder="Ej: Playfair Display"
-            />
-          </label>
-        </div>
+          @case ('capitulos') {
+            <div class="te-split">
+              <section class="te-controls">
+                <div class="ctrl-group">
+                  <span class="group-label">Prefijo y título</span>
+                  <div class="row split">
+                    <label>
+                      <span>Prefijo del capítulo</span>
+                      <app-select
+                        [ngModel]="f.prefijo_capitulo"
+                        (ngModelChange)="update('prefijo_capitulo', $event)"
+                        [options]="prefijoCapituloOptions"
+                      />
+                    </label>
+                    <label class="checkbox">
+                      <input
+                        type="checkbox"
+                        [ngModel]="f.mostrar_titulo_capitulo"
+                        (ngModelChange)="update('mostrar_titulo_capitulo', $event)"
+                      />
+                      <span>Mostrar título del capítulo</span>
+                    </label>
+                  </div>
+                  <div class="row">
+                    <label>
+                      <span>Posición del título en página standalone</span>
+                      <app-select
+                        [ngModel]="f.chapter_title_position"
+                        (ngModelChange)="update('chapter_title_position', $event)"
+                        [options]="chapterTitlePositionOptions"
+                      />
+                    </label>
+                  </div>
+                </div>
 
-        <div class="row section-divider">
-          <span class="section-label">Estilo de capítulos</span>
-        </div>
-        <p class="hint-soft">
-          Reglas que se aplican a todos los libros que usen este tema (o lo
-          hereden). Antes vivían en cada novela; ahora son del tema para
-          mantener consistencia entre libros.
-        </p>
-        <div class="row split">
-          <label>
-            <span>Prefijo del capítulo</span>
-            <app-select
-              [ngModel]="f.prefijo_capitulo"
-              (ngModelChange)="update('prefijo_capitulo', $event)"
-              [options]="prefijoCapituloOptions"
-            />
-          </label>
-          <label class="checkbox">
-            <input
-              type="checkbox"
-              [ngModel]="f.mostrar_titulo_capitulo"
-              (ngModelChange)="update('mostrar_titulo_capitulo', $event)"
-            />
-            <span>Mostrar título del capítulo</span>
-          </label>
-        </div>
-        <div class="row">
-          <label class="checkbox">
-            <input
-              type="checkbox"
-              [ngModel]="f.dropcap"
-              (ngModelChange)="update('dropcap', $event)"
-            />
-            <span>Letrina (dropcap) en primer párrafo</span>
-          </label>
-        </div>
-        <div class="row split">
-          <label class="checkbox">
-            <input
-              type="checkbox"
-              [ngModel]="f.mostrar_numero_parte"
-              (ngModelChange)="update('mostrar_numero_parte', $event)"
-            />
-            <span>Mostrar header de parte</span>
-          </label>
-          <label>
-            <span>Formato de parte</span>
-            <app-select
-              [ngModel]="f.formato_parte"
-              (ngModelChange)="update('formato_parte', $event)"
-              [disabled]="!f.mostrar_numero_parte"
-              [options]="formatoParteOptions"
-            />
-          </label>
-        </div>
-        <div class="row split">
-          <label>
-            <span>Tamaño de página (EPUB)</span>
-            <app-select
-              [ngModel]="f.template"
-              (ngModelChange)="update('template', $event)"
-              [options]="templateOptions"
-            />
-          </label>
-          <label>
-            <span>Posición del título de capítulo</span>
-            <app-select
-              [ngModel]="f.chapter_title_position"
-              (ngModelChange)="update('chapter_title_position', $event)"
-              [options]="chapterTitlePositionOptions"
-            />
-          </label>
-        </div>
+                <div class="ctrl-group">
+                  <span class="group-label">Inicio del cuerpo</span>
+                  <div class="row">
+                    <label class="checkbox">
+                      <input
+                        type="checkbox"
+                        [ngModel]="f.dropcap"
+                        (ngModelChange)="update('dropcap', $event)"
+                      />
+                      <span>Letrina (dropcap) en primer párrafo</span>
+                    </label>
+                  </div>
+                </div>
 
-        <div class="row section-divider">
-          <span class="section-label">Faces explícitas (opcional)</span>
-        </div>
-        <p class="hint-soft">
-          Pisa el auto-pick por sufijo del filename. Útil si la italic de la
-          familia es muy sutil — elegí un face más pronunciado
-          (ej: <code>-MediumItalic</code>).
-        </p>
-        <div class="row split">
-          <label>
-            <span>Italic (em / i)</span>
-            <app-select
-              [ngModel]="f.body_font_italic"
-              (ngModelChange)="update('body_font_italic', $event)"
-              [options]="stemSelectOptions()"
-            />
-          </label>
-          <label>
-            <span>Bold (strong / b)</span>
-            <app-select
-              [ngModel]="f.body_font_bold"
-              (ngModelChange)="update('body_font_bold', $event)"
-              [options]="stemSelectOptions()"
-            />
-          </label>
-        </div>
-        <div class="row">
-          <label>
-            <span>Bold + Italic</span>
-            <app-select
-              [ngModel]="f.body_font_bold_italic"
-              (ngModelChange)="update('body_font_bold_italic', $event)"
-              [options]="stemSelectOptions()"
-            />
-          </label>
-        </div>
+                <div class="ctrl-group">
+                  <span class="group-label">Partes</span>
+                  <div class="row split">
+                    <label class="checkbox">
+                      <input
+                        type="checkbox"
+                        [ngModel]="f.mostrar_numero_parte"
+                        (ngModelChange)="update('mostrar_numero_parte', $event)"
+                      />
+                      <span>Mostrar header de parte</span>
+                    </label>
+                    <label>
+                      <span>Formato</span>
+                      <app-select
+                        [ngModel]="f.formato_parte"
+                        (ngModelChange)="update('formato_parte', $event)"
+                        [disabled]="!f.mostrar_numero_parte"
+                        [options]="formatoParteOptions"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </section>
 
-        <div class="row section-divider">
-          <span class="section-label">Preview</span>
-        </div>
-        <div class="preview-box">
-          <p [attr.style]="previewBodyStyle()">
-            La quietud de la noche envolvía el callejón.
-          </p>
-          <p [attr.style]="previewBodyStyle()">
-            Texto normal con
-            <span [attr.style]="previewItalicStyle()">italic</span>,
-            <span [attr.style]="previewBoldStyle()">bold</span>
-            y
-            <span [attr.style]="previewBoldItalicStyle()">bold + italic</span>.
-          </p>
-        </div>
+              <section class="te-preview">
+                <div class="prev-card">
+                  <h3 class="prev-title">Página de capítulo (standalone)</h3>
+                  <p class="prev-hint">
+                    Página entera, sólo el título. Posición según
+                    <code>chapter_title_position</code>.
+                  </p>
+                  <div [class]="chapterTitlePageClass()" class="page-mock--small">
+                    <div class="page-mock-inner ctp-inner">
+                      <div class="ctp-block">
+                        @if (chapterPrefixLabel(); as cp) {
+                          <p class="ctp-prefix" [attr.style]="previewHeadingStyle()">{{ cp }}</p>
+                        }
+                        @if (f.mostrar_titulo_capitulo) {
+                          <h1 class="ctp-title" [attr.style]="previewHeadingStyle()">
+                            Primer Trabajo
+                          </h1>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-        <div class="row section-divider">
-          <span class="section-label">Fuentes disponibles ({{ fonts().length }})</span>
-          <button type="button" class="add-btn" (click)="pickFont()">
-            + Agregar fuente al pool…
-          </button>
-        </div>
-        <p class="hint">
-          El tema toma sus fuentes del pool global del repo. Podés agregar
-          desde acá o arrastrar al árbol → sección <strong>Fuentes</strong>.
-          Para que <code>&lt;strong&gt;</code> y <code>&lt;em&gt;</code>
-          tengan face propio, usá nombres como
-          <code>Merriweather-Bold.ttf</code>,
-          <code>Merriweather-Italic.ttf</code>,
-          <code>Merriweather-BoldItalic.ttf</code>.
-        </p>
-        @if (fonts().length > 0) {
-          <ul class="fonts-list compact">
-            @for (font of fonts(); track font.relative_path) {
-              <li>
-                <span class="font-name" [title]="font.path">{{ font.name }}</span>
-                <span class="meta">{{ formatStyle(font) }}</span>
-              </li>
-            }
-          </ul>
+                <div class="prev-card">
+                  <h3 class="prev-title">Inicio del cuerpo (parte)</h3>
+                  <p class="prev-hint">
+                    Cabecera de cada parte. El header
+                    <code>Parte N</code> aparece si "Mostrar header de parte"
+                    está activo. El título del capítulo no se repite acá — vive
+                    en la página standalone.
+                  </p>
+                  <div class="prev-chapter">
+                    @if (partLabel(); as pl) {
+                      <h2 class="prev-part-label" [attr.style]="previewHeadingStyle()">{{ pl }}</h2>
+                    }
+                    <p [attr.style]="previewBodyStyle()">
+                      @if (f.dropcap) {
+                        <span class="prev-dropcap" [attr.style]="previewHeadingStyle()">A</span>quel
+                      } @else {
+                        Aquel
+                      }
+                      amanecer las calles seguían vacías. El viento empujaba
+                      contra las persianas y los pasos del sereno se perdían
+                      entre los adoquines.
+                    </p>
+                  </div>
+                </div>
+              </section>
+            </div>
+          }
+
+          @case ('editoriales') {
+            <div class="te-split">
+              <section class="te-controls">
+                <div class="ctrl-group">
+                  <span class="group-label">Páginas editoriales</span>
+                  <p class="hint-soft">
+                    Fuentes dedicadas para TOC, copyright, dedicatoria, title
+                    page y sobre el autor. Vacío = hereda cuerpo y títulos.
+                  </p>
+                  <div class="row">
+                    <label>
+                      <span>Fuente cuerpo</span>
+                      <app-select
+                        [groups]="fontGroups()"
+                        [itemTemplate]="fontItemTpl"
+                        [ngModel]="f.editorial_body_font"
+                        (ngModelChange)="update('editorial_body_font', $event)"
+                        (itemHover)="onFontItemHover($event)"
+                        placeholder="Hereda cuerpo"
+                      />
+                    </label>
+                  </div>
+                  <div class="row">
+                    <label>
+                      <span>Fuente títulos</span>
+                      <app-select
+                        [groups]="fontGroups()"
+                        [itemTemplate]="fontItemTpl"
+                        [ngModel]="f.editorial_heading_font"
+                        (ngModelChange)="update('editorial_heading_font', $event)"
+                        (itemHover)="onFontItemHover($event)"
+                        placeholder="Hereda títulos"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <section class="te-preview">
+                <div class="prev-card">
+                  <h3 class="prev-title">Páginas editoriales</h3>
+                  <div class="prev-editorial">
+                    <h1 [attr.style]="previewEditorialHeadingStyle()">Dedicatoria</h1>
+                    <p [attr.style]="previewEditorialBodyStyle()">
+                      <em>Para los que escriben de noche.</em>
+                    </p>
+                    <h1 [attr.style]="previewEditorialHeadingStyle()">Índice</h1>
+                    <ul class="prev-toc" [attr.style]="previewEditorialBodyStyle()">
+                      <li>1 · La hora del lobo</li>
+                      <li>2 · El callejón sin nombre</li>
+                      <li>3 · Adelantos del cielo</li>
+                    </ul>
+                  </div>
+                </div>
+              </section>
+            </div>
+          }
+
+          @case ('pagina') {
+            <div class="te-split">
+              <section class="te-controls">
+                <div class="ctrl-group">
+                  <span class="group-label">Tamaño y márgenes</span>
+                  <div class="row split">
+                    <label>
+                      <span>Tamaño de página (EPUB)</span>
+                      <app-select
+                        [ngModel]="f.template"
+                        (ngModelChange)="update('template', $event)"
+                        [options]="templateOptions"
+                      />
+                    </label>
+                    <label>
+                      <span>Margen de página</span>
+                      <input
+                        type="text"
+                        [ngModel]="f.page_margin"
+                        (ngModelChange)="update('page_margin', $event)"
+                        placeholder="0.75in"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <section class="te-preview">
+                <div class="prev-card">
+                  <h3 class="prev-title">Página EPUB ({{ f.template || '6×9' }})</h3>
+                  <div [class]="pageMockClass()">
+                    <div class="page-mock-inner" [attr.style]="previewBodyStyle()">
+                      <h1 class="page-mock-h1" [attr.style]="previewHeadingStyle()">
+                        Capítulo 1
+                      </h1>
+                      <p>
+                        El primer párrafo de la novela siempre carga la tensión
+                        del libro entero. Acá se previsualiza el aspecto que va
+                        a tener en el EPUB final.
+                      </p>
+                      <p>
+                        El segundo párrafo confirma el ritmo y el espaciado
+                        entre líneas según la configuración del tema.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          }
+
+          @case ('fuentes') {
+            <section class="te-pool">
+              <div class="te-pool-header">
+                <span class="group-label">Pool de fuentes ({{ pool().length }})</span>
+                <button type="button" class="add-btn" (click)="pickFont()">
+                  + Agregar al pool…
+                </button>
+              </div>
+              <p class="hint">
+                El tema toma sus fuentes del pool global del repo. Cada nombre
+                se renderiza en su propia tipografía. Sólo necesitás la
+                Regular — italic/bold se sintetizan.
+              </p>
+              @if (pool().length > 0) {
+                <cdk-virtual-scroll-viewport itemSize="36" class="te-pool-vp">
+                  <div
+                    *cdkVirtualFor="let item of pool(); trackBy: trackByPath"
+                    class="te-pool-item"
+                  >
+                    <span class="te-pool-name" [style.fontFamily]="item.family">
+                      {{ item.entry.name }}
+                    </span>
+                    <span class="te-pool-meta">{{ item.label }}</span>
+                  </div>
+                </cdk-virtual-scroll-viewport>
+              }
+            </section>
+          }
         }
 
         @if (error(); as err) {

@@ -8,7 +8,7 @@ const FONT_EXTS: &[&str] = &["ttf", "otf", "woff", "woff2"];
 /// Tema reutilizable. Vive en `<root>/themes/<id>/theme.json`. Todos los
 /// campos visuales son opcionales para permitir overrides parciales desde
 /// `saga.json` y `book.json`.
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct Theme {
     /// Identificador (slug). Útil al deserializar para round-trip; el dir
     /// es la fuente de verdad.
@@ -82,11 +82,25 @@ pub struct Theme {
     /// Tamaño de página EPUB: `6x9` | `5x8` | `a5`. Default: `6x9`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub template: Option<String>,
+    /// Ángulo en grados para la oblique sintética de `<em>`/`<i>`. Si está set,
+    /// el CSS del EPUB emite `font-style: oblique Ndeg` en vez del default
+    /// `font-style: italic`. Útil para fuentes donde la italic estándar se ve
+    /// muy poco. Rango razonable: 8-20deg.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub italic_oblique_deg: Option<f32>,
+    /// Peso numérico para `<em>`/`<i>` (100-900). None = peso del regular. Útil
+    /// si querés italic más fuerte que la regular pero sin ser bold.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub italic_weight: Option<u32>,
+    /// Peso numérico para `<strong>`/`<b>` (100-900). Si está set, el CSS del
+    /// EPUB emite `font-weight: N` en vez del default `font-weight: bold` (700).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bold_weight: Option<u32>,
 }
 
 /// Referencia a un tema en saga.json/book.json. `base` es el id del tema,
 /// `overrides` los campos que se sobreescriben sobre el base.
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct ThemeRef {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base: Option<String>,
@@ -105,13 +119,6 @@ pub struct ResolvedTheme {
     pub line_height: Option<String>,
     pub page_margin: Option<String>,
     pub fonts: Vec<FontEmbed>,
-    /// Familia CSS para `<em>`/`<i>` cuando el slot está set y se encontró el
-    /// archivo. None = cae al auto-detect del body_font.
-    pub body_italic_family: Option<String>,
-    /// Familia CSS para `<strong>`/`<b>`.
-    pub body_bold_family: Option<String>,
-    /// Familia CSS para combinaciones bold+italic.
-    pub body_bold_italic_family: Option<String>,
     /// Familia CSS para texto de páginas editoriales. None = sin override.
     pub editorial_body_font: Option<String>,
     /// Familia CSS para títulos de páginas editoriales. None = sin override.
@@ -131,6 +138,12 @@ pub struct ResolvedTheme {
     pub formato_parte: Option<String>,
     /// Tamaño de página EPUB (`6x9`/`5x8`/`a5`). None = `6x9`.
     pub template: Option<String>,
+    /// Ángulo de la oblique sintética para `em`/`i`. None = `font-style: italic` (default UA).
+    pub italic_oblique_deg: Option<f32>,
+    /// Peso numérico para `em`/`i`. None = peso del regular.
+    pub italic_weight: Option<u32>,
+    /// Peso numérico para `strong`/`b`. None = `font-weight: bold` (700).
+    pub bold_weight: Option<u32>,
 }
 
 impl ResolvedTheme {
@@ -145,9 +158,6 @@ impl ResolvedTheme {
             && self.line_height.is_none()
             && self.page_margin.is_none()
             && self.fonts.is_empty()
-            && self.body_italic_family.is_none()
-            && self.body_bold_family.is_none()
-            && self.body_bold_italic_family.is_none()
             && self.editorial_body_font.is_none()
             && self.editorial_heading_font.is_none()
             && self.chapter_title_position.is_none()
@@ -208,23 +218,6 @@ pub fn parse_face_suffix(stem: &str) -> (String, u32, &'static str) {
         }
     }
     (stem.to_string(), 400, "normal")
-}
-
-/// Sanea un nombre de familia para usarlo como CSS `font-family`. Permite
-/// alfanuméricos, `-`, `_`. El resto se reemplaza por `-`.
-pub fn sanitize_family(family: &str) -> String {
-    family
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-                c
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>()
-        .trim_matches('-')
-        .to_string()
 }
 
 fn scan_fonts(dir: &Path) -> Vec<(String, u32, &'static str, PathBuf)> {
@@ -290,42 +283,6 @@ pub fn collect_faces(family: &str, dirs: &[&Path]) -> Vec<FontEmbed> {
     Vec::new()
 }
 
-/// Busca un archivo de fuente por filename stem (case-insensitive) en `dirs`
-/// en orden. Devuelve `(abs_path, ext)` del primer match.
-pub fn locate_face_by_stem(stem: &str, dirs: &[&Path]) -> Option<(PathBuf, String)> {
-    let target = stem.to_ascii_lowercase();
-    for dir in dirs {
-        if !dir.is_dir() {
-            continue;
-        }
-        let Ok(entries) = fs::read_dir(dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if !path.is_file() {
-                continue;
-            }
-            let ext = match path.extension().and_then(|e| e.to_str()) {
-                Some(e) => e.to_string(),
-                None => continue,
-            };
-            if !is_font_ext(&ext) {
-                continue;
-            }
-            let stem_match = path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .map(|s| s.to_ascii_lowercase() == target)
-                .unwrap_or(false);
-            if stem_match {
-                return Some((path, ext));
-            }
-        }
-    }
-    None
-}
-
 fn read_theme_ref(json_path: &Path) -> Option<ThemeRef> {
     let raw = fs::read_to_string(json_path).ok()?;
     let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
@@ -358,15 +315,6 @@ fn merge_overrides(base: &mut Theme, ov: &Theme) {
     if ov.page_margin.is_some() {
         base.page_margin = ov.page_margin.clone();
     }
-    if ov.body_font_italic.is_some() {
-        base.body_font_italic = ov.body_font_italic.clone();
-    }
-    if ov.body_font_bold.is_some() {
-        base.body_font_bold = ov.body_font_bold.clone();
-    }
-    if ov.body_font_bold_italic.is_some() {
-        base.body_font_bold_italic = ov.body_font_bold_italic.clone();
-    }
     if ov.editorial_body_font.is_some() {
         base.editorial_body_font = ov.editorial_body_font.clone();
     }
@@ -393,6 +341,15 @@ fn merge_overrides(base: &mut Theme, ov: &Theme) {
     }
     if ov.template.is_some() {
         base.template = ov.template.clone();
+    }
+    if ov.italic_oblique_deg.is_some() {
+        base.italic_oblique_deg = ov.italic_oblique_deg;
+    }
+    if ov.italic_weight.is_some() {
+        base.italic_weight = ov.italic_weight;
+    }
+    if ov.bold_weight.is_some() {
+        base.bold_weight = ov.bold_weight;
     }
 }
 
@@ -551,7 +508,6 @@ pub fn resolve_theme(
 
     let mut fonts: Vec<FontEmbed> = Vec::new();
     let mut seen_families: BTreeSet<String> = BTreeSet::new();
-    let mut seen_filenames: BTreeSet<String> = BTreeSet::new();
 
     for family_opt in [
         &theme.body_font,
@@ -574,63 +530,7 @@ pub fn resolve_theme(
             tracing::warn!(target: "theme", family = %fam, "fuente no encontrada en book/saga/root/theme fonts/");
             continue;
         }
-        for face in faces {
-            seen_filenames.insert(face.filename.to_ascii_lowercase());
-            fonts.push(face);
-        }
-    }
-
-    // Per-style slots: cada uno apunta a un filename stem específico. Si el
-    // archivo se encuentra, embeber con family = sanitized stem y weight/style
-    // forzados al slot (independiente del sufijo del filename real).
-    let per_style_slots: [(Option<&String>, u32, &'static str); 3] = [
-        (theme.body_font_italic.as_ref(), 400, "italic"),
-        (theme.body_font_bold.as_ref(), 700, "normal"),
-        (theme.body_font_bold_italic.as_ref(), 700, "italic"),
-    ];
-
-    let mut italic_family: Option<String> = None;
-    let mut bold_family: Option<String> = None;
-    let mut bold_italic_family: Option<String> = None;
-
-    for (idx, (stem_opt, weight, style)) in per_style_slots.iter().enumerate() {
-        let Some(stem) = stem_opt
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-        else {
-            continue;
-        };
-        let Some((abs_path, ext)) = locate_face_by_stem(stem, &dir_refs) else {
-            tracing::warn!(target: "theme", face = %stem, "face per-style no encontrada en book/saga/root/theme fonts/");
-            continue;
-        };
-        let Some(media_type) = font_media_type(&ext).map(|s| s.to_string()) else {
-            continue;
-        };
-        let Some(filename) = abs_path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .map(|s| s.to_string())
-        else {
-            continue;
-        };
-        let family = sanitize_family(stem);
-        match idx {
-            0 => italic_family = Some(family.clone()),
-            1 => bold_family = Some(family.clone()),
-            2 => bold_italic_family = Some(family.clone()),
-            _ => unreachable!(),
-        }
-        if seen_filenames.insert(filename.to_ascii_lowercase()) {
-            fonts.push(FontEmbed {
-                family,
-                weight: *weight,
-                style: style.to_string(),
-                filename,
-                abs_path,
-                media_type,
-            });
-        }
+        fonts.extend(faces);
     }
 
     ResolvedTheme {
@@ -641,9 +541,6 @@ pub fn resolve_theme(
         line_height: theme.line_height,
         page_margin: theme.page_margin,
         fonts,
-        body_italic_family: italic_family,
-        body_bold_family: bold_family,
-        body_bold_italic_family: bold_italic_family,
         editorial_body_font: theme.editorial_body_font,
         editorial_heading_font: theme.editorial_heading_font,
         chapter_title_position: theme.chapter_title_position,
@@ -653,6 +550,9 @@ pub fn resolve_theme(
         mostrar_numero_parte: theme.mostrar_numero_parte,
         formato_parte: theme.formato_parte,
         template: theme.template,
+        italic_oblique_deg: theme.italic_oblique_deg,
+        italic_weight: theme.italic_weight,
+        bold_weight: theme.bold_weight,
     }
 }
 
@@ -734,13 +634,6 @@ mod tests {
             parse_face_suffix("Source-Sans-Pro-Bold"),
             ("Source-Sans-Pro".to_string(), 700, "normal")
         );
-    }
-
-    #[test]
-    fn sanitize_family_strips_weird_chars() {
-        assert_eq!(sanitize_family("Merriweather"), "Merriweather");
-        assert_eq!(sanitize_family("Source Sans Pro"), "Source-Sans-Pro");
-        assert_eq!(sanitize_family("Foo!@Bar"), "Foo--Bar");
     }
 
     #[test]
@@ -881,140 +774,6 @@ mod tests {
         // El libro gana: solo Bold (1 archivo).
         assert_eq!(resolved.fonts.len(), 1);
         assert_eq!(resolved.fonts[0].weight, 700);
-    }
-
-    #[test]
-    fn resolve_theme_per_style_picks_explicit_face() {
-        let tmp = tempdir();
-        let theme_fonts = tmp.join("themes").join("classic").join("fonts");
-        fs::create_dir_all(&theme_fonts).unwrap();
-        // Familia base con Italic auto.
-        fs::write(theme_fonts.join("IBMPlexSans-Regular.ttf"), b"").unwrap();
-        fs::write(theme_fonts.join("IBMPlexSans-Italic.ttf"), b"").unwrap();
-        fs::write(theme_fonts.join("IBMPlexSans-Bold.ttf"), b"").unwrap();
-        // Face explícito para italic más pronunciado.
-        fs::write(theme_fonts.join("IBMPlexSans-MediumItalic.ttf"), b"").unwrap();
-        fs::write(
-            tmp.join("themes").join("classic").join("theme.json"),
-            r#"{"id":"classic","body_font":"IBMPlexSans","body_font_italic":"IBMPlexSans-MediumItalic"}"#,
-        )
-        .unwrap();
-        let book = tmp.join("book");
-        fs::create_dir_all(&book).unwrap();
-        fs::write(
-            book.join("book.json"),
-            r#"{"titulo":"B","theme":{"base":"classic"}}"#,
-        )
-        .unwrap();
-
-        let resolved = resolve_theme(&book, None, &tmp);
-        assert_eq!(
-            resolved.body_italic_family.as_deref(),
-            Some("IBMPlexSans-MediumItalic")
-        );
-        // FontEmbed del face explícito está, con weight=400 style=italic.
-        let medium = resolved
-            .fonts
-            .iter()
-            .find(|f| f.filename == "IBMPlexSans-MediumItalic.ttf")
-            .expect("medium italic embebido");
-        assert_eq!(medium.weight, 400);
-        assert_eq!(medium.style, "italic");
-        // El family CSS es el sanitized stem, no la familia base.
-        assert_eq!(medium.family, "IBMPlexSans-MediumItalic");
-    }
-
-    #[test]
-    fn resolve_theme_per_style_missing_stem_logs_falls_back() {
-        let tmp = tempdir();
-        let theme_fonts = tmp.join("themes").join("classic").join("fonts");
-        fs::create_dir_all(&theme_fonts).unwrap();
-        fs::write(theme_fonts.join("IBMPlexSans-Regular.ttf"), b"").unwrap();
-        fs::write(
-            tmp.join("themes").join("classic").join("theme.json"),
-            r#"{"id":"classic","body_font":"IBMPlexSans","body_font_italic":"NotExists"}"#,
-        )
-        .unwrap();
-        let book = tmp.join("book");
-        fs::create_dir_all(&book).unwrap();
-        fs::write(
-            book.join("book.json"),
-            r#"{"titulo":"B","theme":{"base":"classic"}}"#,
-        )
-        .unwrap();
-
-        let resolved = resolve_theme(&book, None, &tmp);
-        assert!(resolved.body_italic_family.is_none());
-        // El body_font_italic original se mantiene en el theme — no en
-        // ResolvedTheme. ResolvedTheme.body_italic_family queda None y CSS
-        // cae al auto-detect normal.
-    }
-
-    #[test]
-    fn resolve_theme_per_style_book_can_override_saga() {
-        let tmp = tempdir();
-        let theme_fonts = tmp.join("themes").join("classic").join("fonts");
-        fs::create_dir_all(&theme_fonts).unwrap();
-        fs::write(theme_fonts.join("Plex-Regular.ttf"), b"").unwrap();
-        fs::write(theme_fonts.join("Plex-Italic.ttf"), b"").unwrap();
-        fs::write(theme_fonts.join("Plex-MediumItalic.ttf"), b"").unwrap();
-        fs::write(
-            tmp.join("themes").join("classic").join("theme.json"),
-            r#"{"id":"classic","body_font":"Plex"}"#,
-        )
-        .unwrap();
-        let saga = tmp.join("Saga");
-        let book = saga.join("Book");
-        fs::create_dir_all(&book).unwrap();
-        fs::write(
-            saga.join("saga.json"),
-            r#"{"nombre":"S","theme":{"base":"classic","overrides":{"body_font_italic":"Plex-Italic"}}}"#,
-        )
-        .unwrap();
-        fs::write(
-            book.join("book.json"),
-            r#"{"titulo":"B","theme":{"overrides":{"body_font_italic":"Plex-MediumItalic"}}}"#,
-        )
-        .unwrap();
-
-        let resolved = resolve_theme(&book, Some(&saga), &tmp);
-        assert_eq!(
-            resolved.body_italic_family.as_deref(),
-            Some("Plex-MediumItalic")
-        );
-    }
-
-    #[test]
-    fn locate_face_by_stem_finds_in_search_order() {
-        let tmp = tempdir();
-        let theme_fonts = tmp.join("theme").join("fonts");
-        let saga_fonts = tmp.join("saga").join("fonts");
-        let book_fonts = tmp.join("book").join("fonts");
-        fs::create_dir_all(&theme_fonts).unwrap();
-        fs::create_dir_all(&saga_fonts).unwrap();
-        fs::create_dir_all(&book_fonts).unwrap();
-        fs::write(theme_fonts.join("Foo-Bold.ttf"), b"theme").unwrap();
-        fs::write(saga_fonts.join("Foo-Bold.ttf"), b"saga").unwrap();
-        fs::write(book_fonts.join("Foo-Bold.ttf"), b"book").unwrap();
-
-        let dirs: Vec<&Path> = vec![&book_fonts, &saga_fonts, &theme_fonts];
-        let (path, ext) = locate_face_by_stem("Foo-Bold", &dirs).unwrap();
-        // Book wins.
-        let bytes = fs::read(&path).unwrap();
-        assert_eq!(bytes, b"book");
-        assert_eq!(ext, "ttf");
-    }
-
-    #[test]
-    fn locate_face_by_stem_case_insensitive() {
-        let tmp = tempdir();
-        let dir = tmp.join("fonts");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("FooBar-Bold.ttf"), b"x").unwrap();
-        let dirs: Vec<&Path> = vec![&dir];
-        assert!(locate_face_by_stem("foobar-bold", &dirs).is_some());
-        assert!(locate_face_by_stem("FOOBAR-BOLD", &dirs).is_some());
-        assert!(locate_face_by_stem("nope", &dirs).is_none());
     }
 
     #[test]

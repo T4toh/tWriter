@@ -252,34 +252,6 @@
             </div>
             <div class="row split">
               <label>
-                <span>Italic face (em / i)</span>
-                <app-select
-                  [ngModel]="ovBodyFontItalic()"
-                  (ngModelChange)="ovBodyFontItalic.set($event)"
-                  [options]="italicFaceOptions()"
-                />
-              </label>
-              <label>
-                <span>Bold face (strong / b)</span>
-                <app-select
-                  [ngModel]="ovBodyFontBold()"
-                  (ngModelChange)="ovBodyFontBold.set($event)"
-                  [options]="boldFaceOptions()"
-                />
-              </label>
-            </div>
-            <div class="row">
-              <label>
-                <span>Bold + Italic face</span>
-                <app-select
-                  [ngModel]="ovBodyFontBoldItalic()"
-                  (ngModelChange)="ovBodyFontBoldItalic.set($event)"
-                  [options]="boldItalicFaceOptions()"
-                />
-              </label>
-            </div>
-            <div class="row split">
-              <label>
                 <span>Fuente cuerpo editorial</span>
                 <input
                   type="text"

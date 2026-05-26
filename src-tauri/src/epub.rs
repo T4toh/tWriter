@@ -185,52 +185,40 @@ fn build_theme_rules_block(theme: &ResolvedTheme) -> String {
         out.push_str("}\n");
     }
 
-    // Per-style overrides para body. Cada slot tiene su propio face dedicado
-    // que pisa el auto-pick de la familia base. Útil cuando la italic auto
-    // de la familia es muy sutil (e.g. usar IBMPlexSans-MediumItalic en vez
-    // de IBMPlexSans-Italic).
-    let body_fallback = body_family.unwrap_or("");
-    if let Some(fam) = theme.body_italic_family.as_deref() {
+    // Italic/bold se sintetizan en el reader desde la regular embebida. Por
+    // default no emitimos overrides CSS — el UA stylesheet del reader aplica
+    // `font-style: italic` y `font-weight: bold` a `<em>`/`<strong>`. Si el
+    // tema tiene tunings explícitos (oblique angle / bold weight), emitimos
+    // overrides puntuales solo para esas propiedades.
+    // Italic weight cascade: italic_weight gana; si vacío, hereda bold_weight
+    // (con bold_weight bumped, italic también queda bumped — el caso clásico
+    // de "esta fuente la italic se confunde con la regular").
+    let italic_w = theme
+        .italic_weight
+        .or(theme.bold_weight)
+        .map(|w| w.clamp(100, 900));
+    if theme.italic_oblique_deg.is_some() || italic_w.is_some() {
         out.push_str("em, i {\n");
-        if !body_fallback.is_empty() {
-            out.push_str(&format!(
-                "  font-family: \"{}\", \"{}\", serif;\n",
-                fam, body_fallback
-            ));
-        } else {
-            out.push_str(&format!("  font-family: \"{}\", serif;\n", fam));
+        if let Some(deg) = theme.italic_oblique_deg {
+            out.push_str(&format!("  font-style: oblique {:.1}deg;\n", deg));
         }
-        out.push_str("  font-style: italic;\n");
+        if let Some(w) = italic_w {
+            out.push_str(&format!("  font-weight: {};\n", w));
+        }
         out.push_str("}\n");
     }
-    if let Some(fam) = theme.body_bold_family.as_deref() {
-        out.push_str("strong, b {\n");
-        if !body_fallback.is_empty() {
-            out.push_str(&format!(
-                "  font-family: \"{}\", \"{}\", serif;\n",
-                fam, body_fallback
-            ));
-        } else {
-            out.push_str(&format!("  font-family: \"{}\", serif;\n", fam));
-        }
-        out.push_str("  font-weight: bold;\n");
-        out.push_str("}\n");
-    }
-    if let Some(fam) = theme.body_bold_italic_family.as_deref() {
-        out.push_str(
-            "strong em, strong i, em strong, em b, b em, b i, i strong, i b {\n",
-        );
-        if !body_fallback.is_empty() {
-            out.push_str(&format!(
-                "  font-family: \"{}\", \"{}\", serif;\n",
-                fam, body_fallback
-            ));
-        } else {
-            out.push_str(&format!("  font-family: \"{}\", serif;\n", fam));
-        }
-        out.push_str("  font-weight: bold;\n");
-        out.push_str("  font-style: italic;\n");
-        out.push_str("}\n");
+    if let Some(w) = theme.bold_weight {
+        let w = w.clamp(100, 900);
+        out.push_str(&format!(
+            "strong, b {{\n  font-weight: {};\n}}\n",
+            w
+        ));
+        // Combo bold+italic: bold_weight gana sobre italic_weight para que
+        // <strong><em> se vea bold sin importar el orden de anidamiento.
+        out.push_str(&format!(
+            "strong em, strong i, em strong, em b, b em, b i, i strong, i b {{\n  font-weight: {};\n}}\n",
+            w
+        ));
     }
 
     // Posición vertical del título de capítulo: solo `top` y `bottom` emiten
@@ -1664,9 +1652,6 @@ mod tests {
             heading_size: Some("2em".into()),
             line_height: Some("1.6".into()),
             page_margin: Some("0.5in".into()),
-            body_italic_family: None,
-            body_bold_family: None,
-            body_bold_italic_family: None,
             editorial_body_font: None,
             editorial_heading_font: None,
             chapter_title_position: None,
@@ -1676,6 +1661,9 @@ mod tests {
             mostrar_numero_parte: None,
             formato_parte: None,
             template: None,
+            italic_oblique_deg: None,
+            italic_weight: None,
+            bold_weight: None,
             fonts: vec![
                 FontEmbed {
                     family: "Merriweather".into(),
@@ -1725,44 +1713,64 @@ mod tests {
     }
 
     #[test]
-    fn theme_rules_emit_per_style_overrides() {
-        let resolved = ResolvedTheme {
-            body_font: Some("IBMPlexSans".into()),
-            body_italic_family: Some("IBMPlexSans-MediumItalic".into()),
-            body_bold_family: Some("IBMPlexSans-Bold".into()),
-            body_bold_italic_family: Some("IBMPlexSans-BoldItalic".into()),
-            ..Default::default()
-        };
-        let block = build_theme_rules_block(&resolved);
-        // em rule.
-        assert!(block.contains("em, i {"));
-        assert!(block.contains(
-            "font-family: \"IBMPlexSans-MediumItalic\", \"IBMPlexSans\", serif;"
-        ));
-        assert!(block.contains("font-style: italic;"));
-        // strong rule.
-        assert!(block.contains("strong, b {"));
-        assert!(block.contains(
-            "font-family: \"IBMPlexSans-Bold\", \"IBMPlexSans\", serif;"
-        ));
-        assert!(block.contains("font-weight: bold;"));
-        // bold-italic rule.
-        assert!(block.contains("strong em, strong i, em strong"));
-        assert!(block.contains(
-            "font-family: \"IBMPlexSans-BoldItalic\", \"IBMPlexSans\", serif;"
-        ));
-    }
-
-    #[test]
-    fn theme_rules_no_per_style_when_unset() {
+    fn theme_rules_never_emit_em_or_strong_overrides() {
+        // Italic/bold se sintetizan en el reader. El CSS del tema nunca debe
+        // emitir reglas para `em`/`strong` que pisen la familia base.
         let resolved = ResolvedTheme {
             body_font: Some("Merriweather".into()),
             ..Default::default()
         };
         let block = build_theme_rules_block(&resolved);
-        // Sin slots per-style: no aparecen las reglas em/strong.
         assert!(!block.contains("em, i {"));
         assert!(!block.contains("strong, b {"));
+        assert!(!block.contains("strong em"));
+    }
+
+    #[test]
+    fn theme_rules_emit_em_block_when_oblique_set() {
+        let resolved = ResolvedTheme {
+            italic_oblique_deg: Some(14.0),
+            ..Default::default()
+        };
+        let block = build_theme_rules_block(&resolved);
+        assert!(block.contains("em, i {"));
+        assert!(block.contains("font-style: oblique 14.0deg;"));
+        assert!(!block.contains("strong, b {"));
+    }
+
+    #[test]
+    fn theme_rules_italic_weight_falls_back_to_bold_weight() {
+        // bold_weight set, italic_weight None: el bloque em hereda el bold_weight.
+        let resolved = ResolvedTheme {
+            bold_weight: Some(800),
+            ..Default::default()
+        };
+        let block = build_theme_rules_block(&resolved);
+        assert!(block.contains("em, i {"));
+        assert!(block.contains("font-weight: 800;"));
+        assert!(block.contains("strong, b {"));
+        // Combo bold+italic emite con bold_weight.
+        assert!(block.contains("strong em, strong i, em strong"));
+    }
+
+    #[test]
+    fn theme_rules_italic_weight_overrides_bold_weight() {
+        let resolved = ResolvedTheme {
+            italic_weight: Some(500),
+            bold_weight: Some(800),
+            ..Default::default()
+        };
+        let block = build_theme_rules_block(&resolved);
+        // em usa italic_weight (500).
+        let em_idx = block.find("em, i {").unwrap();
+        let em_end = block[em_idx..].find('}').unwrap() + em_idx;
+        let em_block = &block[em_idx..em_end];
+        assert!(em_block.contains("font-weight: 500;"));
+        // Combo usa bold_weight (800).
+        let combo_idx = block.find("strong em").unwrap();
+        let combo_end = block[combo_idx..].find('}').unwrap() + combo_idx;
+        let combo_block = &block[combo_idx..combo_end];
+        assert!(combo_block.contains("font-weight: 800;"));
     }
 
     #[test]
@@ -1890,45 +1898,6 @@ mod tests {
         // Activa "Publisher Font" en Apple Books / Kindle KFX.
         assert!(opf.contains("ibooks:specified-fonts"));
         assert!(opf.contains("vocabulary.itunes.apple.com"));
-    }
-
-    #[test]
-    fn export_impl_with_per_style_face_embeds_explicit_italic() {
-        let tmp = tempdir();
-        let theme_fonts = tmp.join("themes").join("classic").join("fonts");
-        std::fs::create_dir_all(&theme_fonts).unwrap();
-        std::fs::write(theme_fonts.join("Plex-Regular.ttf"), b"REGULAR").unwrap();
-        std::fs::write(theme_fonts.join("Plex-Italic.ttf"), b"ITALIC_AUTO").unwrap();
-        std::fs::write(theme_fonts.join("Plex-MediumItalic.ttf"), b"MEDIUM_ITALIC").unwrap();
-        std::fs::write(
-            tmp.join("themes").join("classic").join("theme.json"),
-            r#"{"id":"classic","body_font":"Plex","body_font_italic":"Plex-MediumItalic"}"#,
-        )
-        .unwrap();
-        let book = tmp.join("Book");
-        std::fs::create_dir_all(book.join("Cap1")).unwrap();
-        std::fs::write(
-            book.join("book.json"),
-            r#"{"titulo":"X","theme":{"base":"classic"}}"#,
-        )
-        .unwrap();
-        std::fs::write(book.join("Cap1").join("1.html"), "<p>Hi.</p>").unwrap();
-
-        let result = export_impl(book.to_str().unwrap()).unwrap();
-        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
-        // Auto-detect (Plex-Regular y Plex-Italic) + explicit (Plex-MediumItalic).
-        assert!(entries.contains_key("OEBPS/fonts/Plex-Regular.ttf"));
-        assert!(entries.contains_key("OEBPS/fonts/Plex-Italic.ttf"));
-        assert!(entries.contains_key("OEBPS/fonts/Plex-MediumItalic.ttf"));
-        let css = String::from_utf8(entries.get("OEBPS/style.css").unwrap().clone()).unwrap();
-        // @font-face de Medium Italic con style italic.
-        assert!(css.contains("font-family: \"Plex-MediumItalic\""));
-        assert!(css.contains("src: url(\"fonts/Plex-MediumItalic.ttf\")"));
-        // Override CSS rule.
-        assert!(css.contains("em, i {"));
-        assert!(css.contains(
-            "font-family: \"Plex-MediumItalic\", \"Plex\", serif;"
-        ));
     }
 
     #[test]

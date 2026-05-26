@@ -90,8 +90,6 @@ export class Tree implements OnDestroy {
   protected readonly rootFontsExpanded = signal<boolean>(false);
   /** Familias en uso por algún tema/saga/libro (lowercase). */
   private readonly usedFamilies = signal<Set<string>>(new Set());
-  /** Stems en uso (lowercase). */
-  private readonly usedStems = signal<Set<string>>(new Set());
   /** Cantidad de fuentes del root pool sin uso conocido. */
   protected readonly unusedRootFontsCount = computed(() => {
     return this.getRootFonts().filter((f) => !this.isFontUsed(f)).length;
@@ -458,12 +456,11 @@ export class Tree implements OnDestroy {
     try {
       const [, usage] = await Promise.all([
         this.fonts.refresh(path),
-        invoke<{ families: string[]; stems: string[] }>('list_font_usage', {
+        invoke<{ families: string[] }>('list_font_usage', {
           rootPath: path,
         }),
       ]);
       this.usedFamilies.set(new Set(usage.families.map((s) => s.toLowerCase())));
-      this.usedStems.set(new Set(usage.stems.map((s) => s.toLowerCase())));
       this.fontsLoaded.update((s) => new Set([...s, path]));
     } catch (e) {
       this.toast.error(`No se pudieron cargar fuentes: ${e}`);
@@ -471,11 +468,7 @@ export class Tree implements OnDestroy {
   }
 
   protected isFontUsed(entry: FontEntry): boolean {
-    const fams = this.usedFamilies();
-    const stems = this.usedStems();
-    if (fams.has(entry.family.toLowerCase())) return true;
-    const stem = entry.name.replace(/\.[^.]+$/, '').toLowerCase();
-    return stems.has(stem);
+    return this.usedFamilies().has(entry.family.toLowerCase());
   }
 
   protected async cleanupUnusedFonts(event: Event): Promise<void> {
