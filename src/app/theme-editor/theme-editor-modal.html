@@ -272,9 +272,6 @@
                   <div [class]="chapterTitlePageClass()" class="page-mock--small">
                     <div class="page-mock-inner ctp-inner">
                       <div class="ctp-block">
-                        @if (partLabel(); as pl) {
-                          <p class="ctp-part" [attr.style]="previewHeadingStyle()">{{ pl }}</p>
-                        }
                         @if (chapterPrefixLabel(); as cp) {
                           <p class="ctp-prefix" [attr.style]="previewHeadingStyle()">{{ cp }}</p>
                         }
@@ -289,12 +286,16 @@
                 </div>
 
                 <div class="prev-card">
-                  <h3 class="prev-title">Inicio del cuerpo</h3>
+                  <h3 class="prev-title">Inicio del cuerpo (parte)</h3>
+                  <p class="prev-hint">
+                    Cabecera de cada parte. El header
+                    <code>Parte N</code> aparece si "Mostrar header de parte"
+                    está activo. El título del capítulo no se repite acá — vive
+                    en la página standalone.
+                  </p>
                   <div class="prev-chapter">
-                    @if (f.mostrar_titulo_capitulo) {
-                      <h1 class="prev-chapter-title" [attr.style]="previewHeadingStyle()">
-                        Primer Trabajo
-                      </h1>
+                    @if (partLabel(); as pl) {
+                      <h2 class="prev-part-label" [attr.style]="previewHeadingStyle()">{{ pl }}</h2>
                     }
                     <p [attr.style]="previewBodyStyle()">
                       @if (f.dropcap) {

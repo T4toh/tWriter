@@ -276,15 +276,17 @@ export class ThemeEditorModal {
     return `font-family: ${stack.join(', ')};`;
   });
 
-  /** Etiqueta de prefijo según el setting actual. Capítulo 5 como ejemplo. */
+  /** Etiqueta de prefijo según el setting actual. Matchea exacto lo que
+   *  `chapter_prefix` emite en `src-tauri/src/epub.rs` — solo el número
+   *  (decimal o romano), sin prefijo "Capítulo". El ejemplo usa idx=5. */
   protected readonly chapterPrefixLabel = computed(() => {
     const f = this.form();
     if (!f) return null;
     switch (f.prefijo_capitulo) {
       case 'decimal':
-        return 'Capítulo 5';
+        return '5';
       case 'roman':
-        return 'Capítulo V';
+        return 'V';
       default:
         return null;
     }
