@@ -639,7 +639,9 @@ export class Tree implements OnDestroy {
     if (force === 'expanded') return true;
     const e = this.explicit().get(node.path);
     if (e !== undefined) return e;
-    if (node.kind === 'saga' || node.kind === 'book') return true;
+    // Default colapsado. Solo se abre el camino al capítulo/nota activo
+    // (ancestorPaths) para que el usuario vea dónde está parado dentro de la
+    // saga/libro. Lo que el usuario expande manualmente se persiste aparte.
     return this.ancestorPaths().has(node.path);
   }
 
