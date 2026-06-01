@@ -413,9 +413,10 @@ export class Editor implements AfterViewInit, OnDestroy {
       // NOTA: NO scrollIntoView — la vista arranca arriba (scrollTop=0 ya seteado).
       // Si cerrabas con el cursor al final, antes el cap reabría al final.
       // Ahora cursor preserva posición pero la vista muestra el inicio.
-      if (node?.path && this.paneId() === 0) {
-        const restore = this.cursorRestore.consume(node.path);
-        if (restore && this.tiptap) {
+      if (this.tiptap) {
+        const restore =
+          node?.path && this.paneId() === 0 ? this.cursorRestore.consume(node.path) : null;
+        if (restore) {
           const docSize = this.tiptap.state.doc.content.size;
           // Clamp si el cap se acortó entre sesiones (editado en otra PC).
           const pos = Math.max(0, Math.min(restore.pmPos, Math.max(0, docSize - 1)));
@@ -426,6 +427,15 @@ export class Editor implements AfterViewInit, OnDestroy {
             .run();
           // Re-asegurar el reset (el focus puede haber gatillado scroll del browser
           // si el cursor cayó fuera del viewport visible).
+          this.hostRef.nativeElement.scrollTop = 0;
+        } else {
+          // Navegación normal sin posición guardada. Tras setContent la
+          // selección de ProseMirror puede quedar en un boundary de nodo y el
+          // navegador dibuja un caret fantasma flotando en el margen superior
+          // ("arriba del todo donde no hay nada"). Forzar selección a pos 1
+          // (dentro del primer bloque de texto) la deja en una posición válida.
+          // Sin .focus(): si el editor no tiene foco no se dibuja caret alguno.
+          this.tiptap.commands.setTextSelection(1);
           this.hostRef.nativeElement.scrollTop = 0;
         }
       }
@@ -1157,7 +1167,10 @@ export class Editor implements AfterViewInit, OnDestroy {
       ],
       content,
       editable,
-      autofocus: editable ? 'end' : false,
+      // NO autofocus 'end': forzaba el cursor al final del cap al abrir (y
+      // pisaba la restauración de posición). La posición se restaura abajo
+      // vía cursorRestore; sin posición guardada arranca al inicio.
+      autofocus: false,
       onUpdate: ({ editor }) => {
         this.chapter.updateContentInPane(editor.getHTML(), this.paneId());
       },
