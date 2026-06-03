@@ -158,6 +158,18 @@ export class ChapterService {
     this.scheduleAutosaveInPane(paneId);
   }
 
+  /** Adopta el HTML canónico de TipTap como baseline tras `setContent`,
+   *  sin marcar `dirty`. Evita "dirty fantasma" cuando el archivo en
+   *  disco tiene formato pretty-printed (newlines/espacios dentro de
+   *  bloques) que TipTap colapsa al re-serializar: la comparación
+   *  posterior en `updateContentInPane` se hace contra el canónico,
+   *  no contra el disco. El archivo en disco queda intacto hasta que
+   *  el usuario edite de verdad. */
+  setBaselineInPane(html: string, paneId: PaneId): void {
+    const pane = this.panes[paneId];
+    pane.content.set(html);
+  }
+
   async saveInPane(paneId: PaneId): Promise<void> {
     const pane = this.panes[paneId];
     const node = pane.active();

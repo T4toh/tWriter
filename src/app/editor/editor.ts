@@ -397,7 +397,23 @@ export class Editor implements AfterViewInit, OnDestroy {
         this.createEditor(editable ? html : '', editable);
       } else {
         this.tiptap.commands.setContent(editable ? html : '', { emitUpdate: false });
-        this.tiptap.setEditable(editable);
+        // OJO: `setEditable(editable)` por default emite "update" (TipTap v3
+        // `setEditable(editable, emitUpdate = true)`). Eso dispara onUpdate
+        // → updateContentInPane → como el HTML canónico que TipTap mantiene
+        // tras setContent difiere del HTML del disco (newlines/whitespace
+        // dentro de bloques colapsados), el pane se marca `dirty` y autosave
+        // pisa el archivo aunque el usuario no haya editado nada. Suprimir
+        // el emit pasando `false`.
+        this.tiptap.setEditable(editable, false);
+      }
+      // Adoptar el HTML canónico que TipTap mantiene en memoria como
+      // baseline del pane. El archivo en disco puede tener formato
+      // pretty-printed (newlines/whitespace dentro de bloques) que TipTap
+      // colapsa al parsear; sin este reset, cualquier transacción posterior
+      // que dispare `onUpdate` compararía el canónico vs el HTML del disco
+      // y marcaría `dirty` aunque el usuario no haya editado nada.
+      if (editable && this.tiptap) {
+        this.chapter.setBaselineInPane(this.tiptap.getHTML(), this.paneId());
       }
       // El scroller (.editor-host) conserva su scrollTop entre capítulos, así
       // que al cambiar de archivo el usuario aparecía donde había dejado al
