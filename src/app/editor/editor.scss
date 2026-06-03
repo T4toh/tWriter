@@ -107,6 +107,13 @@
   position: absolute;
   inset: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  // Reserva espacio del scrollbar siempre. En WebKitGTK/Wayland el overlay
+  // scrollbar default flashea durante reflow grande (ej. applyDecorations
+  // tras LanguageTool), generando un "salto" visual + caret fantasma. Con
+  // gutter estable el ancho útil del contenido no cambia y no hay reflow
+  // que dispare el overlay.
+  scrollbar-gutter: stable;
   background: var(--bg-soft);
   padding: 2.5rem 1.5rem;
 
@@ -515,6 +522,12 @@
   }
   &.saved {
     color: var(--fg-muted);
+  }
+  &.saving {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--accent);
   }
   &.error {
     background: #b04040;

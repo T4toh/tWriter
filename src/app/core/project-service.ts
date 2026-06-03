@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { SettingsService } from './settings-service';
 import { NodeKind, TreeNode } from './types';
 import { DebugService } from './debug-service';
+import { formatRelativeTime } from './relative-time';
 
 @Injectable({ providedIn: 'root' })
 export class ProjectService {
@@ -102,6 +103,16 @@ function collectAncestors(node: TreeNode, target: string, out: TreeNode[]): bool
  */
 function patchNodeMtime(node: TreeNode, path: string, modifiedMs: number): TreeNode {
   if (node.path === path) {
+    // Si el badge `relativeTime` del nodo no cambia visualmente (ambos
+    // timestamps caen en la misma cubeta — típicamente "recién" dentro
+    // del primer minuto post-save), devolver la ref original. Sin esto
+    // cada autosave producía una nueva ref del tree aunque el render
+    // fuera idéntico, causando re-render completo del componente Tree,
+    // recálculo de `mostRecentPath` (walk del tree) y un reflow visible
+    // como flash de scrollbar en WebKitGTK/Wayland.
+    if (formatRelativeTime(node.modifiedMs) === formatRelativeTime(modifiedMs)) {
+      return node;
+    }
     return { ...node, modifiedMs };
   }
   const children = node.children ?? [];

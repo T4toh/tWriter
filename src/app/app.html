@@ -59,12 +59,6 @@
     </header>
     <app-tree />
     <footer class="panel-left-footer">
-      @if (saving()) {
-        <div class="loading-row">
-          <app-spinner [size]="12" />
-          <span class="loading-text">guardando…</span>
-        </div>
-      }
       @if (bulkProgress(); as bp) {
         <div class="bulk-progress">
           <div class="bp-text">

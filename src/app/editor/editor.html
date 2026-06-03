@@ -303,7 +303,12 @@
         P. {{ cursorPos().paragraph }} · Col {{ cursorPos().col }}
       </span>
     }
-    @if (dirty()) {
+    @if (saving()) {
+      <span class="indicator saving">
+        <app-spinner [size]="10" />
+        guardando…
+      </span>
+    } @else if (dirty()) {
       <span class="indicator dirty">sin guardar</span>
     } @else if (canEdit()) {
       <span class="indicator saved">guardado</span>

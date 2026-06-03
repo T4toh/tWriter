@@ -61,6 +61,30 @@ interface GitCommitResult {
   files: number;
 }
 
+/** Compara dos `GitStatus` campo por campo (incluyendo `paths` por igualdad
+ *  estructural). Devuelve `true` si son equivalentes para la UI. */
+function gitStatusEquals(a: GitStatus | null, b: GitStatus | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (
+    a.has_changes !== b.has_changes ||
+    a.changed !== b.changed ||
+    a.ahead !== b.ahead ||
+    a.behind !== b.behind ||
+    a.branch !== b.branch ||
+    a.remote !== b.remote ||
+    a.paths.length !== b.paths.length
+  ) {
+    return false;
+  }
+  for (let i = 0; i < a.paths.length; i++) {
+    if (a.paths[i].path !== b.paths[i].path || a.paths[i].kind !== b.paths[i].kind) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export type SyncState =
   | 'unknown'
   | 'clean'
@@ -276,7 +300,15 @@ export class GitService {
     if (!root || this.storage.backend() !== 'git') return;
     try {
       const s = await invoke<GitStatus>('git_status', { repoPath: root });
-      this.status.set(s);
+      // No setear si el status es estructuralmente igual: cada autosave
+      // dispara refreshStatus → invoke → set; el objeto siempre es nuevo
+      // ref aunque los campos sean idénticos, lo que invalida `git.grouped()`,
+      // `effectiveSyncSummary()` y todos los consumers del sidebar. El
+      // recompute reflowa el panel y se ve como flash de scrollbar.
+      const prev = this.status();
+      if (!gitStatusEquals(prev, s)) {
+        this.status.set(s);
+      }
       this.error.set(null);
       if (
         !this.autoPaused &&
