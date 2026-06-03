@@ -54,6 +54,7 @@ import { GrammarMatch, RaeViolation } from '../core/types';
 import { convert as convertRae } from '../dialogos/converter';
 import { validateRae } from '../dialogos/validator';
 import { Landing } from '../landing/landing';
+import { Spinner } from '../shared/spinner';
 import {
   ContextMenuService,
   CtxMenuEntry,
@@ -104,7 +105,7 @@ const EMPTY_STATE: ToolbarState = {
   selector: 'app-editor',
   imports: [
     Landing, GrammarPopover, RaePopover, Select, FormsModule,
-    LucideCircleAlert, LucideDynamicIcon,
+    LucideCircleAlert, LucideDynamicIcon, Spinner,
   ],
   templateUrl: './editor.html',
   styleUrl: './editor.scss',
@@ -134,6 +135,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly canEdit = computed(() => this.pane().canEdit());
   protected readonly wordCount = computed(() => this.pane().wordCount());
   protected readonly dirty = computed(() => this.pane().dirty());
+  protected readonly saving = computed(() => this.pane().saving());
   protected readonly chapterError = computed(() => this.pane().error());
   protected readonly meta = computed(() => this.pane().meta());
   protected readonly state = signal<ToolbarState>(EMPTY_STATE);

@@ -11,6 +11,12 @@
 .tree-area {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  // Reserva espacio del scrollbar siempre — en WebKitGTK/Wayland el overlay
+  // scrollbar flashea durante reflows (LT, refresh de badges relativos) y
+  // se ve como un "salto" del borde. Con gutter estable el ancho del tree
+  // no oscila y el flash desaparece.
+  scrollbar-gutter: stable;
   padding-bottom: 1rem;
 }
 
