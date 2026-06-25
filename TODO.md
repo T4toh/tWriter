@@ -53,12 +53,22 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   split" queda pintado después de soltar el drop. Ver captura. El handler
   de `drop` / `dragend` no está limpiando el estado del hint. Asegurar que
   se resetee también en `dragleave` fuera de la ventana y al soltar.
-- **Doble árbol para notas**: panel de árbol secundario chico, dedicado a
-  notas, que NO cambie el editor activo salvo doble-click o drag. Motivo:
-  poder buscar/navegar notas sin perder el capítulo abierto. Hoy abrir una
-  nota reemplaza el archivo en el editor. Pensar layout (¿árbol colapsable
-  abajo del principal? ¿columna aparte?) y cómo coexiste con el reader de
-  notas existente.
+- [x] **Doble árbol para notas** (`feat/notes-second-tree-no-focus-loss`):
+  panel secundario colapsable + redimensionable abajo del principal, dedicado
+  a notas. El `Tree` ahora toma un input `variant` (`main`/`notes`) y deriva un
+  `root` filtrado de `project.tree()`: `pruneToChapters` saca del principal todo
+  subárbol `note`/`notes` + el nodo "Notas" general (carpetas que solo tienen
+  notas); `pruneToNotes` conserva solo ramas con notas preservando la jerarquía
+  saga/libro. Click en nota → visor derecho (`markdown-reader`) sin tocar el
+  editor; doble-click/Shift → editor central. De yapa se arregló el **foco
+  perdido al navegar**: `toggle()` ya no hace `chapter.close()`/`note.close()`,
+  así expandir/colapsar carpetas mantiene el capítulo abierto en vez de tapar el
+  editor con la galería `app-landing`. Estado del panel (`notesPaneCollapsed`,
+  `notesPaneHeight`) y expansión del árbol de notas (`treeNotesExpanded`)
+  persisten aparte en `settings.json` (+ campos en el `Settings` de Rust, sino
+  serde los dropeaba en el round-trip). IDs de cdkDropList namespaceados por
+  variante y `bindDragDrop` gated a `main` para que las dos instancias no
+  choquen.
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.

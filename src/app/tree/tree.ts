@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, computed, effect, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, computed, effect, inject, input, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { invoke } from '@tauri-apps/api/core';
@@ -98,7 +98,18 @@ export class Tree implements OnDestroy {
   /** Path/id que está siendo target de drag&drop OS para themes. null = no theme target. */
   protected readonly dragOverTheme = signal<string | null>(null);
 
-  protected readonly root = this.project.tree;
+  /** Variante del árbol: 'main' = capítulos + temas/fuentes/exportados (sin
+   *  notas); 'notes' = solo notas, preservando la jerarquía saga/libro. La
+   *  instancia por defecto es 'main'; el panel inferior monta variant='notes'. */
+  readonly variant = input<'main' | 'notes'>('main');
+  /** Árbol filtrado según la variante, derivado de `project.tree()`. Todos los
+   *  computeds de abajo (ancestorPaths, dropListIds, etc.) operan sobre este
+   *  root podado, así que cada instancia ve solo sus nodos. */
+  protected readonly root = computed<TreeNode | null>(() => {
+    const t = this.project.tree();
+    if (!t) return null;
+    return this.variant() === 'notes' ? pruneToNotes(t) : pruneToChapters(t);
+  });
   protected readonly loading = this.project.loading;
   protected readonly error = this.project.error;
   protected readonly activePath = computed(
@@ -139,11 +150,22 @@ export class Tree implements OnDestroy {
   private readonly exportsExpanded = signal<Set<string>>(new Set());
 
   private dragUnlisten: (() => void) | null = null;
+  /** Guard: bindDragDrop corre una sola vez y solo en la variante main. */
+  private dragBound = false;
   /** Guard para que la hidratación desde settings corra una sola vez al boot. */
   private hydratedFromSettings = false;
 
   constructor() {
-    void this.bindDragDrop();
+    // Drag&drop de archivos del OS (fuentes/extras/temas) solo aplica a la
+    // variante main. Se liga vía effect porque el input `variant` todavía no
+    // está resuelto en el constructor; sin este guard ambas instancias del
+    // árbol registrarían el listener global y duplicarían cada drop.
+    effect(() => {
+      if (this.variant() === 'main' && !this.dragBound) {
+        this.dragBound = true;
+        void this.bindDragDrop();
+      }
+    });
     effect(() => {
       // Limpiar cache cuando cambia el root del proyecto
       this.project.root();
@@ -161,12 +183,16 @@ export class Tree implements OnDestroy {
     effect(() => {
       if (!this.settings.loaded() || this.hydratedFromSettings) return;
       this.hydratedFromSettings = true;
-      const expanded = this.settings.treeExpanded();
+      const expanded = this.variant() === 'notes'
+        ? this.settings.treeNotesExpanded()
+        : this.settings.treeExpanded();
       if (expanded.size > 0) {
         const m = new Map<string, boolean>();
         for (const path of expanded) m.set(path, true);
         this.explicit.set(m);
       }
+      // Extras/Exportados/Fuentes solo existen en la variante main.
+      if (this.variant() === 'notes') return;
       const extras = this.settings.treeExtrasExpanded();
       if (extras.size > 0) this.extrasExpanded.set(new Set(extras));
       const extrasDirs = this.settings.treeExtrasDirsExpanded();
@@ -183,7 +209,11 @@ export class Tree implements OnDestroy {
     for (const [path, value] of this.explicit().entries()) {
       if (value) expanded.add(path);
     }
-    this.settings.setTreeExpanded(expanded);
+    if (this.variant() === 'notes') {
+      this.settings.setTreeNotesExpanded(expanded);
+    } else {
+      this.settings.setTreeExpanded(expanded);
+    }
   }
 
   ngOnDestroy(): void {
@@ -311,7 +341,10 @@ export class Tree implements OnDestroy {
   // ───── CDK DnD interno (reorder + cross-parent) ─────
 
   protected dropListId(parentPath: string, childKind: string): string {
-    return `dl::${childKind}::${parentPath}`;
+    // Namespaced por variante: las dos instancias del árbol (main/notes)
+    // comparten paths (mismo root), y CDK exige IDs de dropList únicos en el
+    // DOM. Sin el prefijo, ambas emitirían `dl::saga::<root>` y romperían el DnD.
+    return `dl::${this.variant()}::${childKind}::${parentPath}`;
   }
 
   /** Kind primario que el container acepta como children draggable. */
@@ -646,9 +679,12 @@ export class Tree implements OnDestroy {
   }
 
   protected toggle(node: TreeNode): void {
+    // Solo navega: NO cierra el capítulo/nota activo. Antes hacía
+    // chapter.close()+note.close(), lo que dejaba el editor vacío y disparaba
+    // el overlay `app-landing` (galería de tarjetas) tapando lo que se editaba.
+    // Ahora expandir/colapsar mantiene el archivo en foco; la galería queda
+    // como "home" solo cuando no hay nada abierto.
     this.nav.setBrowsing(node.path);
-    this.chapter.close();
-    this.note.close();
     const wasExpanded = this.isExpanded(node);
     if (this.forceState() !== null) {
       this.forceState.set(null);
@@ -664,9 +700,12 @@ export class Tree implements OnDestroy {
   protected collapseAll(): void {
     this.explicit.set(new Map());
     this.forceState.set('collapsed');
+    this.persistExpanded();
+    // Extras/Exportados solo aplican a la variante main; no tocar sus settings
+    // desde el árbol de notas (pisaría el estado del árbol principal).
+    if (this.variant() === 'notes') return;
     this.extrasExpanded.set(new Set());
     this.exportsExpanded.set(new Set());
-    this.persistExpanded();
     this.settings.setTreeExtrasExpanded(new Set());
     this.settings.setTreeExportsExpanded(new Set());
   }
@@ -893,6 +932,39 @@ export class Tree implements OnDestroy {
       this.toast.error(`No se pudo consolidar: ${e}`);
     }
   }
+}
+
+/** ¿El subárbol contiene alguna nota? (`note` o carpeta `notes`/subcarpeta
+ *  con notas). Sirve para decidir qué ramas conserva cada variante. */
+function containsNote(n: TreeNode): boolean {
+  if (n.kind === 'note' || n.kind === 'notes') return true;
+  return n.children.some(containsNote);
+}
+
+/** ¿El subárbol contiene algún capítulo? */
+function containsChapter(n: TreeNode): boolean {
+  if (n.kind === 'chapter') return true;
+  return n.children.some(containsChapter);
+}
+
+/** Árbol principal: poda todo subárbol de notas (`note`/`notes`) y además las
+ *  carpetas/sagas que SOLO contienen notas (ej. el nodo "Notas" general), que
+ *  pasan a vivir únicamente en el árbol secundario de notas. */
+function pruneToChapters(node: TreeNode): TreeNode {
+  const children = node.children
+    .filter((c) => c.kind !== 'note' && c.kind !== 'notes')
+    .filter((c) => !(containsNote(c) && !containsChapter(c)))
+    .map(pruneToChapters);
+  return { ...node, children };
+}
+
+/** Árbol de notas: conserva solo ramas que llevan a notas, descartando los
+ *  capítulos pero preservando la jerarquía saga/libro/sección que las contiene. */
+function pruneToNotes(node: TreeNode): TreeNode {
+  const children = node.children
+    .filter((c) => containsNote(c))
+    .map((c) => (c.kind === 'note' ? c : pruneToNotes(c)));
+  return { ...node, children };
 }
 
 function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {

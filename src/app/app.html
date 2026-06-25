@@ -57,7 +57,42 @@
         </div>
       </div>
     </header>
-    <app-tree />
+    <app-tree class="tree-main" />
+    @if (root()) {
+      <div
+        class="notes-pane"
+        [class.collapsed]="settings.notesPaneCollapsed()"
+        [class.resizing]="notesResizing()"
+        [style.height.px]="settings.notesPaneCollapsed() ? null : settings.notesPaneHeight()"
+      >
+        @if (!settings.notesPaneCollapsed()) {
+          <div
+            class="notes-resizer"
+            (pointerdown)="startNotesResize($event)"
+            title="Arrastrar para redimensionar"
+          ></div>
+        }
+        <button
+          type="button"
+          class="notes-pane-header"
+          (click)="toggleNotesPane()"
+          [title]="settings.notesPaneCollapsed() ? 'Mostrar notas' : 'Ocultar notas'"
+        >
+          <span class="chevron">
+            @if (settings.notesPaneCollapsed()) {
+              <svg lucideChevronRight [size]="12"></svg>
+            } @else {
+              <svg lucideChevronDown [size]="12"></svg>
+            }
+          </span>
+          <svg lucideNotebook [size]="14"></svg>
+          <span class="notes-pane-title">Notas</span>
+        </button>
+        @if (!settings.notesPaneCollapsed()) {
+          <app-tree class="tree-notes" variant="notes" />
+        }
+      </div>
+    }
     <footer class="panel-left-footer">
       @if (bulkProgress(); as bp) {
         <div class="bulk-progress">
