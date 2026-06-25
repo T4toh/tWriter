@@ -29,6 +29,7 @@ import { MarkdownReaderService } from '../core/markdown-reader-service';
 import { NavigationService } from '../core/navigation-service';
 import { NoteService } from '../core/note-service';
 import { ProjectService } from '../core/project-service';
+import { findAllMatchesInPlain, tokenize } from '../core/search-highlight';
 import { SearchHit, SearchService } from '../core/search-service';
 import { SearchScope, SettingsService } from '../core/settings-service';
 import { Select, SelectOption } from '../shared/select';
@@ -123,6 +124,7 @@ export class SearchPanel implements AfterViewInit {
   }
   protected readonly scope = this.settings.searchScope;
   protected readonly searchDebug = this.settings.searchDebug;
+  protected readonly searchFuzzy = this.settings.searchFuzzy;
   protected readonly scopeNeedsContext = this.svc.scopeNeedsContext;
 
   protected readonly scopeOptions: SelectOption[] = [
@@ -190,6 +192,10 @@ export class SearchPanel implements AfterViewInit {
 
   protected toggleDebug(): void {
     void this.settings.setSearchDebug(!this.searchDebug());
+  }
+
+  protected toggleFuzzy(): void {
+    void this.settings.setSearchFuzzy(!this.searchFuzzy());
   }
 
   protected formatBm25(score: number | undefined): string {
@@ -263,7 +269,7 @@ export class SearchPanel implements AfterViewInit {
       // tendrías que esperar el read del disco. Solo encolá el highlight; el
       // editor reacciona al pendingHighlight aunque el archivo ya esté abierto.
       if (this.chapter.panes[0].active()?.path === hit.path) {
-        this.svc.requestHighlight(hit.path);
+        this.svc.requestHighlight(hit.path, undefined, hit.matchedTerms);
         return;
       }
       const node = findNodeByPath(this.project.tree(), hit.path);
@@ -271,14 +277,14 @@ export class SearchPanel implements AfterViewInit {
         const parent = hit.path.replace(/\/[^/]+$/, '');
         this.nav.setBrowsing(parent);
         // Pedir highlight ANTES del open: el editor lo consume al renderizar.
-        this.svc.requestHighlight(hit.path);
+        this.svc.requestHighlight(hit.path, undefined, hit.matchedTerms);
         await this.chapter.open(node);
       }
       return;
     }
     if (hit.kind === 'note') {
       const name = hit.title || hit.path.split('/').pop() || hit.path;
-      this.svc.requestHighlight(hit.path);
+      this.svc.requestHighlight(hit.path, undefined, hit.matchedTerms);
       if (event?.shiftKey) {
         // Shift+click: abrir en notes-editor central. Si ya está, no recargues.
         if (this.note.panes[0].active()?.path === hit.path) return;
@@ -303,7 +309,7 @@ export class SearchPanel implements AfterViewInit {
     }
     if (hit.kind === 'note') {
       const name = hit.title || hit.path.split('/').pop() || hit.path;
-      this.svc.requestHighlight(hit.path);
+      this.svc.requestHighlight(hit.path, undefined, hit.matchedTerms);
       await this.openNoteInEditor(hit.path, name);
     }
   }
@@ -315,17 +321,28 @@ export class SearchPanel implements AfterViewInit {
     await this.note.open({ path, name });
   }
 
-  protected highlightSnippet(snippet: string, query: string): string {
-    if (!snippet || !query.trim()) return escapeHtml(snippet);
-    const terms = query
-      .trim()
-      .split(/\s+/)
-      .map((t) => t.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-      .filter((t) => t.length > 0);
-    if (terms.length === 0) return escapeHtml(snippet);
-    const re = new RegExp(`(${terms.join('|')})`, 'gi');
-    const escaped = escapeHtml(snippet);
-    return escaped.replace(re, '<mark>$1</mark>');
+  protected highlightSnippet(hit: SearchHit, query: string): string {
+    const snippet = hit.snippet;
+    if (!snippet) return '';
+    // Marca las palabras REALES que matchearon (matchedTerms del backend, ej.
+    // "Kallai" para el typo "kellai"); fallback a los tokens tipeados. Usa el
+    // matcher fold-aware (acentos) por rangos en vez de regex sobre la query —
+    // así "mansión" se marca aunque se haya buscado "mansion".
+    const override = hit.matchedTerms?.filter((t) => t.length > 0) ?? [];
+    const terms = override.length > 0 ? override : tokenize(query);
+    const rawQuery = override.length > 0 ? '' : query.trim();
+    if (terms.length === 0 && !rawQuery) return escapeHtml(snippet);
+    const ranges = findAllMatchesInPlain(snippet, terms, rawQuery);
+    if (ranges.length === 0) return escapeHtml(snippet);
+    let out = '';
+    let cursor = 0;
+    for (const r of ranges) {
+      out += escapeHtml(snippet.slice(cursor, r.start));
+      out += '<mark>' + escapeHtml(snippet.slice(r.start, r.end)) + '</mark>';
+      cursor = r.end;
+    }
+    out += escapeHtml(snippet.slice(cursor));
+    return out;
   }
 }
 

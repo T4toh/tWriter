@@ -30,6 +30,11 @@ export interface SearchHit {
   title: string;
   snippet: string;
   score: number;
+  /** Palabras reales del doc que matchearon (resueltas vía fold+fuzzy en el
+   *  backend). Ej: `["Kallai"]` cuando se tipeó `kellai`. Se usan para resaltar
+   *  el término existente al abrir el hit, en vez del literal tipeado que puede
+   *  no estar en el doc. Ausente en hits client-side ("Archivo actual"). */
+  matchedTerms?: string[];
   /** Score BM25 puro antes de boosts client-side. Solo presente cuando el
    *  modo debug está on (settings.searchDebug). */
   bm25_score?: number;
@@ -63,6 +68,9 @@ export interface PendingHighlight {
    *  busca este literal primero — `¡Duendes!` cae en el grito, no en el
    *  primer `duendes` lowercase del párrafo. Vacío si la query es trivial. */
   rawQuery: string;
+  /** Si true, el matching del highlight plega acentos (modo fuzzy). En exacto
+   *  va false ⇒ accent-sensitive, no resalta variantes con tilde no buscadas. */
+  fold: boolean;
   requestId: number;
 }
 
@@ -120,18 +128,21 @@ export class SearchService {
    *  abierto y la query tenga contenido. Independiente del scope: aplica en
    *  cualquier modo. Las superficies del editor leen este signal y aplican
    *  decoraciones PM. */
-  readonly highlightTerms = computed<{ terms: string[]; rawQuery: string } | null>(() => {
-    if (!this.open()) return null;
-    const q = this.query().trim();
-    if (!q) return null;
-    const terms = tokenize(q);
-    if (terms.length === 0) {
-      // Query sin tokens (solo puntuación) — sigue siendo válida si tiene
-      // forma rica; el highlighter usa rawQuery como literal.
-      return { terms: [], rawQuery: q };
-    }
-    return { terms, rawQuery: q };
-  });
+  readonly highlightTerms = computed<{ terms: string[]; rawQuery: string; fold: boolean } | null>(
+    () => {
+      if (!this.open()) return null;
+      const q = this.query().trim();
+      if (!q) return null;
+      const fold = this.settings.searchFuzzy();
+      const terms = tokenize(q);
+      if (terms.length === 0) {
+        // Query sin tokens (solo puntuación) — sigue siendo válida si tiene
+        // forma rica; el highlighter usa rawQuery como literal.
+        return { terms: [], rawQuery: q, fold };
+      }
+      return { terms, rawQuery: q, fold };
+    },
+  );
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private currentRequestId = 0;
@@ -145,6 +156,7 @@ export class SearchService {
     effect(() => {
       this.settings.searchScope();
       this.settings.searchDebug();
+      this.settings.searchFuzzy();
       this.chapter.panes[0].active();
       this.chapter.panes[0].content();
       this.note.panes[0].active();
@@ -225,6 +237,7 @@ export class SearchService {
         limit: 50,
         scope,
         debug,
+        fuzzy: this.settings.searchFuzzy(),
       });
       if (id !== this.currentRequestId) return;
       this.results.set(res.hits);
@@ -248,11 +261,12 @@ export class SearchService {
       return;
     }
     const terms = tokenize(q);
+    const fold = this.settings.searchFuzzy();
     const hits: SearchHit[] = [];
     let total = 0;
     for (const para of file.paragraphs) {
       if (total >= CURRENT_FILE_MAX_PARAGRAPH_HITS) break;
-      const matches = findAllMatchesInPlain(para.text, terms, q);
+      const matches = findAllMatchesInPlain(para.text, terms, q, fold);
       if (matches.length === 0) continue;
       hits.push({
         path: file.path,
@@ -344,9 +358,27 @@ export class SearchService {
 
   /** Encola un highlight pendiente para `path`. Tokeniza la query actual.
    *  El editor / reader correspondiente al path llama `consumePendingHighlight()`
-   *  cuando termina de renderizar y aplica el scroll + selección. */
-  requestHighlight(path: string, queryOverride?: string): void {
+   *  cuando termina de renderizar y aplica el scroll + selección.
+   *
+   *  `termsOverride` son las palabras REALES del doc (matchedTerms del hit) — al
+   *  abrir un resultado fuzzy, resaltamos `Kallai` (lo que existe) y no `kellai`
+   *  (lo tipeado, que no está). En ese caso `rawQuery` va vacío para forzar el
+   *  matching por token (sin la prioridad de literal-rico que no aplicaría). */
+  requestHighlight(path: string, queryOverride?: string, termsOverride?: string[]): void {
     const q = (queryOverride ?? this.query()).trim();
+    const fold = this.settings.searchFuzzy();
+    const override = termsOverride?.filter((t) => t.length > 0) ?? [];
+    if (override.length > 0) {
+      // Términos reales del doc (matchedTerms) — ya literales, sin fold.
+      this.pendingHighlight.set({
+        path,
+        terms: override,
+        rawQuery: '',
+        fold: false,
+        requestId: ++this.highlightCounter,
+      });
+      return;
+    }
     if (!q) return;
     const terms = tokenize(q);
     if (terms.length === 0) return;
@@ -354,6 +386,7 @@ export class SearchService {
       path,
       terms,
       rawQuery: q,
+      fold,
       requestId: ++this.highlightCounter,
     });
   }

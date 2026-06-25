@@ -95,6 +95,9 @@ interface Settings {
   /** Si está true, cada hit del panel de búsqueda muestra su score BM25 debajo
    *  del título — útil para diagnosticar ranking. Off por default. */
   searchDebug?: boolean;
+  /** Modo de búsqueda flojo (fuzzy + acentos): tolera typos y tildes. Off por
+   *  default — el default es exacto/literal (sirve para corregir errores). */
+  searchFuzzy?: boolean;
   lastSession?: LastSession;
   treeExpanded?: string[];
   treeExtrasExpanded?: string[];
@@ -123,6 +126,7 @@ export class SettingsService {
   readonly rightPanelWidth = signal<RightPanelWidth>(RIGHT_PANEL_DEFAULT);
   readonly searchScope = signal<SearchScope>(SEARCH_SCOPE_DEFAULT);
   readonly searchDebug = signal<boolean>(false);
+  readonly searchFuzzy = signal<boolean>(false);
   /** Última sesión del pane 0 al cerrar la app. Null si nunca se abrió un cap
    *  o si el cap se cerró sin reemplazo. */
   readonly lastSession = signal<LastSession | null>(null);
@@ -159,6 +163,7 @@ export class SettingsService {
       this.rightPanelWidth.set(s.rightPanelWidth ?? RIGHT_PANEL_DEFAULT);
       this.searchScope.set(s.searchScope ?? SEARCH_SCOPE_DEFAULT);
       this.searchDebug.set(s.searchDebug ?? false);
+      this.searchFuzzy.set(s.searchFuzzy ?? false);
       this.lastSession.set(s.lastSession ?? null);
       this.treeExpanded.set(new Set(Array.isArray(s.treeExpanded) ? s.treeExpanded : []));
       this.treeExtrasExpanded.set(
@@ -325,6 +330,11 @@ export class SettingsService {
     await this.persist();
   }
 
+  async setSearchFuzzy(enabled: boolean): Promise<void> {
+    this.searchFuzzy.set(enabled);
+    await this.persist();
+  }
+
   private async persist(): Promise<void> {
     const expanded = Array.from(this.treeExpanded());
     const extrasExp = Array.from(this.treeExtrasExpanded());
@@ -347,6 +357,7 @@ export class SettingsService {
       rightPanelWidth: this.rightPanelWidth(),
       searchScope: this.searchScope(),
       searchDebug: this.searchDebug() || undefined,
+      searchFuzzy: this.searchFuzzy() || undefined,
       lastSession: this.lastSession() ?? undefined,
       treeExpanded: expanded.length ? expanded : undefined,
       treeExtrasExpanded: extrasExp.length ? extrasExp : undefined,

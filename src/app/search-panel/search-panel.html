@@ -21,6 +21,20 @@
   <button
     type="button"
     class="sp-btn"
+    [class.is-active]="searchFuzzy()"
+    (click)="toggleFuzzy()"
+    [title]="
+      searchFuzzy()
+        ? 'Búsqueda flexible (≈) ON — tolera typos y acentos. Apagá para buscar el texto exacto (corregir errores).'
+        : 'Búsqueda exacta — encuentra el texto literal. Activá (≈) para tolerar typos/acentos (nombres inventados).'
+    "
+    aria-label="Toggle búsqueda flexible"
+  >
+    <span class="ico">≈</span>
+  </button>
+  <button
+    type="button"
+    class="sp-btn"
     [class.is-active]="searchDebug()"
     (click)="toggleDebug()"
     [title]="searchDebug() ? 'Modo debug ON — muestra BM25 por hit' : 'Modo debug OFF — muestra BM25 por hit'"
@@ -112,7 +126,7 @@
                       <p class="sp-hit-bm25">{{ formatBm25(hit.bm25_score) }}</p>
                     }
                     @if (hit.snippet) {
-                      <p class="sp-hit-snippet" [innerHTML]="highlightSnippet(hit.snippet, query())"></p>
+                      <p class="sp-hit-snippet" [innerHTML]="highlightSnippet(hit, query())"></p>
                     }
                   </button>
                 </li>
