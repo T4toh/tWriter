@@ -205,17 +205,24 @@ fn strip_legacy_dict(saga_dir: &Path) -> Result<(), String> {
 #[tauri::command]
 pub fn get_saga_dictionary(saga_path: String) -> Result<Vec<String>, String> {
     let dir = PathBuf::from(&saga_path);
-    if let Some(words) = read_dict_file(&dir) {
-        return Ok(words);
+    let from_txt = read_dict_file(&dir);
+    let legacy = read_legacy_dict(&dir);
+    match (from_txt, legacy) {
+        // Hay campo legacy en saga.json: o es pre-migración, o lo escribió una
+        // versión vieja de la app (que no conoce diccionario.txt). En ambos
+        // casos lo absorbemos al .txt uniéndolo con lo que ya hubiera, y
+        // limpiamos el campo. Así viejo→nuevo nunca pierde palabras.
+        (txt, Some(legacy_words)) => {
+            let mut merged = txt.unwrap_or_default();
+            merged.extend(legacy_words);
+            let normalized = normalize_words(merged);
+            write_dict_file(&dir, &normalized)?;
+            let _ = strip_legacy_dict(&dir);
+            Ok(normalized)
+        }
+        (Some(words), None) => Ok(words),
+        (None, None) => Ok(Vec::new()),
     }
-    // No hay .txt: migrar desde el campo legacy de saga.json si existe.
-    if let Some(legacy) = read_legacy_dict(&dir) {
-        let normalized = normalize_words(legacy);
-        write_dict_file(&dir, &normalized)?;
-        let _ = strip_legacy_dict(&dir);
-        return Ok(normalized);
-    }
-    Ok(Vec::new())
 }
 
 #[tauri::command]
@@ -294,6 +301,25 @@ mod tests {
             serde_json::from_str(&fs::read_to_string(dir.join("saga.json")).unwrap()).unwrap();
         assert!(cfg.diccionario.is_none());
         assert_eq!(cfg.nombre, "S");
+    }
+
+    #[test]
+    fn absorbs_legacy_when_txt_already_exists() {
+        // Caso cross-version: la app nueva ya tiene un .txt, pero una app vieja
+        // pusheó palabras al campo legacy de saga.json. get debe unir ambos.
+        let dir = temp_saga();
+        fs::write(dir.join(DICT_FILE), "Aelindor\nKrilar\n").unwrap();
+        fs::write(
+            dir.join("saga.json"),
+            r#"{"nombre":"S","diccionario":["Krilar","Varya"]}"#,
+        )
+        .unwrap();
+        let got = get_saga_dictionary(dir.to_string_lossy().into()).unwrap();
+        assert_eq!(got, vec!["Aelindor", "Krilar", "Varya"]);
+        // legacy absorbido y limpiado
+        let cfg: SagaConfig =
+            serde_json::from_str(&fs::read_to_string(dir.join("saga.json")).unwrap()).unwrap();
+        assert!(cfg.diccionario.is_none());
     }
 
     #[test]
