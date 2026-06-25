@@ -22,6 +22,9 @@ const RIGHT_PANEL_DEFAULT: RightPanelWidth = 'normal';
 const SEARCH_SCOPE_DEFAULT: SearchScope = 'all';
 const FONT_FAMILY_DEFAULT: EditorFontPreset = 'serif';
 const FONT_RECENTS_MAX = 5;
+const NOTES_PANE_HEIGHT_DEFAULT = 200;
+const NOTES_PANE_HEIGHT_MIN = 80;
+const NOTES_PANE_HEIGHT_MAX = 600;
 
 /** Stack CSS para cada preset del editor. Solo el editor; EPUB y UI tienen
  *  su propio CSS y no se ven afectados. */
@@ -103,6 +106,12 @@ interface Settings {
   treeExtrasExpanded?: string[];
   treeExtrasDirsExpanded?: string[];
   treeExportsExpanded?: string[];
+  /** Paths expandidos del árbol secundario de notas (variante 'notes'). */
+  treeNotesExpanded?: string[];
+  /** Panel de notas (segundo árbol) colapsado. */
+  notesPaneCollapsed?: boolean;
+  /** Alto en px del panel de notas abierto. */
+  notesPaneHeight?: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -137,6 +146,13 @@ export class SettingsService {
   /** Keys `<scopePath>::<relPath>` de subdirs Extras expandidos. */
   readonly treeExtrasDirsExpanded = signal<Set<string>>(new Set());
   readonly treeExportsExpanded = signal<Set<string>>(new Set());
+  /** Paths expandidos del árbol secundario de notas. Aparte de treeExpanded
+   *  para que el árbol principal y el de notas no se pisen al persistir. */
+  readonly treeNotesExpanded = signal<Set<string>>(new Set());
+  /** Panel de notas (segundo árbol) colapsado. Default false (abierto). */
+  readonly notesPaneCollapsed = signal<boolean>(false);
+  /** Alto en px del panel de notas cuando está abierto. */
+  readonly notesPaneHeight = signal<number>(NOTES_PANE_HEIGHT_DEFAULT);
   readonly focusMode = signal<boolean>(false);
   readonly loaded = signal<boolean>(false);
   /** Timer del persist debounced (cursor moves). */
@@ -175,6 +191,11 @@ export class SettingsService {
       this.treeExportsExpanded.set(
         new Set(Array.isArray(s.treeExportsExpanded) ? s.treeExportsExpanded : []),
       );
+      this.treeNotesExpanded.set(
+        new Set(Array.isArray(s.treeNotesExpanded) ? s.treeNotesExpanded : []),
+      );
+      this.notesPaneCollapsed.set(s.notesPaneCollapsed ?? false);
+      this.notesPaneHeight.set(clampNotesHeight(s.notesPaneHeight ?? NOTES_PANE_HEIGHT_DEFAULT));
     } catch {
       this.root.set(null);
     } finally {
@@ -215,6 +236,25 @@ export class SettingsService {
   setTreeExportsExpanded(paths: Set<string>): void {
     this.treeExportsExpanded.set(new Set(paths));
     void this.persist();
+  }
+
+  setTreeNotesExpanded(paths: Set<string>): void {
+    this.treeNotesExpanded.set(new Set(paths));
+    void this.persist();
+  }
+
+  setNotesPaneCollapsed(collapsed: boolean): void {
+    this.notesPaneCollapsed.set(collapsed);
+    void this.persist();
+  }
+
+  /** Set del alto del panel de notas (clamp). Debounced — el drag del resizer
+   *  dispara muchos cambios por segundo. */
+  setNotesPaneHeight(px: number): void {
+    const next = clampNotesHeight(px);
+    if (next === this.notesPaneHeight()) return;
+    this.notesPaneHeight.set(next);
+    this.persistDebounced();
   }
 
   /** Schedule un persist debounced 500ms. Acumula múltiples cambios rápidos en
@@ -340,6 +380,7 @@ export class SettingsService {
     const extrasExp = Array.from(this.treeExtrasExpanded());
     const extrasDirsExp = Array.from(this.treeExtrasDirsExpanded());
     const exportsExp = Array.from(this.treeExportsExpanded());
+    const notesExp = Array.from(this.treeNotesExpanded());
     const settings: Settings = {
       root: this.root(),
       editorWidth: this.editorWidth(),
@@ -363,6 +404,9 @@ export class SettingsService {
       treeExtrasExpanded: extrasExp.length ? extrasExp : undefined,
       treeExtrasDirsExpanded: extrasDirsExp.length ? extrasDirsExp : undefined,
       treeExportsExpanded: exportsExp.length ? exportsExp : undefined,
+      treeNotesExpanded: notesExp.length ? notesExp : undefined,
+      notesPaneCollapsed: this.notesPaneCollapsed() || undefined,
+      notesPaneHeight: this.notesPaneHeight(),
     };
     await invoke('set_settings', { settings });
   }
@@ -380,4 +424,8 @@ export class SettingsService {
 
 function clampFont(n: number): number {
   return Math.max(FONT_MIN, Math.min(FONT_MAX, Math.round(n)));
+}
+
+function clampNotesHeight(n: number): number {
+  return Math.max(NOTES_PANE_HEIGHT_MIN, Math.min(NOTES_PANE_HEIGHT_MAX, Math.round(n)));
 }

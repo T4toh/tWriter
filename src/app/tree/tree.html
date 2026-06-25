@@ -6,9 +6,11 @@
     <button type="button" class="tt-btn" (click)="expandAll()" title="Expandir todo">
       <svg lucideChevronsDown [size]="14"></svg>
     </button>
-    <button type="button" class="tt-btn" (click)="createTheme()" title="Crear tema">
-      <svg lucidePalette [size]="14"></svg>
-    </button>
+    @if (variant() === 'main') {
+      <button type="button" class="tt-btn" (click)="createTheme()" title="Crear tema">
+        <svg lucidePalette [size]="14"></svg>
+      </button>
+    }
   </div>
 }
 <div class="tree-area" (contextmenu)="onEmptyContext($event)">
@@ -22,8 +24,10 @@
     <p class="status">Elegí una carpeta arriba.</p>
   }
   @if (root(); as r) {
-    <ng-container *ngTemplateOutlet="themesSectionTpl" />
-    <ng-container *ngTemplateOutlet="rootFontsSectionTpl" />
+    @if (variant() === 'main') {
+      <ng-container *ngTemplateOutlet="themesSectionTpl" />
+      <ng-container *ngTemplateOutlet="rootFontsSectionTpl" />
+    }
     <div
       cdkDropList
       [id]="dropListId(r.path, 'saga')"
@@ -45,9 +49,13 @@
       />
     }
     @if (r.children.length === 0) {
-      <p class="status">
-        Sin sagas todavía. Click derecho aquí para crear una.
-      </p>
+      @if (variant() === 'notes') {
+        <p class="status">Sin notas todavía.</p>
+      } @else {
+        <p class="status">
+          Sin sagas todavía. Click derecho aquí para crear una.
+        </p>
+      }
     }
   }
 </div>
@@ -284,12 +292,12 @@
           />
         }
       }
-      @if ((node.kind === 'saga' || node.kind === 'book') && !node.excluded) {
+      @if (variant() === 'main' && (node.kind === 'saga' || node.kind === 'book') && !node.excluded) {
         <ng-container
           *ngTemplateOutlet="extrasSectionTpl; context: { scopePath: node.path, depth: depth + 1 }"
         />
       }
-      @if (node.kind === 'book' && !node.excluded) {
+      @if (variant() === 'main' && node.kind === 'book' && !node.excluded) {
         <ng-container
           *ngTemplateOutlet="exportsSectionTpl; context: { bookPath: node.path, depth: depth + 1 }"
         />

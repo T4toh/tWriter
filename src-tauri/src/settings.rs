@@ -155,6 +155,29 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub tree_exports_expanded: Option<Vec<String>>,
+    /// Paths expandidos del árbol secundario de notas (variante 'notes'). Se
+    /// persiste aparte de `tree_expanded` para que los dos árboles del panel
+    /// izquierdo no se pisen al guardar.
+    #[serde(
+        default,
+        rename = "treeNotesExpanded",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub tree_notes_expanded: Option<Vec<String>>,
+    /// Panel de notas (segundo árbol) colapsado. Default false (abierto).
+    #[serde(
+        default,
+        rename = "notesPaneCollapsed",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub notes_pane_collapsed: Option<bool>,
+    /// Alto en px del panel de notas cuando está abierto (resizable).
+    #[serde(
+        default,
+        rename = "notesPaneHeight",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub notes_pane_height: Option<u32>,
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {

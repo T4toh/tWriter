@@ -51,12 +51,15 @@ import {
   LucideArrowDownToLine,
   LucideArrowUpDown,
   LucideBug,
+  LucideChevronDown,
+  LucideChevronRight,
   LucideCircleQuestionMark,
   LucideDownload,
   LucideDynamicIcon,
   LucideFolder,
   LucideMoveHorizontal,
   LucideMoveVertical,
+  LucideNotebook,
   LucideNotebookPen,
   LucidePlus,
   LucideRefreshCw,
@@ -71,8 +74,9 @@ import {
     Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, DictionaryModal, SplitChapterModal,
     ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, ToastContainer,
     GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, Spinner, ModalHost, ContextMenuHost,
-    LucideArrowDownToLine, LucideArrowUpDown, LucideBug, LucideCircleQuestionMark, LucideDownload, LucideDynamicIcon,
-    LucideFolder, LucideMoveHorizontal, LucideMoveVertical, LucideNotebookPen, LucidePlus, LucideRefreshCw,
+    LucideArrowDownToLine, LucideArrowUpDown, LucideBug, LucideChevronDown, LucideChevronRight,
+    LucideCircleQuestionMark, LucideDownload, LucideDynamicIcon, LucideFolder, LucideMoveHorizontal,
+    LucideMoveVertical, LucideNotebook, LucideNotebookPen, LucidePlus, LucideRefreshCw,
     LucideSearch, LucideSettings, LucideX,
   ],
   templateUrl: './app.html',
@@ -581,6 +585,38 @@ export class App {
 
   protected closeSecondaryPane(): void {
     this.paneSplit.closeSecondary();
+  }
+
+  // ──────── Panel de notas (segundo árbol, abajo del principal) ────────
+
+  /** True mientras se arrastra el divisor del panel de notas — desactiva la
+   *  transición de alto para que el resize siga al puntero sin lag. */
+  protected readonly notesResizing = signal<boolean>(false);
+  private notesResizeStartY = 0;
+  private notesResizeStartH = 0;
+
+  protected toggleNotesPane(): void {
+    this.settings.setNotesPaneCollapsed(!this.settings.notesPaneCollapsed());
+  }
+
+  /** Arranca el drag del divisor. Arrastrar hacia arriba agranda el panel de
+   *  notas (vive abajo en la columna izquierda). */
+  protected startNotesResize(event: PointerEvent): void {
+    event.preventDefault();
+    this.notesResizeStartY = event.clientY;
+    this.notesResizeStartH = this.settings.notesPaneHeight();
+    this.notesResizing.set(true);
+    const onMove = (e: PointerEvent): void => {
+      const dy = this.notesResizeStartY - e.clientY;
+      this.settings.setNotesPaneHeight(this.notesResizeStartH + dy);
+    };
+    const onUp = (): void => {
+      this.notesResizing.set(false);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
   }
 
   protected async createSaga(): Promise<void> {

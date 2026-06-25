@@ -69,6 +69,91 @@
   background: var(--bg-soft);
 }
 
+/* Árbol principal: crece y scrollea; el panel de notas queda abajo con alto fijo. */
+.panel-left > .tree-main {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Panel de notas (segundo árbol) — colapsable + redimensionable. */
+.notes-pane {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg-soft);
+
+  &:not(.resizing) {
+    transition: height 0.12s ease;
+  }
+
+  &.collapsed {
+    height: auto !important;
+  }
+}
+
+/* Divisor arrastrable en el borde superior del panel. */
+.notes-resizer {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 7px;
+  cursor: row-resize;
+  z-index: 2;
+
+  &:hover::after,
+  .notes-pane.resizing &::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent, #6c6cff);
+  }
+}
+
+.notes-pane-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--fg);
+  }
+
+  .chevron {
+    display: flex;
+    align-items: center;
+  }
+
+  .notes-pane-title {
+    flex: 1;
+    text-align: left;
+  }
+}
+
+/* El árbol de notas dentro del panel toma el alto restante y scrollea solo. */
+.notes-pane > .tree-notes {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .panel-left header {
   height: 41px;
   box-sizing: border-box;
