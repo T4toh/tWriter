@@ -1,4 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { invoke } from '@tauri-apps/api/core';
 import {
   ProblematicEntry,
   cleanList,
@@ -7,7 +8,6 @@ import {
   existsCaseInsensitive,
   validateWord,
 } from '../dictionary/word-validator';
-import { SagaConfig, SagaConfigService } from './saga-config-service';
 import { SagaContextService } from './saga-context-service';
 import { TreeNode } from './types';
 
@@ -23,18 +23,17 @@ export interface OpResult {
 
 @Injectable({ providedIn: 'root' })
 export class DictionaryService {
-  private cfgService = inject(SagaConfigService);
   private sagaCtx = inject(SagaContextService);
 
   readonly editing = signal<DictionaryTarget | null>(null);
   readonly words = signal<string[]>([]);
   readonly loading = signal<boolean>(false);
   readonly error = signal<string | null>(null);
+  /** Bumpea con cada save para que el badge del saga-header re-loadee el conteo. */
+  readonly savedAt = signal<number>(0);
 
   readonly count = computed(() => this.words().length);
   readonly problematic = computed<ProblematicEntry[]>(() => detectProblematic(this.words()));
-
-  private currentConfig: SagaConfig | null = null;
 
   async openFor(node: TreeNode): Promise<void> {
     if (node.kind !== 'saga') return;
@@ -42,13 +41,10 @@ export class DictionaryService {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const cfg = await this.cfgService.load(node.path);
-      this.currentConfig = cfg;
-      const existing = cfg.diccionario ?? [];
+      const existing = await invoke<string[]>('get_saga_dictionary', { sagaPath: node.path });
       this.words.set([...existing].sort(compareWords));
     } catch (err) {
       this.error.set(String(err));
-      this.currentConfig = null;
       this.words.set([]);
     } finally {
       this.loading.set(false);
@@ -57,7 +53,6 @@ export class DictionaryService {
 
   close(): void {
     this.editing.set(null);
-    this.currentConfig = null;
     this.words.set([]);
     this.error.set(null);
   }
@@ -101,17 +96,13 @@ export class DictionaryService {
 
   private async persist(next: string[]): Promise<OpResult> {
     const editing = this.editing();
-    if (!editing || !this.currentConfig) {
+    if (!editing) {
       return { ok: false, reason: 'No hay saga abierta' };
     }
-    const cfg: SagaConfig = {
-      ...this.currentConfig,
-      diccionario: next.length > 0 ? next : null,
-    };
     try {
-      await this.cfgService.save(editing.path, cfg);
-      this.currentConfig = cfg;
+      await invoke('set_saga_dictionary', { sagaPath: editing.path, words: next });
       this.words.set(next);
+      this.savedAt.set(Date.now());
       // Refrescar la saga activa si coincide para que el live-filter del editor
       // reaccione sin tener que recargar el capítulo.
       if (this.sagaCtx.sagaPath() === editing.path) {

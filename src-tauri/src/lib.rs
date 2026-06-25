@@ -30,7 +30,9 @@ mod util;
 
 use audit::list_chapters_for_audit;
 use book_config::{get_book_config, mark_as_epilogo, set_book_config};
-use saga_config::{find_saga_dir, get_saga_config, set_saga_config};
+use saga_config::{
+    find_saga_dir, get_saga_config, get_saga_dictionary, set_saga_config, set_saga_dictionary,
+};
 use create::{create_book, create_chapter, create_directory, insert_part_after};
 use demo_template::generate_demo_template;
 use dialogs::{pick_file, pick_folder};
@@ -42,8 +44,8 @@ use fs::{
     write_chapter, write_meta,
 };
 use git::{
-    git_commit_all, git_ensure_twriter_ignored, git_fetch, git_pull, git_pull_rebase, git_push,
-    git_status,
+    git_commit_all, git_ensure_dict_union_merge, git_ensure_twriter_ignored, git_fetch, git_pull,
+    git_pull_rebase, git_push, git_status,
 };
 use grammar::{
     check_grammar, check_grammar_available, languagetool_docker_start, languagetool_docker_status,
@@ -119,6 +121,7 @@ pub fn run() {
             git_pull,
             git_pull_rebase,
             git_ensure_twriter_ignored,
+            git_ensure_dict_union_merge,
             git_fetch,
             detect_storage_backend,
             import_chapter,
@@ -142,6 +145,8 @@ pub fn run() {
             mark_as_epilogo,
             get_saga_config,
             set_saga_config,
+            get_saga_dictionary,
+            set_saga_dictionary,
             find_saga_dir,
             read_image,
             check_grammar,
