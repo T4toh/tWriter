@@ -28,13 +28,24 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Búsqueda
 
-- **Mejorar la búsqueda (relevancia/recall)**: hoy seguido no encuentra lo
-  buscado y se termina rastreando a mano. Revisar el índice tantivy
-  (`.twriter/`): tokenizer (¿stemming ES/EN?, ¿acentos/diéresis?,
-  case-fold), búsqueda por frase y fuzzy/typo tolerance, matching parcial
-  de palabra, y ranking de resultados. Evaluar resaltar contexto en el hit
-  y ordenar por capítulo/orden. Definir casos concretos que fallan para
-  testear.
+- [x] **Mejorar la búsqueda — exacta por default + toggle ≈ (fuzzy/acentos)**
+  (`feat/search-exact-default-fuzzy-toggle`, PR #52): se rediseñó en dos modos
+  porque las necesidades chocaban. **Exacto (default)**: índice v4 con tokenizer
+  fiel (lowercase, sin fold de acentos, sin drop de stopwords) + QueryParser
+  literal accent-sensitive → encontrás el texto tal cual, ideal para corregir
+  errores anotados en la Kindle (`mansion` no trae `mansión`). **Fuzzy (opt-in,
+  botón `≈` en la barra, persistido en `settings.searchFuzzy`)**: builder
+  fuzzy/OR (Levenshtein escalado por longitud, máx 2) que tolera typos y acentos
+  para nombres inventados (`kellai`→`Kallai`). Fix del snippet "encuentra nada":
+  `resolve_matched_words` ubica la palabra REAL del doc que matcheó, centra el
+  snippet en ella y la expone como `matchedTerms` por hit; el frontend la usa
+  para resaltar/saltar al término existente. El flag `fold` viaja por todo el
+  highlight (panel, editor, notas, md-reader): exacto accent-sensitive, fuzzy
+  plega acentos; `foldAccents` (TS) espeja `fold_accents` (Rust) length-preserving
+  para mantener offsets DOM/PM alineados. Tests 184/0 + `search-highlight.spec.ts`.
+  Bump `INDEX_VERSION` 2→4 (wipe+reindex auto). **Pendiente** (no en este PR):
+  autocompletar términos del proyecto (tipear `kel` → sugerir `Kallai`) para
+  atacar de raíz el "me olvido cómo se escribe".
 
 ## Tree / Importer
 
