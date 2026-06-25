@@ -18,11 +18,12 @@ export class SagaContextService {
 
   readonly sagaPath = signal<string | null>(null);
   readonly config = signal<SagaConfig | null>(null);
-  readonly dictionary = computed<Set<string>>(() => {
-    const cfg = this.config();
-    const list = cfg?.diccionario ?? [];
-    return new Set(list.map((w) => w.toLowerCase()));
-  });
+  /** Palabras del diccionario de la saga activa. Fuente: `diccionario.txt`
+   *  (comando `get_saga_dictionary`), ya no el campo legacy de saga.json. */
+  private readonly dictWords = signal<string[]>([]);
+  readonly dictionary = computed<Set<string>>(
+    () => new Set(this.dictWords().map((w) => w.toLowerCase())),
+  );
   readonly varianteEs = computed<string | null>(() => {
     const v = this.config()?.variante_es;
     return v && v.trim() ? v : null;
@@ -38,6 +39,7 @@ export class SagaContextService {
       if (!node) {
         this.sagaPath.set(null);
         this.config.set(null);
+        this.dictWords.set([]);
         return;
       }
       void this.resolve(node.path);
@@ -49,12 +51,17 @@ export class SagaContextService {
       const dir = await invoke<string | null>('find_saga_dir', { path: chapterPath });
       if (dir !== this.sagaPath()) {
         this.sagaPath.set(dir);
-        if (dir) await this.reload(dir);
-        else this.config.set(null);
+        if (dir) {
+          await this.reload(dir);
+        } else {
+          this.config.set(null);
+          this.dictWords.set([]);
+        }
       }
     } catch {
       this.sagaPath.set(null);
       this.config.set(null);
+      this.dictWords.set([]);
     }
   }
 
@@ -65,6 +72,24 @@ export class SagaContextService {
     } catch {
       this.config.set(null);
     }
+    await this.loadDictionary(sagaDir);
+  }
+
+  private async loadDictionary(sagaDir: string): Promise<void> {
+    try {
+      const words = await invoke<string[]>('get_saga_dictionary', { sagaPath: sagaDir });
+      this.dictWords.set(words);
+    } catch {
+      this.dictWords.set([]);
+    }
+  }
+
+  /** Recarga el diccionario de la saga activa desde disco. Lo usa GitService
+   *  tras un pull que tocó algún `diccionario.txt`, para que el live-filter del
+   *  editor refleje las palabras sincronizadas sin reabrir la saga. */
+  async reloadDictionary(): Promise<void> {
+    const path = this.sagaPath();
+    if (path) await this.loadDictionary(path);
   }
 
   isInDictionary(word: string): boolean {
@@ -85,18 +110,17 @@ export class SagaContextService {
 
   async addToDictionary(word: string): Promise<{ ok: boolean; reason?: string }> {
     const path = this.sagaPath();
-    const cfg = this.config();
-    if (!path || !cfg) return { ok: false, reason: 'No hay saga activa' };
+    if (!path) return { ok: false, reason: 'No hay saga activa' };
     const result = validateWord(word);
     if (!result.ok) return { ok: false, reason: result.reason };
-    const existing = cfg.diccionario ?? [];
+    const existing = this.dictWords();
     if (existsCaseInsensitive(existing, result.value)) {
       return { ok: false, reason: 'Ya existe en el diccionario' };
     }
-    const next: SagaConfig = { ...cfg, diccionario: [...existing, result.value] };
+    const next = [...existing, result.value];
     try {
-      await invoke('set_saga_config', { sagaPath: path, config: next });
-      this.config.set(next);
+      await invoke('set_saga_dictionary', { sagaPath: path, words: next });
+      this.dictWords.set(next);
       return { ok: true };
     } catch (err) {
       return { ok: false, reason: String(err) };
@@ -107,8 +131,6 @@ export class SagaContextService {
    *  DictionaryService después de persistir cambios desde el modal dedicado,
    *  para que el live-filter del editor reaccione sin recargar el capítulo. */
   updateDictionary(words: string[]): void {
-    const cur = this.config();
-    if (!cur) return;
-    this.config.set({ ...cur, diccionario: words.length > 0 ? words : null });
+    this.dictWords.set(words);
   }
 }

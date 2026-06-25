@@ -87,6 +87,11 @@ pub async fn git_ensure_twriter_ignored(repo_path: String) -> Result<EnsureResul
 }
 
 #[tauri::command]
+pub async fn git_ensure_dict_union_merge(repo_path: String) -> Result<bool, String> {
+    run_blocking(move || git_ensure_dict_union_merge_impl(&repo_path)).await
+}
+
+#[tauri::command]
 pub async fn git_fetch(repo_path: String) -> Result<(), String> {
     run_blocking(move || git_fetch_impl(&repo_path)).await
 }
@@ -389,6 +394,37 @@ pub(crate) fn git_ensure_twriter_ignored_impl(repo_path: &str) -> Result<EnsureR
         gitignore_updated,
         untracked_files,
     })
+}
+
+/// Asegura que `<root>/.gitattributes` declare el driver `union` para los
+/// `diccionario.txt` per-saga. El patrón sin `/` matchea por basename a
+/// cualquier profundidad → una sola regla cubre todas las sagas del repo.
+/// Con `merge=union`, git toma ambos lados en un conflicto (unión de líneas);
+/// la app deduplica al leer. Devuelve true si tocó el archivo.
+pub(crate) fn git_ensure_dict_union_merge_impl(repo_path: &str) -> Result<bool, String> {
+    let root = PathBuf::from(repo_path);
+    let ga_path = root.join(".gitattributes");
+    let existing = std::fs::read_to_string(&ga_path).unwrap_or_default();
+    let already = existing.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with("diccionario.txt") && trimmed.contains("merge=union")
+    });
+    if already {
+        return Ok(false);
+    }
+    let mut new_content = existing.clone();
+    if !new_content.is_empty() && !new_content.ends_with('\n') {
+        new_content.push('\n');
+    }
+    if !new_content.is_empty() {
+        new_content.push('\n');
+    }
+    new_content
+        .push_str("# tWriter: diccionarios per-saga se fusionan por unión entre PCs\n");
+    new_content.push_str("diccionario.txt merge=union\n");
+    std::fs::write(&ga_path, new_content).map_err(|e| e.to_string())?;
+    tracing::info!(target: "git", "added diccionario.txt merge=union a .gitattributes");
+    Ok(true)
 }
 
 pub(crate) fn git_pull_rebase_impl(repo_path: &str) -> Result<Vec<PullPathChange>, String> {
@@ -847,6 +883,25 @@ mod tests {
         assert_eq!(res.untracked_files, 0);
         let gi = fs::read_to_string(dir.join(".gitignore")).unwrap();
         assert!(gi.contains(".twriter/"));
+    }
+
+    #[test]
+    fn ensure_dict_union_appends_when_missing() {
+        let dir = init_repo();
+        let touched = git_ensure_dict_union_merge_impl(dir.to_str().unwrap()).unwrap();
+        assert!(touched);
+        let ga = fs::read_to_string(dir.join(".gitattributes")).unwrap();
+        assert!(ga.contains("diccionario.txt merge=union"));
+    }
+
+    #[test]
+    fn ensure_dict_union_idempotent() {
+        let dir = init_repo();
+        fs::write(dir.join(".gitattributes"), "diccionario.txt merge=union\n").unwrap();
+        let touched = git_ensure_dict_union_merge_impl(dir.to_str().unwrap()).unwrap();
+        assert!(!touched);
+        let ga = fs::read_to_string(dir.join(".gitattributes")).unwrap();
+        assert_eq!(ga.matches("merge=union").count(), 1);
     }
 
     #[test]

@@ -6,6 +6,7 @@ import {
   input,
   signal,
 } from '@angular/core';
+import { invoke } from '@tauri-apps/api/core';
 import { LucideBookOpen, LucideSettings } from '@lucide/angular';
 import { BookConfigService } from '../core/book-config-service';
 import { CoverCache } from '../core/cover-cache';
@@ -40,19 +41,17 @@ export class SagaHeader {
   protected readonly author = computed(() => this.config()?.autor ?? null);
   protected readonly idioma = computed(() => this.config()?.idioma ?? null);
   protected readonly bookCount = computed(() => this.node().children.length);
-  protected readonly hasDictionary = computed(
-    () => (this.config()?.diccionario?.length ?? 0) > 0,
-  );
-  protected readonly dictSize = computed(
-    () => this.config()?.diccionario?.length ?? 0,
-  );
+  protected readonly dictCount = signal<number>(0);
+  protected readonly hasDictionary = computed(() => this.dictCount() > 0);
+  protected readonly dictSize = computed(() => this.dictCount());
 
   constructor() {
     effect(() => {
       const n = this.node();
-      // Re-load on save (saga or any book)
+      // Re-load on save (saga, any book, o el diccionario dedicado)
       this.cfgService.savedAt();
       this.bookCfgService.savedAt();
+      this.dictSvc.savedAt();
       void this.load(n);
     });
   }
@@ -77,9 +76,16 @@ export class SagaHeader {
     try {
       const cfg = await this.cfgService.load(node.path);
       this.config.set(cfg);
+      try {
+        const words = await invoke<string[]>('get_saga_dictionary', { sagaPath: node.path });
+        this.dictCount.set(words.length);
+      } catch {
+        this.dictCount.set(0);
+      }
       await this.loadCover(node, cfg.tapa ?? null);
     } catch {
       this.config.set(null);
+      this.dictCount.set(0);
       this.coverDataUrl.set(null);
     }
   }

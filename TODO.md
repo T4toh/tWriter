@@ -14,15 +14,53 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   parte del párrafo → el highlight persiste. La limpieza por mouseup /
   keydown se está escapando para algún path (chapter editor, no notes
   reader). Revisar el cleanup en `editor.ts` que monta el `TreeWalker`.
+- **Bug — cursor fantasma**: queda una barra de cursor pintada en un
+  punto del editor (típicamente arriba a la izquierda, fuera del flujo de
+  texto) además del caret real donde se está escribiendo. Ver captura.
+  Probable caret residual de TipTap/ProseMirror al perder/recuperar foco o
+  tras un scroll. Investigar si es el caret nativo o un overlay de
+  decoración (highlight/gapcursor) que no se limpia.
+- **Performance en archivos grandes**: lag/scroll pesado en capítulos
+  largos. Puede ser el scroll nativo de Windows/Linux, pero medir primero:
+  si es el render de ProseMirror, evaluar virtualización o paginar el
+  documento. Confirmar si el costo está en el editor o en el repintado del
+  árbol/status.
+
+## Búsqueda
+
+- **Mejorar la búsqueda (relevancia/recall)**: hoy seguido no encuentra lo
+  buscado y se termina rastreando a mano. Revisar el índice tantivy
+  (`.twriter/`): tokenizer (¿stemming ES/EN?, ¿acentos/diéresis?,
+  case-fold), búsqueda por frase y fuzzy/typo tolerance, matching parcial
+  de palabra, y ranking de resultados. Evaluar resaltar contexto en el hit
+  y ordenar por capítulo/orden. Definir casos concretos que fallan para
+  testear.
 
 ## Tree / Importer
 
+- **Bug — cartel de split colgado**: el overlay "Soltar acá para abrir en
+  split" queda pintado después de soltar el drop. Ver captura. El handler
+  de `drop` / `dragend` no está limpiando el estado del hint. Asegurar que
+  se resetee también en `dragleave` fuera de la ventana y al soltar.
+- **Doble árbol para notas**: panel de árbol secundario chico, dedicado a
+  notas, que NO cambie el editor activo salvo doble-click o drag. Motivo:
+  poder buscar/navegar notas sin perder el capítulo abierto. Hoy abrir una
+  nota reemplaza el archivo en el editor. Pensar layout (¿árbol colapsable
+  abajo del principal? ¿columna aparte?) y cómo coexiste con el reader de
+  notas existente.
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
 
 ## EPUB
 
+- **Copyright editable en ambos idiomas** (ES/EN): hoy el texto de la
+  página de copyright sale fijo/auto-generado. Permitir editar el cuerpo y
+  que cambie según el `idioma` del libro.
+- **Incisos extra de copyright tipo Reedsy**: sumar cláusulas opcionales
+  (reserva de derechos, "obra de ficción / personajes ficticios",
+  prohibición de reproducción, etc.) elegibles al armar la página legal,
+  bilingües como el copyright.
 - Lista "Otros libros del mismo autor" en EPUB (contratapa ya está embebida).
 - Preview tipo Kindle (B/N, distintos tamaños — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
 - Pesos extra de fuente (300 Light, 600 SemiBold, 900 Black). Hoy solo Regular/Bold/Italic/BoldItalic; pesos custom requieren edit manual del `theme.json`.
@@ -47,6 +85,20 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   repo de novelas, (b) sumar export/import manual, (c) sync explícito
   por gist/Dropbox. La (a) es la más seamless pero mezcla preferencias
   per-PC (font recents) con per-repo (tema, idioma).
+- [x] **Sync del diccionario personal** (`feat/dictionary-git-sync-union`): el
+  diccionario ya viajaba por git (vivía en `saga.json`, trackeado) — lo que
+  faltaba era (a) recargarlo tras pull y (b) unir sin pisar cuando dos PCs
+  agregan palabras distintas. Se movió de `saga.json` a un archivo dedicado
+  per-saga `<saga>/diccionario.txt` (una palabra/línea) + `<root>/.gitattributes`
+  con `diccionario.txt merge=union` (una sola regla cubre todas las sagas vía
+  match por basename). Git fusiona por unión automáticamente; la app deduplica
+  case-insensitive al leer. Comandos Rust `get/set_saga_dictionary` (con
+  migración idempotente desde el campo legacy de saga.json, que se borra al
+  migrar), `git_ensure_dict_union_merge` (espejo de `git_ensure_twriter_ignored`,
+  corre en `bootstrapSync`). `applyPullChanges` detecta `diccionario.txt` tocados
+  y recarga el de la saga activa. `set_saga_config` migra+strip antes de escribir
+  para que ningún round-trip pierda palabras. Verificado end-to-end con dos
+  clones: `pull --rebase` resuelve la unión sin conflicto.
 
 ## Observabilidad / Stats
 
@@ -60,6 +112,13 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 - [x] **Fetch silencioso al abrir + pre-push**: `GitService.bootstrapSync()` hace `git_fetch --prune` al detectar el repo git, y `syncNow()` ahora es fetch-first (fetch → refresh → pull-if-behind → commit → push). El sync también se rebootstrapea ante el evento `online`.
 - [x] **Endurecer `run_git` contra cuelgues sin TTY**: `git.rs::run_git_with_timeout` setea `GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"` y aplica timeout (30s default, 60s para push/pull/fetch) vía la crate `wait-timeout`. Sobre timeout mata el child y devuelve `network: git command timed out`. Pull/rebase ya iban por `run_git` — el TODO viejo asumía un raw `Command::new` que en realidad no existía.
 - **Event-driven sync** (nuevo, agregado en la misma PR): focus → fetch, blur (debounced 30s + cooldown 2min) → flushAndSync, close → flushAndSync con timeout 10s + modal "¿Cerrar igual?" si falla. Listeners de `online`/`offline` también. El poll de status de 30s se eliminó; queda el poll de 5min como red de seguridad para sesiones largas sin transiciones de foco.
+- **Bug — cambio de carpetas en remoto no refresca el árbol**: si en otra
+  PC se crean/renombran/mueven carpetas, hay que recargar el árbol a mano
+  para verlas. El refresh post-pull (`loadTree()` sobre `PullPathChange`)
+  ya cubre `.html`/`.md`, pero los cambios de estructura de carpetas no se
+  reflejan. Verificar si `PullPathChange` reporta dirs y si `loadTree()`
+  realmente se dispara para este caso. (Posible que ya esté resuelto —
+  confirmar con repro entre dos PCs.)
 
 ## Validador RAE
 

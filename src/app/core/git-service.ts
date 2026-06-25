@@ -241,6 +241,13 @@ export class GitService {
       } catch (err) {
         console.warn('git_ensure_twriter_ignored failed', err);
       }
+      try {
+        // Declarar el driver `union` para los diccionario.txt per-saga, así los
+        // cambios de palabras se fusionan por unión entre PCs sin conflicto.
+        await invoke('git_ensure_dict_union_merge', { repoPath: root });
+      } catch (err) {
+        console.warn('git_ensure_dict_union_merge failed', err);
+      }
     }
     try {
       await invoke('git_fetch', { repoPath: root });
@@ -471,6 +478,16 @@ export class GitService {
       void search.applyPathChanges(changes);
     } catch (err) {
       console.warn('post-pull applyPathChanges falló', err);
+    }
+    // Si el pull tocó algún diccionario.txt, recargar el de la saga activa para
+    // que el live-filter del editor refleje las palabras sincronizadas.
+    if (changes.some((c) => c.path.replace(/\\/g, '/').endsWith('/diccionario.txt'))) {
+      try {
+        const { SagaContextService } = await import('./saga-context-service');
+        await this.injector.get(SagaContextService).reloadDictionary();
+      } catch (err) {
+        console.warn('post-pull reloadDictionary falló', err);
+      }
     }
   }
 
