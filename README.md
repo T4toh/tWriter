@@ -32,6 +32,7 @@ Las novelas viven en un repo privado aparte (HTML + JSON). Esta app es solo el e
     - [Debug / observabilidad](#debug--observabilidad)
     - [Storage backend (git / cloud / local)](#storage-backend-git--cloud--local)
     - [Git auto-sync (cuando backend = git)](#git-auto-sync-cuando-backend--git)
+    - [Sync del diccionario entre PCs](#sync-del-diccionario-entre-pcs)
   - [Configuración avanzada](#configuración-avanzada)
     - [LanguageTool (3 backends)](#languagetool-3-backends)
       - [API público (default)](#api-público-default)
@@ -308,7 +309,7 @@ viejo, validador los detecta correctamente con `paragraph-collapsed`.
 - Auto-check auto-on en modo local/custom tras ping ok. Toggle persistido (`settings.json::grammarAutoDisabled`). Público queda off por ToS.
 - Variantes regionales (es-AR, es-ES, en-US, en-GB…) globales + override per-saga (`saga.json::variante_es`/`variante_en`). Click en badge del footer abre dropdown.
 - Diccionario per-saga: "+ diccionario" en popover de TYPOS filtra matches. **Re-filtrado reactivo**: `SagaContextService.dictionary()` es un signal — un effect en `editor.ts` lo observa y re-filtra los `grammarMatches` actuales sin pegarle de nuevo a LT. Cubre el race típico (el saga.json carga async después del primer `checkGrammar`, así que palabras del mundo aparecían marcadas hasta cerrar/reabrir el cap) y el agregar palabra desde el popover (limpia el squiggle on the spot).
-- **Vista dedicada del diccionario** (botón 📖 en saga-header de landing + item "Editar diccionario…" en context menu de saga): modal con contador, búsqueda live, lista alfabética (Intl.Collator), agregar con validación en vivo, borrar con confirm inline, banner opt-in "Limpiar" cuando detecta entradas problemáticas (puntuación al borde, duplicados case-insensitive, solo dígitos, fuera de los límites 2–64). El validador (`dictionary/word-validator.ts`) sanea los bordes (`.`, `,`, `…`, comillas, paréntesis…) y se aplica también en el path "+ diccionario" del popover para que no se cuelen entradas con punto al final. Persiste por acción (cada add/remove escribe `saga.json`); el archivo en disco sigue siendo `Option<Vec<String>>` plano, sin migración.
+- **Vista dedicada del diccionario** (botón 📖 en saga-header de landing + item "Editar diccionario…" en context menu de saga): modal con contador, búsqueda live, lista alfabética (Intl.Collator), agregar con validación en vivo, borrar con confirm inline, banner opt-in "Limpiar" cuando detecta entradas problemáticas (puntuación al borde, duplicados case-insensitive, solo dígitos, fuera de los límites 2–64). El validador (`dictionary/word-validator.ts`) sanea los bordes (`.`, `,`, `…`, comillas, paréntesis…) y se aplica también en el path "+ diccionario" del popover para que no se cuelen entradas con punto al final. Persiste por acción (cada add/remove escribe el archivo). El storage es un `<saga>/diccionario.txt` (una palabra por línea) — ver [sync del diccionario](#sync-del-diccionario-entre-pcs) abajo para el detalle de cómo se fusiona entre PCs.
 - **UX Docker explicativa**: stepper visual con fases `checking → pulling → starting → loading → ready` durante el arranque + bloque "Por qué Docker" con links a docker.com, languagetool.org, el repo oficial de LT y la imagen `erikvl87/languagetool` que usamos. Eventos `languagetool-progress` emitidos desde Rust con `tauri::Emitter`.
 - **LT Premium / self-hosted con auth**: en modo Custom URL podés pegar tu username + apiKey. El apiKey va al **keyring del OS** (libsecret/Keychain/Credential Manager) vía el módulo `secrets`. Ver [Configuración avanzada → LanguageTool](#languagetool-3-backends) para el detalle del keyring.
 
@@ -443,6 +444,35 @@ ni saber qué es `git pull --rebase`.
   resolución. De yapa cubre el switch root git → non-git: el `git_status`
   ya no dispara sobre la carpeta nueva con el backend viejo.
 - Botón "sync ahora" (⇅) en header.
+
+### Sync del diccionario entre PCs
+
+El diccionario per-saga (las palabras que agregás para que LanguageTool deje
+de marcarlas como typo) se sincroniza solo, junto con el repo de novelas, y
+resuelve diferencias entre PCs como **unión sin repetidos**.
+
+- **Storage line-based**: cada saga guarda su diccionario en
+  `<saga>/diccionario.txt`, una palabra por línea (antes vivía en un array
+  dentro de `saga.json`). Es la fuente de verdad; la app deduplica
+  case-insensitive y ordena al leer.
+- **Merge por unión automático**: al detectar un repo git, la app asegura una
+  línea `diccionario.txt merge=union` en `<root>/.gitattributes`. El patrón no
+  lleva `/`, así que matchea por basename a cualquier profundidad — **una sola
+  regla cubre todas las sagas**. Con el driver `union` de git, si dos PCs
+  agregan palabras distintas a la vez, el merge/rebase toma ambos lados (la
+  suma) en vez de tirar conflicto. Por eso conviene un archivo de texto y no el
+  JSON: `union` solo funciona línea por línea.
+- **Recarga tras pull**: cuando un `pull` trae cambios en algún
+  `diccionario.txt`, la app recarga el de la saga abierta sin que tengas que
+  cerrarla — el subrayado del editor refleja las palabras nuevas al toque.
+- **Migración transparente**: la primera vez que abrís una saga vieja, las
+  palabras que estaban en `saga.json` se mueven al `.txt` y el campo legacy se
+  borra. No perdés nada.
+- **Versiones mezcladas**: si una PC corre una versión vieja de la app (que aún
+  escribe en `saga.json`) y otra la nueva, la nueva **absorbe** lo que la vieja
+  haya escrito, así nunca se pierden palabras. Lo que agregues en la versión
+  nueva, eso sí, no lo ve la vieja hasta que la actualices. Recomendación:
+  mantené ambas PCs en la misma versión.
 
 ## Configuración avanzada
 
