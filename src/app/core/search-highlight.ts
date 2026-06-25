@@ -1,3 +1,35 @@
+/** Mapa de vocales acentuadas → base (preserva ñ/Ñ deliberadamente). Espejo de
+ *  `fold_accent_char` en `src-tauri/src/search.rs`. */
+const ACCENT_MAP: Record<string, string> = {
+  á: 'a', à: 'a', ä: 'a', â: 'a', ã: 'a',
+  é: 'e', è: 'e', ë: 'e', ê: 'e',
+  í: 'i', ì: 'i', ï: 'i', î: 'i',
+  ó: 'o', ò: 'o', ö: 'o', ô: 'o', õ: 'o',
+  ú: 'u', ù: 'u', ü: 'u', û: 'u',
+  Á: 'A', À: 'A', Ä: 'A', Â: 'A', Ã: 'A',
+  É: 'E', È: 'E', Ë: 'E', Ê: 'E',
+  Í: 'I', Ì: 'I', Ï: 'I', Î: 'I',
+  Ó: 'O', Ò: 'O', Ö: 'O', Ô: 'O', Õ: 'O',
+  Ú: 'U', Ù: 'U', Ü: 'U', Û: 'U',
+};
+
+/**
+ * Pliega acentos preservando ñ. **LENGTH-PRESERVING** (1 code unit → 1 code
+ * unit): cada clave y valor es un único char BMP, así que `foldAccents(s)` tiene
+ * el mismo largo que `s` y `foldAccents(s)[i]` alinea con `s[i]`. Eso permite
+ * comparar sobre el string plegado pero marcar/seleccionar el substring ORIGINAL
+ * (con tilde) usando los mismos offsets — clave para que `offsetToPm` y los
+ * `Range` DOM no se desfasen. Espejo de `fold_accents` en `search.rs`.
+ *
+ * (`toLowerCase()` también es length-preserving para el dominio ES/latino; el
+ * código ya asumía esto al usar `t.length` post-lowercase.)
+ */
+export function foldAccents(s: string): string {
+  let out = '';
+  for (const ch of s) out += ACCENT_MAP[ch] ?? ch;
+  return out;
+}
+
 /**
  * Busca el primer text node dentro de `host` que matchee la query.
  *
@@ -12,11 +44,16 @@ export function highlightFirstMatch(
   host: HTMLElement | null,
   terms: string[],
   rawQuery?: string,
+  fold = false,
 ): boolean {
   if (!host) return false;
-  const lowerTerms = terms.map((t) => t.toLowerCase()).filter((t) => t.length > 0);
+  // `fold` plega acentos (modo fuzzy) para comparar accent-insensitive; en modo
+  // exacto NO se plega para no resaltar variantes con tilde que no se buscaron.
+  // El fold es length-preserving ⇒ los offsets siguen válidos sobre el original.
+  const norm = (s: string): string => (fold ? foldAccents(s) : s);
+  const lowerTerms = terms.map((t) => norm(t.toLowerCase())).filter((t) => t.length > 0);
   const raw = (rawQuery ?? '').trim();
-  const rawLower = raw.toLowerCase();
+  const rawLower = norm(raw.toLowerCase());
   const hasRichForm =
     raw.length > 0 &&
     [...raw].some((c) => c !== c.toLowerCase() || /[^\p{L}\p{N}\s]/u.test(c));
@@ -38,7 +75,7 @@ export function highlightFirstMatch(
   if (hasRichForm) {
     let cur: Node | null = walker.nextNode();
     while (cur) {
-      const text = (cur.nodeValue ?? '').toLowerCase();
+      const text = norm((cur.nodeValue ?? '').toLowerCase());
       const idx = text.indexOf(rawLower);
       if (idx >= 0) {
         bestNode = cur as Text;
@@ -61,7 +98,7 @@ export function highlightFirstMatch(
     });
     let cur: Node | null = walker2.nextNode();
     while (cur) {
-      const text = (cur.nodeValue ?? '').toLowerCase();
+      const text = norm((cur.nodeValue ?? '').toLowerCase());
       for (const t of lowerTerms) {
         const idx = text.indexOf(t);
         if (idx >= 0) {
@@ -127,14 +164,20 @@ export function findAllMatchesInPlain(
   plain: string,
   terms: string[],
   rawQuery: string,
+  fold = false,
 ): { start: number; end: number }[] {
   if (!plain) return [];
   const raw = (rawQuery ?? '').trim();
-  const rawLower = raw.toLowerCase();
+  // `fold` (modo fuzzy) plega acentos para comparar accent-insensitive; en modo
+  // exacto NO se plega. El fold es length-preserving ⇒ los índices del string
+  // plegado son válidos sobre `plain` original, así que los rangos devueltos
+  // marcan el substring (con tilde) tal cual aparece.
+  const norm = (s: string): string => (fold ? foldAccents(s) : s);
+  const rawLower = norm(raw.toLowerCase());
   const hasRichForm =
     raw.length > 0 &&
     [...raw].some((c) => c !== c.toLowerCase() || /[^\p{L}\p{N}\s]/u.test(c));
-  const lowerPlain = plain.toLowerCase();
+  const lowerPlain = norm(plain.toLowerCase());
   const hits: { start: number; end: number }[] = [];
 
   if (hasRichForm) {
@@ -149,7 +192,7 @@ export function findAllMatchesInPlain(
     return hits;
   }
 
-  const lowerTerms = terms.map((t) => t.toLowerCase()).filter((t) => t.length > 0);
+  const lowerTerms = terms.map((t) => norm(t.toLowerCase())).filter((t) => t.length > 0);
   if (lowerTerms.length === 0) return [];
 
   const all: { start: number; end: number }[] = [];

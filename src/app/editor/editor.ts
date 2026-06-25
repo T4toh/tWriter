@@ -464,7 +464,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         const pending = this.search.consumePendingHighlight(node.path);
         if (pending) {
           setTimeout(() => {
-            highlightFirstMatch(this.hostRef.nativeElement, pending.terms, pending.rawQuery);
+            highlightFirstMatch(this.hostRef.nativeElement, pending.terms, pending.rawQuery, pending.fold);
           }, 0);
         }
       }
@@ -588,7 +588,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         this.applySearchDecorations([]);
         return;
       }
-      this.recomputeSearchDecorations(terms.terms, terms.rawQuery);
+      this.recomputeSearchDecorations(terms.terms, terms.rawQuery, terms.fold);
     });
 
     // Pending highlight (scroll-to-match) cuando el archivo YA está abierto.
@@ -603,7 +603,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       const consumed = this.search.consumePendingHighlight(node.path);
       if (!consumed) return;
       setTimeout(() => {
-        highlightFirstMatch(this.hostRef.nativeElement, consumed.terms, consumed.rawQuery);
+        highlightFirstMatch(this.hostRef.nativeElement, consumed.terms, consumed.rawQuery, consumed.fold);
       }, 0);
     });
 
@@ -1019,14 +1019,14 @@ export class Editor implements AfterViewInit, OnDestroy {
     setSearchHighlights(view, ranges);
   }
 
-  private recomputeSearchDecorations(terms: string[], rawQuery: string): void {
+  private recomputeSearchDecorations(terms: string[], rawQuery: string, fold: boolean): void {
     if (!this.tiptap) return;
     const { plain, ranges } = extractPlainText(this.tiptap.state.doc);
     if (!plain) {
       this.applySearchDecorations([]);
       return;
     }
-    const hits = findAllMatchesInPlain(plain, terms, rawQuery);
+    const hits = findAllMatchesInPlain(plain, terms, rawQuery, fold);
     const positioned: { from: number; to: number }[] = [];
     for (const h of hits) {
       const from = offsetToPm(h.start, ranges);

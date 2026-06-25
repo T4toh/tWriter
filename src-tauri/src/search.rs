@@ -6,25 +6,38 @@ use std::time::UNIX_EPOCH;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tantivy::collector::TopDocs;
-use tantivy::query::{BooleanQuery, Occur, Query, QueryParser, TermQuery};
+use tantivy::query::{
+    BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, Query, QueryParser, TermQuery,
+};
 use tantivy::schema::{
     Field, IndexRecordOption, Schema, TextFieldIndexing, TextOptions, Value, FAST, STORED, STRING,
 };
-use tantivy::tokenizer::{
-    Language, LowerCaser, RemoveLongFilter, SimpleTokenizer, StopWordFilter, TextAnalyzer,
-};
+use tantivy::tokenizer::{LowerCaser, RemoveLongFilter, SimpleTokenizer, TextAnalyzer};
 use tantivy::{doc, Index, IndexReader, IndexWriter, ReloadPolicy, TantivyDocument, Term};
 use tauri::{AppHandle, Emitter};
 
 use crate::fs as fs_mod;
 
 const INDEX_SUBDIR: &str = ".twriter/search-index";
-const INDEX_VERSION: u32 = 2;
+// v4: el tokenizer `es_text` preserva acentos Y stopwords (lowercase only) — el
+// modo exacto (default) necesita matchear el string literal tal cual para
+// proofreading; el modo fuzzy (opt-in) absorbe typos/acentos vía Levenshtein.
+// Bump fuerza wipe + full reindex.
+const INDEX_VERSION: u32 = 4;
 const VERSION_FILE: &str = ".version";
 const WRITER_HEAP_BYTES: usize = 50_000_000;
 const SNIPPET_MAX_LEN: usize = 240;
 const ES_TOKENIZER: &str = "es_text";
 const TITLE_BOOST: f32 = 2.5;
+
+// Fuzzy/typo tolerance: distancia Levenshtein escalada por longitud del término.
+// Max 2 — tantivy 0.22 sólo cachea autómatas 0/1/2 (≥3 ⇒ InvalidArgument).
+const FUZZY_LEN_EXACT_MAX: usize = 3; // <=3 chars ⇒ distancia 0 (exacto)
+const FUZZY_LEN_ONE_MAX: usize = 7; // 4..=7 chars ⇒ distancia 1; >=8 ⇒ distancia 2
+const FUZZY_TRANSPOSITION_COST_ONE: bool = true; // swap adyacente cuesta 1 edit
+// Boost del clause "todos los términos" (AND) sobre el OR base — docs con todos
+// los términos ranquean por encima de los que matchean sólo alguno.
+const FULL_MATCH_BOOST: f32 = 3.0;
 
 static INDEX_STATE: OnceLock<Mutex<Option<SearchIndex>>> = OnceLock::new();
 
@@ -55,6 +68,11 @@ pub struct SearchHit {
     pub title: String,
     pub snippet: String,
     pub score: f32,
+    /// Palabras REALES del doc que matchearon cada término (resueltas vía
+    /// fold+fuzzy). Permiten al frontend resaltar el término existente — ej.
+    /// "Kallai" cuando se tipeó "kellai" — en vez del literal inexistente.
+    #[serde(rename = "matchedTerms")]
+    pub matched_terms: Vec<String>,
     /// Score BM25 puro (sin el boost ×2 de forma rica). Solo presente cuando
     /// la query llega con `debug=true`. Útil para diagnosticar resultados.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -123,21 +141,40 @@ struct SchemaFields {
     mtime_field: Field,
 }
 
-/// Pipeline custom para `title` y `content`: simple tokenizer → remove-long →
-/// lowercase → drop stopwords ES (lista snowball embebida en tantivy v0.22 con
-/// feature `stopwords`). Cubre `el/la/que/y/de/...` para que esos términos no
-/// generen ranking ruidoso ni hits triviales en queries puras.
-fn make_es_analyzer() -> TextAnalyzer {
-    let base = TextAnalyzer::builder(SimpleTokenizer::default())
-        .filter(RemoveLongFilter::limit(40))
-        .filter(LowerCaser);
-    // El builder es typestate (cada `.filter` cambia el tipo concreto), así
-    // que ramificamos antes de `.build()` y dejamos que tantivy borre el tipo
-    // al construir el `TextAnalyzer`.
-    match StopWordFilter::new(Language::Spanish) {
-        Some(stop) => base.filter(stop).build(),
-        None => base.build(),
+/// Pliega una vocal acentuada a su base (á→a … ü→u y mayúsculas), preservando
+/// ñ/Ñ. Length-preserving en chars (1 char → 1 char). El índice NO se pliega
+/// (modo exacto accent-sensitive); este fold se usa sólo para `resolve_matched_words`
+/// (ubicar la palabra real de un hit ignorando acentos).
+fn fold_accent_char(c: char) -> char {
+    match c {
+        'á' | 'à' | 'ä' | 'â' | 'ã' => 'a',
+        'é' | 'è' | 'ë' | 'ê' => 'e',
+        'í' | 'ì' | 'ï' | 'î' => 'i',
+        'ó' | 'ò' | 'ö' | 'ô' | 'õ' => 'o',
+        'ú' | 'ù' | 'ü' | 'û' => 'u',
+        'Á' | 'À' | 'Ä' | 'Â' | 'Ã' => 'A',
+        'É' | 'È' | 'Ë' | 'Ê' => 'E',
+        'Í' | 'Ì' | 'Ï' | 'Î' => 'I',
+        'Ó' | 'Ò' | 'Ö' | 'Ô' | 'Õ' => 'O',
+        'Ú' | 'Ù' | 'Ü' | 'Û' => 'U',
+        // ñ/Ñ NO se pliegan — "año" ≠ "ano".
+        other => other,
     }
+}
+
+fn fold_accents(s: &str) -> String {
+    s.chars().map(fold_accent_char).collect()
+}
+
+/// Pipeline de `title` y `content`: simple tokenizer → remove-long → lowercase.
+/// Deliberadamente SIN fold de acentos ni drop de stopwords: el índice preserva
+/// la grafía (lowercased) para que el modo exacto encuentre el string literal
+/// — incluyendo palabras función — que es lo que se busca al corregir errores.
+fn make_es_analyzer() -> TextAnalyzer {
+    TextAnalyzer::builder(SimpleTokenizer::default())
+        .filter(RemoveLongFilter::limit(40))
+        .filter(LowerCaser)
+        .build()
 }
 
 fn read_index_version(dir: &Path) -> Option<u32> {
@@ -257,6 +294,78 @@ fn html_to_text(html: &str) -> String {
         .replace("&quot;", "\"")
         .replace("&#39;", "'");
     decoded.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Distancia Levenshtein entre dos strings (sobre chars). Con corte temprano:
+/// si la diferencia de longitud ya supera `max`, devuelve `max + 1` sin calcular.
+fn levenshtein(a: &str, b: &str, max: usize) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let (la, lb) = (a.len(), b.len());
+    if la.abs_diff(lb) > max {
+        return max + 1;
+    }
+    let mut prev: Vec<usize> = (0..=lb).collect();
+    let mut cur = vec![0usize; lb + 1];
+    for i in 1..=la {
+        cur[0] = i;
+        let mut row_min = cur[0];
+        for j in 1..=lb {
+            let cost = if a[i - 1] == b[j - 1] { 0 } else { 1 };
+            cur[j] = (prev[j] + 1).min(cur[j - 1] + 1).min(prev[j - 1] + cost);
+            row_min = row_min.min(cur[j]);
+        }
+        // Corte: si toda la fila ya excede max, no hay vuelta atrás.
+        if row_min > max {
+            return max + 1;
+        }
+        std::mem::swap(&mut prev, &mut cur);
+    }
+    prev[lb]
+}
+
+/// Para cada término de la query, busca en `content` la palabra real que lo
+/// matchea (igual criterio que el índice: fold de acentos + lowercase + fuzzy
+/// escalado por longitud) y devuelve esa palabra ORIGINAL (con su tilde/caso tal
+/// cual aparece). Reusado para (a) centrar el snippet en la palabra correcta
+/// aunque sea un match fuzzy/acento, y (b) que el frontend resalte el término
+/// real en el editor en vez del literal tipeado (que puede no existir en el doc).
+fn resolve_matched_words(content: &str, query_terms: &[String], fuzzy: bool) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    // Palabras del contenido (runs alfanuméricos) con su forma normalizada.
+    let words: Vec<(&str, String)> = content
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(|w| (w, fold_accents(&w.to_lowercase())))
+        .collect();
+    for term in query_terms {
+        let qn = fold_accents(&term.to_lowercase());
+        if qn.is_empty() {
+            continue;
+        }
+        // Exacto ⇒ budget 0 (sólo la palabra literal, ya presente en el hit).
+        let budget = if fuzzy {
+            fuzzy_distance_for(qn.chars().count()) as usize
+        } else {
+            0
+        };
+        let mut best: Option<(usize, &str)> = None;
+        for (orig, wn) in &words {
+            let d = levenshtein(&qn, wn, budget);
+            if d <= budget && best.map_or(true, |(bd, _)| d < bd) {
+                best = Some((d, orig));
+                if d == 0 {
+                    break; // match exacto (post-fold) — no hay mejor.
+                }
+            }
+        }
+        if let Some((_, w)) = best {
+            if !out.iter().any(|e| e.eq_ignore_ascii_case(w)) {
+                out.push(w.to_string());
+            }
+        }
+    }
+    out
 }
 
 /// Genera un snippet centrado en el primer match de los términos de la query.
@@ -658,6 +767,7 @@ pub fn search_query_impl(
     limit: usize,
     scope: Option<&SearchScope>,
     debug: bool,
+    fuzzy: bool,
 ) -> Result<SearchResult, String> {
     let slot = state().lock().map_err(|e| e.to_string())?;
     let idx = match slot.as_ref() {
@@ -677,16 +787,28 @@ pub fn search_query_impl(
         });
     }
     let searcher = idx.reader.searcher();
-    let mut parser = QueryParser::for_index(&idx.index, vec![idx.title_field, idx.content_field]);
-    // Title pesa más que content — un hit en el título ranquea sobre uno en
-    // el body. El boost se compone multiplicativamente con BM25.
-    parser.set_field_boost(idx.title_field, TITLE_BOOST);
-    // Default AND: `duendes mansión` exige ambos. Operadores explícitos
-    // (`OR`, `-término`, `"frase"`, `kind:note`) siguen disponibles.
-    parser.set_conjunction_by_default();
-    let parsed = match parser.parse_query(q) {
-        Ok(p) => p,
-        Err(_) => return Ok(SearchResult { hits: Vec::new(), total: 0 }),
+    // Modo fuzzy (opt-in) + query "plain" (sin operadores) ⇒ builder fuzzy/OR:
+    // tolera typos/acentos, trae por OR con boost al match completo. En modo
+    // exacto (default) o con operadores (`"frase"`, `OR`, `-término`, `kind:`)
+    // va el QueryParser clásico (AND default), accent-sensitive ⇒ encuentra el
+    // string literal tal cual, que es lo que se busca al corregir errores.
+    let parsed: Box<dyn Query> = if fuzzy && is_plain_query(q) {
+        match build_fuzzy_or_query(idx, q) {
+            Some(query) => query,
+            None => return Ok(SearchResult { hits: Vec::new(), total: 0 }),
+        }
+    } else {
+        let mut parser =
+            QueryParser::for_index(&idx.index, vec![idx.title_field, idx.content_field]);
+        // Title pesa más que content — un hit en el título ranquea sobre uno
+        // en el body. El boost se compone multiplicativamente con BM25.
+        parser.set_field_boost(idx.title_field, TITLE_BOOST);
+        // Default AND: `duendes AND mansión` exige ambos.
+        parser.set_conjunction_by_default();
+        match parser.parse_query(q) {
+            Ok(p) => p,
+            Err(_) => return Ok(SearchResult { hits: Vec::new(), total: 0 }),
+        }
     };
     let final_query: Box<dyn Query> = build_scoped_query(idx, parsed, scope);
     let limit = limit.clamp(1, 200);
@@ -733,12 +855,19 @@ pub fn search_query_impl(
             .to_string();
         let exact_hit = has_rich_form && content.to_lowercase().contains(&raw_lower);
         let final_score = if exact_hit { score * 2.0 } else { score };
+        // Palabras reales del doc que matchearon (fold/fuzzy). Centran el snippet
+        // en la palabra correcta aunque sea un match no-literal y viajan al
+        // frontend para el highlight. Si no se resolvió ninguna, caemos a los
+        // términos tipeados (caso operadores/phrase, ya literales).
+        let matched = resolve_matched_words(&content, &terms, fuzzy);
+        let snippet_terms: &[String] = if matched.is_empty() { &terms } else { &matched };
         hits.push(SearchHit {
             path,
             kind,
             title,
-            snippet: make_snippet(&content, q, &terms),
+            snippet: make_snippet(&content, q, snippet_terms),
             score: final_score,
+            matched_terms: matched,
             bm25_score: if debug { Some(score) } else { None },
         });
     }
@@ -747,6 +876,89 @@ pub fn search_query_impl(
     }
     let total = hits.len();
     Ok(SearchResult { hits, total })
+}
+
+/// Una query es "plain" si no usa sintaxis de operadores del QueryParser.
+/// Esas van por el builder fuzzy/OR; el resto sigue por QueryParser intacto.
+fn is_plain_query(q: &str) -> bool {
+    if q.contains('"') || q.contains(':') || q.contains('-') {
+        return false;
+    }
+    // `OR`/`AND` como tokens sueltos (el QueryParser sólo los reconoce en
+    // mayúsculas) — evita falso positivo en palabras como "ORden".
+    !q.split_whitespace().any(|t| t == "OR" || t == "AND")
+}
+
+/// Distancia Levenshtein para un término según su longitud (en chars).
+fn fuzzy_distance_for(term_chars: usize) -> u8 {
+    if term_chars <= FUZZY_LEN_EXACT_MAX {
+        0
+    } else if term_chars <= FUZZY_LEN_ONE_MAX {
+        1
+    } else {
+        2
+    }
+}
+
+/// Construye una BooleanQuery fuzzy+OR para queries "plain":
+/// - cada término ⇒ `FuzzyTermQuery` contra title (boosteado ×TITLE_BOOST) OR
+///   content, como clause `Occur::Should` del outer (OR entre términos).
+/// - si hay >1 término, un clause extra `Occur::Should` boosteado
+///   (×FULL_MATCH_BOOST) que exige TODOS los términos (AND-de-fuzzy) ⇒ los docs
+///   con todos los términos ranquean por encima de los que matchean alguno.
+/// El boost de title se aplica a mano vía `BoostQuery` (`set_field_boost` es del
+/// QueryParser, no aplica acá). Normaliza igual que el indexado: alfanumérico,
+/// lowercase, fold de acentos.
+fn build_fuzzy_or_query(idx: &SearchIndex, q: &str) -> Option<Box<dyn Query>> {
+    // Lowercase para alinear con el índice (LowerCaser). NO se pliega: el índice
+    // preserva acentos y el fuzzy ya absorbe á↔a como 1 edit.
+    let terms: Vec<String> = q
+        .split_whitespace()
+        .map(|t| t.trim_matches(|c: char| !c.is_alphanumeric()))
+        .filter(|t| !t.is_empty())
+        .map(|t| t.to_lowercase())
+        .collect();
+    if terms.is_empty() {
+        return None;
+    }
+
+    // Un término ⇒ OR(title fuzzy [boosted], content fuzzy).
+    let per_term = |t: &str| -> Box<dyn Query> {
+        let dist = fuzzy_distance_for(t.chars().count());
+        let title_q: Box<dyn Query> = Box::new(BoostQuery::new(
+            Box::new(FuzzyTermQuery::new(
+                Term::from_field_text(idx.title_field, t),
+                dist,
+                FUZZY_TRANSPOSITION_COST_ONE,
+            )),
+            TITLE_BOOST,
+        ));
+        let content_q: Box<dyn Query> = Box::new(FuzzyTermQuery::new(
+            Term::from_field_text(idx.content_field, t),
+            dist,
+            FUZZY_TRANSPOSITION_COST_ONE,
+        ));
+        Box::new(BooleanQuery::new(vec![
+            (Occur::Should, title_q),
+            (Occur::Should, content_q),
+        ]))
+    };
+
+    let mut should: Vec<(Occur, Box<dyn Query>)> =
+        terms.iter().map(|t| (Occur::Should, per_term(t))).collect();
+
+    // Clause de "full match": todos los términos requeridos, boosteado.
+    if terms.len() > 1 {
+        let all_must: Vec<(Occur, Box<dyn Query>)> =
+            terms.iter().map(|t| (Occur::Must, per_term(t))).collect();
+        let full_match: Box<dyn Query> = Box::new(BooleanQuery::new(all_must));
+        should.push((
+            Occur::Should,
+            Box::new(BoostQuery::new(full_match, FULL_MATCH_BOOST)),
+        ));
+    }
+
+    Some(Box::new(BooleanQuery::new(should)))
 }
 
 /// Si hay scope, combina la query parseada con term filters via BooleanQuery
@@ -789,12 +1001,14 @@ pub fn search_query(
     limit: Option<usize>,
     scope: Option<SearchScope>,
     debug: Option<bool>,
+    fuzzy: Option<bool>,
 ) -> Result<SearchResult, String> {
     search_query_impl(
         &query,
         limit.unwrap_or(50),
         scope.as_ref(),
         debug.unwrap_or(false),
+        fuzzy.unwrap_or(false),
     )
 }
 
@@ -976,15 +1190,41 @@ mod tests {
     }
 
     #[test]
-    fn search_and_operator_filters_results() {
+    fn search_plain_multiword_or_recall_and_ranking() {
         let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
         reset_state();
         let dir = make_repo();
         full_reindex(dir.path(), None).unwrap();
-        // "duendes mansión" — AND default. Solo el cap A debería matchear.
-        let res = search_query_impl("duendes mansión", 50, None, false).unwrap();
-        assert!(res.hits.iter().all(|h| h.path.contains("Saga A")), "got: {:?}", res.hits);
-        assert!(res.hits.len() >= 1, "should match A cap");
+        // fuzzy=true + plain ⇒ OR. Trae cap A (ambos términos) y cap B / nota
+        // (sólo "duendes"). El full-match (Saga A) ranquea primero.
+        let res = search_query_impl("duendes mansión", 50, None, false, true).unwrap();
+        assert!(
+            res.hits.len() >= 2,
+            "OR debería traer A + B/nota: {:?}",
+            res.hits
+        );
+        assert!(
+            res.hits[0].path.contains("Saga A"),
+            "el full-match (Saga A) debería ranquear primero: {:?}",
+            res.hits
+        );
+    }
+
+    #[test]
+    fn operator_query_still_strict() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        let dir = make_repo();
+        full_reindex(dir.path(), None).unwrap();
+        // Con `AND` explícito vuelve la semántica estricta del QueryParser,
+        // incluso en modo fuzzy (el operador fuerza ese path).
+        let res = search_query_impl("duendes AND mansión", 50, None, false, true).unwrap();
+        assert!(!res.hits.is_empty(), "debería matchear cap A");
+        assert!(
+            res.hits.iter().all(|h| h.path.contains("Saga A")),
+            "AND sólo cap A: {:?}",
+            res.hits
+        );
     }
 
     #[test]
@@ -993,7 +1233,8 @@ mod tests {
         reset_state();
         let dir = make_repo();
         full_reindex(dir.path(), None).unwrap();
-        let res = search_query_impl("mansión OR distintos", 50, None, false).unwrap();
+        // Operador OR explícito funciona aun en modo exacto (default).
+        let res = search_query_impl("mansión OR distintos", 50, None, false, false).unwrap();
         assert!(res.hits.len() >= 2, "OR should match both A and B chapters: {:?}", res.hits);
     }
 
@@ -1003,7 +1244,7 @@ mod tests {
         reset_state();
         let dir = make_repo();
         full_reindex(dir.path(), None).unwrap();
-        let res = search_query_impl("duendes -mansión", 50, None, false).unwrap();
+        let res = search_query_impl("duendes -mansión", 50, None, false, false).unwrap();
         // Ningún hit debería contener "mansión".
         for h in &res.hits {
             assert!(!h.snippet.to_lowercase().contains("mansión"), "leak: {h:?}");
@@ -1020,7 +1261,7 @@ mod tests {
             kind: Some("note".into()),
             ..Default::default()
         };
-        let res = search_query_impl("duendes", 50, Some(&scope), false).unwrap();
+        let res = search_query_impl("duendes", 50, Some(&scope), false, false).unwrap();
         assert!(!res.hits.is_empty(), "expected note hit");
         for h in &res.hits {
             assert_eq!(h.kind, "note", "leak non-note: {h:?}");
@@ -1037,7 +1278,7 @@ mod tests {
             saga: Some("Saga A".into()),
             ..Default::default()
         };
-        let res = search_query_impl("duendes", 50, Some(&scope), false).unwrap();
+        let res = search_query_impl("duendes", 50, Some(&scope), false, false).unwrap();
         assert!(!res.hits.is_empty(), "expected hits in Saga A");
         for h in &res.hits {
             assert!(h.path.contains("Saga A"), "leak from B: {h:?}");
@@ -1050,25 +1291,165 @@ mod tests {
         reset_state();
         let dir = make_repo();
         full_reindex(dir.path(), None).unwrap();
-        let res_no_debug = search_query_impl("duendes", 5, None, false).unwrap();
+        let res_no_debug = search_query_impl("duendes", 5, None, false, false).unwrap();
         assert!(res_no_debug.hits.iter().all(|h| h.bm25_score.is_none()));
-        let res_debug = search_query_impl("duendes", 5, None, true).unwrap();
+        let res_debug = search_query_impl("duendes", 5, None, true, false).unwrap();
         assert!(res_debug.hits.iter().all(|h| h.bm25_score.is_some()));
     }
 
     #[test]
-    fn stopwords_es_drop_common_words() {
+    fn exact_finds_common_words_and_is_accent_sensitive() {
         let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
         reset_state();
         let dir = make_repo();
         full_reindex(dir.path(), None).unwrap();
-        // "los" es stopword ES — debería no devolver hits (el tokenizer lo dropea).
-        let res = search_query_impl("los", 50, None, false).unwrap();
+        // Las stopwords YA NO se dropean (el índice las preserva): el modo exacto
+        // debe encontrar palabras función literales — útil para proofreading.
+        let res = search_query_impl("los", 50, None, false, false).unwrap();
+        assert!(
+            !res.hits.is_empty(),
+            "exacto: 'los' (presente en los docs) debería matchear"
+        );
+        // Modo exacto es accent-sensitive: "mansion" sin tilde NO encuentra
+        // "mansión" — esto es lo que permite ubicar el typo literal al corregir.
+        let res = search_query_impl("mansion", 50, None, false, false).unwrap();
         assert!(
             res.hits.is_empty(),
-            "stopword 'los' debería no matchear: {:?}",
+            "exacto: 'mansion' no debería traer 'mansión': {:?}",
             res.hits
         );
+        let res = search_query_impl("mansión", 50, None, false, false).unwrap();
+        assert!(!res.hits.is_empty(), "exacto: 'mansión' literal debería matchear");
+    }
+
+    /// Repo mínimo: Saga A / Libro 1 con un capítulo por `(nombre, contenido)`.
+    fn make_repo_chapters(chapters: &[(&str, &str)]) -> TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let book = dir.path().join("Saga A").join("Libro 1");
+        std::fs::create_dir_all(&book).unwrap();
+        std::fs::write(
+            dir.path().join("Saga A").join("saga.json"),
+            "{\"nombre\":\"Saga A\"}",
+        )
+        .unwrap();
+        std::fs::write(book.join("book.json"), "{\"titulo\":\"Libro 1\"}").unwrap();
+        for (name, content) in chapters {
+            std::fs::write(book.join(format!("{name}.html")), format!("<p>{content}</p>")).unwrap();
+        }
+        dir
+    }
+
+    #[test]
+    fn fold_accents_basic() {
+        assert_eq!(fold_accents("Mansión"), "Mansion");
+        assert_eq!(fold_accents("camión corazón"), "camion corazon");
+        assert_eq!(fold_accents("ÁÉÍÓÚ"), "AEIOU");
+    }
+
+    #[test]
+    fn fold_accents_preserves_enie() {
+        assert_eq!(fold_accents("año"), "año");
+        assert_ne!(fold_accents("año"), "ano");
+        assert_eq!(fold_accents("niño"), "niño");
+    }
+
+    #[test]
+    fn fold_accents_length_preserving() {
+        for s in ["áéíóúü", "Mansión", "señor", "corazón"] {
+            assert_eq!(
+                fold_accents(s).chars().count(),
+                s.chars().count(),
+                "fold no length-preserving para {s:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn fuzzy_is_accent_insensitive() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        let dir = make_repo_chapters(&[("1", "la mansión encantada del bosque")]);
+        full_reindex(dir.path(), None).unwrap();
+        // En modo fuzzy, "mansion" sin tilde encuentra "mansión" (lev á↔a = 1).
+        let res = search_query_impl("mansion", 50, None, false, true).unwrap();
+        assert!(!res.hits.is_empty(), "fuzzy: 'mansion' debería encontrar 'mansión'");
+        let res = search_query_impl("mansión", 50, None, false, true).unwrap();
+        assert!(!res.hits.is_empty(), "fuzzy: 'mansión' debería encontrarse");
+    }
+
+    #[test]
+    fn search_enie_not_folded() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        // Término corto (≤3 chars ⇒ distancia fuzzy 0): aun en modo fuzzy, "ano"
+        // NO debe traer "año" (lev á... 1 > 0). ñ no se confunde con n.
+        let dir = make_repo_chapters(&[("1", "ano"), ("2", "año")]);
+        full_reindex(dir.path(), None).unwrap();
+        let res = search_query_impl("ano", 50, None, false, true).unwrap();
+        assert!(!res.hits.is_empty(), "'ano' debería matchear su doc");
+        for h in &res.hits {
+            assert!(
+                h.path.ends_with("1.html"),
+                "'ano' no debería traer el doc 'año': {h:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn fuzzy_hit_snippet_and_matched_terms_center_on_real_word() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        let dir = make_repo_chapters(&[(
+            "1",
+            "He was running on the treadmill. Later that night Kallai arrived at the gate.",
+        )]);
+        full_reindex(dir.path(), None).unwrap();
+        // Modo fuzzy: typo "kellai" (dist 1 de "Kallai") matchea, centra el
+        // snippet en "Kallai" (no en el inicio) y reporta la palabra real.
+        let res = search_query_impl("kellai", 50, None, false, true).unwrap();
+        assert_eq!(res.hits.len(), 1, "debería matchear el doc: {:?}", res.hits);
+        let h = &res.hits[0];
+        assert!(
+            h.snippet.contains("Kallai"),
+            "snippet debe centrarse en 'Kallai': {:?}",
+            h.snippet
+        );
+        assert!(
+            h.matched_terms.iter().any(|m| m == "Kallai"),
+            "matched_terms debe incluir 'Kallai': {:?}",
+            h.matched_terms
+        );
+    }
+
+    #[test]
+    fn levenshtein_early_exit() {
+        assert_eq!(levenshtein("kellai", "kallai", 1), 1);
+        assert_eq!(levenshtein("sol", "col", 0), 1); // excede budget 0 ⇒ max+1
+        assert_eq!(levenshtein("casa", "casa", 2), 0);
+    }
+
+    #[test]
+    fn search_fuzzy_typo() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        let dir = make_repo_chapters(&[("1", "la mansión encantada")]);
+        full_reindex(dir.path(), None).unwrap();
+        // "mansionn" (len 8 ⇒ dist 2) vs indexado "mansión": 2 edits ⇒ match.
+        let res = search_query_impl("mansionn", 50, None, false, true).unwrap();
+        assert!(!res.hits.is_empty(), "typo 'mansionn' debería encontrar 'mansión'");
+    }
+
+    #[test]
+    fn search_fuzzy_short_term_exact() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        let dir = make_repo_chapters(&[("1", "brillaba el sol radiante")]);
+        full_reindex(dir.path(), None).unwrap();
+        // Modo fuzzy, término ≤3 chars ⇒ distancia 0: "col" NO debe traer "sol".
+        let res = search_query_impl("col", 50, None, false, true).unwrap();
+        assert!(res.hits.is_empty(), "term corto debe ser exacto: {:?}", res.hits);
+        let res = search_query_impl("sol", 50, None, false, true).unwrap();
+        assert!(!res.hits.is_empty(), "'sol' debería matchear");
     }
 
     #[test]
