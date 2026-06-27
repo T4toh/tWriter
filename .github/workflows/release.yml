@@ -118,10 +118,11 @@ jobs:
       matrix:
         include:
           - target: aarch64-apple-darwin   # Apple Silicon (Macs nuevas)
-            runner: macos-14
-          - target: x86_64-apple-darwin    # Intel (PC vieja)
-            runner: macos-13
-    runs-on: ${{ matrix.runner }}
+          - target: x86_64-apple-darwin    # Intel (PC vieja, cross-compile desde ARM)
+    # Ambos targets corren en el runner ARM (macos-14): los runners Intel
+    # GitHub-hosted (macos-13) escasean y la cola queda colgada. Apple Silicon
+    # trae los dos SDKs, así que x86_64 cross-compila sin emulación.
+    runs-on: macos-14
     steps:
       - name: Checkout
         uses: actions/checkout@v5
