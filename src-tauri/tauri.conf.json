@@ -28,7 +28,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "nsis"],
+    "targets": ["deb", "nsis", "app", "dmg"],
     "createUpdaterArtifacts": true,
     "publisher": "Tatoh <tatukis@gmail.com>",
     "copyright": "Copyright © 2026 Tatoh",
@@ -50,6 +50,9 @@
       "deb": {
         "section": "editors"
       }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
     }
   },
   "plugins": {
