@@ -180,4 +180,16 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Plataformas
 
+- **Verificar auto-update en macOS (app unsigned)**: los builds macOS
+  (`aarch64` + `x64`, desde v0.5.7) salen sin firmar. El updater Tauri
+  descarga el `.app.tar.gz` firmado con minisign y reemplaza la app in-place,
+  pero falta confirmar end-to-end que el flujo funcione en macOS sin Developer
+  ID: Gatekeeper puede poner en cuarentena el `.app` recién bajado y bloquear
+  el relaunch (volviendo a pedir click derecho → Abrir), o el reemplazo fallar
+  por permisos. Repro: instalar una versión vieja, publicar una nueva, aceptar
+  el banner de update y ver si arranca limpio. Si rompe: documentar el
+  workaround (`xattr -dr com.apple.quarantine` post-update) y/o evaluar firma +
+  notarización (Apple Developer ID, $99/año) para que el auto-update sea
+  seamless. Ver `tauri.conf.json::plugins.updater` y el job `build-macos` en
+  `.github/workflows/release.yml`.
 - Mobile (no urgente, capaz solo un exportador a EPUB para ver archivos desde gh). Tomador de notas estaría piola, pero no veo que sea posible sincronizar git en el teléfono (Capaz que sí, investigar.) Estaría re zarpado poder tomar notas sobre partes o capítulos mientras leo en la kindle y que queden resgistrados en notas del libro o algo así.
