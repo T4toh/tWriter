@@ -103,7 +103,32 @@ Auto-update Tauri-native: la app chequea `releases/latest/download/latest.json` 
 
 ### macOS
 
-Diferido hasta que el autor arregle la pantalla del MacBook Pro. Mientras tanto, build manual desde fuente — ver [Setup local](#setup-local).
+Descargar el `.dmg` del último release:
+
+- **Apple Silicon (M1/M2/M3/…)**: el `.dmg` con `aarch64`.
+- **Intel**: el `.dmg` con `x64`.
+
+Abrir el `.dmg`, arrastrar tWriter a Applications.
+
+**App sin firmar** (no hay Apple Developer ID): en el primer arranque macOS la bloquea. Destrabala con una de estas:
+
+- **Finder**: click derecho sobre tWriter → **Abrir** → en el diálogo, **Abrir**. (En Sequoia 15+: si solo ofrece "Mover a papelera", andá a **Ajustes → Privacidad y seguridad** → **Abrir de todos modos**.)
+- **Terminal** (de una): `xattr -dr com.apple.quarantine /Applications/tWriter.app`
+
+Después abre normal. Es solo la primera vez.
+
+> Ambos `.dmg` se compilan en CI sobre runner Apple Silicon (`macos-14`); el `x64` se cross-compila a `x86_64-apple-darwin`. Auto-update Tauri-native vía `latest.json` (incluye `darwin-aarch64` + `darwin-x86_64`).
+
+**LanguageTool en macOS**: la gramática local levanta un container Docker, así que necesitás un engine de Docker corriendo. Recomendado (liviano, sin la GUI de Docker Desktop):
+
+```bash
+brew install colima docker
+colima start                 # arranca el engine; brew services start colima para auto-boot
+```
+
+Si **antes tuviste Docker Desktop** y lo desinstalaste, borrá la línea `"credsStore": "desktop"` de `~/.docker/config.json` — si no, `docker pull` falla con `docker-credential-desktop ... not found`. Sin engine docker, la app igual anda usando el API público de LT por default.
+
+**Pandoc** (importar `.docx`/`.odt`): `brew install pandoc`.
 
 ### Dependencias opcionales
 
