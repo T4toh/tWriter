@@ -778,7 +778,7 @@ fn convert_to_html(
         return Err(format!("ya existe: {}", html_out.display()));
     }
 
-    let output = Command::new("pandoc")
+    let output = Command::new(crate::import::pandoc_bin())
         .arg(src)
         .args(["--to=html5", "--no-highlight", "--wrap=none"])
         .output()

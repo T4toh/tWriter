@@ -10,6 +10,32 @@ use crate::secrets;
 const LT_CONTAINER: &str = "twriter-languagetool";
 const LT_IMAGE: &str = "erikvl87/languagetool:latest";
 
+/// Resuelve el binario `docker`. Una app empaquetada lanzada desde Finder/Dock
+/// hereda el PATH mínimo de launchd (`/usr/bin:/bin:/usr/sbin:/sbin`), que no
+/// incluye los symlinks de Docker Desktop ni Homebrew, así que `Command::new
+/// ("docker")` falla aunque Docker esté instalado. Probamos las rutas conocidas
+/// y caemos a `docker` (PATH) para dev y para Linux/Windows.
+fn docker_bin() -> String {
+    const CANDIDATES: [&str; 4] = [
+        "/usr/local/bin/docker",                              // Docker Desktop (Intel) / Homebrew
+        "/opt/homebrew/bin/docker",                           // Homebrew (Apple Silicon)
+        "/Applications/Docker.app/Contents/Resources/bin/docker", // Docker Desktop interno
+        "/usr/bin/docker",                                    // paquetes nativos Linux
+    ];
+    for c in CANDIDATES {
+        if std::path::Path::new(c).exists() {
+            return c.to_string();
+        }
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        let user = std::path::Path::new(&home).join(".docker/bin/docker");
+        if user.exists() {
+            return user.to_string_lossy().into_owned();
+        }
+    }
+    "docker".to_string()
+}
+
 const PUBLIC_BASE: &str = "https://api.languagetool.org";
 const LOCAL_BASE: &str = "http://localhost:8081";
 const MAX_CHUNK_BYTES: usize = 19_500;
@@ -362,7 +388,7 @@ pub struct LtDockerStatus {
 
 #[tauri::command]
 pub async fn languagetool_docker_status() -> LtDockerStatus {
-    let docker_installed = Command::new("docker")
+    let docker_installed = Command::new(docker_bin())
         .arg("--version")
         .output()
         .map(|o| o.status.success())
@@ -370,7 +396,7 @@ pub async fn languagetool_docker_status() -> LtDockerStatus {
     let mut container_running = false;
     let mut container_exists = false;
     if docker_installed {
-        if let Ok(out) = Command::new("docker")
+        if let Ok(out) = Command::new(docker_bin())
             .args(["ps", "--format", "{{.Names}}"])
             .output()
         {
@@ -378,7 +404,7 @@ pub async fn languagetool_docker_status() -> LtDockerStatus {
                 .lines()
                 .any(|l| l.trim() == LT_CONTAINER);
         }
-        if let Ok(out) = Command::new("docker")
+        if let Ok(out) = Command::new(docker_bin())
             .args(["ps", "-a", "--format", "{{.Names}}"])
             .output()
         {
@@ -417,7 +443,7 @@ fn emit_progress(app: &AppHandle, phase: &'static str, message: impl Into<String
 #[tauri::command]
 pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String> {
     emit_progress(&app, "checking", "Chequeando que Docker esté instalado…");
-    let docker_check = Command::new("docker").arg("--version").output();
+    let docker_check = Command::new(docker_bin()).arg("--version").output();
     match docker_check {
         Ok(o) if o.status.success() => {}
         _ => {
@@ -428,7 +454,7 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
         }
     }
     emit_progress(&app, "checking", "Chequeando que el daemon de Docker responda…");
-    if let Ok(o) = Command::new("docker").args(["info"]).output() {
+    if let Ok(o) = Command::new(docker_bin()).args(["info"]).output() {
         if !o.status.success() {
             return Err(
                 "Docker está instalado pero el daemon no responde. Iniciá el servicio (ej: `sudo systemctl start docker`)."
@@ -437,7 +463,7 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
         }
     }
 
-    let already_running = Command::new("docker")
+    let already_running = Command::new(docker_bin())
         .args(["ps", "--format", "{{.Names}}"])
         .output()
         .map(|o| {
@@ -451,7 +477,7 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
         return Ok("Ya estaba corriendo.".into());
     }
 
-    let exists = Command::new("docker")
+    let exists = Command::new(docker_bin())
         .args(["ps", "-a", "--format", "{{.Names}}"])
         .output()
         .map(|o| {
@@ -463,7 +489,7 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
 
     if exists {
         emit_progress(&app, "starting", "Reiniciando container existente…");
-        let out = Command::new("docker")
+        let out = Command::new(docker_bin())
             .args(["start", LT_CONTAINER])
             .output()
             .map_err(|e| format!("docker start: {}", e))?;
@@ -480,7 +506,7 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
             "Bajando imagen erikvl87/languagetool (~300MB, puede tardar 1–3 min según conexión)…",
         );
         let pull = tokio::task::spawn_blocking(|| {
-            Command::new("docker").args(["pull", LT_IMAGE]).output()
+            Command::new(docker_bin()).args(["pull", LT_IMAGE]).output()
         })
         .await
         .map_err(|e| format!("spawn pull: {}", e))?
@@ -492,7 +518,7 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
             ));
         }
         emit_progress(&app, "starting", "Creando container en localhost:8081…");
-        let run = Command::new("docker")
+        let run = Command::new(docker_bin())
             .args([
                 "run",
                 "-d",
@@ -537,7 +563,7 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
 
 #[tauri::command]
 pub async fn languagetool_docker_stop() -> Result<(), String> {
-    let out = Command::new("docker")
+    let out = Command::new(docker_bin())
         .args(["stop", LT_CONTAINER])
         .output()
         .map_err(|e| format!("docker stop: {}", e))?;

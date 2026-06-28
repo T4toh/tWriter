@@ -215,7 +215,7 @@ fn load_as_cleaned_html(src: &Path) -> Result<String, String> {
 }
 
 fn pandoc_to_html(src: &Path) -> Result<String, String> {
-    let output = Command::new("pandoc")
+    let output = Command::new(crate::import::pandoc_bin())
         .arg(src)
         .args(["--to=html5", "--no-highlight", "--wrap=none"])
         .output()

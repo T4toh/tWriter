@@ -9,6 +9,24 @@ pub struct ImportResult {
     pub created: bool,
 }
 
+/// Resuelve el binario `pandoc`. Igual que con docker: la app empaquetada
+/// lanzada desde Finder/Dock no hereda el PATH del shell, así que un simple
+/// `Command::new("pandoc")` no encuentra el pandoc de Homebrew. Probamos las
+/// rutas conocidas y caemos a `pandoc` (PATH) para dev y Linux/Windows.
+pub(crate) fn pandoc_bin() -> String {
+    const CANDIDATES: [&str; 3] = [
+        "/opt/homebrew/bin/pandoc", // Homebrew (Apple Silicon)
+        "/usr/local/bin/pandoc",    // Homebrew (Intel) / instalador oficial
+        "/usr/bin/pandoc",          // paquetes nativos Linux
+    ];
+    for c in CANDIDATES {
+        if std::path::Path::new(c).exists() {
+            return c.to_string();
+        }
+    }
+    "pandoc".to_string()
+}
+
 #[derive(Serialize, Debug)]
 pub struct DeleteResult {
     pub deleted: Vec<String>,
@@ -52,7 +70,7 @@ fn import_impl(input_path: &str) -> Result<ImportResult, String> {
 
     // Pandoc → HTML5 fragment, sin highlight, sin wrap
     // Pandoc auto-detecta el formato desde la extensión del input.
-    let output = Command::new("pandoc")
+    let output = Command::new(pandoc_bin())
         .arg(&input)
         .args(["--to=html5", "--no-highlight", "--wrap=none"])
         .output()
