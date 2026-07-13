@@ -52,6 +52,7 @@ import { FontsService } from '../core/fonts-service';
 import { Select, SelectGroup, SelectOption } from '../shared/select';
 import { GrammarMatch, RaeViolation } from '../core/types';
 import { convert as convertRae } from '../dialogos/converter';
+import { educateQuotes } from '../quotes/educate';
 import { validateRae } from '../dialogos/validator';
 import { Landing } from '../landing/landing';
 import { Spinner } from '../shared/spinner';
@@ -142,11 +143,16 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** Posición del cursor para el footer: número de párrafo (1-based) y columna dentro del párrafo. */
   protected readonly cursorPos = signal<{ paragraph: number; col: number }>({ paragraph: 1, col: 0 });
   protected readonly rae = signal<{ original: string; converted: string } | null>(null);
+  protected readonly quotes = signal<{ original: string; converted: string } | null>(null);
   protected readonly importing = this.chapter.importing;
   protected readonly canApplyRae = computed(() => {
     if (!this.canEdit()) return false;
     const lang = this.meta().idioma;
     return lang === null || lang === 'es' || lang === undefined;
+  });
+  protected readonly canApplyQuotes = computed(() => {
+    if (!this.canEdit()) return false;
+    return this.meta().idioma === 'en';
   });
   protected readonly canCheckGrammar = computed(() => {
     if (!this.canEdit()) return false;
@@ -828,6 +834,24 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   protected cancelRae(): void {
     this.rae.set(null);
+  }
+
+  protected openQuotes(): void {
+    if (!this.tiptap || !this.canApplyQuotes()) return;
+    const original = this.tiptap.getHTML();
+    const result = educateQuotes(original);
+    this.quotes.set({ original, converted: result.text });
+  }
+
+  protected acceptQuotes(): void {
+    const m = this.quotes();
+    if (!m || !this.tiptap) return;
+    this.tiptap.commands.setContent(m.converted, { emitUpdate: true });
+    this.quotes.set(null);
+  }
+
+  protected cancelQuotes(): void {
+    this.quotes.set(null);
   }
 
   protected importNow(): void {

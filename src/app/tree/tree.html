@@ -180,8 +180,9 @@
       [attr.data-kind]="node.kind"
       [style.padding-left.px]="8 + depth * 14"
       (click)="toggle(node)"
+      (dblclick)="browseFolder(node)"
       (contextmenu)="onContextMenu($event, node)"
-      [title]="node.path"
+      [title]="node.path + ' — doble click para ver tarjetas'"
     >
       <span class="chevron">
         @if (isExpanded(node)) {
@@ -238,7 +239,9 @@
       [attr.data-extra-scope]="(node.kind === 'saga' || node.kind === 'book') ? node.path : null"
       [style.padding-left.px]="8 + depth * 14"
       (click)="toggle(node)"
+      (dblclick)="browseFolder(node)"
       (contextmenu)="onContextMenu($event, node)"
+      [title]="node.path + ' — doble click para ver tarjetas'"
     >
       <span class="chevron">
         @if (node.excluded) {
