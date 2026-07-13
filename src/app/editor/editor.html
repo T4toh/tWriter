@@ -134,6 +134,18 @@
       }
     }
 
+    @if (canApplyQuotes()) {
+      <span class="sep"></span>
+      <button
+        type="button"
+        class="tb-btn tb-text"
+        (click)="openQuotes()"
+        title="Convertir comillas rectas a tipográficas (“ ” ‘ ’) en el capítulo entero (preview con diff)"
+      >
+        Comillas
+      </button>
+    }
+
     @if (canCheckGrammar()) {
       <span class="sep"></span>
       <button
@@ -279,6 +291,30 @@
     <footer class="rae-actions">
       <button type="button" class="btn btn-secondary" (click)="cancelRae()">Cancelar</button>
       <button type="button" class="btn btn-primary" (click)="acceptRae()">Aplicar al editor</button>
+    </footer>
+  </div>
+}
+
+@if (quotes(); as q) {
+  <div class="rae-backdrop" (click)="cancelQuotes()"></div>
+  <div class="rae-modal" (click)="$event.stopPropagation()">
+    <header class="rae-header">
+      <h2>Arreglar comillas</h2>
+      <p>Convierte comillas rectas a tipográficas (“ ” ‘ ’). Revisá los cambios antes de aceptar.</p>
+    </header>
+    <div class="rae-diff">
+      <div class="rae-pane">
+        <h3>Original</h3>
+        <div class="rae-content" [innerHTML]="q.original"></div>
+      </div>
+      <div class="rae-pane">
+        <h3>Convertido</h3>
+        <div class="rae-content" [innerHTML]="q.converted"></div>
+      </div>
+    </div>
+    <footer class="rae-actions">
+      <button type="button" class="btn btn-secondary" (click)="cancelQuotes()">Cancelar</button>
+      <button type="button" class="btn btn-primary" (click)="acceptQuotes()">Aplicar al editor</button>
     </footer>
   </div>
 }
