@@ -10,6 +10,7 @@ import {
   LucideFolderOpen,
   LucideNotebook,
   LucidePencil,
+  LucideQuote,
   LucideRuler,
 } from '@lucide/angular';
 import { BookConfigService } from '../core/book-config-service';
@@ -19,6 +20,7 @@ import { FontsService } from '../core/fonts-service';
 import { ImageViewerService } from '../core/image-viewer-service';
 import { MarkdownReaderService } from '../core/markdown-reader-service';
 import { RaeAuditService } from '../core/rae-audit-service';
+import { QuotesFixService } from '../core/quotes-fix-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
 import { NoteService, NoteTarget } from '../core/note-service';
 import { ProjectService } from '../core/project-service';
@@ -53,6 +55,7 @@ export class NodeActionsService {
   private imageViewer = inject(ImageViewerService);
   private mdReader = inject(MarkdownReaderService);
   private raeAudit = inject(RaeAuditService);
+  private quotesFix = inject(QuotesFixService);
   private toast = inject(ToastService);
   private modal = inject(ModalService);
   private dialogs = inject(NativeDialogsService);
@@ -335,6 +338,11 @@ export class NodeActionsService {
         icon: LucideRuler,
         onClick: () => this.auditRae(node),
       });
+      entries.push({
+        label: 'Arreglar comillas',
+        icon: LucideQuote,
+        onClick: () => this.fixQuotesBulk(node),
+      });
     }
 
     if (!isExcluded) {
@@ -536,6 +544,26 @@ export class NodeActionsService {
 
   async auditRae(node: TreeNode): Promise<void> {
     await this.raeAudit.open({ path: node.path, name: node.name });
+  }
+
+  async fixQuotesBulk(node: TreeNode): Promise<void> {
+    let count: number;
+    try {
+      count = await this.quotesFix.countEnglishChapters(node.path);
+    } catch (e) {
+      this.toast.error(`Comillas: ${e}`);
+      return;
+    }
+    if (count === 0) {
+      this.toast.info('No hay capítulos en inglés en esta selección.');
+      return;
+    }
+    const ok = await this.modal.confirm({
+      title: 'Arreglar comillas',
+      message: `Convertir comillas rectas a tipográficas (“ ” ‘ ’) en ${count} capítulo${count === 1 ? '' : 's'} en inglés de "${node.name}"?\nSolo se modifican los capítulos con cambios.`,
+    });
+    if (!ok) return;
+    await this.quotesFix.fixScope(node.path);
   }
 
   configBook(node: TreeNode): void {
