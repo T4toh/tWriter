@@ -1,6 +1,6 @@
 [package]
 name = "twriter"
-version = "0.5.7"
+version = "0.6.0"
 description = "Editor desktop de novelas: editor TipTap, conversor RAE, gramática (LanguageTool) y EPUB."
 authors = ["Tatoh <tatukis@gmail.com>"]
 license = "MIT"
