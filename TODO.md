@@ -25,6 +25,22 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   si es el render de ProseMirror, evaluar virtualización o paginar el
   documento. Confirmar si el costo está en el editor o en el repintado del
   árbol/status.
+- [x] **Educador de comillas tipográficas (inglés)** (`feat/comillas-tipograficas-en`,
+  PR #60): contraparte en inglés del conversor a rayas RAE, para novelas
+  importadas que quedaron con comillas rectas ASCII. `quotes/educate.ts`
+  (`educateQuotes`) convierte `"`→`“ ”` (open/close contextual), `'`→`‘ ’`
+  (cita) / `’` (apóstrofe, posesivo, elisiones `'em`/`'90s`). **Tag-aware**:
+  tokeniza tags vs texto y educa solo texto → `class="scene-break"` y demás
+  atributos quedan intactos (no se puede hacer `.replace` global). Botón
+  "Comillas" por capítulo (gate `idioma === 'en'`) con modal diff reusando
+  estilos RAE; acción masiva "Arreglar comillas" en menú saga/libro/sección
+  (`quotes-fix-service.ts`, confirm con conteo, escribe solo los que cambian,
+  refresca árbol + git status) reusando `list_chapters_for_audit`/`write_chapter`
+  (cero Rust nuevo, cero deps npm). Spec + smoke runner (`node --experimental-strip-types`).
+- [x] **Fix scroll del modal diff (RAE/Comillas)** (misma PR): `.rae-pane`
+  (grid item) tenía `min-height:auto` → crecía con el contenido y `.rae-content`
+  nunca activaba su `overflow-y`, scrolleando el archivo de fondo. Fix:
+  `grid-template-rows: minmax(0,1fr)` + `min-height:0` + `overscroll-behavior:contain`.
 
 ## Búsqueda
 
@@ -69,6 +85,12 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   serde los dropeaba en el round-trip). IDs de cdkDropList namespaceados por
   variante y `bindDragDrop` gated a `main` para que las dos instancias no
   choquen.
+- [x] **Doble-click en carpeta → vista de tarjetas** (`feat/comillas-tipograficas-en`,
+  PR #60): complemento del fix "navegar sin perder foco" de arriba. Tras ese
+  cambio el single-click solo expande/colapsa (mantiene el archivo en foco). El
+  doble-click ahora (`browseFolder`) flushea ediciones pendientes, cierra el
+  archivo del pane primario y navega la galería `app-landing` a esa carpeta.
+  Excluye el árbol de notas (la galería navega el árbol principal).
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
