@@ -202,6 +202,19 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Plataformas
 
+- [x] **Soporte multi-runtime de containers para LanguageTool** (`grammar.rs`):
+  antes todo asumía el CLI `docker`. Ahora una abstracción `Runtime`/`Engine`
+  autodetecta Docker, Podman o Apple `container` (prioridad: el que ya tenga el
+  container de LT levantado → Docker → Podman → Apple). Absorbe las diferencias
+  de CLI: Apple no soporta `--restart` (se omite), usa `ls --format json` en vez
+  de Go templates `{{.Names}}` (se parsea `configuration.id`), daemon check vía
+  `container system status`, pull vía `container image pull`. El mapeo `-p
+  8081:8010` a `localhost` funciona en los tres (verificado en vivo con Apple
+  container: pull arm64 nativo → run → `localhost:8081` responde → check ES ok).
+  Mensajes de error OS/runtime-aware (adiós `systemctl` en Mac). El status expone
+  `runtime` y la UI lo muestra ("corriendo … vía Apple container"). Tests en
+  `grammar.rs` (args con/sin `--restart`, parseo JSON de Apple). Docs README +
+  release notes con instrucciones para los tres.
 - [x] **Fix instalador macOS ARM "dañado"** (`signingIdentity: "-"` en
   `tauri.conf.json`): el `.app` aarch64 salía solo con la firma que el
   *linker* de Apple Silicon pega al binario (`adhoc,linker-signed`,

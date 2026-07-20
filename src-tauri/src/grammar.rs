@@ -10,30 +10,280 @@ use crate::secrets;
 const LT_CONTAINER: &str = "twriter-languagetool";
 const LT_IMAGE: &str = "erikvl87/languagetool:latest";
 
-/// Resuelve el binario `docker`. Una app empaquetada lanzada desde Finder/Dock
-/// hereda el PATH mínimo de launchd (`/usr/bin:/bin:/usr/sbin:/sbin`), que no
-/// incluye los symlinks de Docker Desktop ni Homebrew, así que `Command::new
-/// ("docker")` falla aunque Docker esté instalado. Probamos las rutas conocidas
-/// y caemos a `docker` (PATH) para dev y para Linux/Windows.
-fn docker_bin() -> String {
-    const CANDIDATES: [&str; 4] = [
-        "/usr/local/bin/docker",                              // Docker Desktop (Intel) / Homebrew
-        "/opt/homebrew/bin/docker",                           // Homebrew (Apple Silicon)
-        "/Applications/Docker.app/Contents/Resources/bin/docker", // Docker Desktop interno
-        "/usr/bin/docker",                                    // paquetes nativos Linux
-    ];
-    for c in CANDIDATES {
-        if std::path::Path::new(c).exists() {
-            return c.to_string();
+/// Runtime de containers soportado. tWriter maneja LanguageTool con cualquiera
+/// de los tres comunes; no asume Docker. En Mac conviven Docker Desktop, colima
+/// (ambos exponen el CLI `docker`), Podman y el `container` nativo de Apple.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Runtime {
+    Docker,
+    Podman,
+    Apple,
+}
+
+impl Runtime {
+    // Prioridad de detección: Docker y Podman primero (docker-compatibles),
+    // Apple al final (sintaxis propia). El desempate real lo hace `detect_engine`,
+    // que prefiere el runtime donde ya vive nuestro container.
+    const ALL: [Runtime; 3] = [Runtime::Docker, Runtime::Podman, Runtime::Apple];
+
+    fn label(self) -> &'static str {
+        match self {
+            Runtime::Docker => "Docker",
+            Runtime::Podman => "Podman",
+            Runtime::Apple => "Apple container",
         }
     }
-    if let Some(home) = std::env::var_os("HOME") {
-        let user = std::path::Path::new(&home).join(".docker/bin/docker");
-        if user.exists() {
-            return user.to_string_lossy().into_owned();
+
+    fn cmd(self) -> &'static str {
+        match self {
+            Runtime::Docker => "docker",
+            Runtime::Podman => "podman",
+            Runtime::Apple => "container",
         }
     }
-    "docker".to_string()
+
+    /// Rutas absolutas conocidas por runtime. Una app lanzada desde Finder/Dock
+    /// hereda el PATH mínimo de launchd (`/usr/bin:/bin:/usr/sbin:/sbin`), que no
+    /// incluye los symlinks de Homebrew ni Docker Desktop, así que
+    /// `Command::new("docker")` fallaría aunque esté instalado.
+    fn candidates(self) -> &'static [&'static str] {
+        match self {
+            Runtime::Docker => &[
+                "/usr/local/bin/docker",                                  // Docker Desktop (Intel) / Homebrew
+                "/opt/homebrew/bin/docker",                               // Homebrew (Apple Silicon) / colima
+                "/Applications/Docker.app/Contents/Resources/bin/docker", // Docker Desktop interno
+                "/usr/bin/docker",                                        // paquetes nativos Linux
+            ],
+            Runtime::Podman => &[
+                "/opt/homebrew/bin/podman", // Homebrew (Apple Silicon)
+                "/usr/local/bin/podman",    // Homebrew (Intel)
+                "/usr/bin/podman",          // paquetes nativos Linux
+            ],
+            Runtime::Apple => &[
+                "/opt/homebrew/bin/container", // Apple container (Homebrew)
+                "/usr/local/bin/container",
+            ],
+        }
+    }
+
+    /// Resuelve el binario: rutas absolutas → `~/.docker/bin` (solo Docker) →
+    /// nombre pelado en el PATH (dev / Linux). `None` si no está instalado.
+    fn bin(self) -> Option<String> {
+        for c in self.candidates() {
+            if std::path::Path::new(c).exists() {
+                return Some((*c).to_string());
+            }
+        }
+        if self == Runtime::Docker {
+            if let Some(home) = std::env::var_os("HOME") {
+                let user = std::path::Path::new(&home).join(".docker/bin/docker");
+                if user.exists() {
+                    return Some(user.to_string_lossy().into_owned());
+                }
+            }
+        }
+        let on_path = Command::new(self.cmd())
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        on_path.then(|| self.cmd().to_string())
+    }
+}
+
+/// Un runtime concreto ya resuelto a su binario, con las operaciones que
+/// necesita el ciclo de vida de LanguageTool. Absorbe las diferencias de CLI
+/// entre Docker/Podman (compatibles) y Apple `container`.
+#[derive(Clone)]
+struct Engine {
+    rt: Runtime,
+    bin: String,
+}
+
+impl Engine {
+    /// ¿Responde el daemon? Docker/Podman: `info`. Apple: `system status`.
+    fn daemon_ok(&self) -> bool {
+        let args: &[&str] = match self.rt {
+            Runtime::Docker | Runtime::Podman => &["info"],
+            Runtime::Apple => &["system", "status"],
+        };
+        Command::new(&self.bin)
+            .args(args)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+
+    /// Nombres de containers. Docker/Podman soportan Go templates
+    /// (`--format {{.Names}}`); Apple `container` no, solo `json` → parseamos
+    /// `configuration.id` (que es el `--name` que le pasamos). `all` incluye
+    /// los apagados (`-a`), igual que `docker ps -a`.
+    fn names(&self, all: bool) -> Vec<String> {
+        match self.rt {
+            Runtime::Docker | Runtime::Podman => {
+                let mut args: Vec<&str> = vec!["ps"];
+                if all {
+                    args.push("-a");
+                }
+                args.extend_from_slice(&["--format", "{{.Names}}"]);
+                Command::new(&self.bin)
+                    .args(&args)
+                    .output()
+                    .ok()
+                    .map(|o| {
+                        String::from_utf8_lossy(&o.stdout)
+                            .lines()
+                            .map(|l| l.trim().to_string())
+                            .filter(|l| !l.is_empty())
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            }
+            Runtime::Apple => {
+                let mut args: Vec<&str> = vec!["ls"];
+                if all {
+                    args.push("-a");
+                }
+                args.extend_from_slice(&["--format", "json"]);
+                Command::new(&self.bin)
+                    .args(&args)
+                    .output()
+                    .ok()
+                    .and_then(|o| serde_json::from_slice::<Vec<AppleContainer>>(&o.stdout).ok())
+                    .map(|v| v.into_iter().map(|c| c.configuration.id).collect())
+                    .unwrap_or_default()
+            }
+        }
+    }
+
+    fn running(&self) -> bool {
+        self.names(false).iter().any(|n| n == LT_CONTAINER)
+    }
+
+    fn exists(&self) -> bool {
+        self.names(true).iter().any(|n| n == LT_CONTAINER)
+    }
+
+    fn pull(&self) -> std::io::Result<std::process::Output> {
+        match self.rt {
+            Runtime::Docker | Runtime::Podman => {
+                Command::new(&self.bin).args(["pull", LT_IMAGE]).output()
+            }
+            Runtime::Apple => Command::new(&self.bin)
+                .args(["image", "pull", LT_IMAGE])
+                .output(),
+        }
+    }
+
+    /// Args de `run` para crear el container. Apple `container` no soporta
+    /// `--restart`, así que solo lo agregamos para Docker/Podman.
+    fn run_args(&self) -> Vec<&'static str> {
+        let mut args: Vec<&'static str> = vec!["run", "-d", "--name", LT_CONTAINER];
+        if matches!(self.rt, Runtime::Docker | Runtime::Podman) {
+            args.extend_from_slice(&["--restart", "unless-stopped"]);
+        }
+        args.extend_from_slice(&[
+            "-p",
+            "8081:8010",
+            "-e",
+            "Java_Xms=512m",
+            "-e",
+            "Java_Xmx=2g",
+            LT_IMAGE,
+        ]);
+        args
+    }
+
+    /// Crea y levanta el container.
+    fn run_lt(&self) -> std::io::Result<std::process::Output> {
+        Command::new(&self.bin).args(self.run_args()).output()
+    }
+
+    fn start_container(&self) -> std::io::Result<std::process::Output> {
+        Command::new(&self.bin).args(["start", LT_CONTAINER]).output()
+    }
+
+    fn stop_container(&self) -> std::io::Result<std::process::Output> {
+        Command::new(&self.bin).args(["stop", LT_CONTAINER]).output()
+    }
+}
+
+/// Shape mínimo del `container ls --format json` de Apple: solo nos importa el
+/// id (== `--name`).
+#[derive(Deserialize)]
+struct AppleContainer {
+    configuration: AppleContainerConfig,
+}
+
+#[derive(Deserialize)]
+struct AppleContainerConfig {
+    id: String,
+}
+
+/// Primer runtime con daemon vivo. Prefiere aquel donde ya vive nuestro
+/// container (corriendo, luego existente), sino el primero por prioridad. Así,
+/// si LanguageTool ya está levantado en Apple `container`, no lo ignoramos por
+/// tener también Docker instalado.
+fn detect_engine() -> Option<Engine> {
+    let mut live: Vec<Engine> = Vec::new();
+    for rt in Runtime::ALL {
+        if let Some(bin) = rt.bin() {
+            let engine = Engine { rt, bin };
+            if engine.daemon_ok() {
+                live.push(engine);
+            }
+        }
+    }
+    if let Some(e) = live.iter().find(|e| e.running()) {
+        return Some(e.clone());
+    }
+    if let Some(e) = live.iter().find(|e| e.exists()) {
+        return Some(e.clone());
+    }
+    live.into_iter().next()
+}
+
+/// Cualquier runtime instalado (binario presente), aunque el daemon esté
+/// apagado. Distingue "no hay runtime" de "instalado pero apagado".
+fn detect_installed() -> Option<Engine> {
+    Runtime::ALL
+        .into_iter()
+        .find_map(|rt| rt.bin().map(|bin| Engine { rt, bin }))
+}
+
+fn no_runtime_message() -> String {
+    if cfg!(target_os = "macos") {
+        "No se encontró ningún runtime de containers. Instalá uno con Homebrew:\n\
+         • Apple container: brew install container && container system start\n\
+         • colima (Docker): brew install colima docker && colima start\n\
+         • Podman: brew install podman && podman machine init && podman machine start\n\
+         Después reabrí esta ventana."
+            .to_string()
+    } else {
+        "No se encontró Docker ni Podman. Instalá Docker (https://docs.docker.com/get-docker/) \
+         o Podman, y volvé a intentar."
+            .to_string()
+    }
+}
+
+fn daemon_down_message(rt: Runtime) -> String {
+    let macos = cfg!(target_os = "macos");
+    match (rt, macos) {
+        (Runtime::Apple, _) => {
+            "Apple container está instalado pero el daemon no responde. Corré `container system start`."
+        }
+        (Runtime::Podman, true) => {
+            "Podman está instalado pero la máquina no responde. Corré `podman machine start`."
+        }
+        (Runtime::Podman, false) => "Podman no responde. Verificá la instalación (`podman info`).",
+        (Runtime::Docker, true) => {
+            "Docker está instalado pero el daemon no responde. Iniciá colima (`colima start`) o abrí Docker Desktop."
+        }
+        (Runtime::Docker, false) => {
+            "Docker está instalado pero el daemon no responde. Iniciá el servicio (ej: `sudo systemctl start docker`)."
+        }
+    }
+    .to_string()
 }
 
 const PUBLIC_BASE: &str = "https://api.languagetool.org";
@@ -380,7 +630,11 @@ fn split_chunks(text: &str) -> Vec<Chunk> {
 
 #[derive(Serialize)]
 pub struct LtDockerStatus {
+    /// Hay al menos un runtime de containers instalado (Docker/Podman/Apple).
+    /// Conserva el nombre del campo por compat con el front.
     pub docker_installed: bool,
+    /// Nombre legible del runtime detectado (ej. "Apple container"), o `null`.
+    pub runtime: Option<String>,
     pub container_running: bool,
     pub container_exists: bool,
     pub api_responding: bool,
@@ -388,34 +642,24 @@ pub struct LtDockerStatus {
 
 #[tauri::command]
 pub async fn languagetool_docker_status() -> LtDockerStatus {
-    let docker_installed = Command::new(docker_bin())
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    let mut container_running = false;
-    let mut container_exists = false;
-    if docker_installed {
-        if let Ok(out) = Command::new(docker_bin())
-            .args(["ps", "--format", "{{.Names}}"])
-            .output()
-        {
-            container_running = String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .any(|l| l.trim() == LT_CONTAINER);
+    // Preferimos un runtime con daemon vivo; si ninguno responde pero hay uno
+    // instalado, lo reportamos igual (para el mensaje "apagado, levantalo").
+    let engine = detect_engine().or_else(detect_installed);
+    let (docker_installed, runtime, container_running, container_exists) = match &engine {
+        Some(e) => {
+            let (running, exists) = if e.daemon_ok() {
+                (e.running(), e.exists())
+            } else {
+                (false, false)
+            };
+            (true, Some(e.rt.label().to_string()), running, exists)
         }
-        if let Ok(out) = Command::new(docker_bin())
-            .args(["ps", "-a", "--format", "{{.Names}}"])
-            .output()
-        {
-            container_exists = String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .any(|l| l.trim() == LT_CONTAINER);
-        }
-    }
+        None => (false, None, false, false),
+    };
     let api_responding = ping_local_lt().await;
     LtDockerStatus {
         docker_installed,
+        runtime,
         container_running,
         container_exists,
         api_responding,
@@ -442,60 +686,36 @@ fn emit_progress(app: &AppHandle, phase: &'static str, message: impl Into<String
 
 #[tauri::command]
 pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String> {
-    emit_progress(&app, "checking", "Chequeando que Docker esté instalado…");
-    let docker_check = Command::new(docker_bin()).arg("--version").output();
-    match docker_check {
-        Ok(o) if o.status.success() => {}
-        _ => {
-            return Err(
-                "Docker no está instalado. Instalalo desde https://docs.docker.com/get-docker/ y volvé a intentar."
-                    .into(),
-            );
-        }
-    }
-    emit_progress(&app, "checking", "Chequeando que el daemon de Docker responda…");
-    if let Ok(o) = Command::new(docker_bin()).args(["info"]).output() {
-        if !o.status.success() {
-            return Err(
-                "Docker está instalado pero el daemon no responde. Iniciá el servicio (ej: `sudo systemctl start docker`)."
-                    .into(),
-            );
-        }
+    emit_progress(&app, "checking", "Buscando un runtime de containers…");
+    let engine = match detect_installed() {
+        Some(e) => e,
+        None => return Err(no_runtime_message()),
+    };
+    emit_progress(
+        &app,
+        "checking",
+        format!(
+            "Usando {}. Chequeando que el daemon responda…",
+            engine.rt.label()
+        ),
+    );
+    if !engine.daemon_ok() {
+        return Err(daemon_down_message(engine.rt));
     }
 
-    let already_running = Command::new(docker_bin())
-        .args(["ps", "--format", "{{.Names}}"])
-        .output()
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .any(|l| l.trim() == LT_CONTAINER)
-        })
-        .unwrap_or(false);
-    if already_running {
+    if engine.running() {
         emit_progress(&app, "ready", "El container ya estaba corriendo.");
         return Ok("Ya estaba corriendo.".into());
     }
 
-    let exists = Command::new(docker_bin())
-        .args(["ps", "-a", "--format", "{{.Names}}"])
-        .output()
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .any(|l| l.trim() == LT_CONTAINER)
-        })
-        .unwrap_or(false);
-
-    if exists {
+    if engine.exists() {
         emit_progress(&app, "starting", "Reiniciando container existente…");
-        let out = Command::new(docker_bin())
-            .args(["start", LT_CONTAINER])
-            .output()
-            .map_err(|e| format!("docker start: {}", e))?;
+        let out = engine
+            .start_container()
+            .map_err(|e| format!("{} start: {}", engine.rt.cmd(), e))?;
         if !out.status.success() {
             return Err(format!(
-                "docker start falló: {}",
+                "start falló: {}",
                 String::from_utf8_lossy(&out.stderr)
             ));
         }
@@ -505,40 +725,24 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
             "pulling",
             "Bajando imagen erikvl87/languagetool (~300MB, puede tardar 1–3 min según conexión)…",
         );
-        let pull = tokio::task::spawn_blocking(|| {
-            Command::new(docker_bin()).args(["pull", LT_IMAGE]).output()
-        })
-        .await
-        .map_err(|e| format!("spawn pull: {}", e))?
-        .map_err(|e| format!("docker pull: {}", e))?;
+        let engine_pull = engine.clone();
+        let pull = tokio::task::spawn_blocking(move || engine_pull.pull())
+            .await
+            .map_err(|e| format!("spawn pull: {}", e))?
+            .map_err(|e| format!("pull: {}", e))?;
         if !pull.status.success() {
             return Err(format!(
-                "docker pull falló: {}",
+                "pull falló: {}",
                 String::from_utf8_lossy(&pull.stderr)
             ));
         }
         emit_progress(&app, "starting", "Creando container en localhost:8081…");
-        let run = Command::new(docker_bin())
-            .args([
-                "run",
-                "-d",
-                "--name",
-                LT_CONTAINER,
-                "--restart",
-                "unless-stopped",
-                "-p",
-                "8081:8010",
-                "-e",
-                "Java_Xms=512m",
-                "-e",
-                "Java_Xmx=2g",
-                LT_IMAGE,
-            ])
-            .output()
-            .map_err(|e| format!("docker run: {}", e))?;
+        let run = engine
+            .run_lt()
+            .map_err(|e| format!("{} run: {}", engine.rt.cmd(), e))?;
         if !run.status.success() {
             return Err(format!(
-                "docker run falló: {}",
+                "run falló: {}",
                 String::from_utf8_lossy(&run.stderr)
             ));
         }
@@ -552,30 +756,37 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
     for _ in 0..40 {
         if ping_local_lt().await {
             emit_progress(&app, "ready", "LanguageTool listo en localhost:8081");
-            tracing::info!(target: "grammar", "LanguageTool Docker listo en localhost:8081");
+            tracing::info!(target: "grammar", runtime = engine.rt.label(), "LanguageTool listo en localhost:8081");
             return Ok("LanguageTool listo en localhost:8081".into());
         }
         sleep(Duration::from_millis(1000)).await;
     }
     tracing::error!(target: "grammar", "container levantado pero LT no responde tras 40s");
-    Err("Container levantado pero no responde después de 40s. Revisá `docker logs twriter-languagetool`.".into())
+    Err(format!(
+        "Container levantado pero no responde después de 40s. Revisá `{} logs {}`.",
+        engine.rt.cmd(),
+        LT_CONTAINER
+    ))
 }
 
 #[tauri::command]
 pub async fn languagetool_docker_stop() -> Result<(), String> {
-    let out = Command::new(docker_bin())
-        .args(["stop", LT_CONTAINER])
-        .output()
-        .map_err(|e| format!("docker stop: {}", e))?;
+    let engine = match detect_engine().or_else(detect_installed) {
+        Some(e) => e,
+        None => return Ok(()), // sin runtime no hay nada que detener
+    };
+    let out = engine
+        .stop_container()
+        .map_err(|e| format!("{} stop: {}", engine.rt.cmd(), e))?;
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr);
-        if err.contains("No such container") || err.contains("no such container") {
+        if err.to_lowercase().contains("no such container") {
             return Ok(());
         }
-        tracing::error!(target: "grammar", error = %err, "docker stop LanguageTool falló");
-        return Err(format!("docker stop falló: {}", err));
+        tracing::error!(target: "grammar", error = %err, "stop LanguageTool falló");
+        return Err(format!("stop falló: {}", err));
     }
-    tracing::info!(target: "grammar", "LanguageTool Docker detenido");
+    tracing::info!(target: "grammar", runtime = engine.rt.label(), "LanguageTool detenido");
     Ok(())
 }
 
@@ -678,6 +889,67 @@ mod tests {
         assert!(chunks.len() >= 2);
         let rebuilt: String = chunks.iter().map(|c| c.text.as_str()).collect();
         assert_eq!(rebuilt, text);
+    }
+
+    fn engine(rt: Runtime) -> Engine {
+        Engine {
+            rt,
+            bin: rt.cmd().to_string(),
+        }
+    }
+
+    #[test]
+    fn docker_run_args_include_restart() {
+        let args = engine(Runtime::Docker).run_args();
+        assert!(
+            args.windows(2).any(|w| w == ["--restart", "unless-stopped"]),
+            "Docker debe incluir --restart unless-stopped"
+        );
+        assert!(args.windows(2).any(|w| w == ["-p", "8081:8010"]));
+        assert_eq!(*args.last().unwrap(), LT_IMAGE);
+    }
+
+    #[test]
+    fn podman_run_args_include_restart() {
+        let args = engine(Runtime::Podman).run_args();
+        assert!(args.windows(2).any(|w| w == ["--restart", "unless-stopped"]));
+    }
+
+    #[test]
+    fn apple_run_args_omit_restart() {
+        // Apple `container` no soporta --restart; incluirlo rompería el run.
+        let args = engine(Runtime::Apple).run_args();
+        assert!(
+            !args.iter().any(|a| *a == "--restart"),
+            "Apple container NO debe llevar --restart"
+        );
+        assert!(args.windows(2).any(|w| w == ["-p", "8081:8010"]));
+        assert!(args.windows(2).any(|w| w == ["--name", LT_CONTAINER]));
+        assert_eq!(*args.last().unwrap(), LT_IMAGE);
+    }
+
+    #[test]
+    fn apple_container_json_parses_id() {
+        // El `container ls --format json` de Apple anida el nombre en
+        // configuration.id. Verificamos el parseo que usa Engine::names.
+        let json = r#"[{"configuration":{"id":"twriter-languagetool","image":{"reference":"x"}}}]"#;
+        let parsed: Vec<AppleContainer> = serde_json::from_slice(json.as_bytes()).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].configuration.id, "twriter-languagetool");
+    }
+
+    #[test]
+    fn apple_container_json_empty_is_ok() {
+        let parsed: Vec<AppleContainer> = serde_json::from_slice(b"[]").unwrap();
+        assert!(parsed.is_empty());
+    }
+
+    #[test]
+    fn daemon_down_message_is_os_and_runtime_aware() {
+        // Apple siempre sugiere `container system start`, nunca systemctl.
+        let apple = daemon_down_message(Runtime::Apple);
+        assert!(apple.contains("container system start"));
+        assert!(!apple.contains("systemctl"));
     }
 
     #[test]

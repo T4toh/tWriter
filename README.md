@@ -119,14 +119,28 @@ Después abre normal. Es solo la primera vez.
 
 > Ambos `.dmg` se compilan en CI sobre runner Apple Silicon (`macos-14`); el `x64` se cross-compila a `x86_64-apple-darwin`. Auto-update Tauri-native vía `latest.json` (incluye `darwin-aarch64` + `darwin-x86_64`).
 
-**LanguageTool en macOS**: la gramática local levanta un container Docker, así que necesitás un engine de Docker corriendo. Recomendado (liviano, sin la GUI de Docker Desktop):
+**LanguageTool en macOS**: la gramática local corre en un container, y la app
+maneja cualquiera de los 3 runtimes comunes (autodetecta el que tengas). Elegí uno:
 
 ```bash
+# Opción A — Apple container (nativo, sin VM que administres)
+brew install container
+container system start
+
+# Opción B — colima (Docker, liviano, sin la GUI de Docker Desktop)
 brew install colima docker
-colima start                 # arranca el engine; brew services start colima para auto-boot
+colima start                 # brew services start colima para auto-boot
+
+# Opción C — Podman
+brew install podman
+podman machine init && podman machine start
 ```
 
-Si **antes tuviste Docker Desktop** y lo desinstalaste, borrá la línea `"credsStore": "desktop"` de `~/.docker/config.json` — si no, `docker pull` falla con `docker-credential-desktop ... not found`. Sin engine docker, la app igual anda usando el API público de LT por default.
+Con cualquiera corriendo, la app baja la imagen y levanta LanguageTool sola desde
+el modal de gramática. Si usás **Docker** y antes tuviste Docker Desktop (y lo
+desinstalaste), borrá la línea `"credsStore": "desktop"` de `~/.docker/config.json`
+— si no, `docker pull` falla con `docker-credential-desktop ... not found`. Sin
+ningún runtime, la app igual anda usando el API público de LT por default.
 
 **Pandoc** (importar `.docx`/`.odt`): `brew install pandoc`.
 
@@ -514,11 +528,16 @@ HTTP (`/v2/check`); cambia dónde corre y cómo se autentica.
 - Solo chequeo on-demand (sin auto-recheck mientras escribís — el ToS lo prohíbe).
 - Banner naranja avisa la primera vez que activás la feature en una sesión.
 
-#### Local (Docker)
+#### Local (Docker / Podman / Apple container)
 
-Para uso intensivo y privacidad total. La app puede levantarlo desde el
-modal de gramática (⚙ del header → "Local (Docker)" → "Levantar LanguageTool"),
-o por CLI:
+Para uso intensivo y privacidad total. La app maneja los 3 runtimes de
+containers comunes y **autodetecta** el que tengas instalado y con daemon vivo
+(prioridad: el que ya tenga el container de LT levantado → Docker → Podman →
+Apple `container`). Absorbe las diferencias de CLI entre ellos (Apple no soporta
+`--restart` y usa `ls --format json` en vez de Go templates; el mapeo de puerto
+`-p 8081:8010` a `localhost` funciona en los tres). Podés levantarlo desde el
+modal de gramática (⚙ del header → "Local (Docker)" → "Levantar LanguageTool") —
+el status muestra vía qué runtime corre —, o por CLI:
 
 ```bash
 ./scripts/start-languagetool.sh   # primera vez tarda ~30s en cargar modelos
