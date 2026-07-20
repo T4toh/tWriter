@@ -202,8 +202,22 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Plataformas
 
-- **Verificar auto-update en macOS (app unsigned)**: los builds macOS
-  (`aarch64` + `x64`, desde v0.5.7) salen sin firmar. El updater Tauri
+- [x] **Fix instalador macOS ARM "dañado"** (`signingIdentity: "-"` en
+  `tauri.conf.json`): el `.app` aarch64 salía solo con la firma que el
+  *linker* de Apple Silicon pega al binario (`adhoc,linker-signed`,
+  `Sealed Resources=none`) porque sin `signingIdentity` Tauri saltea
+  `codesign`. Esa firma está rota a nivel bundle → en Macs ARM Gatekeeper
+  reporta la app como **"dañada, mover a la papelera"** y ni el click
+  derecho → Abrir la rescata. Con `signingIdentity: "-"` Tauri corre
+  `codesign --force -s -` (firma binario + bundle, sella recursos) → firma
+  ad-hoc válida (`codesign --verify --strict` pasa, sobrevive a
+  `com.apple.quarantine`). No necesita keychain/identidad en CI. Reproducido
+  y verificado local en M5 (baseline roto → fix ok). Sigue sin notarizar
+  (requiere Apple Developer ID), así que el workaround `xattr`/click-derecho
+  se mantiene, pero ahora funciona de verdad.
+- **Verificar auto-update en macOS (app ad-hoc, sin notarizar)**: los builds
+  macOS (`aarch64` + `x64`, desde v0.5.7) salen firmados ad-hoc pero sin
+  notarizar. El updater Tauri
   descarga el `.app.tar.gz` firmado con minisign y reemplaza la app in-place,
   pero falta confirmar end-to-end que el flujo funcione en macOS sin Developer
   ID: Gatekeeper puede poner en cuarentena el `.app` recién bajado y bloquear

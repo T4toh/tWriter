@@ -63,7 +63,7 @@ jobs:
             **Windows**: descargar `.msi` o `.exe` (NSIS).
 
             **macOS (Apple Silicon)**: descargar el `.dmg` con `aarch64`. **macOS (Intel)**: descargar el `.dmg` con `x64`.
-            La app no está firmada: en el primer arranque hacé **click derecho → Abrir**, o corré `xattr -dr com.apple.quarantine /Applications/tWriter.app`.
+            La app está firmada ad-hoc (sin notarización de Apple): en el primer arranque hacé **click derecho → Abrir**, o corré `xattr -dr com.apple.quarantine /Applications/tWriter.app`.
             Para importar `.docx`/`.odt` necesitás pandoc: `brew install pandoc`.
 
             **macOS — LanguageTool (gramática)**: la app levanta LanguageTool en un container Docker, así que necesitás un engine de Docker corriendo. Recomendado (liviano, sin GUI): `brew install colima docker && colima start`. Si antes tuviste Docker Desktop y lo desinstalaste, borrá la línea `"credsStore": "desktop"` de `~/.docker/config.json` (rompe el `docker pull`).
