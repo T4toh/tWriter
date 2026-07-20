@@ -106,14 +106,17 @@
               <div class="docker-panel">
                 @if (!ds.docker_installed) {
                   <div class="docker-status err">
-                    Docker no detectado.
-                    <a href="https://docs.docker.com/get-docker/" target="_blank" rel="noopener">Instalalo desde docker.com</a>
-                    y volvé a abrir esta ventana.
+                    No se detectó ningún runtime de containers (Docker, Podman o Apple container).
+                    Instalá uno —
+                    <a href="https://docs.docker.com/get-docker/" target="_blank" rel="noopener">Docker</a>,
+                    <a href="https://podman.io/get-started" target="_blank" rel="noopener">Podman</a>
+                    o <a href="https://github.com/apple/container" target="_blank" rel="noopener">Apple container</a>
+                    — y volvé a abrir esta ventana.
                   </div>
                 } @else if (ds.container_running && ds.api_responding) {
                   <div class="docker-status ok">
                     <svg lucideCircle [size]="10"></svg>
-                    LanguageTool corriendo en localhost:8081
+                    LanguageTool corriendo en localhost:8081{{ ds.runtime ? ' (vía ' + ds.runtime + ')' : '' }}
                   </div>
                   <button
                     type="button"
@@ -146,7 +149,7 @@
                     <li [class.active]="dockerPhase() === 'checking'"
                         [class.done]="phaseDone('checking')">
                       <span class="step-icon">①</span>
-                      <span class="step-label">Chequeando Docker</span>
+                      <span class="step-label">Chequeando runtime</span>
                     </li>
                     <li [class.active]="dockerPhase() === 'pulling'"
                         [class.done]="phaseDone('pulling')">

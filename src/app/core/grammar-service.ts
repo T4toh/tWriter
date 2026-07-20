@@ -16,7 +16,10 @@ interface GrammarCfg {
 }
 
 export interface LtDockerStatus {
+  /** Hay al menos un runtime de containers instalado (Docker/Podman/Apple). */
   docker_installed: boolean;
+  /** Nombre legible del runtime detectado (ej. "Apple container"), o null. */
+  runtime: string | null;
   container_running: boolean;
   container_exists: boolean;
   api_responding: boolean;
