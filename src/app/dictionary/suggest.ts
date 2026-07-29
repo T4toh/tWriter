@@ -9,12 +9,14 @@
  */
 import { foldAccents } from '../core/search-highlight';
 
-/** Máximo de ediciones tolerado según el largo de la palabra tipeada. Mismo
- *  criterio que la búsqueda fuzzy: cortas exigen precisión, largas toleran más. */
+/** Máximo de ediciones tolerado según el largo de la palabra tipeada: 1 hasta
+ *  6 caracteres, 2 desde 7. Difiere a propósito de `fuzzy_distance_for` de
+ *  `search.rs` (0/1/2 en ≤3/4..=7/≥8): ese umbral es para BUSCAR en el índice,
+ *  este es para SUGERIR una corrección. Tolerancia 0 en palabras de 3 letras
+ *  no ofrecería nada útil — para sugerir conviene arrancar en 1 incluso en
+ *  las cortas. */
 function maxDistanceFor(length: number): number {
-  if (length <= 3) return 1;
-  if (length <= 6) return 1;
-  return 2;
+  return length <= 6 ? 1 : 2;
 }
 
 /** Levenshtein clásico con dos filas (O(n) memoria). Corta temprano si la
@@ -51,7 +53,10 @@ function levenshtein(a: string, b: string, limit: number): number {
  * Nota: si el diccionario tiene dos entradas que pliegan al mismo valor con
  * acentos distintos (ej. `Kallia` y `Kállia`), tipear una de ellas exactamente
  * igual sugiere la otra — es la intersección de "acento distinto ⇒ sugerir" y
- * "idéntica ⇒ excluir". Esto es por diseño.
+ * "idéntica ⇒ excluir". Esto es por diseño. En el flujo real del editor este
+ * caso es inalcanzable: `SagaContextService.isInDictionary` filtra el match
+ * de LanguageTool antes de que el popover pueda abrirse, así que esta función
+ * nunca se llama con una palabra que ya esté verbatim en el diccionario.
  */
 export function suggestFromDictionary(word: string, words: string[], max = 3): string[] {
   if (word.length === 0 || words.length === 0) return [];

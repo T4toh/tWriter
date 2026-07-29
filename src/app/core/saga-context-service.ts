@@ -27,7 +27,7 @@ export class SagaContextService {
   /** Palabras del diccionario tal cual están escritas en `diccionario.txt`.
    *  `dictionary` (Set en minúscula) sirve para filtrar; para SUGERIR hace
    *  falta la forma original, que es la que se le ofrece al autor. */
-  readonly dictionaryWords = computed<string[]>(() => this.dictWords());
+  readonly dictionaryWords = this.dictWords.asReadonly();
   readonly varianteEs = computed<string | null>(() => {
     const v = this.config()?.variante_es;
     return v && v.trim() ? v : null;
