@@ -150,7 +150,10 @@ flotando desanclado del span que lo originó.
 
 ## Verificación
 
-**Unit tests (Karma):**
+**Unit tests.** El repo no tiene runner de Karma (`angular.json` no define target `test`);
+el patrón vigente es un `.spec.ts` con los casos más un `.smoke.ts` standalone que corre con
+`node --experimental-strip-types`, como `src/app/quotes/educate.spec.ts` +
+`educate.smoke.ts`. Los tests nuevos siguen ese patrón:
 
 - `popover-position.spec.ts`: cabe abajo; no cabe abajo y flipea arriba; no cabe en ninguno
   (clamp + `maxHeight`); clamp de X contra el borde izquierdo y el derecho.
