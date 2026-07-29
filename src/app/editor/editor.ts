@@ -1209,6 +1209,20 @@ export class Editor implements AfterViewInit, OnDestroy {
       ],
       content,
       editable,
+      // El OS no opina sobre el texto: sin corrector, sin autocorrección y sin
+      // autocapitalización. Las comillas y rayas las hace Typography de TipTap.
+      // Explícito acá además de heredado desde <html> porque ProseMirror
+      // reescribe los atributos del contenteditable al montar la vista.
+      editorProps: {
+        attributes: {
+          spellcheck: 'false',
+          autocorrect: 'off',
+          autocapitalize: 'off',
+          autocomplete: 'off',
+          'data-gramm': 'false',
+          'data-gramm_editor': 'false',
+        },
+      },
       // NO autofocus 'end': forzaba el cursor al final del cap al abrir (y
       // pisaba la restauración de posición). La posición se restaura abajo
       // vía cursorRestore; sin posición guardada arranca al inicio.
