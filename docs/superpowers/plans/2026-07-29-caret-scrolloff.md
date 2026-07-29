@@ -16,7 +16,9 @@
 
 - **Cero dependencias npm nuevas.** Todo sale de `@tiptap/core`, `@tiptap/pm/view` y el DOM.
 - **Convenciones del repo** (`CLAUDE.md`): standalone components, signals, `@if`/`@for`, sin `public` explícito, **return types explícitos en todos los métodos**, `inject()` para DI, comentarios y nombres de dominio en español.
-- **Naming de archivos**: `caret-scrolloff.ts`, no `caret-scrolloff.util.ts`.
+- **Naming de archivos**: `caret-scrolloff.ts` y `editor-props.ts`, sin sufijos tipo `.util.ts`.
+- **Los `editorProps` viven en un solo lugar.** Los dos editores tipeables tienen hoy exactamente los mismos (los 6 atributos anti-corrector) y el mismo cálculo de insets, así que la función es compartida — no se duplica el bloque en cada componente. (Ruling del autor sobre el texto original de este plan, que mandaba duplicar; ver Task 2.)
+- **`caret-scrolloff.ts` no toca el DOM ni importa nada.** Es lo que lo hace testeable con el runner de `tsc` aislado: si importara `@tiptap/pm/view` o usara `getComputedStyle`, la compilación del smoke runner necesitaría el `lib` de DOM y la resolución de subpath exports. Todo lo que toca DOM vive en `editor-props.ts`.
 - **`threshold == margin`**: los dos insets se calculan del mismo valor. No divergen.
 - **Insets simétricos**: `top === bottom`; `left === right === 0` (el host es `overflow-x: hidden`).
 - **`SCROLLOFF_LINES = 2`**, **`FALLBACK_LINE_HEIGHT = 1.5`**, **`FALLBACK_FONT_SIZE = 17`** (espeja `FONT_DEFAULT` de `settings-service.ts:19`).
@@ -263,83 +265,93 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 2: Enganchar el scrolloff en el editor de capítulos
+### Task 2: `editor-props.ts` compartido + enganche en el editor de capítulos
+
+El adaptador DOM del módulo puro, más el primer consumidor. Los `editorProps` de los dos editores tipeables son hoy idénticos (los mismos 6 atributos anti-corrector), así que la función es una sola y vive fuera de los componentes.
 
 **Files:**
+- Create: `src/app/editor/editor-props.ts`
 - Modify: `src/app/editor/editor.ts` (imports del tope; `createEditor()` en `1209-1308`; constructor, después del último effect que cierra en `637`)
 
 **Interfaces:**
-- Consumes: `caretScrolloff`, `lineHeightPxFrom`, `FALLBACK_LINE_HEIGHT` de `./caret-scrolloff`.
-- Produces: método privado `buildEditorProps(fontSizePx: number): EditorProps` en la clase `Editor`. Task 3 replica el patrón en otra clase, no lo importa.
+- Consumes: `FALLBACK_LINE_HEIGHT`, `caretScrolloff`, `lineHeightPxFrom` de `./caret-scrolloff` (Task 1).
+- Produces: `buildEditorProps(dom: HTMLElement | null, fontSizePx: number): EditorProps` exportada de `src/app/editor/editor-props.ts`. Task 3 importa **esta misma función**, no replica nada.
 
-- [ ] **Step 1: Agregar los imports**
+- [ ] **Step 1: Crear `editor-props.ts`**
 
-En el bloque de imports de `src/app/editor/editor.ts`, sumar el tipo de ProseMirror junto a los otros imports de TipTap (después de `import TextAlign from '@tiptap/extension-text-align';`):
+Crear `src/app/editor/editor-props.ts`:
 
 ```ts
 import type { EditorProps } from '@tiptap/pm/view';
-```
-
-Y el módulo nuevo junto a los otros imports relativos de `./`:
-
-```ts
 import { FALLBACK_LINE_HEIGHT, caretScrolloff, lineHeightPxFrom } from './caret-scrolloff';
+
+/**
+ * Props de ProseMirror compartidas por los dos editores tipeables (capítulos y
+ * notas). Son una función y no un literal porque se reaplican al cambiar el
+ * tamaño de fuente: el respiro del caret escala con la línea.
+ *
+ * Ojo con `setOptions`: reemplaza la key `editorProps` entera en vez de
+ * mergearla, así que esta función tiene que devolver **todo** — si faltaran los
+ * `attributes`, un `setEditable()` posterior los borraría.
+ *
+ * El OS no opina sobre el texto: sin corrector, sin autocorrección y sin
+ * autocapitalización. Las comillas y rayas las hace Typography de TipTap.
+ * Explícito acá además de heredado desde <html> como defensa en profundidad: si
+ * algo intermedio (extensión, wrapper, un `<iframe>`) rompiera la herencia de
+ * esos atributos, este bloque los repone.
+ *
+ * @param dom El `view.dom` del editor, o `null` si todavía no existe (durante
+ *   la construcción de la instancia). Sin él no hay `line-height` computado que
+ *   leer y se cae al factor del SCSS; los componentes reaplican apenas
+ *   instancian, con el valor real.
+ */
+export function buildEditorProps(dom: HTMLElement | null, fontSizePx: number): EditorProps {
+  const lineHeightPx = dom
+    ? lineHeightPxFrom(getComputedStyle(dom).lineHeight, fontSizePx)
+    : fontSizePx * FALLBACK_LINE_HEIGHT;
+  return {
+    attributes: {
+      spellcheck: 'false',
+      autocorrect: 'off',
+      autocapitalize: 'off',
+      autocomplete: 'off',
+      'data-gramm': 'false',
+      'data-gramm_editor': 'false',
+    },
+    ...caretScrolloff(lineHeightPx),
+  };
+}
 ```
 
 (`@tiptap/pm/view` re-exporta `prosemirror-view`; el repo ya lo usa así en `rae-extension.ts:3`.)
 
-- [ ] **Step 2: Extraer los `editorProps` a un método**
+- [ ] **Step 2: Reemplazar el literal en `editor.ts`**
 
-En `createEditor()`, reemplazar el bloque literal actual (`editorProps: { attributes: {...} }`, líneas ~1228-1242, junto con el comentario que lo precede) por una sola línea:
-
-```ts
-      editorProps: this.buildEditorProps(this.fontSize()),
-```
-
-Y agregar el método privado nuevo en la clase, inmediatamente antes de `private createEditor(...)`:
+En el bloque de imports de `src/app/editor/editor.ts`, junto a los otros imports relativos de `./`:
 
 ```ts
-  /**
-   * Props de ProseMirror. Un método y no un literal porque se reaplican al
-   * cambiar el tamaño de fuente (el respiro del caret escala con la línea) y
-   * porque `setOptions` reemplaza la key `editorProps` entera — si acá
-   * faltaran los `attributes`, un `setEditable()` posterior los borraría.
-   *
-   * El OS no opina sobre el texto: sin corrector, sin autocorrección y sin
-   * autocapitalización. Las comillas y rayas las hace Typography de TipTap.
-   * Explícito acá además de heredado desde <html> como defensa en
-   * profundidad: si algo intermedio (extensión, wrapper, un `<iframe>`)
-   * rompiera la herencia de esos atributos, este bloque los repone.
-   */
-  private buildEditorProps(fontSizePx: number): EditorProps {
-    // Antes de que exista la view no hay computado que leer: se cae al factor
-    // del SCSS. `createEditor` reaplica apenas instancia, con el valor real.
-    const lineHeightPx = this.tiptap
-      ? lineHeightPxFrom(getComputedStyle(this.tiptap.view.dom).lineHeight, fontSizePx)
-      : fontSizePx * FALLBACK_LINE_HEIGHT;
-    return {
-      attributes: {
-        spellcheck: 'false',
-        autocorrect: 'off',
-        autocapitalize: 'off',
-        autocomplete: 'off',
-        'data-gramm': 'false',
-        'data-gramm_editor': 'false',
-      },
-      ...caretScrolloff(lineHeightPx),
-    };
-  }
+import { buildEditorProps } from './editor-props';
 ```
+
+En `createEditor()`, reemplazar el bloque literal actual (`editorProps: { attributes: {...} }`, líneas ~1228-1242, **junto con el comentario de 6 líneas que lo precede** — ese comentario ya vive en el JSDoc de `buildEditorProps`) por una sola línea:
+
+```ts
+      editorProps: buildEditorProps(null, this.fontSize()),
+```
+
+Va `null` porque acá `this.tiptap` todavía se está construyendo: no hay `view.dom` del que leer el computado. El Step 3 reaplica con el valor real.
 
 - [ ] **Step 3: Reaplicar apenas existe la view**
 
 En `createEditor()`, justo después del `});` que cierra el `new TipTapEditor({ ... })` (línea ~1308, antes del bloque `if (this.grammarHostListener) {`), agregar:
 
 ```ts
-    // Recién ahora existe `view.dom`: releer el line-height computado real
-    // (el literal de arriba usó el factor de fallback) y reaplicar. Idempotente,
+    // Recién ahora existe `view.dom`: releer el line-height computado real (el
+    // literal de arriba usó el factor de fallback) y reaplicar. Idempotente,
     // así que no importa si el effect de fontSize ya corrió o no.
-    this.tiptap.setOptions({ editorProps: this.buildEditorProps(this.fontSize()) });
+    this.tiptap.setOptions({
+      editorProps: buildEditorProps(this.tiptap.view.dom, this.fontSize()),
+    });
 ```
 
 El narrowing de `this.tiptap` sobrevive a la asignación de arriba, así que no hace falta el `!`. Si TypeScript igual se queja de que puede ser `null`, guardar la instancia en un `const` local y llamar `setOptions` sobre él — nunca meter un `!` ni un cast a `unknown`.
@@ -354,31 +366,33 @@ Al final del constructor, después del `});` que cierra el effect de auto-check 
     // path "preserve" de ProseMirror: reaplica los props sin mover la vista.
     effect(() => {
       const fontSizePx = this.fontSize();
-      if (!this.tiptap) return;
-      this.tiptap.setOptions({ editorProps: this.buildEditorProps(fontSizePx) });
+      const editor = this.tiptap;
+      if (!editor) return;
+      editor.setOptions({ editorProps: buildEditorProps(editor.view.dom, fontSizePx) });
     });
 ```
 
 - [ ] **Step 5: Verificar que compila**
 
 Run: `pnpm build`
-Expected: build de Angular sin errores. Si TypeScript se queja del acceso a `this.tiptap.view.dom`, **no** castear a `unknown`: revisar que el import sea `import type { EditorProps } from '@tiptap/pm/view';` y que `this.tiptap` esté estrechado por el chequeo de verdad (`this.tiptap ? ... : ...`).
+Expected: build de Angular sin errores. Si TypeScript se queja del tipo de `view.dom`, **no** castear a `unknown`: revisar que el import en `editor-props.ts` sea `import type { EditorProps } from '@tiptap/pm/view';`.
 
-- [ ] **Step 6: Verificar que el smoke runner sigue verde**
+- [ ] **Step 6: Verificar que los smoke runners siguen verdes**
 
 Run: `node scripts/run-caret-scrolloff-smoke.mjs && node scripts/run-popover-position-smoke.mjs`
-Expected: los cuatro conteos en `N/N ok`.
+Expected: los tres conteos en `N/N ok` (`lineHeightPxFrom: 8/8`, `caretScrolloff: 9/9`, `placePopover: 9/9`).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/app/editor/editor.ts
+git add src/app/editor/editor-props.ts src/app/editor/editor.ts
 git commit -m "feat(editor): scrolloff de 2 líneas al tipear en el editor de capítulos
 
-Los editorProps pasan a buildEditorProps(), que suma scrollThreshold y
-scrollMargin calculados desde el line-height computado de view.dom. Se
-reaplican al instanciar (ya hay view.dom real) y en un effect sobre
-editorFontSize, porque el respiro escala con la línea.
+Los editorProps salen del literal inline a buildEditorProps() en
+editor-props.ts (compartida con el editor de notas), que suma
+scrollThreshold y scrollMargin calculados desde el line-height computado
+de view.dom. Se reaplican al instanciar (ya hay view.dom real) y en un
+effect sobre editorFontSize, porque el respiro escala con la línea.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```
@@ -387,71 +401,29 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ### Task 3: Enganchar el scrolloff en el editor de notas
 
-Mismo patrón que Task 2 en la otra clase. El código se repite en vez de compartirse porque son dos componentes independientes con `editorProps` distintos (notas no tiene `TextAlign` ni las extensiones de gramática/RAE); lo compartido es el módulo puro.
+Consumidor de la función que creó Task 2. Mismos tres enganches que en el editor de capítulos, sin código nuevo propio: el `line-height` de notas (1.55 en el SCSS, contra 1.5 en capítulos) sale solo porque se lee el computado de su propio `view.dom`.
 
 **Files:**
 - Modify: `src/app/notes-editor/notes-editor.ts` (imports del tope; `createEditor()` en `335-388`; constructor, línea `133`)
 
 **Interfaces:**
-- Consumes: `caretScrolloff`, `lineHeightPxFrom`, `FALLBACK_LINE_HEIGHT` de `../editor/caret-scrolloff`.
-- Produces: método privado `buildEditorProps(fontSizePx: number): EditorProps` en la clase `NotesEditor`. Nada más lo consume.
+- Consumes: `buildEditorProps(dom: HTMLElement | null, fontSizePx: number): EditorProps` de `../editor/editor-props` (Task 2). **No** se replica la función ni se escribe otra versión del literal de atributos.
+- Produces: nada que consuman otras tasks.
 
-- [ ] **Step 1: Agregar los imports**
+- [ ] **Step 1: Agregar el import**
 
-En `src/app/notes-editor/notes-editor.ts`, junto a los imports de TipTap del tope:
+En `src/app/notes-editor/notes-editor.ts`, junto a los otros imports relativos a `../editor/`:
 
 ```ts
-import type { EditorProps } from '@tiptap/pm/view';
+import { buildEditorProps } from '../editor/editor-props';
 ```
 
-Y junto a los otros imports relativos a `../editor/`:
+- [ ] **Step 2: Reemplazar el literal**
+
+En `createEditor()`, reemplazar el bloque literal actual (`editorProps: { attributes: {...} }`, líneas ~356-370, **junto con el comentario de 6 líneas que lo precede** — ya vive en el JSDoc de `buildEditorProps`) por:
 
 ```ts
-import { FALLBACK_LINE_HEIGHT, caretScrolloff, lineHeightPxFrom } from '../editor/caret-scrolloff';
-```
-
-- [ ] **Step 2: Extraer los `editorProps` a un método**
-
-En `createEditor()`, reemplazar el bloque literal actual (`editorProps: { attributes: {...} }`, líneas ~356-370, junto con el comentario que lo precede) por:
-
-```ts
-      editorProps: this.buildEditorProps(this.fontSize()),
-```
-
-Y agregar el método privado inmediatamente antes de `private createEditor(...)`:
-
-```ts
-  /**
-   * Props de ProseMirror. Un método y no un literal porque se reaplican al
-   * cambiar el tamaño de fuente (el respiro del caret escala con la línea) y
-   * porque `setOptions` reemplaza la key `editorProps` entera — si acá
-   * faltaran los `attributes`, un `setEditable()` posterior los borraría.
-   *
-   * El OS no opina sobre el texto: sin corrector, sin autocorrección y sin
-   * autocapitalización. Las comillas y rayas las hace Typography de TipTap.
-   * Explícito acá además de heredado desde <html> como defensa en
-   * profundidad: si algo intermedio (extensión, wrapper, un `<iframe>`)
-   * rompiera la herencia de esos atributos, este bloque los repone.
-   */
-  private buildEditorProps(fontSizePx: number): EditorProps {
-    // Antes de que exista la view no hay computado que leer: se cae al factor
-    // del SCSS. `createEditor` reaplica apenas instancia, con el valor real
-    // (el SCSS de notas usa 1.55, no el 1.5 del fallback).
-    const lineHeightPx = this.tiptap
-      ? lineHeightPxFrom(getComputedStyle(this.tiptap.view.dom).lineHeight, fontSizePx)
-      : fontSizePx * FALLBACK_LINE_HEIGHT;
-    return {
-      attributes: {
-        spellcheck: 'false',
-        autocorrect: 'off',
-        autocapitalize: 'off',
-        autocomplete: 'off',
-        'data-gramm': 'false',
-        'data-gramm_editor': 'false',
-      },
-      ...caretScrolloff(lineHeightPx),
-    };
-  }
+      editorProps: buildEditorProps(null, this.fontSize()),
 ```
 
 - [ ] **Step 3: Reaplicar apenas existe la view**
@@ -459,10 +431,13 @@ Y agregar el método privado inmediatamente antes de `private createEditor(...)`
 En `createEditor()`, justo después del `});` que cierra el `new TipTapEditor({ ... })` (línea ~388) y antes del `}` que cierra el método:
 
 ```ts
-    // Recién ahora existe `view.dom`: releer el line-height computado real
-    // (el literal de arriba usó el factor de fallback) y reaplicar. Idempotente,
-    // así que no importa si el effect de fontSize ya corrió o no.
-    this.tiptap.setOptions({ editorProps: this.buildEditorProps(this.fontSize()) });
+    // Recién ahora existe `view.dom`: releer el line-height computado real (el
+    // literal de arriba usó el factor de fallback, y el SCSS de notas usa 1.55)
+    // y reaplicar. Idempotente, así que no importa si el effect de fontSize ya
+    // corrió o no.
+    this.tiptap.setOptions({
+      editorProps: buildEditorProps(this.tiptap.view.dom, this.fontSize()),
+    });
 ```
 
 Igual que en Task 2: si TypeScript se queja de que `this.tiptap` puede ser `null`, guardar la instancia en un `const` local, sin `!` ni casts.
@@ -479,8 +454,9 @@ Al final del constructor de `NotesEditor` (constructor en línea `133`), despué
     // path "preserve" de ProseMirror: reaplica los props sin mover la vista.
     effect(() => {
       const fontSizePx = this.fontSize();
-      if (!this.tiptap) return;
-      this.tiptap.setOptions({ editorProps: this.buildEditorProps(fontSizePx) });
+      const editor = this.tiptap;
+      if (!editor) return;
+      editor.setOptions({ editorProps: buildEditorProps(editor.view.dom, fontSizePx) });
     });
 ```
 
@@ -500,9 +476,9 @@ Expected: todos los conteos en `N/N ok`.
 git add src/app/notes-editor/notes-editor.ts
 git commit -m "feat(notes): scrolloff de 2 líneas al tipear en el editor de notas
 
-Mismo patrón que el editor de capítulos: buildEditorProps() con los
-insets de caret-scrolloff, reaplicados al instanciar y en un effect sobre
-editorFontSize.
+Consume la buildEditorProps() compartida de editor-props.ts: mismos
+insets, reaplicados al instanciar y en un effect sobre editorFontSize. El
+line-height propio de notas (1.55) sale del computado de su view.dom.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```
@@ -553,7 +529,9 @@ por:
   el `padding: 2.5rem` del host no aporta respiro y el caret queda a 5px del
   borde visual. Fix: `caret-scrolloff.ts` (módulo puro) calcula insets de 2
   líneas desde el `line-height` computado de `view.dom`, y los dos editores
-  tipeables los pasan por `editorProps` vía `buildEditorProps()`, reaplicados
+  tipeables los pasan por `editorProps` vía la `buildEditorProps()` compartida
+  de `editor-props.ts` (que también centraliza los atributos anti-corrector que
+  antes estaban duplicados en los dos componentes), reaplicados
   al instanciar y en un effect sobre `editorFontSize` (el respiro escala con la
   fuente, 12–28px). `threshold == margin` a propósito: el scroll avanza de a
   una línea, sin saltos. `markdown-reader` queda afuera (read-only). No se
