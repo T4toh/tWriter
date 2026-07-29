@@ -28,12 +28,31 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   donde no corresponde. Verificar primero si pasa con la fuente en otro
   tamaño/zoom y en otro OS antes de tocar el theme.
 - **Scroll a la línea nueva al tipear**: cuando el cursor pasa a una línea
-  nueva al final del viewport, la vista no lo sigue — se escribe a ciegas
-  contra el borde inferior. Hace falta mantener el caret visible (con un
-  margen de respiro tipo "scrolloff", no pegado al borde). Ojo con no pisar
-  la restauración de posición al abrir capítulo (`editor.ts:426-463` setea
-  `scrollTop = 0` y usa `focus(undefined, { scrollIntoView: false })` a
+  nueva al final del viewport, la vista queda pegada al borde inferior — se
+  escribe a ciegas. Hace falta un margen de respiro tipo "scrolloff". Ojo con
+  no pisar la restauración de posición al abrir capítulo (`editor.ts:426-463`
+  setea `scrollTop = 0` y usa `focus(undefined, { scrollIntoView: false })` a
   propósito).
+
+  **Implementado (`feat/caret-scrolloff`)**: spec en
+  `docs/superpowers/specs/2026-07-29-caret-scrolloff-design.md`. La causa no era
+  que la vista no siguiera al caret: ProseMirror ya scrollea al tipear
+  (`readDOMChange` cierra sus transacciones con `tr.scrollIntoView()`), pero
+  `scrollRectIntoView` usa los defaults `scrollThreshold = 0` /
+  `scrollMargin = 5px`, y mide el *padding box* de `.editor-host` — o sea que
+  el `padding: 2.5rem` del host no aporta respiro y el caret queda a 5px del
+  borde visual. Fix: `caret-scrolloff.ts` (módulo puro) calcula insets de 2
+  líneas desde el `line-height` computado de `view.dom`, y los dos editores
+  tipeables los pasan por `editorProps` vía la `buildEditorProps()` compartida
+  de `editor-props.ts` (que también centraliza los atributos anti-corrector que
+  antes estaban duplicados en los dos componentes), reaplicados
+  al instanciar y en un effect sobre `editorFontSize` (el respiro escala con la
+  fuente, 12–28px). `threshold == margin` a propósito: el scroll avanza de a
+  una línea, sin saltos. `markdown-reader` queda afuera (read-only). No se
+  tocaron los dos paths de scroll manual: la restauración al abrir y el salto
+  de búsqueda (`scrollIntoView({block:'center'})` nativo). Tests:
+  `scripts/run-caret-scrolloff-smoke.mjs` (17 casos) + `pnpm build`. **Falta
+  verificación manual del autor** con la app levantada.
 - [x] **Control total del tipeo — matar el corrector del OS + sugerencias del
   diccionario propio + ubicar bien el popup** (`feat/control-total-tipeo`,
   PR #63): spec en
