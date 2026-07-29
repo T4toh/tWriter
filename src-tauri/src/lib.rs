@@ -14,6 +14,7 @@ mod image;
 mod import;
 mod import_notes;
 mod import_wizard;
+mod macos_text;
 mod notes;
 mod reorder;
 mod saga_config;
@@ -75,6 +76,7 @@ pub fn run() {
     debug_bridge::init_tracing();
     tauri::Builder::default()
         .setup(|app| {
+            macos_text::disable_native_text_substitutions(app.handle());
             let handle = app.handle().clone();
             debug_bridge::set_app_handle(handle.clone());
             tracing::info!(target: "boot", "tWriter listo");
