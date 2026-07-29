@@ -55,7 +55,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   en scroll del `.editor-host`.
 
   **Implementado (`feat/control-total-tipeo`, 10 commits):** las tres
-  componentes del spec. Verificado por código: `pnpm build` ✓;
+  componentes del spec. Verificado por código: `pnpm build` sin errores;
   `suggestFromDictionary: 12/12 ok`, `placePopover: 9/9 ok`; `cargo check`
   limpio. En macOS/Darwin 25.5: de los 6 setters de `WKWebView` que la app
   intenta, existen solo 3 (`setAutomaticQuoteSubstitutionEnabled:`,
