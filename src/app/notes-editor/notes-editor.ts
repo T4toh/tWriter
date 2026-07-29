@@ -364,7 +364,7 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
       ],
       content,
       editable,
-      editorProps: buildEditorProps(null, this.fontSize()),
+      editorProps: buildEditorProps(null, untracked(() => this.fontSize())),
       // Solo el pane principal autofocusea — el lateral abre al tope sin
       // mover el cursor. Pane 0 además tiene cursor-restore que sobreescribe
       // el 'end' si había posición guardada para el path. Si autofocus 'end'
@@ -386,10 +386,13 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
     // literal de arriba usó el factor de fallback, y el SCSS de notas usa 1.55)
     // y reaplicar. Idempotente, así que no importa si el effect de fontSize ya
     // corrió o no.
+    // `untracked`: esto corre dentro del effect de carga — sin envolver, el
+    // effect quedaría suscripto a `editorFontSize` y un Ctrl+/- lo re-entraría
+    // (mismo motivo que `md`/`target` arriba van con `untracked`).
     const editor = this.tiptap;
     if (editor) {
       editor.setOptions({
-        editorProps: buildEditorProps(editor.view.dom, this.fontSize()),
+        editorProps: buildEditorProps(editor.view.dom, untracked(() => this.fontSize())),
       });
     }
   }

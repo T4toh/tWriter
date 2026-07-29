@@ -1236,7 +1236,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       ],
       content,
       editable,
-      editorProps: buildEditorProps(null, this.fontSize()),
+      editorProps: buildEditorProps(null, untracked(() => this.fontSize())),
       // NO autofocus 'end': forzaba el cursor al final del cap al abrir (y
       // pisaba la restauración de posición). La posición se restaura abajo
       // vía cursorRestore; sin posición guardada arranca al inicio.
@@ -1306,8 +1306,11 @@ export class Editor implements AfterViewInit, OnDestroy {
     // Recién ahora existe `view.dom`: releer el line-height computado real (el
     // literal de arriba usó el factor de fallback) y reaplicar. Idempotente,
     // así que no importa si el effect de fontSize ya corrió o no.
+    // `untracked`: esto corre dentro del effect de carga — sin envolver, el
+    // effect quedaría suscripto a `editorFontSize` y un Ctrl+/- lo re-entraría
+    // (mismo motivo que `node`/`html` arriba van con `untracked`).
     this.tiptap.setOptions({
-      editorProps: buildEditorProps(this.tiptap.view.dom, this.fontSize()),
+      editorProps: buildEditorProps(this.tiptap.view.dom, untracked(() => this.fontSize())),
     });
     if (this.grammarHostListener) {
       this.hostRef.nativeElement.removeEventListener('click', this.grammarHostListener);
