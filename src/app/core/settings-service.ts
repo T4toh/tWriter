@@ -16,7 +16,7 @@ export type EditorFontFamily = string;
 
 const FONT_MIN = 12;
 const FONT_MAX = 28;
-const FONT_DEFAULT = 17;
+const FONT_DEFAULT = 17; // Espejado en caret-scrolloff.ts::FALLBACK_FONT_SIZE (import-free por diseño, no puede importar esto).
 const SPACING_DEFAULT: ParagraphSpacing = 'tight';
 const RIGHT_PANEL_DEFAULT: RightPanelWidth = 'normal';
 const SEARCH_SCOPE_DEFAULT: SearchScope = 'all';

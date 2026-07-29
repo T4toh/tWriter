@@ -27,13 +27,42 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   de la variante sintetizada (italic oblique / bold synthesis) aplicándose
   donde no corresponde. Verificar primero si pasa con la fuente en otro
   tamaño/zoom y en otro OS antes de tocar el theme.
-- **Scroll a la línea nueva al tipear**: cuando el cursor pasa a una línea
-  nueva al final del viewport, la vista no lo sigue — se escribe a ciegas
-  contra el borde inferior. Hace falta mantener el caret visible (con un
-  margen de respiro tipo "scrolloff", no pegado al borde). Ojo con no pisar
-  la restauración de posición al abrir capítulo (`editor.ts:426-463` setea
-  `scrollTop = 0` y usa `focus(undefined, { scrollIntoView: false })` a
+- [x] **Scroll a la línea nueva al tipear** (`feat/caret-scrolloff`, PR #64):
+  cuando el cursor pasaba a una línea nueva al final del viewport, la vista
+  quedaba pegada al borde inferior — se escribía a ciegas. Ojo con
+  no pisar la restauración de posición al abrir capítulo (`editor.ts:430-469`
+  setea `scrollTop = 0` y usa `focus(undefined, { scrollIntoView: false })` a
   propósito).
+
+  **Implementado (`feat/caret-scrolloff`)**: spec en
+  `docs/superpowers/specs/2026-07-29-caret-scrolloff-design.md`. La causa no era
+  que la vista no siguiera al caret: ProseMirror ya scrollea al tipear
+  (`readDOMChange` cierra sus transacciones con `tr.scrollIntoView()`), pero
+  `scrollRectIntoView` usa los defaults `scrollThreshold = 0` /
+  `scrollMargin = 5px`, y mide el *padding box* de `.editor-host` — o sea que
+  el `padding: 2.5rem` del host no aporta respiro y el caret queda a 5px del
+  borde visual. Fix: `caret-scrolloff.ts` (módulo puro) calcula insets de 2
+  líneas desde el `line-height` computado de `view.dom`, y las tres superficies
+  tipeables (capítulos, notas y el modo edit del markdown-reader) los pasan por
+  `editorProps` vía la `buildEditorProps()` compartida de `editor-props.ts` (que
+  también centraliza los atributos anti-corrector que antes estaban duplicados
+  entre componentes), reaplicados al instanciar y — en capítulos y notas, que
+  tienen tamaño de fuente configurable — en un effect sobre `editorFontSize`
+  (el respiro escala con la fuente, 12–28px; el markdown-reader tiene
+  `font-size` fijo en el SCSS, sin señal que reaplicar). El inset vertical es
+  compartido entre `threshold` y `margin` a propósito: el scroll avanza de a
+  una línea, sin saltos. En el eje horizontal, `threshold` queda en 0 y
+  `margin` en 5 — el default histórico de ProseMirror, necesario porque un
+  `pre` de code block en notas sí scrollea horizontal. No se tocaron los dos
+  paths de scroll manual: la restauración al abrir y el salto de búsqueda
+  (`scrollIntoView({block:'center'})` nativo). Tests:
+  `scripts/run-caret-scrolloff-smoke.mjs` (19 casos) + `pnpm build`.
+  **Verificado a mano** en macOS (M5, Darwin 25.5, 2026-07-29) con la app en
+  dev: el autor probó el checklist completo — tipeo contra el borde inferior y
+  flecha arriba contra el superior, escalado al cambiar el tamaño de fuente sin
+  que la vista salte, reapertura de capítulo arrancando arriba, salto de
+  búsqueda centrando el match, línea larga dentro de un `pre` de code block en
+  notas, y el modo edit del markdown-reader — y da el comportamiento por bueno.
 - [x] **Control total del tipeo — matar el corrector del OS + sugerencias del
   diccionario propio + ubicar bien el popup** (`feat/control-total-tipeo`,
   PR #63): spec en

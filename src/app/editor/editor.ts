@@ -71,6 +71,7 @@ import {
 } from './grammar-extension';
 import { SearchHighlight, setSearchHighlights } from './search-highlight-extension';
 import { AnchorBox } from './popover-position';
+import { buildEditorProps } from './editor-props';
 import { GrammarPopover } from './grammar-popover';
 import {
   RaeExtension,
@@ -634,6 +635,16 @@ export class Editor implements AfterViewInit, OnDestroy {
         this.raePopover.set(null);
         this.lastRaePlain = null;
       }
+    });
+
+    // El respiro del caret escala con la línea, así que cambia con la fuente.
+    // `setOptions` termina en `view.updateState(state)` sin flag de scroll →
+    // path "preserve" de ProseMirror: reaplica los props sin mover la vista.
+    effect(() => {
+      const fontSizePx = this.fontSize();
+      const editor = this.tiptap;
+      if (!editor) return;
+      editor.setOptions({ editorProps: buildEditorProps(editor.view.dom, fontSizePx) });
     });
   }
 
@@ -1225,21 +1236,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       ],
       content,
       editable,
-      // El OS no opina sobre el texto: sin corrector, sin autocorrección y sin
-      // autocapitalización. Las comillas y rayas las hace Typography de TipTap.
-      // Explícito acá además de heredado desde <html> como defensa en
-      // profundidad: si algo intermedio (extensión, wrapper, un `<iframe>`)
-      // rompiera la herencia de esos atributos, este bloque los repone.
-      editorProps: {
-        attributes: {
-          spellcheck: 'false',
-          autocorrect: 'off',
-          autocapitalize: 'off',
-          autocomplete: 'off',
-          'data-gramm': 'false',
-          'data-gramm_editor': 'false',
-        },
-      },
+      editorProps: buildEditorProps(null, untracked(() => this.fontSize())),
       // NO autofocus 'end': forzaba el cursor al final del cap al abrir (y
       // pisaba la restauración de posición). La posición se restaura abajo
       // vía cursorRestore; sin posición guardada arranca al inicio.
@@ -1305,6 +1302,15 @@ export class Editor implements AfterViewInit, OnDestroy {
           if (this.raeAuto()) this.scheduleRaeRecheck();
         }
       },
+    });
+    // Recién ahora existe `view.dom`: releer el line-height computado real (el
+    // literal de arriba usó el factor de fallback) y reaplicar. Idempotente,
+    // así que no importa si el effect de fontSize ya corrió o no.
+    // `untracked`: esto corre dentro del effect de carga — sin envolver, el
+    // effect quedaría suscripto a `editorFontSize` y un Ctrl+/- lo re-entraría
+    // (mismo motivo que `node`/`html` arriba van con `untracked`).
+    this.tiptap.setOptions({
+      editorProps: buildEditorProps(this.tiptap.view.dom, untracked(() => this.fontSize())),
     });
     if (this.grammarHostListener) {
       this.hostRef.nativeElement.removeEventListener('click', this.grammarHostListener);

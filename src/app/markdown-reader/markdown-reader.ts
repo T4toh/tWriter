@@ -35,6 +35,8 @@ import {
   highlightFirstMatch,
 } from '../core/search-highlight';
 import { SettingsService } from '../core/settings-service';
+import { FALLBACK_FONT_SIZE } from '../editor/caret-scrolloff';
+import { buildEditorProps } from '../editor/editor-props';
 import { extractPlainText, offsetToPm } from '../editor/grammar-extension';
 import {
   SearchHighlight,
@@ -289,21 +291,7 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
       ],
       content,
       editable,
-      // El OS no opina sobre el texto: sin corrector, sin autocorrección y sin
-      // autocapitalización. Las comillas y rayas las hace Typography de TipTap.
-      // Explícito acá además de heredado desde <html> como defensa en
-      // profundidad: si algo intermedio (extensión, wrapper, un `<iframe>`)
-      // rompiera la herencia de esos atributos, este bloque los repone.
-      editorProps: {
-        attributes: {
-          spellcheck: 'false',
-          autocorrect: 'off',
-          autocapitalize: 'off',
-          autocomplete: 'off',
-          'data-gramm': 'false',
-          'data-gramm_editor': 'false',
-        },
-      },
+      editorProps: buildEditorProps(null, FALLBACK_FONT_SIZE),
       // Sin autofocus: el reader siempre abre al tope de la nota, sin mover
       // cursor. Con `'end'` TipTap scrolleaba al final async después del
       // mount, dando la sensación de que el lateral seguía el scroll del
@@ -320,6 +308,14 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
         this.search.setFocused('mdReader');
       },
       onTransaction: () => this.refreshState(),
+    });
+    // Recién ahora existe `view.dom`: releer el line-height computado real (el
+    // literal de arriba usó el factor de fallback) y reaplicar. Sin fuente
+    // configurable en este componente (font-size fijo del SCSS), se sigue
+    // pasando FALLBACK_FONT_SIZE — solo importa como fallback si el
+    // line-height no resuelve.
+    this.tiptap.setOptions({
+      editorProps: buildEditorProps(this.tiptap.view.dom, FALLBACK_FONT_SIZE),
     });
   }
 
