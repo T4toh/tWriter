@@ -25,6 +25,21 @@
 - **No tocar** los dos paths de scroll manual: la restauración al abrir (`editor.ts:426-467`, `notes-editor.ts:149-175`) y el salto de búsqueda (`core/search-highlight.ts:129`).
 - **`pnpm build` tiene que pasar** al cerrar cada task que toque `src/app/`.
 - **El item de `TODO.md` NO se marca `[x]`** en este plan: la verificación manual la hace el autor con la app levantada.
+- **Enmienda (revisión final de `feat/caret-scrolloff`, post-Task 4)**: dos constraints de
+  arriba describían el diseño original y quedaron desactualizadas — se anotan acá en vez de
+  reescribirse, para no perder el rastro de por qué cambiaron.
+  - `"threshold == margin"` y `"left === right === 0"` ya no son exactos tal cual. Lo que
+    se mantiene: el inset **vertical** (`top`/`bottom`) sigue compartido entre
+    `scrollThreshold` y `scrollMargin`. Lo que cambió: en `left`/`right`, `scrollThreshold`
+    sigue en `0` pero `scrollMargin` pasó a `PM_DEFAULT_SCROLL_MARGIN_X` (`5`, el default
+    histórico de `scrollMargin` de ProseMirror) — "el host es `overflow-x: hidden`" es
+    cierto para `editor.scss` pero falso para `notes-editor.scss` (su `pre` de code block
+    es `overflow-x: auto`, scroller real), así que aplastar los dos ejes a `0` regresionaba
+    el respiro horizontal nativo de PM ahí.
+  - `markdown-reader.ts` se sumó como tercer consumidor de `buildEditorProps()`: su modo
+    edit (`this.svc.editing()` gatea `editable`) también tiene caret, no es read-only como
+    asumía el texto original. No suma el effect de `editorFontSize` — su tamaño de fuente
+    es fijo en el SCSS. Ver la sección "Alcance" y "Wiring en los componentes" de la spec.
 
 ---
 
