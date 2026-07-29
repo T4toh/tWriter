@@ -385,8 +385,7 @@
   <div class="grammar-pop-backdrop" (click)="closeGrammarPopover()"></div>
   <app-grammar-popover
     [match]="gp.match"
-    [x]="gp.x"
-    [y]="gp.y"
+    [anchor]="gp.anchor"
     [dictSuggestions]="gp.dictSuggestions"
     (apply)="applyGrammarReplacement($event)"
     (dismiss)="dismissGrammarMatch()"
@@ -398,8 +397,7 @@
   <div class="grammar-pop-backdrop" (click)="dismissRae()"></div>
   <app-rae-popover
     [violation]="rp.violation"
-    [x]="rp.x"
-    [y]="rp.y"
+    [anchor]="rp.anchor"
     (apply)="applyRaeFix()"
     (applyParagraph)="applyRaeParagraph()"
     (dismiss)="dismissRae()"

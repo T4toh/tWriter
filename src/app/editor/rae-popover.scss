@@ -12,6 +12,12 @@
   font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.4;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.rae-pop--measuring {
+  visibility: hidden;
 }
 
 .rae-pop--pending {

@@ -1,5 +1,18 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  ElementRef,
+  afterRenderEffect,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { GrammarMatch } from '../core/types';
+import { AnchorBox, Placement, placePopover } from './popover-position';
 
 @Component({
   selector: 'app-grammar-popover',
@@ -8,9 +21,12 @@ import { GrammarMatch } from '../core/types';
   template: `
     @if (match(); as m) {
       <div
+        #root
         class="grammar-pop"
-        [style.top.px]="y()"
-        [style.left.px]="x()"
+        [class.grammar-pop--measuring]="placed() === null"
+        [style.top.px]="placed()?.y ?? 0"
+        [style.left.px]="placed()?.x ?? 0"
+        [style.max-height.px]="placed()?.maxHeight ?? null"
         (click)="$event.stopPropagation()"
       >
         <div class="msg">{{ m.message }}</div>
@@ -62,8 +78,7 @@ import { GrammarMatch } from '../core/types';
 })
 export class GrammarPopover {
   match = input<GrammarMatch | null>(null);
-  x = input<number>(0);
-  y = input<number>(0);
+  anchor = input<AnchorBox | null>(null);
   dictSuggestions = input<string[]>([]);
   apply = output<string>();
   dismiss = output<void>();
@@ -74,4 +89,36 @@ export class GrammarPopover {
   });
   hasAnySuggestion = computed(() => this.dictSuggestions().length > 0 || this.suggestions().length > 0);
   canAddToDict = computed(() => this.match()?.category === 'TYPOS');
+
+  private readonly root = viewChild<ElementRef<HTMLElement>>('root');
+  /** null hasta que el popover se midió: se renderiza invisible para que no se
+   *  vea el salto desde la posición inicial. */
+  protected readonly placed = signal<Placement | null>(null);
+  private readonly resizeTick = signal(0);
+
+  constructor() {
+    const onResize = (): void => this.resizeTick.update((n) => n + 1);
+    window.addEventListener('resize', onResize);
+    inject(DestroyRef).onDestroy(() => window.removeEventListener('resize', onResize));
+
+    // Medición real: el alto depende de cuántas sugerencias haya, así que no
+    // se puede estimar desde el CSS. Se mide el elemento ya renderizado y se
+    // recoloca en el mismo ciclo.
+    afterRenderEffect(() => {
+      this.resizeTick();
+      const anchor = this.anchor();
+      const el = this.root()?.nativeElement;
+      if (!anchor || !el) {
+        this.placed.set(null);
+        return;
+      }
+      this.placed.set(
+        placePopover(
+          anchor,
+          { width: el.offsetWidth, height: el.scrollHeight },
+          { width: window.innerWidth, height: window.innerHeight },
+        ),
+      );
+    });
+  }
 }

@@ -1,5 +1,18 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  ElementRef,
+  afterRenderEffect,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { RaeViolation } from '../core/types';
+import { AnchorBox, Placement, placePopover } from './popover-position';
 
 @Component({
   selector: 'app-rae-popover',
@@ -8,13 +21,16 @@ import { RaeViolation } from '../core/types';
   template: `
     @if (violation(); as v) {
       <div
+        #root
         class="rae-pop"
         [class.rae-pop--pending]="v.category === 'pending-conversion'"
         [class.rae-pop--char]="v.category === 'char'"
         [class.rae-pop--structure]="v.category === 'structure'"
         [class.rae-pop--typo]="v.category === 'typo'"
-        [style.top.px]="y()"
-        [style.left.px]="x()"
+        [class.rae-pop--measuring]="placed() === null"
+        [style.top.px]="placed()?.y ?? 0"
+        [style.left.px]="placed()?.x ?? 0"
+        [style.max-height.px]="placed()?.maxHeight ?? null"
         (click)="$event.stopPropagation()"
       >
         <div class="rae-pop-head">
@@ -53,8 +69,7 @@ import { RaeViolation } from '../core/types';
 })
 export class RaePopover {
   violation = input<RaeViolation | null>(null);
-  x = input<number>(0);
-  y = input<number>(0);
+  anchor = input<AnchorBox | null>(null);
   apply = output<void>();
   applyParagraph = output<void>();
   dismiss = output<void>();
@@ -83,4 +98,36 @@ export class RaePopover {
         return 'Tipografía';
     }
   });
+
+  private readonly root = viewChild<ElementRef<HTMLElement>>('root');
+  /** null hasta que el popover se midió: se renderiza invisible para que no se
+   *  vea el salto desde la posición inicial. */
+  protected readonly placed = signal<Placement | null>(null);
+  private readonly resizeTick = signal(0);
+
+  constructor() {
+    const onResize = (): void => this.resizeTick.update((n) => n + 1);
+    window.addEventListener('resize', onResize);
+    inject(DestroyRef).onDestroy(() => window.removeEventListener('resize', onResize));
+
+    // Medición real: el alto depende del mensaje y de qué botones aplican, así
+    // que no se puede estimar desde el CSS. Se mide el elemento ya renderizado
+    // y se recoloca en el mismo ciclo.
+    afterRenderEffect(() => {
+      this.resizeTick();
+      const anchor = this.anchor();
+      const el = this.root()?.nativeElement;
+      if (!anchor || !el) {
+        this.placed.set(null);
+        return;
+      }
+      this.placed.set(
+        placePopover(
+          anchor,
+          { width: el.offsetWidth, height: el.scrollHeight },
+          { width: window.innerWidth, height: window.innerHeight },
+        ),
+      );
+    });
+  }
 }
