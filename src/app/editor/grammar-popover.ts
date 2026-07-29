@@ -14,8 +14,15 @@ import { GrammarMatch } from '../core/types';
         (click)="$event.stopPropagation()"
       >
         <div class="msg">{{ m.message }}</div>
-        @if (suggestions().length > 0) {
+        @if (hasAnySuggestion()) {
           <ul class="reps">
+            @for (r of dictSuggestions(); track r) {
+              <li>
+                <button type="button" class="rep-btn rep-btn--dict" (click)="apply.emit(r)">
+                  {{ r }}<span class="rep-chip">tu diccionario</span>
+                </button>
+              </li>
+            }
             @for (r of suggestions(); track r) {
               <li>
                 <button type="button" class="rep-btn" (click)="apply.emit(r)">{{ r }}</button>
@@ -57,9 +64,14 @@ export class GrammarPopover {
   match = input<GrammarMatch | null>(null);
   x = input<number>(0);
   y = input<number>(0);
+  dictSuggestions = input<string[]>([]);
   apply = output<string>();
   dismiss = output<void>();
   addToDict = output<void>();
-  suggestions = computed(() => (this.match()?.replacements ?? []).slice(0, 5));
+  suggestions = computed(() => {
+    const room = Math.max(0, 5 - this.dictSuggestions().length);
+    return (this.match()?.replacements ?? []).slice(0, room);
+  });
+  hasAnySuggestion = computed(() => this.dictSuggestions().length > 0 || this.suggestions().length > 0);
   canAddToDict = computed(() => this.match()?.category === 'TYPOS');
 }

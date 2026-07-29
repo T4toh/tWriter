@@ -52,6 +52,7 @@ import { FontsService } from '../core/fonts-service';
 import { Select, SelectGroup, SelectOption } from '../shared/select';
 import { GrammarMatch, RaeViolation } from '../core/types';
 import { convert as convertRae } from '../dialogos/converter';
+import { suggestFromDictionary } from '../dictionary/suggest';
 import { educateQuotes } from '../quotes/educate';
 import { validateRae } from '../dialogos/validator';
 import { Landing } from '../landing/landing';
@@ -163,7 +164,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly grammarChecking = this.grammar.checking;
   protected readonly grammarError = this.grammar.lastError;
   protected readonly grammarMatches = signal<GrammarMatchPos[]>([]);
-  protected readonly grammarPopover = signal<{ match: GrammarMatch; x: number; y: number; from: number; to: number } | null>(null);
+  protected readonly grammarPopover = signal<{ match: GrammarMatch; x: number; y: number; from: number; to: number; dictSuggestions: string[] } | null>(null);
   protected readonly raeViolations = signal<RaeViolationPos[]>([]);
   protected readonly raePopover = signal<{ violation: RaeViolationPos; x: number; y: number } | null>(null);
   protected readonly raeAuto = computed(() => {
@@ -1181,12 +1182,23 @@ export class Editor implements AfterViewInit, OnDestroy {
     event.preventDefault();
     event.stopPropagation();
     const rect = span.getBoundingClientRect();
+    // El diccionario de la saga hasta ahora solo silenciaba falsos positivos.
+    // Para los TYPOS también aporta candidatos: si el autor escribió mal un
+    // nombre propio del mundo, LT nunca lo va a ofrecer.
+    const word = this.tiptap?.state.doc.textBetween(m.from, m.to, ' ').trim() ?? '';
+    const dictSuggestions =
+      m.category === 'TYPOS' && word.length > 0
+        ? suggestFromDictionary(word, this.sagaCtx.dictionaryWords(), 3).filter(
+            (s) => !m.replacements.some((r) => r.toLowerCase() === s.toLowerCase()),
+          )
+        : [];
     this.grammarPopover.set({
       match: m,
       x: Math.min(rect.left, window.innerWidth - 340),
       y: rect.bottom + 4,
       from: m.from,
       to: m.to,
+      dictSuggestions,
     });
   }
 

@@ -46,6 +46,23 @@
   border-color: var(--accent);
 }
 
+.rep-btn--dict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.rep-chip {
+  flex: none;
+  font-size: 0.7em;
+  text-transform: lowercase;
+  opacity: 0.75;
+  border: 1px solid currentcolor;
+  border-radius: 999px;
+  padding: 0 0.4em;
+}
+
 .no-reps {
   font-style: italic;
   color: var(--fg-muted);
