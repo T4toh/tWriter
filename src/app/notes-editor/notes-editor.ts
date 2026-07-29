@@ -355,8 +355,9 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
       editable,
       // El OS no opina sobre el texto: sin corrector, sin autocorrección y sin
       // autocapitalización. Las comillas y rayas las hace Typography de TipTap.
-      // Explícito acá además de heredado desde <html> porque ProseMirror
-      // reescribe los atributos del contenteditable al montar la vista.
+      // Explícito acá además de heredado desde <html> como defensa en
+      // profundidad: si algo intermedio (extensión, wrapper, un `<iframe>`)
+      // rompiera la herencia de esos atributos, este bloque los repone.
       editorProps: {
         attributes: {
           spellcheck: 'false',

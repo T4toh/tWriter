@@ -289,6 +289,21 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
       ],
       content,
       editable,
+      // El OS no opina sobre el texto: sin corrector, sin autocorrección y sin
+      // autocapitalización. Las comillas y rayas las hace Typography de TipTap.
+      // Explícito acá además de heredado desde <html> como defensa en
+      // profundidad: si algo intermedio (extensión, wrapper, un `<iframe>`)
+      // rompiera la herencia de esos atributos, este bloque los repone.
+      editorProps: {
+        attributes: {
+          spellcheck: 'false',
+          autocorrect: 'off',
+          autocapitalize: 'off',
+          autocomplete: 'off',
+          'data-gramm': 'false',
+          'data-gramm_editor': 'false',
+        },
+      },
       // Sin autofocus: el reader siempre abre al tope de la nota, sin mover
       // cursor. Con `'end'` TipTap scrolleaba al final async después del
       // mount, dando la sensación de que el lateral seguía el scroll del
