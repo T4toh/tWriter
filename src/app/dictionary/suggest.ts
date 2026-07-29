@@ -7,26 +7,7 @@
  * falta. Función pura, sin Angular ni DOM: la lista tiene decenas o cientos de
  * palabras, así que la distancia se calcula en TS sin Rust ni red.
  */
-
-/** Pliega acentos (copia de src/app/core/search-highlight.ts línea 27).
- * Length-preserving: cada acento mapea a base (1:1). */
-function foldAccents(s: string): string {
-  const ACCENT_MAP: Record<string, string> = {
-    á: 'a', à: 'a', ä: 'a', â: 'a', ã: 'a',
-    é: 'e', è: 'e', ë: 'e', ê: 'e',
-    í: 'i', ì: 'i', ï: 'i', î: 'i',
-    ó: 'o', ò: 'o', ö: 'o', ô: 'o', õ: 'o',
-    ú: 'u', ù: 'u', ü: 'u', û: 'u',
-    Á: 'A', À: 'A', Ä: 'A', Â: 'A', Ã: 'A',
-    É: 'E', È: 'E', Ë: 'E', Ê: 'E',
-    Í: 'I', Ì: 'I', Ï: 'I', Î: 'I',
-    Ó: 'O', Ò: 'O', Ö: 'O', Ô: 'O', Õ: 'O',
-    Ú: 'U', Ù: 'U', Ü: 'U', Û: 'U',
-  };
-  let out = '';
-  for (const ch of s) out += ACCENT_MAP[ch] ?? ch;
-  return out;
-}
+import { foldAccents } from '../core/search-highlight';
 
 /** Máximo de ediciones tolerado según el largo de la palabra tipeada. Mismo
  *  criterio que la búsqueda fuzzy: cortas exigen precisión, largas toleran más. */
@@ -64,8 +45,13 @@ function levenshtein(a: string, b: string, limit: number): number {
  * Devuelve hasta `max` palabras del diccionario cercanas a `word`, tal cual
  * están escritas en el diccionario. Comparación case-insensitive y con acentos
  * plegados; orden por distancia ascendente y después alfabético (estable).
- * Excluye coincidencias exactas: si la palabra ya está bien escrita no hay nada
- * que sugerir.
+ * Excluye coincidencias exactas (verbatim): si la palabra ya está bien escrita
+ * no hay nada que sugerir.
+ *
+ * Nota: si el diccionario tiene dos entradas que pliegan al mismo valor con
+ * acentos distintos (ej. `Kallia` y `Kállia`), tipear una de ellas exactamente
+ * igual sugiere la otra — es la intersección de "acento distinto ⇒ sugerir" y
+ * "idéntica ⇒ excluir". Esto es por diseño.
  */
 export function suggestFromDictionary(word: string, words: string[], max = 3): string[] {
   if (word.length === 0 || words.length === 0) return [];
@@ -73,7 +59,7 @@ export function suggestFromDictionary(word: string, words: string[], max = 3): s
   const limit = maxDistanceFor(needle.length);
   const scored: { word: string; distance: number }[] = [];
   for (const candidate of words) {
-    if (word === candidate) continue;
+    if (word === candidate) continue; // Excluye coincidencia verbatim exacta.
     const folded = foldAccents(candidate.toLowerCase());
     const distance = levenshtein(needle, folded, limit);
     if (distance <= limit) scored.push({ word: candidate, distance });

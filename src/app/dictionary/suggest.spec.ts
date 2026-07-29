@@ -2,8 +2,8 @@
  * Tests de `suggest.ts` — candidatos del diccionario de la saga para un typo.
  *
  * Igual que `quotes/educate.spec.ts`: no hay Karma en el repo, así que los
- * casos viven acá y `suggest.smoke.ts` los corre con
- * `node --experimental-strip-types`.
+ * casos viven acá y `scripts/run-suggest-smoke.mjs` los corre compilando a
+ * CommonJS temporal (mismo patrón que `run-rae-smoke.mjs`).
  */
 import { suggestFromDictionary } from './suggest';
 
