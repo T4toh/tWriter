@@ -21,6 +21,15 @@ export const FALLBACK_LINE_HEIGHT = 1.5;
 /** Espeja `FONT_DEFAULT` de `settings-service.ts`. */
 export const FALLBACK_FONT_SIZE = 17;
 
+/**
+ * Espeja el default de `scrollMargin` de ProseMirror (`scrollRectIntoView`
+ * cae a `5` si el editorProp no está seteado). Se usa en el eje X: no todos
+ * los hosts son `overflow-x: hidden` (el `pre` de un code block en notas sí
+ * scrollea horizontal), así que hay que preservar el respiro que PM ya traía
+ * de fábrica en vez de aplastarlo a 0.
+ */
+export const PM_DEFAULT_SCROLL_MARGIN_X = 5;
+
 export interface ScrolloffInsets {
   top: number;
   right: number;
@@ -54,11 +63,19 @@ export function lineHeightPxFrom(computed: string, fontSizePx: number): number {
 /**
  * Threshold y margin en px para los `editorProps` de ProseMirror.
  *
- * Los dos valen lo mismo a propósito: la condición de disparo y la posición de
- * reposo coinciden, así que el caret entra en la zona de guarda y queda justo
- * en su borde — el scroll resultante es de una línea por línea nueva, sin
- * saltos que reubiquen el párrafo. Simétrico arriba y abajo (subir con las
- * flechas también deja contexto); costados en cero, el host no scrollea en X.
+ * El eje vertical vale lo mismo en los dos a propósito: la condición de
+ * disparo y la posición de reposo coinciden, así que el caret entra en la
+ * zona de guarda y queda justo en su borde — el scroll resultante es de una
+ * línea por línea nueva, sin saltos que reubiquen el párrafo. Simétrico
+ * arriba y abajo (subir con las flechas también deja contexto).
+ *
+ * El eje horizontal reproduce el default histórico de ProseMirror en vez de
+ * aplastarlo a 0: `scrollThreshold` en `left`/`right` sigue en `0` (el punto
+ * de disparo en X no cambia) y `scrollMargin` en `left`/`right` sigue en
+ * `PM_DEFAULT_SCROLL_MARGIN_X` (la posición de reposo en X tampoco cambia).
+ * Necesario porque no todos los hosts son `overflow-x: hidden` — un `pre` de
+ * code block en notas sí scrollea horizontal, y con `0` el caret quedaría
+ * pegado a su borde derecho.
  *
  * Defensivo con entradas inválidas: un inset `NaN` o negativo rompería la
  * aritmética de `scrollRectIntoView` y dejaría el scroll trabado.
@@ -72,6 +89,6 @@ export function caretScrolloff(lineHeightPx: number, lines: number = SCROLLOFF_L
   const inset = Math.round(safeLineHeight * safeLines);
   return {
     scrollThreshold: { top: inset, right: 0, bottom: inset, left: 0 },
-    scrollMargin: { top: inset, right: 0, bottom: inset, left: 0 },
+    scrollMargin: { top: inset, right: PM_DEFAULT_SCROLL_MARGIN_X, bottom: inset, left: PM_DEFAULT_SCROLL_MARGIN_X },
   };
 }

@@ -36,9 +36,13 @@ if (r.status !== 0) {
   process.exit(r.status ?? 1);
 }
 
-// Insets esperados: top/bottom iguales, costados en cero (host overflow-x: hidden).
-const insets = (v) => ({ top: v, right: 0, bottom: v, left: 0 });
-const props = (v) => ({ scrollThreshold: insets(v), scrollMargin: insets(v) });
+// Insets esperados: top/bottom iguales entre threshold y margin (el vertical
+// es compartido). En X, threshold sigue en 0 (el punto de disparo no se
+// mueve) y margin sigue en 5 (el default histórico de scrollMargin de PM, la
+// posición de reposo tampoco se mueve — ver PM_DEFAULT_SCROLL_MARGIN_X).
+const thresholdInsets = (v) => ({ top: v, right: 0, bottom: v, left: 0 });
+const marginInsets = (v) => ({ top: v, right: 5, bottom: v, left: 5 });
+const props = (v) => ({ scrollThreshold: thresholdInsets(v), scrollMargin: marginInsets(v) });
 
 let exitCode = 0;
 try {
@@ -52,9 +56,12 @@ try {
     ['normal → fallback 1.5', () => lineHeightPxFrom('normal', 17), 25.5],
     ['string vacío → fallback', () => lineHeightPxFrom('', 17), 25.5],
     ['sin unidad px (unitless) → fallback', () => lineHeightPxFrom('1.5', 17), 25.5],
-    ['con espacios alrededor', () => lineHeightPxFrom('  42px  ', 28), 42],
-    ['px válido gana aunque el fontSize sea basura', () => lineHeightPxFrom('25.5px', Number.NaN), 25.5],
+    // fallback con fontSize 20 sería 30 — distingue de un trim roto que dejara pasar el fallback.
+    ['con espacios alrededor', () => lineHeightPxFrom('  42px  ', 20), 42],
+    // fallback con fontSize NaN sería 25.5 — distingue de que el px resuelto realmente gane.
+    ['px válido gana aunque el fontSize sea basura', () => lineHeightPxFrom('30px', Number.NaN), 30],
     ['fontSize inválido con normal → fallback de fuente 17', () => lineHeightPxFrom('normal', 0), 25.5],
+    ['0px → el guard > 0 lo rechaza, cae a fallback', () => lineHeightPxFrom('0px', 17), 25.5],
   ];
 
   const scrolloffCases = [
@@ -65,6 +72,7 @@ try {
     ['lines custom', () => caretScrolloff(25.5, 3), props(77)],
     ['line-height NaN → fallback 25.5 * 2', () => caretScrolloff(Number.NaN), props(51)],
     ['line-height negativo → fallback', () => caretScrolloff(-10), props(51)],
+    ['line-height 0 → fallback (mismos insets que NaN)', () => caretScrolloff(0), props(51)],
     ['lines 0 → default 2', () => caretScrolloff(25.5, 0), props(51)],
     ['lines negativo → default 2', () => caretScrolloff(25.5, -1), props(51)],
   ];
@@ -81,8 +89,17 @@ try {
   for (const [name, run, expected] of scrolloffCases) {
     const got = run();
     assert.deepStrictEqual(got, expected, `\n  case: ${name}\n  got:  ${JSON.stringify(got)}\n  exp:  ${JSON.stringify(expected)}`);
-    // threshold y margin son iguales por diseño, pero objetos distintos (no alias).
-    assert.deepStrictEqual(got.scrollThreshold, got.scrollMargin, `threshold != margin en: ${name}`);
+    // El inset vertical es simétrico y compartido entre threshold y margin.
+    assert.strictEqual(got.scrollThreshold.top, got.scrollThreshold.bottom, `threshold.top != threshold.bottom en: ${name}`);
+    assert.strictEqual(got.scrollMargin.top, got.scrollMargin.bottom, `margin.top != margin.bottom en: ${name}`);
+    assert.strictEqual(got.scrollThreshold.top, got.scrollMargin.top, `el inset vertical difiere entre threshold y margin en: ${name}`);
+    // En X, threshold queda en 0 (punto de disparo sin cambios) y margin en 5
+    // (default histórico de PM, posición de reposo sin cambios).
+    assert.strictEqual(got.scrollThreshold.left, 0, `threshold.left != 0 en: ${name}`);
+    assert.strictEqual(got.scrollThreshold.right, 0, `threshold.right != 0 en: ${name}`);
+    assert.strictEqual(got.scrollMargin.left, 5, `margin.left != 5 en: ${name}`);
+    assert.strictEqual(got.scrollMargin.right, 5, `margin.right != 5 en: ${name}`);
+    // Objetos distintos (no alias) — guarda contra "simplificar" a un solo objeto compartido.
     assert.notStrictEqual(got.scrollThreshold, got.scrollMargin, `threshold y margin son el mismo objeto en: ${name}`);
     passed++;
   }
