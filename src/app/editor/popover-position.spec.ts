@@ -50,9 +50,9 @@ describe('placePopover', () => {
     });
   });
 
-  it('cuando hay más espacio arriba que abajo, pega arriba con altura limitada', () => {
+  it('entra completo arriba (viewport chico)', () => {
     // Viewport 300. anchor top=250 bottom=280. Abajo: 300-8-280-6=6.
-    // Arriba: 250-6-8=236 → gana arriba, cabe el popover → y=250-6-200=44, maxHeight=200.
+    // Arriba: 250-6-8=236 → sí entra completo → y=250-6-200=44, maxHeight=200.
     const anchor = { left: 100, top: 250, bottom: 280 };
     expect(placePopover(anchor, SIZE, { width: 1000, height: 300 })).toEqual({
       x: 100,
@@ -99,6 +99,20 @@ describe('placePopover', () => {
       y: 140,
       placement: 'below',
       maxHeight: 200,
+    });
+  });
+
+  it('no entra en ningún lado → gana arriba con altura limitada', () => {
+    // Viewport 300. anchor top=200 bottom=210.
+    // Abajo: 300-8-210-6=76 (< 200). Arriba: 200-6-8=186 (< 200). No entra en ninguno.
+    // spaceBelow(76) >= spaceAbove(186)? No → gana arriba con altura limitada.
+    // y=margin=8, maxHeight=spaceAbove=186.
+    const anchor = { left: 100, top: 200, bottom: 210 };
+    expect(placePopover(anchor, SIZE, { width: 1000, height: 300 })).toEqual({
+      x: 100,
+      y: 8,
+      placement: 'above',
+      maxHeight: 186,
     });
   });
 });

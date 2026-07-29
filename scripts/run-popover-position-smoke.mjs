@@ -50,11 +50,12 @@ try {
     ['abre abajo', () => placePopover({ left: 100, top: 100, bottom: 120 }, SIZE, VIEWPORT), { x: 100, y: 126, placement: 'below', maxHeight: 200 }],
     ['flipea arriba', () => placePopover({ left: 100, top: 650, bottom: 700 }, SIZE, VIEWPORT), { x: 100, y: 444, placement: 'above', maxHeight: 200 }],
     ['no entra en ningún lado → below con altura limitada', () => placePopover({ left: 100, top: 140, bottom: 160 }, SIZE, SMALL), { x: 100, y: 166, placement: 'below', maxHeight: 126 }],
-    ['no entra en ningún lado → above con altura limitada', () => placePopover({ left: 100, top: 250, bottom: 280 }, SIZE, SMALL), { x: 100, y: 44, placement: 'above', maxHeight: 200 }],
+    ['entra completo arriba (viewport chico)', () => placePopover({ left: 100, top: 250, bottom: 280 }, SIZE, SMALL), { x: 100, y: 44, placement: 'above', maxHeight: 200 }],
     ['clamp derecho', () => placePopover({ left: 950, top: 100, bottom: 120 }, SIZE, VIEWPORT), { x: 672, y: 126, placement: 'below', maxHeight: 200 }],
     ['clamp izquierdo', () => placePopover({ left: -50, top: 100, bottom: 120 }, SIZE, VIEWPORT), { x: 8, y: 126, placement: 'below', maxHeight: 200 }],
     ['viewport angosto', () => placePopover({ left: 40, top: 100, bottom: 120 }, SIZE, NARROW), { x: 8, y: 126, placement: 'below', maxHeight: 200 }],
     ['gap y margin custom', () => placePopover({ left: 100, top: 100, bottom: 120 }, SIZE, VIEWPORT, 20, 40), { x: 100, y: 140, placement: 'below', maxHeight: 200 }],
+    ['no entra en ningún lado → gana arriba con altura limitada', () => placePopover({ left: 100, top: 200, bottom: 210 }, SIZE, SMALL), { x: 100, y: 8, placement: 'above', maxHeight: 186 }],
   ];
 
   let passed = 0;
