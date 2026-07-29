@@ -34,8 +34,9 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   la restauración de posición al abrir capítulo (`editor.ts:426-463` setea
   `scrollTop = 0` y usa `focus(undefined, { scrollIntoView: false })` a
   propósito).
-- **Control total del tipeo — matar el corrector del OS + sugerencias del
-  diccionario propio + ubicar bien el popup**: spec en
+- [x] **Control total del tipeo — matar el corrector del OS + sugerencias del
+  diccionario propio + ubicar bien el popup** (`feat/control-total-tipeo`,
+  PR #63): spec en
   `docs/superpowers/specs/2026-07-29-control-total-tipeo-design.md`. (a) macOS
   reescribe el texto dentro de la webview (autocorrección + sustituciones) y
   arruina el voseo, en el editor y en los inputs comunes: `spellcheck`/
@@ -67,19 +68,16 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   `NSUserDefaults` registrados. Ver selector por selector con
   `RUST_LOG=twriter_lib=debug,boot=debug pnpm tauri dev` (el resumen sale por
   default bajo target `boot`). Tests de funciones puras: patrón `tsc` a tmpdir.
-  **Falta verificar a mano:** (1) voseo sin reescritura: `vos tenés`, `andá`,
-  `querés`, `fijate`; (2) comillas curvas de Typography, no del sistema; (3)
-  sin subrayado rojo del OS en editor/inputs de búsqueda/configuración; (4) un
-  reemplazo de texto configurado en Ajustes → Teclado de macOS que no se
-  expanda; (5) popover de gramática en última línea visible abriendo hacia
-  arriba y visible completo; (6) popover cerrándose al scrollear; (7)
-  recolocación de popover al redimensionar a altura chica; (8) nombre mal
-  tipeado de saga ofreciendo candidato correcto con chip "tu diccionario";
-  (9) que los candidatos del diccionario se lean como grupo diferenciado en
-  el popover — `.reps` es `display: flex; flex-wrap: wrap`, así que los chips
-  del diccionario son los primeros ítems de una fila que envuelve, no una
-  sección separada arriba; el chip "tu diccionario" hace el trabajo de
-  diferenciar, confirmar mirando que alcance.
+  **Verificado a mano** en macOS (M5, Darwin 25.5, 2026-07-29) con la app en
+  dev y LanguageTool en `:8081`: el autor probó el flujo completo y da el
+  comportamiento por bueno. Queda una nota de layout, no un bug: los
+  candidatos del diccionario salen como los primeros chips de una fila que
+  envuelve (`.reps` es `display: flex; flex-wrap: wrap`), no como una sección
+  separada arriba; el chip "tu diccionario" alcanza para diferenciarlos, así
+  que se deja así. Deuda anotada aparte: una palabra con decoración de
+  gramática **y** de RAE abre los dos popovers superpuestos (preexistente,
+  necesita `stopImmediatePropagation()`), y `shared/select.ts` sigue con su
+  `panelHeight = 320` y su propio flip en vez de usar `placePopover`.
 - **Performance en archivos grandes**: lag/scroll pesado en capítulos
   largos. Puede ser el scroll nativo de Windows/Linux, pero medir primero:
   si es el render de ProseMirror, evaluar virtualización o paginar el
