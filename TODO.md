@@ -27,9 +27,9 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   de la variante sintetizada (italic oblique / bold synthesis) aplicándose
   donde no corresponde. Verificar primero si pasa con la fuente en otro
   tamaño/zoom y en otro OS antes de tocar el theme.
-- **Scroll a la línea nueva al tipear**: cuando el cursor pasa a una línea
-  nueva al final del viewport, la vista queda pegada al borde inferior — se
-  escribe a ciegas. Hace falta un margen de respiro tipo "scrolloff". Ojo con
+- [x] **Scroll a la línea nueva al tipear** (`feat/caret-scrolloff`, PR #64):
+  cuando el cursor pasaba a una línea nueva al final del viewport, la vista
+  quedaba pegada al borde inferior — se escribía a ciegas. Ojo con
   no pisar la restauración de posición al abrir capítulo (`editor.ts:430-469`
   setea `scrollTop = 0` y usa `focus(undefined, { scrollIntoView: false })` a
   propósito).
@@ -56,8 +56,13 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   `pre` de code block en notas sí scrollea horizontal. No se tocaron los dos
   paths de scroll manual: la restauración al abrir y el salto de búsqueda
   (`scrollIntoView({block:'center'})` nativo). Tests:
-  `scripts/run-caret-scrolloff-smoke.mjs` (19 casos) + `pnpm build`. **Falta
-  verificación manual del autor** con la app levantada.
+  `scripts/run-caret-scrolloff-smoke.mjs` (19 casos) + `pnpm build`.
+  **Verificado a mano** en macOS (M5, Darwin 25.5, 2026-07-29) con la app en
+  dev: el autor probó el checklist completo — tipeo contra el borde inferior y
+  flecha arriba contra el superior, escalado al cambiar el tamaño de fuente sin
+  que la vista salte, reapertura de capítulo arrancando arriba, salto de
+  búsqueda centrando el match, línea larga dentro de un `pre` de code block en
+  notas, y el modo edit del markdown-reader — y da el comportamiento por bueno.
 - [x] **Control total del tipeo — matar el corrector del OS + sugerencias del
   diccionario propio + ubicar bien el popup** (`feat/control-total-tipeo`,
   PR #63): spec en

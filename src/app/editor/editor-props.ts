@@ -2,9 +2,11 @@ import type { EditorProps } from '@tiptap/pm/view';
 import { FALLBACK_LINE_HEIGHT, caretScrolloff, lineHeightPxFrom } from './caret-scrolloff';
 
 /**
- * Props de ProseMirror compartidas por los dos editores tipeables (capítulos y
- * notas). Son una función y no un literal porque se reaplican al cambiar el
- * tamaño de fuente: el respiro del caret escala con la línea.
+ * Props de ProseMirror compartidas por las tres superficies tipeables
+ * (capítulos, notas y el modo edit del markdown-reader). Son una función y no
+ * un literal porque se reaplican al cambiar el tamaño de fuente: el respiro del
+ * caret escala con la línea. (El markdown-reader no reaplica por fuente — la
+ * tiene fija en el SCSS — pero sí tras instanciar, para leer el computado.)
  *
  * Ojo con `setOptions`: reemplaza la key `editorProps` entera en vez de
  * mergearla, así que esta función tiene que devolver **todo** — si faltaran los
