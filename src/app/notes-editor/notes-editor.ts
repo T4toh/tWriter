@@ -353,6 +353,21 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
       ],
       content,
       editable,
+      // El OS no opina sobre el texto: sin corrector, sin autocorrección y sin
+      // autocapitalización. Las comillas y rayas las hace Typography de TipTap.
+      // Explícito acá además de heredado desde <html> como defensa en
+      // profundidad: si algo intermedio (extensión, wrapper, un `<iframe>`)
+      // rompiera la herencia de esos atributos, este bloque los repone.
+      editorProps: {
+        attributes: {
+          spellcheck: 'false',
+          autocorrect: 'off',
+          autocapitalize: 'off',
+          autocomplete: 'off',
+          'data-gramm': 'false',
+          'data-gramm_editor': 'false',
+        },
+      },
       // Solo el pane principal autofocusea — el lateral abre al tope sin
       // mover el cursor. Pane 0 además tiene cursor-restore que sobreescribe
       // el 'end' si había posición guardada para el path. Si autofocus 'end'

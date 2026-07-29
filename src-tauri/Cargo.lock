@@ -5392,6 +5392,8 @@ dependencies = [
  "fontdb",
  "git2",
  "keyring",
+ "objc2",
+ "objc2-foundation",
  "regex",
  "reqwest 0.12.28",
  "rfd",

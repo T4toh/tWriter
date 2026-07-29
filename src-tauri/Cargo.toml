@@ -49,6 +49,13 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 # si la app abre sin SSH agent / sin TTY. Plataformas: Linux/macOS/Windows.
 wait-timeout = "0.2"
 
+# Apagar las sustituciones de texto nativas de macOS (autocorrección, comillas
+# inteligentes, guiones, reemplazo de texto) que muerden dentro de la WKWebView
+# y arruinan el voseo. Ambas ya venían como transitivas de Tauri.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+
 [dev-dependencies]
 tempfile = "3"
 

@@ -52,6 +52,7 @@ import { FontsService } from '../core/fonts-service';
 import { Select, SelectGroup, SelectOption } from '../shared/select';
 import { GrammarMatch, RaeViolation } from '../core/types';
 import { convert as convertRae } from '../dialogos/converter';
+import { suggestFromDictionary } from '../dictionary/suggest';
 import { educateQuotes } from '../quotes/educate';
 import { validateRae } from '../dialogos/validator';
 import { Landing } from '../landing/landing';
@@ -69,6 +70,7 @@ import {
   setGrammarMatches,
 } from './grammar-extension';
 import { SearchHighlight, setSearchHighlights } from './search-highlight-extension';
+import { AnchorBox } from './popover-position';
 import { GrammarPopover } from './grammar-popover';
 import {
   RaeExtension,
@@ -163,9 +165,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly grammarChecking = this.grammar.checking;
   protected readonly grammarError = this.grammar.lastError;
   protected readonly grammarMatches = signal<GrammarMatchPos[]>([]);
-  protected readonly grammarPopover = signal<{ match: GrammarMatch; x: number; y: number; from: number; to: number } | null>(null);
+  protected readonly grammarPopover = signal<{ match: GrammarMatch; anchor: AnchorBox; from: number; to: number; dictSuggestions: string[] } | null>(null);
   protected readonly raeViolations = signal<RaeViolationPos[]>([]);
-  protected readonly raePopover = signal<{ violation: RaeViolationPos; x: number; y: number } | null>(null);
+  protected readonly raePopover = signal<{ violation: RaeViolationPos; anchor: AnchorBox } | null>(null);
   protected readonly raeAuto = computed(() => {
     if (!this.canCheckRae()) return false;
     return !this.settings.raeAutoDisabled();
@@ -359,6 +361,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private lastLoadedAt = 0;
   private grammarHostListener: ((e: MouseEvent) => void) | null = null;
   private raeHostListener: ((e: MouseEvent) => void) | null = null;
+  private popoverScrollListener: (() => void) | null = null;
   private grammarDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private raeDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private skipNextGrammarRemap = false;
@@ -655,6 +658,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (this.raeHostListener) {
       this.hostRef.nativeElement.removeEventListener('click', this.raeHostListener);
       this.raeHostListener = null;
+    }
+    if (this.popoverScrollListener) {
+      this.hostRef.nativeElement.removeEventListener('scroll', this.popoverScrollListener);
+      this.popoverScrollListener = null;
     }
     if (this.grammarDebounceHandle !== null) {
       clearTimeout(this.grammarDebounceHandle);
@@ -1163,8 +1170,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     const rect = span.getBoundingClientRect();
     this.raePopover.set({
       violation: v,
-      x: Math.min(rect.left, window.innerWidth - 380),
-      y: rect.bottom + 4,
+      anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
     });
   }
 
@@ -1181,12 +1187,22 @@ export class Editor implements AfterViewInit, OnDestroy {
     event.preventDefault();
     event.stopPropagation();
     const rect = span.getBoundingClientRect();
+    // El diccionario de la saga hasta ahora solo silenciaba falsos positivos.
+    // Para los TYPOS también aporta candidatos: si el autor escribió mal un
+    // nombre propio del mundo, LT nunca lo va a ofrecer.
+    const word = this.tiptap?.state.doc.textBetween(m.from, m.to, ' ').trim() ?? '';
+    const dictSuggestions =
+      m.category === 'TYPOS' && word.length > 0
+        ? suggestFromDictionary(word, this.sagaCtx.dictionaryWords(), 3).filter(
+            (s) => !m.replacements.some((r) => r.toLowerCase() === s.toLowerCase()),
+          )
+        : [];
     this.grammarPopover.set({
       match: m,
-      x: Math.min(rect.left, window.innerWidth - 340),
-      y: rect.bottom + 4,
+      anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
       from: m.from,
       to: m.to,
+      dictSuggestions,
     });
   }
 
@@ -1209,6 +1225,21 @@ export class Editor implements AfterViewInit, OnDestroy {
       ],
       content,
       editable,
+      // El OS no opina sobre el texto: sin corrector, sin autocorrección y sin
+      // autocapitalización. Las comillas y rayas las hace Typography de TipTap.
+      // Explícito acá además de heredado desde <html> como defensa en
+      // profundidad: si algo intermedio (extensión, wrapper, un `<iframe>`)
+      // rompiera la herencia de esos atributos, este bloque los repone.
+      editorProps: {
+        attributes: {
+          spellcheck: 'false',
+          autocorrect: 'off',
+          autocapitalize: 'off',
+          autocomplete: 'off',
+          'data-gramm': 'false',
+          'data-gramm_editor': 'false',
+        },
+      },
       // NO autofocus 'end': forzaba el cursor al final del cap al abrir (y
       // pisaba la restauración de posición). La posición se restaura abajo
       // vía cursorRestore; sin posición guardada arranca al inicio.
@@ -1285,6 +1316,16 @@ export class Editor implements AfterViewInit, OnDestroy {
     }
     this.raeHostListener = (e) => this.onRaeHostClick(e);
     this.hostRef.nativeElement.addEventListener('click', this.raeHostListener);
+    if (this.popoverScrollListener) {
+      this.hostRef.nativeElement.removeEventListener('scroll', this.popoverScrollListener);
+    }
+    // Los popovers son position:fixed y no siguen al scroll: si el capítulo se
+    // mueve, quedarían flotando lejos del span que los abrió.
+    this.popoverScrollListener = () => {
+      if (this.grammarPopover()) this.grammarPopover.set(null);
+      if (this.raePopover()) this.raePopover.set(null);
+    };
+    this.hostRef.nativeElement.addEventListener('scroll', this.popoverScrollListener, { passive: true });
   }
 
   private refreshState(): void {

@@ -20,6 +20,64 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Probable caret residual de TipTap/ProseMirror al perder/recuperar foco o
   tras un scroll. Investigar si es el caret nativo o un overlay de
   decoración (highlight/gapcursor) que no se limpia.
+- **Bug — artefacto de glifo en algunas letras**: al renderizar el texto del
+  editor, algunas letras salen con un trazo espurio pegado al principio del
+  glifo (visto en una `N` mayúscula, fuente serif del editor). Ver captura.
+  Probable problema de hinting/subpixel de la fuente en la webview (macOS) o
+  de la variante sintetizada (italic oblique / bold synthesis) aplicándose
+  donde no corresponde. Verificar primero si pasa con la fuente en otro
+  tamaño/zoom y en otro OS antes de tocar el theme.
+- **Scroll a la línea nueva al tipear**: cuando el cursor pasa a una línea
+  nueva al final del viewport, la vista no lo sigue — se escribe a ciegas
+  contra el borde inferior. Hace falta mantener el caret visible (con un
+  margen de respiro tipo "scrolloff", no pegado al borde). Ojo con no pisar
+  la restauración de posición al abrir capítulo (`editor.ts:426-463` setea
+  `scrollTop = 0` y usa `focus(undefined, { scrollIntoView: false })` a
+  propósito).
+- [x] **Control total del tipeo — matar el corrector del OS + sugerencias del
+  diccionario propio + ubicar bien el popup** (`feat/control-total-tipeo`,
+  PR #63): spec en
+  `docs/superpowers/specs/2026-07-29-control-total-tipeo-design.md`. (a) macOS
+  reescribe el texto dentro de la webview (autocorrección + sustituciones) y
+  arruina el voseo, en el editor y en los inputs comunes: `spellcheck`/
+  `autocorrect`/`autocapitalize` off heredados desde `<html>` + explícitos en
+  los `editorProps` de los tres editores TipTap (capítulo, notas y markdown
+  reader), más `macos_text.rs` apagando las
+  sustituciones nativas (`registerDefaults` + setters de `NSTextCheckingClient`
+  sobre la `WKWebView`, gateados por `respondsToSelector:`). Typography de
+  TipTap queda como única fuente de comillas y rayas. (b) el diccionario
+  per-saga hoy solo silencia falsos positivos de LT y nunca sugiere: sumar
+  `dictionary/suggest.ts` (Levenshtein con umbral por longitud, acentos
+  plegados) y mostrar hasta 3 candidatos con chip "tu diccionario" en el
+  popover de gramática. (c) el popup de gramática/RAE sale siempre hacia abajo
+  con constantes mágicas (`editor.ts:1163-1190`) y se corta contra el borde
+  inferior: `popover-position.ts` con flip arriba/abajo, clamp de X, `maxHeight`
+  + scroll interno cuando no entra en ningún lado, medición real del popover
+  (`afterRenderEffect` + `visibility:hidden`), recálculo en `resize` y cierre
+  en scroll del `.editor-host`.
+
+  **Implementado (`feat/control-total-tipeo`):** las tres
+  componentes del spec. Verificado por código: `pnpm build` sin errores;
+  `suggestFromDictionary: 12/12 ok`, `placePopover: 9/9 ok`; `cargo check`
+  limpio. En macOS/Darwin 25.5: de los 6 setters de `WKWebView` que la app
+  intenta, existen solo 3 (`setAutomaticQuoteSubstitutionEnabled:`,
+  `setAutomaticDashSubstitutionEnabled:`, `setAutomaticTextReplacementEnabled:`);
+  faltan `setAutomaticSpellingCorrectionEnabled:`, `setContinuousSpellCheckingEnabled:`
+  y `setSmartInsertDeleteEnabled:` (son API de `NSTextView` legacy). La
+  autocorrección/spell-check del OS dependen exclusivamente de
+  `NSUserDefaults` registrados. Ver selector por selector con
+  `RUST_LOG=twriter_lib=debug,boot=debug pnpm tauri dev` (el resumen sale por
+  default bajo target `boot`). Tests de funciones puras: patrón `tsc` a tmpdir.
+  **Verificado a mano** en macOS (M5, Darwin 25.5, 2026-07-29) con la app en
+  dev y LanguageTool en `:8081`: el autor probó el flujo completo y da el
+  comportamiento por bueno. Queda una nota de layout, no un bug: los
+  candidatos del diccionario salen como los primeros chips de una fila que
+  envuelve (`.reps` es `display: flex; flex-wrap: wrap`), no como una sección
+  separada arriba; el chip "tu diccionario" alcanza para diferenciarlos, así
+  que se deja así. Deuda anotada aparte: una palabra con decoración de
+  gramática **y** de RAE abre los dos popovers superpuestos (preexistente,
+  necesita `stopImmediatePropagation()`), y `shared/select.ts` sigue con su
+  `panelHeight = 320` y su propio flip en vez de usar `placePopover`.
 - **Performance en archivos grandes**: lag/scroll pesado en capítulos
   largos. Puede ser el scroll nativo de Windows/Linux, pero medir primero:
   si es el render de ProseMirror, evaluar virtualización o paginar el
@@ -61,7 +119,13 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   para mantener offsets DOM/PM alineados. Tests 184/0 + `search-highlight.spec.ts`.
   Bump `INDEX_VERSION` 2→4 (wipe+reindex auto). **Pendiente** (no en este PR):
   autocompletar términos del proyecto (tipear `kel` → sugerir `Kallai`) para
-  atacar de raíz el "me olvido cómo se escribe".
+  atacar de raíz el "me olvido cómo se escribe". **Herramienta viable**:
+  `@tiptap/suggestion` para el popup inline, alimentado por el diccionario
+  per-saga (`<saga>/diccionario.txt`) + prefix query sobre el índice tantivy
+  — offline, determinista, cero red. LanguageTool NO sirve para esto: expone
+  `/v2/check` y diccionario personal Premium, no tiene API de completion.
+  Hunspell (`zspell`/`hunspell-rs`) daría corrección ortográfica ES pero no
+  completa nombres propios inventados, que es el caso real.
 
 ## Tree / Importer
 
