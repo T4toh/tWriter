@@ -36,6 +36,7 @@ import {
   SearchHighlight,
   setSearchHighlights,
 } from '../editor/search-highlight-extension';
+import { buildEditorProps } from '../editor/editor-props';
 import { PARAGRAPH_SPACING_EM, SettingsService } from '../core/settings-service';
 import {
   ContextMenuService,
@@ -216,6 +217,16 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
         highlightFirstMatch(this.hostRef.nativeElement, consumed.terms, consumed.rawQuery, consumed.fold);
       }, 0);
     });
+
+    // El respiro del caret escala con la línea, así que cambia con la fuente.
+    // `setOptions` termina en `view.updateState(state)` sin flag de scroll →
+    // path "preserve" de ProseMirror: reaplica los props sin mover la vista.
+    effect(() => {
+      const fontSizePx = this.fontSize();
+      const editor = this.tiptap;
+      if (!editor) return;
+      editor.setOptions({ editorProps: buildEditorProps(editor.view.dom, fontSizePx) });
+    });
   }
 
   ngAfterViewInit(): void {
@@ -353,21 +364,7 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
       ],
       content,
       editable,
-      // El OS no opina sobre el texto: sin corrector, sin autocorrección y sin
-      // autocapitalización. Las comillas y rayas las hace Typography de TipTap.
-      // Explícito acá además de heredado desde <html> como defensa en
-      // profundidad: si algo intermedio (extensión, wrapper, un `<iframe>`)
-      // rompiera la herencia de esos atributos, este bloque los repone.
-      editorProps: {
-        attributes: {
-          spellcheck: 'false',
-          autocorrect: 'off',
-          autocapitalize: 'off',
-          autocomplete: 'off',
-          'data-gramm': 'false',
-          'data-gramm_editor': 'false',
-        },
-      },
+      editorProps: buildEditorProps(null, this.fontSize()),
       // Solo el pane principal autofocusea — el lateral abre al tope sin
       // mover el cursor. Pane 0 además tiene cursor-restore que sobreescribe
       // el 'end' si había posición guardada para el path. Si autofocus 'end'
@@ -385,6 +382,16 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
       },
       onTransaction: () => this.refreshState(),
     });
+    // Recién ahora existe `view.dom`: releer el line-height computado real (el
+    // literal de arriba usó el factor de fallback, y el SCSS de notas usa 1.55)
+    // y reaplicar. Idempotente, así que no importa si el effect de fontSize ya
+    // corrió o no.
+    const editor = this.tiptap;
+    if (editor) {
+      editor.setOptions({
+        editorProps: buildEditorProps(editor.view.dom, this.fontSize()),
+      });
+    }
   }
 
   private applySearchDecorations(ranges: { from: number; to: number }[]): void {
