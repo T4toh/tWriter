@@ -74,9 +74,15 @@ use themes::{
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     debug_bridge::init_tracing();
+    // Antes de `Builder::default()`: Tauri construye la `WKWebView` durante el
+    // armado del builder, no en `.setup()`. Si WebKit inicializa su text
+    // checker con esa construcción, un registro de `NSUserDefaults` hecho
+    // recién en `.setup()` llega tarde y la autocorrección/spell-check del OS
+    // no se apagan pese a que el log de boot diga que sí. Ver macos_text.rs.
+    macos_text::register_defaults_early();
     tauri::Builder::default()
         .setup(|app| {
-            macos_text::disable_native_text_substitutions(app.handle());
+            macos_text::apply_to_webviews(app.handle());
             let handle = app.handle().clone();
             debug_bridge::set_app_handle(handle.clone());
             tracing::info!(target: "boot", "tWriter listo");
