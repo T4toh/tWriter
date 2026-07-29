@@ -40,7 +40,8 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   reescribe el texto dentro de la webview (autocorrección + sustituciones) y
   arruina el voseo, en el editor y en los inputs comunes: `spellcheck`/
   `autocorrect`/`autocapitalize` off heredados desde `<html>` + explícitos en
-  los `editorProps` de ambos editores TipTap, más `macos_text.rs` apagando las
+  los `editorProps` de los tres editores TipTap (capítulo, notas y markdown
+  reader), más `macos_text.rs` apagando las
   sustituciones nativas (`registerDefaults` + setters de `NSTextCheckingClient`
   sobre la `WKWebView`, gateados por `respondsToSelector:`). Typography de
   TipTap queda como única fuente de comillas y rayas. (b) el diccionario
@@ -54,7 +55,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   (`afterRenderEffect` + `visibility:hidden`), recálculo en `resize` y cierre
   en scroll del `.editor-host`.
 
-  **Implementado (`feat/control-total-tipeo`, 10 commits):** las tres
+  **Implementado (`feat/control-total-tipeo`):** las tres
   componentes del spec. Verificado por código: `pnpm build` sin errores;
   `suggestFromDictionary: 12/12 ok`, `placePopover: 9/9 ok`; `cargo check`
   limpio. En macOS/Darwin 25.5: de los 6 setters de `WKWebView` que la app
@@ -73,7 +74,12 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   expanda; (5) popover de gramática en última línea visible abriendo hacia
   arriba y visible completo; (6) popover cerrándose al scrollear; (7)
   recolocación de popover al redimensionar a altura chica; (8) nombre mal
-  tipeado de saga ofreciendo candidato correcto con chip "tu diccionario".
+  tipeado de saga ofreciendo candidato correcto con chip "tu diccionario";
+  (9) que los candidatos del diccionario se lean como grupo diferenciado en
+  el popover — `.reps` es `display: flex; flex-wrap: wrap`, así que los chips
+  del diccionario son los primeros ítems de una fila que envuelve, no una
+  sección separada arriba; el chip "tu diccionario" hace el trabajo de
+  diferenciar, confirmar mirando que alcance.
 - **Performance en archivos grandes**: lag/scroll pesado en capítulos
   largos. Puede ser el scroll nativo de Windows/Linux, pero medir primero:
   si es el render de ProseMirror, evaluar virtualización o paginar el

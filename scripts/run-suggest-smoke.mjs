@@ -36,32 +36,40 @@ if (r.status !== 0) {
   process.exit(r.status ?? 1);
 }
 
-const mod = await import(pathToFileURL(join(outDir, 'dictionary/suggest.js')).href);
-const { suggestFromDictionary } = mod;
+let exitCode = 0;
+try {
+  const mod = await import(pathToFileURL(join(outDir, 'dictionary/suggest.js')).href);
+  const { suggestFromDictionary } = mod;
 
-const DICT = ['Kallai', 'Kállia', 'Bastien', 'Meridian', 'duende', 'Adi'];
+  const DICT = ['Kallai', 'Kállia', 'Bastien', 'Meridian', 'duende', 'Adi'];
 
-const cases = [
-  ['Kallay', DICT, undefined, ['Kallai']],
-  ['kallia', DICT, undefined, ['Kállia']],
-  ['bastien', DICT, undefined, ['Bastien']],
-  ['Kalliaa', DICT, 2, ['Kállia', 'Kallai']],
-  ['Xdo', DICT, undefined, []],
-  ['Meridiam', DICT, undefined, ['Meridian']],
-  ['Meridiaan', DICT, undefined, ['Meridian']],
-  ['zzzzqqqq', DICT, undefined, []],
-  ['Bastien', DICT, undefined, []],
-  ['Kalla', DICT, 1, ['Kallai']],
-  ['Kallai', [], undefined, []],
-  ['', DICT, undefined, []],
-];
+  const cases = [
+    ['Kallay', DICT, undefined, ['Kallai']],
+    ['kallia', DICT, undefined, ['Kállia']],
+    ['bastien', DICT, undefined, ['Bastien']],
+    ['Kalliaa', DICT, 2, ['Kállia', 'Kallai']],
+    ['Xdo', DICT, undefined, []],
+    ['Meridiam', DICT, undefined, ['Meridian']],
+    ['Meridiaan', DICT, undefined, ['Meridian']],
+    ['zzzzqqqq', DICT, undefined, []],
+    ['Bastien', DICT, undefined, []],
+    ['Kalla', DICT, 1, ['Kallai']],
+    ['Kallai', [], undefined, []],
+    ['', DICT, undefined, []],
+  ];
 
-let passed = 0;
-for (const [word, dict, max, expected] of cases) {
-  const got = max === undefined ? suggestFromDictionary(word, dict) : suggestFromDictionary(word, dict, max);
-  assert.deepStrictEqual(got, expected, `\n  word: ${word}\n  got:  ${JSON.stringify(got)}\n  exp:  ${JSON.stringify(expected)}`);
-  passed++;
+  let passed = 0;
+  for (const [word, dict, max, expected] of cases) {
+    const got = max === undefined ? suggestFromDictionary(word, dict) : suggestFromDictionary(word, dict, max);
+    assert.deepStrictEqual(got, expected, `\n  word: ${word}\n  got:  ${JSON.stringify(got)}\n  exp:  ${JSON.stringify(expected)}`);
+    passed++;
+  }
+  console.log(`suggestFromDictionary: ${passed}/${cases.length} ok`);
+} catch (err) {
+  console.error(err);
+  exitCode = 1;
+} finally {
+  rmSync(outDir, { recursive: true, force: true });
 }
 
-rmSync(outDir, { recursive: true, force: true });
-console.log(`suggestFromDictionary: ${passed}/${cases.length} ok`);
+process.exit(exitCode);
