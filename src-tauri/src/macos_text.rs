@@ -88,18 +88,33 @@ fn apply_to_webviews(app: &tauri::AppHandle) {
             // la macro local en vez de iterar sobre `&[&str]`). Preferido por
             // sobre `performSelector:withObject:`, que es frágil para pasar
             // el `BOOL` del setter.
+            //
+            // `applied`/`skipped` acumulan los nombres para el resumen final:
+            // en macOS 15+ solo 3 de los 6 selectores existen en `WKWebView`
+            // (`setAutomaticSpellingCorrectionEnabled:`,
+            // `setContinuousSpellCheckingEnabled:` y
+            // `setSmartInsertDeleteEnabled:` son API de `NSTextView`, no de
+            // `WKWebView`), así que el salteo de la mitad es el caso normal,
+            // no una falla — pero tiene que quedar visible en el log de boot
+            // sin depender de `RUST_LOG` custom.
+            let mut applied: Vec<&'static str> = Vec::new();
+            let mut skipped: Vec<&'static str> = Vec::new();
+
             macro_rules! apply_setter {
                 ($sel:ident : $value:expr) => {{
+                    let name: &'static str = concat!(stringify!($sel), ":");
                     unsafe {
                         let responds: bool = msg_send![wv, respondsToSelector: sel!($sel:)];
                         if responds {
                             let _: () = msg_send![wv, $sel: $value];
+                            applied.push(name);
                         } else {
                             tracing::debug!(
                                 target: "boot",
-                                selector = concat!(stringify!($sel), ":"),
+                                selector = name,
                                 "WKWebView no responde, salteado"
                             );
+                            skipped.push(name);
                         }
                     }
                 }};
@@ -111,6 +126,28 @@ fn apply_to_webviews(app: &tauri::AppHandle) {
             apply_setter!(setAutomaticSpellingCorrectionEnabled: false);
             apply_setter!(setContinuousSpellCheckingEnabled: false);
             apply_setter!(setSmartInsertDeleteEnabled: false);
+
+            // Resumen a nivel `info`/`warn` (no `debug`) para que salga con
+            // el filtro por default del repo (`debug_bridge.rs`, que suma
+            // `boot=info` justo para esto). El log por-selector de arriba
+            // queda en `debug` para quien corra con `RUST_LOG` custom.
+            if skipped.is_empty() {
+                tracing::info!(
+                    target: "boot",
+                    "setters de WKWebView: {}/6 aplicados ({})",
+                    applied.len(),
+                    applied.join(", ")
+                );
+            } else {
+                tracing::warn!(
+                    target: "boot",
+                    "setters de WKWebView: {}/6 aplicados ({}) — {} no existen en esta versión de WebKit y se saltearon ({})",
+                    applied.len(),
+                    applied.join(", "),
+                    skipped.len(),
+                    skipped.join(", ")
+                );
+            }
         });
     });
     if let Err(e) = r {
