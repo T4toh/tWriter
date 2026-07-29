@@ -53,6 +53,27 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   + scroll interno cuando no entra en ningún lado, medición real del popover
   (`afterRenderEffect` + `visibility:hidden`), recálculo en `resize` y cierre
   en scroll del `.editor-host`.
+
+  **Implementado (`feat/control-total-tipeo`, 10 commits):** las tres
+  componentes del spec. Verificado por código: `pnpm build` ✓;
+  `suggestFromDictionary: 12/12 ok`, `placePopover: 9/9 ok`; `cargo check`
+  limpio. En macOS/Darwin 25.5: de los 6 setters de `WKWebView` que la app
+  intenta, existen solo 3 (`setAutomaticQuoteSubstitutionEnabled:`,
+  `setAutomaticDashSubstitutionEnabled:`, `setAutomaticTextReplacementEnabled:`);
+  faltan `setAutomaticSpellingCorrectionEnabled:`, `setContinuousSpellCheckingEnabled:`
+  y `setSmartInsertDeleteEnabled:` (son API de `NSTextView` legacy). La
+  autocorrección/spell-check del OS dependen exclusivamente de
+  `NSUserDefaults` registrados. Ver selector por selector con
+  `RUST_LOG=twriter_lib=debug,boot=debug pnpm tauri dev` (el resumen sale por
+  default bajo target `boot`). Tests de funciones puras: patrón `tsc` a tmpdir.
+  **Falta verificar a mano:** (1) voseo sin reescritura: `vos tenés`, `andá`,
+  `querés`, `fijate`; (2) comillas curvas de Typography, no del sistema; (3)
+  sin subrayado rojo del OS en editor/inputs de búsqueda/configuración; (4) un
+  reemplazo de texto configurado en Ajustes → Teclado de macOS que no se
+  expanda; (5) popover de gramática en última línea visible abriendo hacia
+  arriba y visible completo; (6) popover cerrándose al scrollear; (7)
+  recolocación de popover al redimensionar a altura chica; (8) nombre mal
+  tipeado de saga ofreciendo candidato correcto con chip "tu diccionario".
 - **Performance en archivos grandes**: lag/scroll pesado en capítulos
   largos. Puede ser el scroll nativo de Windows/Linux, pero medir primero:
   si es el render de ProseMirror, evaluar virtualización o paginar el
