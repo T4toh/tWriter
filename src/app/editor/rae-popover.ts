@@ -124,7 +124,10 @@ export class RaePopover {
       this.placed.set(
         placePopover(
           anchor,
-          { width: el.offsetWidth, height: el.scrollHeight },
+          // scrollHeight excluye el border; max-height con box-sizing:border-box
+          // lo incluye. Se suma (offsetHeight - clientHeight) = borders (+ scrollbar
+          // horizontal), que no depende del recorte, así remedir converge igual.
+          { width: el.offsetWidth, height: el.scrollHeight + el.offsetHeight - el.clientHeight },
           { width: window.innerWidth, height: window.innerHeight },
         ),
       );
