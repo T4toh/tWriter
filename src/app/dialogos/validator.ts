@@ -27,7 +27,7 @@ import { RaeCategory, RaeViolation } from '../core/types';
 const QUOTE_NORM_RE = /[«»“”]/g;
 const SINGLE_QUOTE_NORM_RE = /[‘’]/g;
 
-function normalizeQuotesForCompare(text: string): string {
+export function normalizeQuotesForCompare(text: string): string {
   return text.replace(QUOTE_NORM_RE, '"').replace(SINGLE_QUOTE_NORM_RE, "'");
 }
 

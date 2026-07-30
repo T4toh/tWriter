@@ -76,14 +76,37 @@ console.log('convertFragmentHtml');
   check('fragmento sin nada que convertir → null', out === null, out);
 }
 {
-  // Rango que cruza bloques: el slice serializa con <p> adentro y el converter
-  // entra por su rama <p>, que procesa cada párrafo por separado.
+  // Documenta la rama <p> del converter. El caller no puede producir este
+  // input: los rangos del validador viven siempre adentro de un textblock
+  // (`extractPlainText` emite \n\n por bloque y por hard break), así que
+  // `doc.slice` nunca devuelve nodos de bloque.
   const out = convertFragmentHtml('<p>"Hola", dijo Ana.</p><p>"Chau", respondió.</p>');
   check(
     'fragmento con <p> → convierte cada párrafo sin colapsarlos',
     out === '<p>—Hola, dijo Ana.</p><p>—Chau, respondió.</p>',
     out,
   );
+}
+{
+  // El markup de apertura corre la comilla de la posición 0 y el ancla ^(\s*)"
+  // de D1 no dispara. Nada que convertir → null, y el caller avisa.
+  const out = convertFragmentHtml('<em>"Vení"</em>, dijo ella.');
+  check('diálogo que arranca con <em> → null (D1 no puede anclar)', out === null, out);
+}
+{
+  // El que motivó el finding: sin el guard de normalización, `convert()`
+  // devolvía el mismo párrafo con “” degradadas a "" y sin raya, y la
+  // transacción lo escribía.
+  const out = convertFragmentHtml('<em>“Vení”</em>, dijo ella.');
+  check(
+    'idem con comillas tipográficas → null (no degrada “” a "")',
+    out === null,
+    out,
+  );
+}
+{
+  const out = convertFragmentHtml('<strong>"Vení"</strong>, dijo ella.');
+  check('diálogo que arranca con <strong> → null', out === null, out);
 }
 
 rmSync(outDir, { recursive: true, force: true });

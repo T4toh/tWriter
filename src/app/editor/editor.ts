@@ -1157,7 +1157,19 @@ export class Editor implements AfterViewInit, OnDestroy {
     const { doc, schema } = this.tiptap.state;
     const html = serializeRange(doc, v.paragraphFrom, v.paragraphTo, schema);
     const converted = convertFragmentHtml(html);
-    if (converted === null) return;
+    if (converted === null) {
+      // Pasa cuando el párrafo arranca con markup (`<em>"Vení"</em>, dijo…`):
+      // el ancla de la regla D1 necesita la comilla al principio del texto y el
+      // tag se la corre. No hay fallback posible — aplicar el replacement plano
+      // del validador convertiría borrando la cursiva.
+      this.raePopover.set(null);
+      this.toast.warn(
+        'Este párrafo no se puede convertir solo: el diálogo empieza después ' +
+          'de una cursiva o negrita. Sacale el formato a la comilla de ' +
+          'apertura y volvé a intentar, o escribí la raya a mano.',
+      );
+      return;
+    }
     this.tiptap
       .chain()
       .focus()
