@@ -577,3 +577,12 @@ option {
     cursor: not-allowed;
   }
 }
+
+/* Un botón por runtime candidato. Envuelve en ventanas angostas en vez de
+   desbordar; son 2-3 botones como mucho. */
+.runtime-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}

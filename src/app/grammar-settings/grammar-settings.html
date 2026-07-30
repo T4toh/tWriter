@@ -124,7 +124,24 @@
                   <div class="docker-status warn">
                     {{ ds.remedy?.message ?? 'El daemon del runtime no responde.' }}
                   </div>
-                  @if (ds.remedy; as rem) {
+                  @if (ds.runtime_choices.length > 0) {
+                    <!-- Varios runtimes instalados y ninguno respondiendo:
+                         adivinar acá es el bug — arrancar el equivocado baja
+                         ~300MB y crea un container paralelo. Pregunta y
+                         recuerda la respuesta. -->
+                    <div class="runtime-choices">
+                      @for (choice of ds.runtime_choices; track choice.key) {
+                        <button
+                          type="button"
+                          class="btn btn-secondary docker-btn"
+                          [disabled]="dockerBusy() !== null"
+                          (click)="startDocker(choice.key)"
+                        >
+                          Usar {{ choice.label }}
+                        </button>
+                      }
+                    </div>
+                  } @else if (ds.remedy; as rem) {
                     @if (rem.command; as cmd) {
                       <app-copy-command [command]="cmd" />
                     }
