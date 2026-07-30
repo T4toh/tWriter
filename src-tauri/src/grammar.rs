@@ -114,6 +114,23 @@ impl Engine {
             .unwrap_or(false)
     }
 
+    /// argv listo para `Command`, con el token del programa resuelto a ruta
+    /// absoluta (el PATH de una app lanzada desde Finder no tiene Homebrew), y
+    /// el flag de poll. `None` cuando el remedio no lo puede correr la app.
+    fn daemon_start_cmd(&self) -> Option<(Vec<String>, bool)> {
+        let plan = daemon_plan(self.rt, Os::current(), colima_bin().is_some());
+        let mut argv = plan.argv?;
+        argv[0] = match argv[0].as_str() {
+            // El binario del runtime ya viene resuelto en `self.bin`.
+            "container" | "podman" | "docker" => self.bin.clone(),
+            "colima" => colima_bin()?,
+            // `open` es de macOS y vive en una ruta fija del sistema.
+            "open" => "/usr/bin/open".to_string(),
+            other => other.to_string(),
+        };
+        Some((argv, plan.poll))
+    }
+
     /// Nombres de containers. Docker/Podman soportan Go templates
     /// (`--format {{.Names}}`); Apple `container` no, solo `json` → parseamos
     /// `configuration.id` (que es el `--name` que le pasamos). `all` incluye
@@ -266,24 +283,155 @@ fn no_runtime_message() -> String {
     }
 }
 
-fn daemon_down_message(rt: Runtime) -> String {
-    let macos = cfg!(target_os = "macos");
-    match (rt, macos) {
-        (Runtime::Apple, _) => {
-            "Apple container está instalado pero el daemon no responde. Corré `container system start`."
-        }
-        (Runtime::Podman, true) => {
-            "Podman está instalado pero la máquina no responde. Corré `podman machine start`."
-        }
-        (Runtime::Podman, false) => "Podman no responde. Verificá la instalación (`podman info`).",
-        (Runtime::Docker, true) => {
-            "Docker está instalado pero el daemon no responde. Iniciá colima (`colima start`) o abrí Docker Desktop."
-        }
-        (Runtime::Docker, false) => {
-            "Docker está instalado pero el daemon no responde. Iniciá el servicio (ej: `sudo systemctl start docker`)."
+/// Sistema operativo relevante para elegir el remedio. Se pasa como parámetro
+/// en vez de leer `cfg!(target_os)` adentro, para que las funciones de remedio
+/// sean puras y testeables en las tres plataformas desde una sola máquina.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Os {
+    MacOs,
+    Linux,
+    Windows,
+}
+
+impl Os {
+    fn current() -> Os {
+        if cfg!(target_os = "macos") {
+            Os::MacOs
+        } else if cfg!(target_os = "windows") {
+            Os::Windows
+        } else {
+            Os::Linux
         }
     }
-    .to_string()
+}
+
+/// Ruta de instalación por default de Docker Desktop en Windows. No es un
+/// comando que el usuario tipee: se lanza el ejecutable.
+const DOCKER_DESKTOP_EXE: &str = r"C:\Program Files\Docker\Docker\Docker Desktop.exe";
+
+/// Rutas conocidas de colima. Mismo problema que los runtimes: una app lanzada
+/// desde Finder hereda el PATH mínimo de launchd, sin los symlinks de Homebrew.
+const COLIMA_CANDIDATES: [&str; 2] = ["/opt/homebrew/bin/colima", "/usr/local/bin/colima"];
+
+fn colima_bin() -> Option<String> {
+    COLIMA_CANDIDATES
+        .iter()
+        .find(|c| std::path::Path::new(*c).exists())
+        .map(|c| (*c).to_string())
+}
+
+/// Qué pasó, qué comando lo arregla y quién puede correrlo. El comando va
+/// SIEMPRE aparte del mensaje: el botón de copiar tiene que copiar el comando
+/// pelado, sin arrastrar la explicación.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct Remedy {
+    /// Qué pasó, en prosa, SIN el comando embebido.
+    pub message: String,
+    /// Comando exacto para copiar, o `None` cuando no hay uno (ej. "abrí Docker
+    /// Desktop", que es una app de GUI y no un comando).
+    pub command: Option<String>,
+    /// La app puede ejecutarlo sola: sin sudo y sin depender de que el usuario
+    /// haga algo primero. Decide si la UI muestra el botón primario o solo el
+    /// chip copiable.
+    pub can_run: bool,
+}
+
+/// Remedio + cómo ejecutarlo, derivados juntos del mismo `match` para que el
+/// texto que ve el usuario y el comando que corre la app no puedan divergir.
+#[derive(Clone, Debug, PartialEq)]
+struct DaemonPlan {
+    remedy: Remedy,
+    /// argv con un *token* de programa en `[0]` ("container", "podman",
+    /// "colima", "open", o la ruta del .exe en Windows), que
+    /// `Engine::daemon_start_cmd` resuelve a ruta absoluta. `None` cuando la
+    /// app no puede ejecutar nada.
+    argv: Option<Vec<String>>,
+    /// Hay que esperar y pollear `daemon_ok()` después de lanzarlo: abrir Docker
+    /// Desktop devuelve al instante pero el daemon tarda ~30s en aceptar
+    /// conexiones. Sin este poll el arranque seguiría al paso siguiente contra
+    /// un daemon muerto y fallaría con un error que no tiene nada que ver.
+    poll: bool,
+}
+
+/// Única fuente de verdad del diagnóstico de daemon caído. Pura: no toca el
+/// entorno (el chequeo de colima entra por parámetro).
+fn daemon_plan(rt: Runtime, os: Os, colima_present: bool) -> DaemonPlan {
+    match (rt, os) {
+        (Runtime::Apple, Os::MacOs) => DaemonPlan {
+            remedy: Remedy {
+                message: "Apple container está instalado pero el daemon no responde. Hay que arrancarlo antes de poder usar LanguageTool.".into(),
+                command: Some("container system start".into()),
+                can_run: true,
+            },
+            argv: Some(vec!["container".into(), "system".into(), "start".into()]),
+            poll: false,
+        },
+        // El binario `container` es de Apple y solo corre en macOS. Si aparece
+        // en otro OS no inventamos un comando: decimos qué pasa y listo.
+        (Runtime::Apple, _) => DaemonPlan {
+            remedy: Remedy {
+                message: "Apple container no responde y solo está soportado en macOS. Instalá Docker o Podman.".into(),
+                command: None,
+                can_run: false,
+            },
+            argv: None,
+            poll: false,
+        },
+        (Runtime::Podman, _) => DaemonPlan {
+            remedy: Remedy {
+                message: "Podman está instalado pero su máquina no responde. Hay que arrancarla.".into(),
+                command: Some("podman machine start".into()),
+                can_run: true,
+            },
+            argv: Some(vec!["podman".into(), "machine".into(), "start".into()]),
+            poll: false,
+        },
+        // colima primero: es un comando de verdad y arranca más rápido que
+        // Docker Desktop.
+        (Runtime::Docker, Os::MacOs) if colima_present => DaemonPlan {
+            remedy: Remedy {
+                message: "Docker está instalado pero el daemon no responde. colima puede levantarlo.".into(),
+                command: Some("colima start".into()),
+                can_run: true,
+            },
+            argv: Some(vec!["colima".into(), "start".into()]),
+            poll: false,
+        },
+        (Runtime::Docker, Os::MacOs) => DaemonPlan {
+            remedy: Remedy {
+                message: "Docker está instalado pero el daemon no responde. Hay que abrir Docker Desktop y esperar a que termine de arrancar (~30s).".into(),
+                command: None,
+                can_run: true,
+            },
+            argv: Some(vec!["open".into(), "-a".into(), "Docker".into()]),
+            poll: true,
+        },
+        (Runtime::Docker, Os::Windows) => DaemonPlan {
+            remedy: Remedy {
+                message: "Docker está instalado pero el daemon no responde. Hay que abrir Docker Desktop y esperar a que termine de arrancar (~30s).".into(),
+                command: None,
+                can_run: true,
+            },
+            argv: Some(vec![DOCKER_DESKTOP_EXE.into()]),
+            poll: true,
+        },
+        // En Linux el daemon de Docker es un servicio del sistema: arrancarlo
+        // pide root, que tWriter no tiene ni debería pedir.
+        (Runtime::Docker, Os::Linux) => DaemonPlan {
+            remedy: Remedy {
+                message: "Docker está instalado pero el daemon no responde. Arrancar el servicio necesita permisos de root, así que lo tenés que correr vos en una terminal.".into(),
+                command: Some("sudo systemctl start docker".into()),
+                can_run: false,
+            },
+            argv: None,
+            poll: false,
+        },
+    }
+}
+
+/// Remedio para el runtime detectado, leyendo el entorno real.
+fn daemon_remedy(rt: Runtime) -> Remedy {
+    daemon_plan(rt, Os::current(), colima_bin().is_some()).remedy
 }
 
 const PUBLIC_BASE: &str = "https://api.languagetool.org";
@@ -700,7 +848,7 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
         ),
     );
     if !engine.daemon_ok() {
-        return Err(daemon_down_message(engine.rt));
+        return Err(daemon_remedy(engine.rt).message);
     }
 
     if engine.running() {
@@ -945,14 +1093,6 @@ mod tests {
     }
 
     #[test]
-    fn daemon_down_message_is_os_and_runtime_aware() {
-        // Apple siempre sugiere `container system start`, nunca systemctl.
-        let apple = daemon_down_message(Runtime::Apple);
-        assert!(apple.contains("container system start"));
-        assert!(!apple.contains("systemctl"));
-    }
-
-    #[test]
     fn multiple_chunks_accumulate_utf16() {
         // 3 chunks: cada uno con varios em-dashes para que bytes >> UTF-16.
         let block = format!("{}{}", "—".repeat(100), "a".repeat(MAX_CHUNK_BYTES));
@@ -966,5 +1106,178 @@ mod tests {
         }
         // Suma total de UTF-16 de los chunks == UTF-16 del texto original
         assert_eq!(acc, utf16_len(&text));
+    }
+
+    /// Matriz completa (runtime × OS × colima) para los tests de invariantes.
+    fn all_plans() -> Vec<((Runtime, Os, bool), DaemonPlan)> {
+        let mut out = Vec::new();
+        for rt in Runtime::ALL {
+            for os in [Os::MacOs, Os::Linux, Os::Windows] {
+                for colima in [false, true] {
+                    out.push(((rt, os, colima), daemon_plan(rt, os, colima)));
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn apple_daemon_plan_is_container_system_start() {
+        let p = daemon_plan(Runtime::Apple, Os::MacOs, false);
+        assert_eq!(p.remedy.command.as_deref(), Some("container system start"));
+        assert!(p.remedy.can_run);
+        assert_eq!(
+            p.argv,
+            Some(vec![
+                "container".to_string(),
+                "system".to_string(),
+                "start".to_string()
+            ])
+        );
+        assert!(!p.poll, "`container system start` es sincrónico, no hace falta pollear");
+        assert!(
+            !p.remedy.message.contains("systemctl"),
+            "Apple container nunca se arranca con systemctl"
+        );
+    }
+
+    #[test]
+    fn apple_outside_macos_offers_no_command() {
+        // El binario `container` solo existe en macOS. Si aparece en otro OS no
+        // inventamos un comando.
+        for os in [Os::Linux, Os::Windows] {
+            let p = daemon_plan(Runtime::Apple, os, false);
+            assert_eq!(p.remedy.command, None);
+            assert!(!p.remedy.can_run);
+            assert_eq!(p.argv, None);
+        }
+    }
+
+    #[test]
+    fn podman_daemon_plan_is_machine_start_on_every_os() {
+        for os in [Os::MacOs, Os::Linux, Os::Windows] {
+            let p = daemon_plan(Runtime::Podman, os, false);
+            assert_eq!(p.remedy.command.as_deref(), Some("podman machine start"));
+            assert!(p.remedy.can_run);
+            assert_eq!(
+                p.argv,
+                Some(vec![
+                    "podman".to_string(),
+                    "machine".to_string(),
+                    "start".to_string()
+                ])
+            );
+        }
+    }
+
+    #[test]
+    fn docker_macos_prefers_colima_when_present() {
+        let p = daemon_plan(Runtime::Docker, Os::MacOs, true);
+        assert_eq!(p.remedy.command.as_deref(), Some("colima start"));
+        assert!(p.remedy.can_run);
+        assert_eq!(p.argv, Some(vec!["colima".to_string(), "start".to_string()]));
+        assert!(!p.poll, "colima start bloquea hasta que el daemon está arriba");
+    }
+
+    #[test]
+    fn docker_macos_without_colima_opens_desktop_and_polls() {
+        let p = daemon_plan(Runtime::Docker, Os::MacOs, false);
+        // Abrir una app de GUI no es un comando que el usuario copie y pegue.
+        assert_eq!(p.remedy.command, None);
+        assert!(p.remedy.can_run, "la app sí puede abrir Docker Desktop");
+        assert_eq!(
+            p.argv,
+            Some(vec![
+                "open".to_string(),
+                "-a".to_string(),
+                "Docker".to_string()
+            ])
+        );
+        assert!(p.poll, "`open -a Docker` vuelve al instante; el daemon tarda ~30s");
+    }
+
+    #[test]
+    fn docker_windows_launches_desktop_exe_and_polls() {
+        let p = daemon_plan(Runtime::Docker, Os::Windows, false);
+        assert!(p.remedy.can_run);
+        assert_eq!(p.argv, Some(vec![DOCKER_DESKTOP_EXE.to_string()]));
+        assert!(p.poll);
+    }
+
+    #[test]
+    fn docker_linux_needs_sudo_so_app_cannot_run_it() {
+        for colima in [false, true] {
+            let p = daemon_plan(Runtime::Docker, Os::Linux, colima);
+            assert_eq!(p.remedy.command.as_deref(), Some("sudo systemctl start docker"));
+            assert!(
+                !p.remedy.can_run,
+                "necesita root: mostrar un botón que va a fallar es peor que no tenerlo"
+            );
+            assert_eq!(p.argv, None);
+        }
+    }
+
+    #[test]
+    fn no_remedy_message_embeds_its_command() {
+        // El punto del spec: el comando viaja aparte para que el botón de copiar
+        // copie el comando pelado y nada más.
+        for ((rt, os, colima), p) in all_plans() {
+            assert!(
+                !p.remedy.message.contains('`'),
+                "{:?}/{:?}/colima={} tiene backticks en el message",
+                rt,
+                os,
+                colima
+            );
+            if let Some(cmd) = &p.remedy.command {
+                assert!(
+                    !p.remedy.message.contains(cmd.as_str()),
+                    "{:?}/{:?}/colima={} repite el comando adentro del message",
+                    rt,
+                    os,
+                    colima
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn no_remedy_has_empty_command_or_message() {
+        for ((rt, os, colima), p) in all_plans() {
+            assert!(
+                !p.remedy.message.trim().is_empty(),
+                "{:?}/{:?}/colima={} sin message",
+                rt,
+                os,
+                colima
+            );
+            assert!(
+                p.remedy.command.as_deref() != Some(""),
+                "{:?}/{:?}/colima={} tiene command vacío en vez de None",
+                rt,
+                os,
+                colima
+            );
+        }
+    }
+
+    #[test]
+    fn can_run_matches_argv_presence() {
+        // Invariante: la UI decide el botón por `can_run`, así que tiene que
+        // coincidir exactamente con "hay algo que ejecutar".
+        for ((rt, os, colima), p) in all_plans() {
+            assert_eq!(
+                p.remedy.can_run,
+                p.argv.is_some(),
+                "{:?}/{:?}/colima={}: can_run y argv desalineados",
+                rt,
+                os,
+                colima
+            );
+            if let Some(argv) = &p.argv {
+                assert!(!argv.is_empty(), "argv vacío no se puede ejecutar");
+                assert!(!argv[0].trim().is_empty(), "argv[0] vacío");
+            }
+        }
     }
 }
