@@ -300,13 +300,61 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
     text. Implementar con patch quirúrgico HTML-aware: encontrar el rango en
     el HTML que corresponde al span del fix y reemplazar solo eso, sin tocar
     el resto del párrafo.
-- **Fix de `pending-conversion` desde popover inline**: hoy aplica el
+- [x] **Fix de `pending-conversion` desde popover inline**: hoy aplica el
   replacement del converter como plain text sobre el rango del párrafo, lo
   que strip-ea inline markup en ese párrafo. Para párrafos con markup, usar
   el botón "RAE" del toolbar (modal de capítulo entero) que sí preserva
   markup vía el path `<p>…</p>` del converter. Solución: serializar el slice
   ProseMirror del párrafo a HTML antes de invocar `convert()`, y replazar el
   rango con el HTML resultante en vez de `insertContent` plano.
+
+  **Estado**: implementado en `fix/rae-popover-markup` — spec en
+  `docs/superpowers/specs/2026-07-30-rae-popover-markup-design.md`.
+  `applyRaeParagraph` serializa el rango con `serializeRange`
+  (`getHTMLFromFragment` de `@tiptap/core`), lo pasa por `convertFragmentHtml` y
+  reinserta HTML con `insertContentAt` — es el rango y no el nodo, porque un
+  bloque con `<br>` cuenta como varios párrafos para el validador. De yapa,
+  `applyRaeFix` (los fixes puntuales, que tenían el mismo antipatrón con blast
+  radius más chico) pasó a una transacción que hereda con `marksAcross` las
+  marcas vivas en el span `fixFrom..fixTo`. Tests:
+  `scripts/run-rae-apply-smoke.mjs` (7 casos) + `pnpm build`; la parte con DOM
+  no es automatizable en este repo (no hay runner con DOM).
+
+  El review final encontró tres cosas que el spec no había visto, arregladas en
+  la misma PR. (a) Con markup abriendo el párrafo el ancla de D1 no dispara,
+  pero la normalización `“” → ""` sí cambia el string: la transacción se
+  disparaba igual, degradaba las comillas tipográficas y no ponía la raya — el
+  caso típico de un `.docx` importado con el diálogo en cursiva. Ahora
+  `convertFragmentHtml` compara contra el input normalizado (mismo guard que
+  `pushPendingConversion`) y devuelve `null`. (b) Ese `null` era un no-op mudo;
+  ahora cierra el popover y avisa por toast. (c) `insertContentAt` con un
+  **string** toma la rama `isOnlyTextContent` de TipTap y hace
+  `tr.insertText(string)`, así que un `&nbsp;` entraba literal al documento y se
+  acumulaba en cada aplicación: se parsea a `Fragment` antes de insertar. De
+  paso se corrigió la herencia de marcas — `resolve(from).marks()` toma el lado
+  equivocado del borde, y el `insertContent` viejo ya usaba `marksAcross`, o sea
+  que el primer intento regresaba en el borde izquierdo de una cursiva.
+
+  **Verificado a mano** en macOS (M5, Darwin 25.6, 2026-07-30) con la app en
+  dev: el autor probó los seis puntos del checklist — itálica en el medio del
+  diálogo sobreviviendo a la conversión, párrafo con markup de apertura cerrando
+  con el toast y sin tocar las comillas, mismo resultado por el botón "RAE" del
+  toolbar, hard breaks con un solo segmento reemplazado, fix puntual en el borde
+  izquierdo de una cursiva quedando en cursiva, y espacio duro sin `&nbsp;`
+  literal — y da el comportamiento por bueno.
+- **El ancla de D1 no tolera markup inline de apertura** (limitación del
+  converter, no del popover): la regla D1 ancla el diálogo con `^(\s*)"`, o sea
+  que la comilla de apertura tiene que ser el primer carácter no-espacio del
+  texto del párrafo. Si el párrafo arranca con un tag —`<em>"Vení"</em>, dijo
+  ella.`, típico de un `.docx` importado donde el diálogo va en cursiva— el tag
+  corre la comilla y la regla no dispara. Como el ancla es del converter, **el
+  agujero es el mismo por los dos caminos**: ni el popover inline
+  ("Aplicar RAE al párrafo") ni el botón "RAE" del toolbar (capítulo entero)
+  convierten ese párrafo. Hoy el popover al menos avisa con un toast en vez de
+  quedarse mudo; el botón del toolbar lo saltea en silencio. Arreglo de fondo:
+  que el converter tolere tags inline antes de la comilla de apertura —
+  reconocer el prefijo de markup y anclar sobre el texto, no sobre el string
+  crudo.
 - **Jump-to-exact-offset desde el batch**: el click en una violación del
   panel usa el patrón `requestHighlight` de search (busca el término en el
   capítulo y scrollea al primer match). Funciona para violaciones con

@@ -39,6 +39,8 @@ import {
   findAllMatchesInPlain,
   highlightFirstMatch,
 } from '../core/search-highlight';
+import { convertFragmentHtml } from './rae-convert';
+import { parseFragmentHtml, serializeRange } from './rae-apply';
 import {
   EDITOR_FONT_LABEL,
   EDITOR_FONT_PRESETS,
@@ -1116,11 +1118,34 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!popover || !this.tiptap) return;
     const v = popover.violation;
     if (!v.autoFix || v.fixFrom === undefined || v.fixTo === undefined) return;
+    const from = v.fixFrom;
+    const to = v.fixTo;
+    const replacement = v.autoFix.replacement;
     this.tiptap
       .chain()
       .focus()
-      .setTextSelection({ from: v.fixFrom, to: v.fixTo })
-      .insertContent(v.autoFix.replacement)
+      .command(({ tr, state, dispatch }) => {
+        if (!dispatch) return true;
+        // La herencia de marcas se hace explícita acá en vez de depender de lo
+        // que decida `insertContent` adentro. `marksAcross` es el lado correcto:
+        // toma las marcas que sobreviven de punta a punta del span reemplazado,
+        // mientras que `marks()` a secas devuelve las del texto ANTERIOR a
+        // `from`, que está fuera del span (en el borde izquierdo de un `<em>`
+        // da `[]` y se pierde la cursiva). Con marcas mixtas adentro del span se
+        // homogeneiza — pérdida acotada en un span de pocos caracteres.
+        const $f = tr.doc.resolve(from);
+        const marks =
+          to > from
+            ? ($f.marksAcross(tr.doc.resolve(to)) ?? $f.marks())
+            : $f.marks();
+        if (replacement.length === 0) {
+          // `schema.text('')` tira excepción: un borrado va por `delete`.
+          tr.delete(from, to);
+        } else {
+          tr.replaceWith(from, to, state.schema.text(replacement, marks));
+        }
+        return true;
+      })
       .run();
     this.raePopover.set(null);
     this.raeViolations.update((list) => list.filter((m) => m.id !== v.id));
@@ -1133,12 +1158,32 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!popover || !this.tiptap) return;
     const v = popover.violation;
     if (v.paragraphFrom === undefined || v.paragraphTo === undefined) return;
-    if (!v.autoFix) return;
+    // NO se usa `v.autoFix.replacement`: es texto plano (el validador corre
+    // sobre el plano del documento) y reinsertarlo borraba las itálicas y
+    // negritas del párrafo. Se recalcula sobre el HTML del rango.
+    const { doc, schema } = this.tiptap.state;
+    const html = serializeRange(doc, v.paragraphFrom, v.paragraphTo, schema);
+    const converted = convertFragmentHtml(html);
+    if (converted === null) {
+      // Pasa cuando el párrafo arranca con markup (`<em>"Vení"</em>, dijo…`):
+      // el ancla de la regla D1 necesita la comilla al principio del texto y el
+      // tag se la corre. No hay fallback posible — aplicar el replacement plano
+      // del validador convertiría borrando la cursiva.
+      this.raePopover.set(null);
+      this.toast.warn(
+        'Este párrafo no se puede convertir solo: el diálogo empieza después ' +
+          'de una cursiva o negrita. Sacale el formato a la comilla de ' +
+          'apertura y volvé a intentar, o escribí la raya a mano.',
+      );
+      return;
+    }
     this.tiptap
       .chain()
       .focus()
-      .setTextSelection({ from: v.paragraphFrom, to: v.paragraphTo })
-      .insertContent(v.autoFix.replacement)
+      .insertContentAt(
+        { from: v.paragraphFrom, to: v.paragraphTo },
+        parseFragmentHtml(converted, schema),
+      )
       .run();
     this.raePopover.set(null);
     this.raeViolations.update((list) => list.filter((m) => m.id !== v.id));
