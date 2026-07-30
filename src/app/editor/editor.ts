@@ -360,8 +360,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private viewReady = signal(false);
   private tiptap: TipTapEditor | null = null;
   private lastLoadedAt = 0;
-  private grammarHostListener: ((e: MouseEvent) => void) | null = null;
-  private raeHostListener: ((e: MouseEvent) => void) | null = null;
+  private hostClickListener: ((e: MouseEvent) => void) | null = null;
   private popoverScrollListener: (() => void) | null = null;
   private grammarDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private raeDebounceHandle: ReturnType<typeof setTimeout> | null = null;
@@ -662,13 +661,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.grammarHostListener) {
-      this.hostRef.nativeElement.removeEventListener('click', this.grammarHostListener);
-      this.grammarHostListener = null;
-    }
-    if (this.raeHostListener) {
-      this.hostRef.nativeElement.removeEventListener('click', this.raeHostListener);
-      this.raeHostListener = null;
+    if (this.hostClickListener) {
+      this.hostRef.nativeElement.removeEventListener('click', this.hostClickListener);
+      this.hostClickListener = null;
     }
     if (this.popoverScrollListener) {
       this.hostRef.nativeElement.removeEventListener('scroll', this.popoverScrollListener);
@@ -1166,18 +1161,41 @@ export class Editor implements AfterViewInit, OnDestroy {
     }, 1500);
   }
 
-  private onRaeHostClick(event: MouseEvent): void {
+  /**
+   * Único listener de click del host. Los dos popovers (gramática y RAE) se
+   * anclan a decoraciones que pueden solaparse sobre la misma palabra — un
+   * verbo dicendi tras una raya suele tener las dos — y antes había un listener
+   * por popover sobre este mismo nodo: `stopPropagation()` no corta al hermano
+   * (para eso haría falta `stopImmediatePropagation()`), así que los dos
+   * abrían y quedaban superpuestos. Con un solo handler la prioridad se lee
+   * acá en vez de depender de cuál se registró primero.
+   */
+  private onHostClick(event: MouseEvent): void {
     const target = event.target as HTMLElement | null;
-    const span = target?.closest('.rae-violation') as HTMLElement | null;
-    if (!span) {
-      if (this.raePopover()) this.raePopover.set(null);
+    const raeSpan = target?.closest('.rae-violation') as HTMLElement | null;
+    const grammarSpan = target?.closest('.grammar-error') as HTMLElement | null;
+    // RAE gana: es regla propia y determinista, y su popover ofrece el fix del
+    // conversor. LanguageTool es opinable y justo sobre rayas y verbos dicendi
+    // es donde más falsea.
+    if (raeSpan) {
+      this.openRaePopover(raeSpan, event);
       return;
     }
+    if (grammarSpan) {
+      this.openGrammarPopover(grammarSpan, event);
+      return;
+    }
+    if (this.raePopover()) this.raePopover.set(null);
+    if (this.grammarPopover()) this.closeGrammarPopover();
+  }
+
+  private openRaePopover(span: HTMLElement, event: MouseEvent): void {
     const idx = parseInt(span.dataset['raeIdx'] ?? '-1', 10);
     const v = this.raeViolations()[idx];
     if (!v) return;
     event.preventDefault();
     event.stopPropagation();
+    if (this.grammarPopover()) this.closeGrammarPopover();
     const rect = span.getBoundingClientRect();
     this.raePopover.set({
       violation: v,
@@ -1185,18 +1203,13 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
-  private onGrammarHostClick(event: MouseEvent): void {
-    const target = event.target as HTMLElement | null;
-    const span = target?.closest('.grammar-error') as HTMLElement | null;
-    if (!span) {
-      if (this.grammarPopover()) this.closeGrammarPopover();
-      return;
-    }
+  private openGrammarPopover(span: HTMLElement, event: MouseEvent): void {
     const idx = parseInt(span.dataset['grammarIdx'] ?? '-1', 10);
     const m = this.grammarMatches()[idx];
     if (!m) return;
     event.preventDefault();
     event.stopPropagation();
+    if (this.raePopover()) this.raePopover.set(null);
     const rect = span.getBoundingClientRect();
     // El diccionario de la saga hasta ahora solo silenciaba falsos positivos.
     // Para los TYPOS también aporta candidatos: si el autor escribió mal un
@@ -1312,16 +1325,11 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.tiptap.setOptions({
       editorProps: buildEditorProps(this.tiptap.view.dom, untracked(() => this.fontSize())),
     });
-    if (this.grammarHostListener) {
-      this.hostRef.nativeElement.removeEventListener('click', this.grammarHostListener);
+    if (this.hostClickListener) {
+      this.hostRef.nativeElement.removeEventListener('click', this.hostClickListener);
     }
-    this.grammarHostListener = (e) => this.onGrammarHostClick(e);
-    this.hostRef.nativeElement.addEventListener('click', this.grammarHostListener);
-    if (this.raeHostListener) {
-      this.hostRef.nativeElement.removeEventListener('click', this.raeHostListener);
-    }
-    this.raeHostListener = (e) => this.onRaeHostClick(e);
-    this.hostRef.nativeElement.addEventListener('click', this.raeHostListener);
+    this.hostClickListener = (e) => this.onHostClick(e);
+    this.hostRef.nativeElement.addEventListener('click', this.hostClickListener);
     if (this.popoverScrollListener) {
       this.hostRef.nativeElement.removeEventListener('scroll', this.popoverScrollListener);
     }
