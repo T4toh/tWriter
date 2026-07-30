@@ -118,6 +118,16 @@ export class Select implements ControlValueAccessor {
       this.resizeTick();
       const isOpen = this.open();
       // Se leen para remedir cuando cambia el contenido: filtrar acorta la lista.
+      // CAVEAT (mismo tipo que documenta grammar-popover.ts:110-118): el
+      // selector de fuentes del toolbar/theme-editor lazy-carga la `FontFace`
+      // vía `itemHover` (ver `onFontItemHover` en editor.ts), y una fuente que
+      // termina de cargar mientras el panel está abierto puede cambiar el alto
+      // de esa fila sin tocar `filter()` ni `visibleOptions()` — ninguna señal
+      // que este efecto lee se dispara, así que el panel queda con la posición
+      // vieja hasta el próximo resize/scroll. No se agrega un `ResizeObserver`
+      // para cubrirlo: está fuera de alcance y, sin el fix de medición de
+      // arriba, oscilaría (el propio observer se dispararía con cada resize
+      // que él mismo provoca al recortar/expandir el panel).
       this.filter();
       this.visibleOptions();
       const el = this.panelEl()?.nativeElement;
@@ -132,7 +142,20 @@ export class Select implements ControlValueAccessor {
       // y scrollea en vez de empujar al panel. Distinto del popover de
       // gramática, que no tiene cap ni scroller y hay que preguntarle cuánto
       // *querría* medir con `scrollHeight`.
+      //
+      // OJO con el orden: `[style.max-height.px]="clippedMaxHeight()"` deja un
+      // `max-height` INLINE puesto en el panel (más específico que el del
+      // SCSS). Si midiéramos con ese inline todavía puesto, `offsetHeight`
+      // devolvería el recorte de la medición ANTERIOR, no el alto capeado por
+      // el SCSS — y la remedición nunca converge (un panel que quedó recortado
+      // "below" nunca se entera de que ahora entraría completo arriba). Por
+      // eso se saca el inline, se mide (fuerza reflow contra el cap del
+      // SCSS), y se lo devuelve intacto: el binding de abajo decide si hace
+      // falta reponerlo con el valor nuevo.
+      const prevInlineMaxHeight = el.style.maxHeight;
+      el.style.maxHeight = '';
       const height = el.offsetHeight;
+      el.style.maxHeight = prevInlineMaxHeight;
       // El panel lleva `min-width` = ancho del trigger, y ese bind se aplica
       // DESPUÉS de esta medición en el primer render: si le pasáramos el
       // `offsetWidth` crudo, el clamp de X se calcularía con un ancho más chico
@@ -149,6 +172,21 @@ export class Select implements ControlValueAccessor {
       this.placed.set(result);
       this.clippedMaxHeight.set(result.maxHeight < height ? result.maxHeight : null);
     });
+
+    // `scroll` no bubblea, así que un `@HostListener('window:scroll')` solo se
+    // entera de scroll del `document`. El theme editor tiene `.te-body` con
+    // `overflow-y: auto` y 8 `<app-select>` adentro: scrollear ESE contenedor
+    // con un panel abierto no dispara nada y el panel (`position: fixed`)
+    // queda flotando lejos del trigger que se movió. Un listener en fase de
+    // CAPTURA sobre `document` sí ve el scroll de cualquier ancestro con
+    // overflow, porque la captura baja por el árbol antes de que el evento
+    // quede atado a un target puntual (y `scroll` no bubblea, pero sí se
+    // despacha en capture en cada nivel).
+    const onAnyScroll = (): void => {
+      if (this.open()) this.resizeTick.update((n) => n + 1);
+    };
+    document.addEventListener('scroll', onAnyScroll, { capture: true, passive: true });
+    this.destroyRef.onDestroy(() => document.removeEventListener('scroll', onAnyScroll, true));
   }
 
   protected readonly useGroups = computed(() => this.groups().length > 0);
@@ -356,7 +394,6 @@ export class Select implements ControlValueAccessor {
   }
 
   @HostListener('window:resize')
-  @HostListener('window:scroll')
   protected onViewportChange(): void {
     if (this.open()) this.resizeTick.update((n) => n + 1);
   }
