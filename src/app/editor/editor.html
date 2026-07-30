@@ -382,7 +382,6 @@
 }
 
 @if (grammarPopover(); as gp) {
-  <div class="grammar-pop-backdrop" (click)="closeGrammarPopover()"></div>
   <app-grammar-popover
     [match]="gp.match"
     [anchor]="gp.anchor"
@@ -394,7 +393,6 @@
 }
 
 @if (raePopover(); as rp) {
-  <div class="grammar-pop-backdrop" (click)="dismissRae()"></div>
   <app-rae-popover
     [violation]="rp.violation"
     [anchor]="rp.anchor"

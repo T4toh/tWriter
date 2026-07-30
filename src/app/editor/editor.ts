@@ -361,6 +361,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private tiptap: TipTapEditor | null = null;
   private lastLoadedAt = 0;
   private hostClickListener: ((e: MouseEvent) => void) | null = null;
+  private documentClickListener: ((e: MouseEvent) => void) | null = null;
   private popoverScrollListener: (() => void) | null = null;
   private grammarDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private raeDebounceHandle: ReturnType<typeof setTimeout> | null = null;
@@ -664,6 +665,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (this.hostClickListener) {
       this.hostRef.nativeElement.removeEventListener('click', this.hostClickListener);
       this.hostClickListener = null;
+    }
+    if (this.documentClickListener) {
+      document.removeEventListener('click', this.documentClickListener);
+      this.documentClickListener = null;
     }
     if (this.popoverScrollListener) {
       this.hostRef.nativeElement.removeEventListener('scroll', this.popoverScrollListener);
@@ -1211,6 +1216,30 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (this.grammarPopover()) this.closeGrammarPopover();
   }
 
+  /**
+   * Cierre por click afuera. Antes lo hacía un `.grammar-pop-backdrop`
+   * (`position: fixed; inset: 0; z-index: 999`) que tapaba el editor entero:
+   * con un popover abierto, el primer click sobre OTRO error se lo comía el
+   * backdrop para cerrar y hacía falta un segundo click para abrir el
+   * siguiente. Mismo patrón que `shared/select.ts::onDocClick`: se escucha en
+   * `document` y se cierra solo si el click cayó afuera, sin interceptar el
+   * texto.
+   *
+   * Los clicks que NO llegan acá: los de adentro de un popover (sus roots hacen
+   * `stopPropagation()`) y los que abren un popover nuevo (`onHostClick` corta
+   * la propagación al abrir). Así clickear de un error al siguiente cuesta un
+   * click, no dos.
+   */
+  private onDocumentClick(event: MouseEvent): void {
+    if (!this.grammarPopover() && !this.raePopover()) return;
+    const target = event.target as HTMLElement | null;
+    // Defensa en profundidad: si algún día un elemento interno del popover
+    // dejara de burbujear hasta su root, el guard evita que se cierre solo.
+    if (target?.closest('.grammar-pop, .rae-pop')) return;
+    if (this.grammarPopover()) this.closeGrammarPopover();
+    if (this.raePopover()) this.raePopover.set(null);
+  }
+
   private openRaePopover(span: HTMLElement, v: RaeViolationPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
@@ -1346,6 +1375,11 @@ export class Editor implements AfterViewInit, OnDestroy {
     }
     this.hostClickListener = (e) => this.onHostClick(e);
     this.hostRef.nativeElement.addEventListener('click', this.hostClickListener);
+    if (this.documentClickListener) {
+      document.removeEventListener('click', this.documentClickListener);
+    }
+    this.documentClickListener = (e) => this.onDocumentClick(e);
+    document.addEventListener('click', this.documentClickListener);
     if (this.popoverScrollListener) {
       this.hostRef.nativeElement.removeEventListener('scroll', this.popoverScrollListener);
     }

@@ -681,8 +681,8 @@
   }
 }
 
-.grammar-pop-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 999;
-}
+// El backdrop que había acá (`position: fixed; inset: 0; z-index: 999`) tapaba
+// el editor entero mientras un popover estaba abierto: el primer click sobre
+// OTRO error se lo comía el backdrop para cerrar, y hacía falta un segundo
+// click para abrir el siguiente. El cierre por click afuera ahora lo hace
+// `onDocumentClick` en `editor.ts`, sin interceptar el texto.
