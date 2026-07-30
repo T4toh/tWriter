@@ -360,8 +360,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   private viewReady = signal(false);
   private tiptap: TipTapEditor | null = null;
   private lastLoadedAt = 0;
-  private grammarHostListener: ((e: MouseEvent) => void) | null = null;
-  private raeHostListener: ((e: MouseEvent) => void) | null = null;
+  private hostClickListener: ((e: MouseEvent) => void) | null = null;
+  private documentClickListener: ((e: MouseEvent) => void) | null = null;
   private popoverScrollListener: (() => void) | null = null;
   private grammarDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private raeDebounceHandle: ReturnType<typeof setTimeout> | null = null;
@@ -662,13 +662,13 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.grammarHostListener) {
-      this.hostRef.nativeElement.removeEventListener('click', this.grammarHostListener);
-      this.grammarHostListener = null;
+    if (this.hostClickListener) {
+      this.hostRef.nativeElement.removeEventListener('click', this.hostClickListener);
+      this.hostClickListener = null;
     }
-    if (this.raeHostListener) {
-      this.hostRef.nativeElement.removeEventListener('click', this.raeHostListener);
-      this.raeHostListener = null;
+    if (this.documentClickListener) {
+      document.removeEventListener('click', this.documentClickListener);
+      this.documentClickListener = null;
     }
     if (this.popoverScrollListener) {
       this.hostRef.nativeElement.removeEventListener('scroll', this.popoverScrollListener);
@@ -1166,18 +1166,84 @@ export class Editor implements AfterViewInit, OnDestroy {
     }, 1500);
   }
 
-  private onRaeHostClick(event: MouseEvent): void {
+  /**
+   * Único listener de click del host. Los dos popovers (gramática y RAE) se
+   * anclan a decoraciones que pueden solaparse sobre la misma palabra — un
+   * verbo dicendi tras una raya suele tener las dos — y antes había un listener
+   * por popover sobre este mismo nodo: `stopPropagation()` no corta al hermano
+   * (para eso haría falta `stopImmediatePropagation()`), así que los dos
+   * abrían y quedaban superpuestos. Con un solo handler la prioridad se lee
+   * acá en vez de depender de cuál se registró primero.
+   */
+  private onHostClick(event: MouseEvent): void {
     const target = event.target as HTMLElement | null;
-    const span = target?.closest('.rae-violation') as HTMLElement | null;
-    if (!span) {
-      if (this.raePopover()) this.raePopover.set(null);
+    const raeSpan = target?.closest('.rae-violation') as HTMLElement | null;
+    const grammarSpan = target?.closest('.grammar-error') as HTMLElement | null;
+    // Los dos candidatos se resuelven ANTES de decidir nada: si el índice de
+    // uno no matchea contra el array actual (remap tras una transacción que
+    // corrió entre el render de la decoración y el click), no lo tratamos
+    // como un match — así el otro candidato conserva su chance, y si ninguno
+    // resuelve caemos al bloque final que cierra los dos. Antes `openRaePopover`
+    // podía devolver temprano con el índice roto sin cerrar nada: gramática
+    // no se intentaba (aunque su span resolviera bien) y los dos popovers
+    // podían quedar huérfanos en pantalla.
+    const raeIdx = raeSpan ? parseInt(raeSpan.dataset['raeIdx'] ?? '-1', 10) : -1;
+    const raeViolation = raeIdx >= 0 ? this.raeViolations()[raeIdx] : undefined;
+    const grammarIdx = grammarSpan ? parseInt(grammarSpan.dataset['grammarIdx'] ?? '-1', 10) : -1;
+    const grammarMatch = grammarIdx >= 0 ? this.grammarMatches()[grammarIdx] : undefined;
+
+    // RAE gana salvo una excepción: `pending-conversion` (validator.ts,
+    // `pushPendingConversion`) decora el PÁRRAFO entero (`length: para.length`),
+    // no la violación puntual — así que toda palabra de un diálogo con
+    // comillas sin convertir queda con `.rae-violation`, tapando el popover
+    // de gramática de cualquier palabra de ese párrafo (incluido el
+    // "+ diccionario" de un nombre propio marcado TYPOS). Ese caso ya tiene
+    // su fix a mano vía el botón "Aplicar RAE" del capítulo entero, así que
+    // no necesita también ganarle a gramática acá.
+    if (raeViolation && grammarMatch && raeViolation.category === 'pending-conversion') {
+      this.openGrammarPopover(grammarSpan!, grammarMatch, event);
       return;
     }
-    const idx = parseInt(span.dataset['raeIdx'] ?? '-1', 10);
-    const v = this.raeViolations()[idx];
-    if (!v) return;
+    if (raeViolation) {
+      this.openRaePopover(raeSpan!, raeViolation, event);
+      return;
+    }
+    if (grammarMatch) {
+      this.openGrammarPopover(grammarSpan!, grammarMatch, event);
+      return;
+    }
+    if (this.raePopover()) this.raePopover.set(null);
+    if (this.grammarPopover()) this.closeGrammarPopover();
+  }
+
+  /**
+   * Cierre por click afuera. Antes lo hacía un `.grammar-pop-backdrop`
+   * (`position: fixed; inset: 0; z-index: 999`) que tapaba el editor entero:
+   * con un popover abierto, el primer click sobre OTRO error se lo comía el
+   * backdrop para cerrar y hacía falta un segundo click para abrir el
+   * siguiente. Mismo patrón que `shared/select.ts::onDocClick`: se escucha en
+   * `document` y se cierra solo si el click cayó afuera, sin interceptar el
+   * texto.
+   *
+   * Los clicks que NO llegan acá: los de adentro de un popover (sus roots hacen
+   * `stopPropagation()`) y los que abren un popover nuevo (`onHostClick` corta
+   * la propagación al abrir). Así clickear de un error al siguiente cuesta un
+   * click, no dos.
+   */
+  private onDocumentClick(event: MouseEvent): void {
+    if (!this.grammarPopover() && !this.raePopover()) return;
+    const target = event.target as HTMLElement | null;
+    // Defensa en profundidad: si algún día un elemento interno del popover
+    // dejara de burbujear hasta su root, el guard evita que se cierre solo.
+    if (target?.closest('.grammar-pop, .rae-pop')) return;
+    if (this.grammarPopover()) this.closeGrammarPopover();
+    if (this.raePopover()) this.raePopover.set(null);
+  }
+
+  private openRaePopover(span: HTMLElement, v: RaeViolationPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
+    if (this.grammarPopover()) this.closeGrammarPopover();
     const rect = span.getBoundingClientRect();
     this.raePopover.set({
       violation: v,
@@ -1185,18 +1251,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
-  private onGrammarHostClick(event: MouseEvent): void {
-    const target = event.target as HTMLElement | null;
-    const span = target?.closest('.grammar-error') as HTMLElement | null;
-    if (!span) {
-      if (this.grammarPopover()) this.closeGrammarPopover();
-      return;
-    }
-    const idx = parseInt(span.dataset['grammarIdx'] ?? '-1', 10);
-    const m = this.grammarMatches()[idx];
-    if (!m) return;
+  private openGrammarPopover(span: HTMLElement, m: GrammarMatchPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
+    if (this.raePopover()) this.raePopover.set(null);
     const rect = span.getBoundingClientRect();
     // El diccionario de la saga hasta ahora solo silenciaba falsos positivos.
     // Para los TYPOS también aporta candidatos: si el autor escribió mal un
@@ -1312,16 +1370,16 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.tiptap.setOptions({
       editorProps: buildEditorProps(this.tiptap.view.dom, untracked(() => this.fontSize())),
     });
-    if (this.grammarHostListener) {
-      this.hostRef.nativeElement.removeEventListener('click', this.grammarHostListener);
+    if (this.hostClickListener) {
+      this.hostRef.nativeElement.removeEventListener('click', this.hostClickListener);
     }
-    this.grammarHostListener = (e) => this.onGrammarHostClick(e);
-    this.hostRef.nativeElement.addEventListener('click', this.grammarHostListener);
-    if (this.raeHostListener) {
-      this.hostRef.nativeElement.removeEventListener('click', this.raeHostListener);
+    this.hostClickListener = (e) => this.onHostClick(e);
+    this.hostRef.nativeElement.addEventListener('click', this.hostClickListener);
+    if (this.documentClickListener) {
+      document.removeEventListener('click', this.documentClickListener);
     }
-    this.raeHostListener = (e) => this.onRaeHostClick(e);
-    this.hostRef.nativeElement.addEventListener('click', this.raeHostListener);
+    this.documentClickListener = (e) => this.onDocumentClick(e);
+    document.addEventListener('click', this.documentClickListener);
     if (this.popoverScrollListener) {
       this.hostRef.nativeElement.removeEventListener('scroll', this.popoverScrollListener);
     }

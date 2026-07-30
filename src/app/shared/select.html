@@ -18,9 +18,10 @@
   #panel
   class="sel-panel"
   [class.is-open]="open()"
-  [class.flip-up]="panelFlipUp()"
-  [style.top.px]="panelTop()"
-  [style.left.px]="panelLeft()"
+  [class.sel-panel--measuring]="placed() === null"
+  [style.top.px]="placed()?.y ?? 0"
+  [style.left.px]="placed()?.x ?? 0"
+  [style.max-height.px]="clippedMaxHeight()"
   [style.minWidth.px]="panelWidth()"
   (keydown)="onPanelKeydown($event)"
 >

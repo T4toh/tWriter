@@ -93,11 +93,12 @@
     flex-direction: column;
     animation: sel-fade 100ms ease-out both;
   }
-}
 
-.sel-panel.flip-up.is-open {
-  transform: translateY(-100%);
-  animation: sel-fade-up 100ms ease-out both;
+  // Medido pero todavía sin ubicar: visible para el layout (hace falta para
+  // medirlo) pero no para el ojo, así no se ve el salto desde el 0,0 inicial.
+  &.sel-panel--measuring {
+    visibility: hidden;
+  }
 }
 
 @keyframes sel-fade {
@@ -111,20 +112,8 @@
   }
 }
 
-@keyframes sel-fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(calc(-100% + 4px));
-  }
-  to {
-    opacity: 1;
-    transform: translateY(-100%);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .sel-panel.is-open,
-  .sel-panel.flip-up.is-open {
+  .sel-panel.is-open {
     animation: none;
   }
 }

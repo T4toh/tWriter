@@ -103,10 +103,44 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   candidatos del diccionario salen como los primeros chips de una fila que
   envuelve (`.reps` es `display: flex; flex-wrap: wrap`), no como una sección
   separada arriba; el chip "tu diccionario" alcanza para diferenciarlos, así
-  que se deja así. Deuda anotada aparte: una palabra con decoración de
-  gramática **y** de RAE abre los dos popovers superpuestos (preexistente,
-  necesita `stopImmediatePropagation()`), y `shared/select.ts` sigue con su
-  `panelHeight = 320` y su propio flip en vez de usar `placePopover`.
+  que se deja así. Deuda cobrada en `fix/popover-collision-select-placement` (spec en
+  `docs/superpowers/specs/2026-07-30-popover-collision-select-placement-design.md`):
+  (a) la palabra con las dos decoraciones abría los dos popovers porque los dos
+  listeners de click vivían en el **mismo** nodo (`.editor-host`) — el
+  `stopPropagation()` que ya tenían corta el bubbling, no al listener hermano, y
+  `stopImmediatePropagation()` habría dejado la prioridad atada al orden de
+  registro. Ahora hay un handler único con la prioridad escrita, así que lo que
+  cambia no es solo cuántos popovers se abren sino **cuál** de los dos gana:
+  **gana RAE**, que es regla propia y determinista y cuyo popover ofrece el fix
+  del conversor — excepto cuando la violación es `pending-conversion`
+  (`validator.ts::pushPendingConversion` decora el párrafo entero, no la
+  palabra puntual, así que tapaba gramática en casi todo un capítulo con
+  diálogo entre comillas sin convertir); ahí gana gramática, porque el fix de
+  esa violación ya está a mano vía "Aplicar RAE" al capítulo completo.
+  (b) `shared/select.ts` usa `placePopover`: mide el panel ya renderizado en un
+  `afterRenderEffect` (antes `measurePanel()` corría antes de `open.set(true)`,
+  con el contenido detrás de un `@if`, así que medía 0 y de ahí el `320`
+  hardcodeado). De yapa gana el clamp horizontal que no tenía — un select con
+  opciones largas cerca del borde derecho se salía de la pantalla — y el
+  `maxHeight` con scroll interno en vez de cortarse. Se fueron el
+  `transform: translateY(-100%)` y el keyframe `sel-fade-up`.
+  (c) De yapa, salido de la verificación a mano: el `.grammar-pop-backdrop`
+  (`position: fixed; inset: 0; z-index: 999`) tapaba el editor entero mientras
+  un popover estaba abierto, así que el primer click sobre **otro** error se lo
+  comía el backdrop para cerrar y hacía falta un segundo click para abrir el
+  siguiente. Preexistente, no lo introdujo esta PR. El cierre por click afuera
+  pasó a un listener en `document` (mismo patrón que `shared/select.ts::onDocClick`),
+  que no intercepta el texto: los clicks de adentro de un popover no llegan ahí
+  porque sus roots hacen `stopPropagation()`, y los que abren un popover nuevo
+  tampoco porque `onHostClick` corta la propagación al abrir.
+  **Verificado a mano** en macOS (M5, Darwin 25.6, 2026-07-30) con la app en dev
+  y LanguageTool en `:8081`: el autor probó los diez puntos del checklist — un
+  solo popover por palabra, `pending-conversion` cediéndole a gramática con el
+  "+ diccionario" alcanzable (el caso que motivó la excepción), nunca dos
+  popovers, cambio de un error al siguiente en un click tras el fix del
+  backdrop, aplicar fixes desde los dos popovers, y los tres del select (borde
+  derecho sin salirse, borde inferior abriendo hacia arriba, ventana chica
+  scrolleando adentro sin scrollbar espurio) — y da el comportamiento por bueno.
 - **Performance en archivos grandes**: lag/scroll pesado en capítulos
   largos. Puede ser el scroll nativo de Windows/Linux, pero medir primero:
   si es el render de ProseMirror, evaluar virtualización o paginar el
