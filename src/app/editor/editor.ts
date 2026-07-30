@@ -1126,11 +1126,18 @@ export class Editor implements AfterViewInit, OnDestroy {
       .focus()
       .command(({ tr, state, dispatch }) => {
         if (!dispatch) return true;
-        // `insertContent` de texto plano dejaba el reemplazo sin marcas: un fix
-        // adentro de una itálica la borraba. Se heredan las marcas vivas en
-        // `from`. Con marcas mixtas adentro del span se homogeneiza — pérdida
-        // acotada en un span de pocos caracteres, contra perderlas todas.
-        const marks = tr.doc.resolve(from).marks();
+        // La herencia de marcas se hace explícita acá en vez de depender de lo
+        // que decida `insertContent` adentro. `marksAcross` es el lado correcto:
+        // toma las marcas que sobreviven de punta a punta del span reemplazado,
+        // mientras que `marks()` a secas devuelve las del texto ANTERIOR a
+        // `from`, que está fuera del span (en el borde izquierdo de un `<em>`
+        // da `[]` y se pierde la cursiva). Con marcas mixtas adentro del span se
+        // homogeneiza — pérdida acotada en un span de pocos caracteres.
+        const $f = tr.doc.resolve(from);
+        const marks =
+          to > from
+            ? ($f.marksAcross(tr.doc.resolve(to)) ?? $f.marks())
+            : $f.marks();
         if (replacement.length === 0) {
           // `schema.text('')` tira excepción: un borrado va por `delete`.
           tr.delete(from, to);
