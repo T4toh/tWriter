@@ -122,13 +122,13 @@ export class GrammarSettings {
     }
   }
 
-  protected async startDocker(): Promise<void> {
+  protected async startDocker(runtime?: string): Promise<void> {
     this.dockerBusy.set('starting');
     this.dockerPhase.set('checking');
     this.dockerMessage.set('Buscando un runtime de containers…');
     await this.attachProgressListener();
     try {
-      const msg = await this.grammar.dockerStart();
+      const msg = await this.grammar.dockerStart(runtime);
       this.dockerPhase.set('ready');
       this.dockerMessage.set(msg);
     } catch (e) {

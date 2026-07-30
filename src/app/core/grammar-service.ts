@@ -32,6 +32,13 @@ export interface InstallOption {
   url: string;
 }
 
+/** Runtime candidato cuando la app no puede saber cuál usa LanguageTool. */
+export interface RuntimeChoice {
+  /** Clave estable que vuelve como parámetro de dockerStart. */
+  key: string;
+  label: string;
+}
+
 export interface LtDockerStatus {
   /** Hay al menos un runtime de containers instalado (Docker/Podman/Apple). */
   docker_installed: boolean;
@@ -50,6 +57,11 @@ export interface LtDockerStatus {
   remedy: Remedy | null;
   /** Cómo instalar un runtime. Solo viene con contenido si no hay ninguno. */
   install_options: InstallOption[];
+  /**
+   * Candidatos entre los que elegir. No vacío SOLO cuando hay más de un runtime
+   * instalado, ninguno respondiendo y nada recordado.
+   */
+  runtime_choices: RuntimeChoice[];
 }
 
 export type SecretBackend = 'keyring' | 'plain' | 'none';
@@ -180,9 +192,11 @@ export class GrammarService {
     return invoke<LtDockerStatus>('languagetool_docker_status');
   }
 
-  async dockerStart(): Promise<string> {
+  async dockerStart(runtime?: string): Promise<string> {
     try {
-      const msg = await invoke<string>('languagetool_docker_start');
+      const msg = await invoke<string>('languagetool_docker_start', {
+        runtime: runtime ?? null,
+      });
       this.debug.info('grammar', `LanguageTool Docker arrancado`, msg);
       return msg;
     } catch (e) {

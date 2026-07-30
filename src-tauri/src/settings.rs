@@ -178,6 +178,16 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub notes_pane_height: Option<u32>,
+    /// Runtime de containers donde la app vio el container de LanguageTool
+    /// ("docker" | "podman" | "apple"). Lo descubre y lo escribe el backend
+    /// (`grammar.rs`); el frontend NO lo conoce ni lo manda. Ver
+    /// `merge_backend_owned`.
+    #[serde(
+        default,
+        rename = "languagetoolRuntime",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub languagetool_runtime: Option<String>,
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -189,9 +199,9 @@ fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("settings.json"))
 }
 
-#[tauri::command]
-pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
-    let path = settings_path(&app)?;
+/// Lectura cruda del archivo. La comparten el comando y los helpers del backend.
+pub fn read_settings(app: &AppHandle) -> Result<Settings, String> {
+    let path = settings_path(app)?;
     if !path.exists() {
         return Ok(Settings::default());
     }
@@ -199,11 +209,69 @@ pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
     serde_json::from_str(&raw).map_err(|e| e.to_string())
 }
 
+/// Campos que descubre el backend por su cuenta y el frontend no conoce: si el
+/// entrante no los trae (que es siempre), se conservan los de disco. Sin esto
+/// hay una carrera real — el front guarda una copia de settings anterior a la
+/// escritura del backend y le pisa el campo.
+fn merge_backend_owned(incoming: &mut Settings, disk: &Settings) {
+    if incoming.languagetool_runtime.is_none() {
+        incoming.languagetool_runtime = disk.languagetool_runtime.clone();
+    }
+}
+
+#[tauri::command]
+pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
+    read_settings(&app)
+}
+
 #[tauri::command]
 pub fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     let path = settings_path(&app)?;
+    let mut settings = settings;
+    match read_settings(&app) {
+        Ok(disk) => merge_backend_owned(&mut settings, &disk),
+        Err(e) => {
+            // Justo el camino donde se pierde el runtime recordado si el
+            // disco falla: igual seguimos y escribimos lo que llegó del
+            // front (no cambia el comportamiento, solo deja rastro).
+            tracing::warn!(target: "grammar", error = %e, "no se pudo leer settings de disco para el merge");
+        }
+    }
     let raw = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
     fs::write(&path, raw).map_err(|e| e.to_string())
+}
+
+/// Runtime recordado, o `None` si no hay nada o el archivo no se pudo leer.
+pub fn remembered_lt_runtime(app: &AppHandle) -> Option<String> {
+    read_settings(app).ok()?.languagetool_runtime
+}
+
+/// Persiste el runtime si cambió. Best-effort: si falla, se loggea y sigue —
+/// que la próxima vez vuelva a preguntar es peor que no arrancar el container
+/// ahora.
+pub fn remember_lt_runtime(app: &AppHandle, key: &str) {
+    let mut s = match read_settings(app) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(target: "grammar", error = %e, "no se pudo leer settings para recordar el runtime");
+            return;
+        }
+    };
+    if s.languagetool_runtime.as_deref() == Some(key) {
+        return;
+    }
+    s.languagetool_runtime = Some(key.to_string());
+    let Ok(path) = settings_path(app) else { return };
+    match serde_json::to_string_pretty(&s) {
+        Ok(raw) => {
+            if let Err(e) = fs::write(&path, raw) {
+                tracing::warn!(target: "grammar", error = %e, "no se pudo recordar el runtime de LanguageTool");
+            }
+        }
+        Err(e) => {
+            tracing::warn!(target: "grammar", error = %e, "no se pudo serializar settings");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -262,5 +330,45 @@ mod tests {
         assert!(!json.contains("treeExtrasExpanded"));
         assert!(!json.contains("treeExtrasDirsExpanded"));
         assert!(!json.contains("treeExportsExpanded"));
+    }
+
+    #[test]
+    fn merge_conserva_el_runtime_de_disco_cuando_el_front_no_lo_manda() {
+        // El frontend no conoce el campo, así que SIEMPRE llega None. Sin el
+        // merge, cada set_settings (cambiar el tamaño de fuente, por ejemplo)
+        // borraría lo que el backend descubrió.
+        let mut incoming = Settings::default();
+        let disk = Settings {
+            languagetool_runtime: Some("apple".to_string()),
+            ..Settings::default()
+        };
+        merge_backend_owned(&mut incoming, &disk);
+        assert_eq!(incoming.languagetool_runtime, Some("apple".to_string()));
+    }
+
+    #[test]
+    fn merge_no_pisa_un_valor_entrante_explicito() {
+        let mut incoming = Settings {
+            languagetool_runtime: Some("podman".to_string()),
+            ..Settings::default()
+        };
+        let disk = Settings {
+            languagetool_runtime: Some("apple".to_string()),
+            ..Settings::default()
+        };
+        merge_backend_owned(&mut incoming, &disk);
+        assert_eq!(incoming.languagetool_runtime, Some("podman".to_string()));
+    }
+
+    #[test]
+    fn runtime_roundtripea_por_json() {
+        let s = Settings {
+            languagetool_runtime: Some("apple".to_string()),
+            ..Settings::default()
+        };
+        let raw = serde_json::to_string(&s).unwrap();
+        assert!(raw.contains("\"languagetoolRuntime\":\"apple\""), "raw: {raw}");
+        let back: Settings = serde_json::from_str(&raw).unwrap();
+        assert_eq!(back.languagetool_runtime, Some("apple".to_string()));
     }
 }
