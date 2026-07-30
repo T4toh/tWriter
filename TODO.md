@@ -315,10 +315,24 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   reinserta HTML con `insertContentAt` — es el rango y no el nodo, porque un
   bloque con `<br>` cuenta como varios párrafos para el validador. De yapa,
   `applyRaeFix` (los fixes puntuales, que tenían el mismo antipatrón con blast
-  radius más chico) pasó a una transacción que hereda las marcas vivas en
-  `fixFrom`. Tests: `scripts/run-rae-apply-smoke.mjs` (4 casos) + `pnpm build`;
-  la parte con DOM no es automatizable en este repo (no hay runner con DOM).
+  radius más chico) pasó a una transacción que hereda con `marksAcross` las
+  marcas vivas en el span `fixFrom..fixTo`. Tests:
+  `scripts/run-rae-apply-smoke.mjs` (7 casos) + `pnpm build`; la parte con DOM
+  no es automatizable en este repo (no hay runner con DOM).
   **Falta la verificación a mano** (la hace el autor).
+- **El ancla de D1 no tolera markup inline de apertura** (limitación del
+  converter, no del popover): la regla D1 ancla el diálogo con `^(\s*)"`, o sea
+  que la comilla de apertura tiene que ser el primer carácter no-espacio del
+  texto del párrafo. Si el párrafo arranca con un tag —`<em>"Vení"</em>, dijo
+  ella.`, típico de un `.docx` importado donde el diálogo va en cursiva— el tag
+  corre la comilla y la regla no dispara. Como el ancla es del converter, **el
+  agujero es el mismo por los dos caminos**: ni el popover inline
+  ("Aplicar RAE al párrafo") ni el botón "RAE" del toolbar (capítulo entero)
+  convierten ese párrafo. Hoy el popover al menos avisa con un toast en vez de
+  quedarse mudo; el botón del toolbar lo saltea en silencio. Arreglo de fondo:
+  que el converter tolere tags inline antes de la comilla de apertura —
+  reconocer el prefijo de markup y anclar sobre el texto, no sobre el string
+  crudo.
 - **Jump-to-exact-offset desde el batch**: el click en una violación del
   panel usa el patrón `requestHighlight` de search (busca el término en el
   capítulo y scrollea al primer match). Funciona para violaciones con
