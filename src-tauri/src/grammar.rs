@@ -6,6 +6,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::time::sleep;
 
 use crate::secrets;
+use crate::settings;
 
 const LT_CONTAINER: &str = "twriter-languagetool";
 const LT_IMAGE: &str = "erikvl87/languagetool:latest";
@@ -44,7 +45,6 @@ impl Runtime {
 
     /// Clave estable para persistir en settings. NO usar `label()`: eso es
     /// texto de UI y puede cambiar sin romper nada.
-    #[allow(dead_code)]
     fn key(self) -> &'static str {
         match self {
             Runtime::Docker => "docker",
@@ -53,7 +53,6 @@ impl Runtime {
         }
     }
 
-    #[allow(dead_code)]
     fn from_key(key: &str) -> Option<Runtime> {
         match key {
             "docker" => Some(Runtime::Docker),
@@ -297,7 +296,6 @@ enum RuntimePick {
 }
 
 /// Única fuente de la decisión. Pura: no toca disco ni procesos.
-#[allow(dead_code)]
 fn pick_runtime(installed: &[Runtime], remembered: Option<Runtime>) -> RuntimePick {
     if let Some(rt) = remembered {
         if installed.contains(&rt) {
@@ -317,6 +315,63 @@ fn detect_installed() -> Option<Engine> {
     Runtime::ALL
         .into_iter()
         .find_map(|rt| rt.bin().map(|bin| Engine { rt, bin }))
+}
+
+/// Runtimes con binario presente, en el orden de `Runtime::ALL`.
+fn installed_runtimes() -> Vec<Runtime> {
+    Runtime::ALL
+        .into_iter()
+        .filter(|rt| rt.bin().is_some())
+        .collect()
+}
+
+// Consumida en la Task 4 (migración de `languagetool_docker_start`/`_stop`
+// a `pick_installed`); hasta entonces queda sin uso.
+#[allow(dead_code)]
+fn engine_for(rt: Runtime) -> Option<Engine> {
+    rt.bin().map(|bin| Engine { rt, bin })
+}
+
+/// Con qué runtime operar cuando ningún daemon responde. Antes esto agarraba el
+/// primero de `Runtime::ALL`, que no tiene ninguna relación con cuál es dueño
+/// del container.
+fn pick_installed(app: &AppHandle) -> RuntimePick {
+    let remembered = settings::remembered_lt_runtime(app)
+        .as_deref()
+        .and_then(Runtime::from_key);
+    pick_runtime(&installed_runtimes(), remembered)
+}
+
+/// Runtimes candidatos para que la UI arme un botón por cada uno.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct RuntimeChoice {
+    /// Clave estable, la que vuelve como parámetro de `languagetool_docker_start`.
+    pub key: String,
+    pub label: String,
+}
+
+fn runtime_choices(rts: &[Runtime]) -> Vec<RuntimeChoice> {
+    rts.iter()
+        .map(|rt| RuntimeChoice {
+            key: rt.key().to_string(),
+            label: rt.label().to_string(),
+        })
+        .collect()
+}
+
+/// Remedio cuando hay varios runtimes instalados, ninguno respondiendo y nada
+/// recordado. No hay comando: la decisión es del autor y la toma con los
+/// botones que arma la UI desde `runtime_choices`.
+fn ambiguous_remedy(rts: &[Runtime]) -> Remedy {
+    let nombres: Vec<&str> = rts.iter().map(|rt| rt.label()).collect();
+    Remedy {
+        message: format!(
+            "Tenés más de un runtime de containers instalado ({}) y ninguno está respondiendo. ¿Cuál usás para LanguageTool?",
+            nombres.join(", ")
+        ),
+        command: None,
+        can_run: false,
+    }
 }
 
 /// Una forma de instalar un runtime de containers. `command` solo se llena
@@ -916,16 +971,64 @@ pub struct LtDockerStatus {
     pub remedy: Option<Remedy>,
     /// Cómo instalar un runtime. Solo se llena cuando no hay ninguno.
     pub install_options: Vec<InstallOption>,
+    /// Candidatos para que el autor elija. No vacío SOLO cuando hay más de un
+    /// runtime instalado, ninguno respondiendo y nada recordado.
+    pub runtime_choices: Vec<RuntimeChoice>,
 }
 
 #[tauri::command]
-pub async fn languagetool_docker_status() -> LtDockerStatus {
-    // Preferimos un runtime con daemon vivo; si ninguno responde pero hay uno
-    // instalado, lo reportamos igual con el remedio para levantarlo.
-    let engine = detect_engine().or_else(detect_installed);
+pub async fn languagetool_docker_status(app: AppHandle) -> LtDockerStatus {
     let api_responding = ping_local_lt().await;
-    let Some(e) = engine else {
+
+    // Con un daemon vivo hay evidencia: `detect_engine` ya prefiere el runtime
+    // donde vive nuestro container. Si lo encontramos, lo recordamos.
+    if let Some(e) = detect_engine() {
+        let container_running = e.running();
+        let container_exists = e.exists();
+        if container_running || container_exists {
+            settings::remember_lt_runtime(&app, e.rt.key());
+        }
         return LtDockerStatus {
+            docker_installed: true,
+            runtime: Some(e.rt.label().to_string()),
+            daemon_running: true,
+            container_running,
+            container_exists,
+            api_responding,
+            remedy: None,
+            install_options: Vec::new(),
+            runtime_choices: Vec::new(),
+        };
+    }
+
+    // Ningún daemon responde: sin daemon el CLI no puede ni listar containers
+    // (Apple `container ls` falla con XPC connection error), así que los flags
+    // quedan en false y `daemon_running` es el que explica por qué.
+    match pick_installed(&app) {
+        RuntimePick::Chosen(rt) => LtDockerStatus {
+            docker_installed: true,
+            runtime: Some(rt.label().to_string()),
+            daemon_running: false,
+            container_running: false,
+            container_exists: false,
+            api_responding,
+            remedy: Some(daemon_remedy(rt)),
+            install_options: Vec::new(),
+            runtime_choices: Vec::new(),
+        },
+        RuntimePick::Ambiguous(rts) => LtDockerStatus {
+            docker_installed: true,
+            // No afirmamos un runtime que no sabemos cuál es.
+            runtime: None,
+            daemon_running: false,
+            container_running: false,
+            container_exists: false,
+            api_responding,
+            remedy: Some(ambiguous_remedy(&rts)),
+            install_options: Vec::new(),
+            runtime_choices: runtime_choices(&rts),
+        },
+        RuntimePick::None => LtDockerStatus {
             docker_installed: false,
             runtime: None,
             daemon_running: false,
@@ -934,27 +1037,8 @@ pub async fn languagetool_docker_status() -> LtDockerStatus {
             api_responding,
             remedy: Some(no_runtime_remedy()),
             install_options: install_options(Os::current()),
-        };
-    };
-    let daemon_running = e.daemon_ok();
-    // Sin daemon el CLI no puede listar containers (Apple `container ls` falla
-    // con XPC connection error), así que los flags quedan en false y
-    // `daemon_running` es el que explica por qué. Antes esto se colapsaba y la
-    // UI afirmaba "el container no existe" sobre un container que sí existía.
-    let (container_running, container_exists) = if daemon_running {
-        (e.running(), e.exists())
-    } else {
-        (false, false)
-    };
-    LtDockerStatus {
-        docker_installed: true,
-        runtime: Some(e.rt.label().to_string()),
-        daemon_running,
-        container_running,
-        container_exists,
-        api_responding,
-        remedy: (!daemon_running).then(|| daemon_remedy(e.rt)),
-        install_options: Vec::new(),
+            runtime_choices: Vec::new(),
+        },
     }
 }
 
@@ -1779,6 +1863,7 @@ mod tests {
             api_responding: false,
             remedy: Some(daemon_plan(Runtime::Apple, Os::MacOs, false).remedy),
             install_options: Vec::new(),
+            runtime_choices: Vec::new(),
         };
         let v = serde_json::to_value(&s).unwrap();
         assert_eq!(v["daemon_running"], serde_json::json!(false));
@@ -1802,6 +1887,7 @@ mod tests {
             api_responding: false,
             remedy: Some(no_runtime_remedy()),
             install_options: install_options(Os::MacOs),
+            runtime_choices: Vec::new(),
         };
         let v = serde_json::to_value(&s).unwrap();
         assert_eq!(v["install_options"].as_array().unwrap().len(), 3);
@@ -1880,6 +1966,30 @@ mod tests {
                 !matches!(pick_runtime(&installed, None), RuntimePick::Ambiguous(_)),
                 "Ambiguous con {} instalados", installed.len()
             );
+        }
+    }
+
+    #[test]
+    fn ambiguous_remedy_nombra_los_runtimes_y_no_trae_comando() {
+        let r = ambiguous_remedy(&[Runtime::Docker, Runtime::Apple]);
+        assert!(r.message.contains("Docker"), "message: {}", r.message);
+        assert!(r.message.contains("Apple container"), "message: {}", r.message);
+        // No hay un comando único que sirva: la UI ofrece un botón por runtime.
+        assert_eq!(r.command, None);
+        assert!(!r.can_run);
+    }
+
+    #[test]
+    fn runtime_choices_usa_key_estable_y_label_de_ui() {
+        let choices = runtime_choices(&[Runtime::Docker, Runtime::Apple]);
+        assert_eq!(choices.len(), 2);
+        assert_eq!(choices[0].key, "docker");
+        assert_eq!(choices[0].label, "Docker");
+        assert_eq!(choices[1].key, "apple");
+        assert_eq!(choices[1].label, "Apple container");
+        // El key tiene que poder volver al enum: es lo que manda la UI al start.
+        for c in &choices {
+            assert!(Runtime::from_key(&c.key).is_some(), "key inválida: {}", c.key);
         }
     }
 }
