@@ -358,6 +358,17 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   solo URL en Linux/Windows, porque el comando depende de la distro y un comando
   que falla es peor que un link). Tests: `daemon_remedy` y `daemon_start_cmd`
   son puras `(Runtime, OS)` y van a los tests de `grammar.rs`.
+  **Estado**: implementado en `feat/languagetool-setup-seamless` — `Remedy` +
+  `daemon_plan(Runtime, Os, colima)` puro como fuente única del diagnóstico,
+  `daemon_running`/`remedy`/`install_options` en `LtDockerStatus`, la fase
+  `daemon` al frente del arranque con polling de 60s para Docker Desktop, y
+  `shared/copy-command.ts`. Los tests de Rust cubren la matriz runtime × OS ×
+  colima, las invariantes (`can_run` ⟺ hay argv, nunca `command: Some("")`,
+  nunca el comando embebido en el `message`) y el contrato serializado del
+  status. **Falta la verificación manual** del checklist del spec (`container
+  system stop` → mensaje correcto, el botón haciendo las dos capas, el chip
+  copiando el comando pelado, la lista de instalación sin runtime) — hasta
+  entonces este item no se marca.
 - [x] **Soporte multi-runtime de containers para LanguageTool** (`grammar.rs`):
   antes todo asumía el CLI `docker`. Ahora una abstracción `Runtime`/`Engine`
   autodetecta Docker, Podman o Apple `container` (prioridad: el que ya tenga el
