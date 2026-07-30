@@ -42,6 +42,27 @@ impl Runtime {
         }
     }
 
+    /// Clave estable para persistir en settings. NO usar `label()`: eso es
+    /// texto de UI y puede cambiar sin romper nada.
+    #[allow(dead_code)]
+    fn key(self) -> &'static str {
+        match self {
+            Runtime::Docker => "docker",
+            Runtime::Podman => "podman",
+            Runtime::Apple => "apple",
+        }
+    }
+
+    #[allow(dead_code)]
+    fn from_key(key: &str) -> Option<Runtime> {
+        match key {
+            "docker" => Some(Runtime::Docker),
+            "podman" => Some(Runtime::Podman),
+            "apple" => Some(Runtime::Apple),
+            _ => None,
+        }
+    }
+
     /// Rutas absolutas conocidas por runtime. Una app lanzada desde Finder/Dock
     /// hereda el PATH mínimo de launchd (`/usr/bin:/bin:/usr/sbin:/sbin`), que no
     /// incluye los symlinks de Homebrew ni Docker Desktop, así que
@@ -261,6 +282,33 @@ fn detect_engine() -> Option<Engine> {
         return Some(e.clone());
     }
     live.into_iter().next()
+}
+
+/// Resultado de decidir con qué runtime operar cuando ningún daemon responde
+/// (con daemon vivo decide `detect_engine`, que tiene evidencia).
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum RuntimePick {
+    Chosen(Runtime),
+    /// Más de un runtime instalado y nada recordado: hay que preguntar. Adivinar
+    /// acá es el bug — un click puede bajar 300MB y crear un container en el
+    /// runtime equivocado mientras el real duerme en otro.
+    Ambiguous(Vec<Runtime>),
+    None,
+}
+
+/// Única fuente de la decisión. Pura: no toca disco ni procesos.
+#[allow(dead_code)]
+fn pick_runtime(installed: &[Runtime], remembered: Option<Runtime>) -> RuntimePick {
+    if let Some(rt) = remembered {
+        if installed.contains(&rt) {
+            return RuntimePick::Chosen(rt);
+        }
+    }
+    match installed {
+        [] => RuntimePick::None,
+        [only] => RuntimePick::Chosen(*only),
+        many => RuntimePick::Ambiguous(many.to_vec()),
+    }
 }
 
 /// Cualquier runtime instalado (binario presente), aunque el daemon esté
@@ -1776,5 +1824,62 @@ mod tests {
         let msg = daemon_block_error(Runtime::Apple, Os::Linux, false);
         let expected = daemon_plan(Runtime::Apple, Os::Linux, false).remedy.message;
         assert_eq!(msg, expected, "sin comando no se le pega nada al mensaje");
+    }
+
+    #[test]
+    fn runtime_key_roundtrip() {
+        for rt in Runtime::ALL {
+            assert_eq!(Runtime::from_key(rt.key()), Some(rt), "roundtrip de {:?}", rt);
+        }
+        assert_eq!(Runtime::from_key("containerd"), None);
+        assert_eq!(Runtime::from_key(""), None);
+    }
+
+    #[test]
+    fn pick_prefiere_el_recordado_sobre_el_orden_fijo() {
+        // El caso del bug: Docker primero en Runtime::ALL, pero el container
+        // vive en Apple container.
+        let installed = [Runtime::Docker, Runtime::Apple];
+        assert_eq!(
+            pick_runtime(&installed, Some(Runtime::Apple)),
+            RuntimePick::Chosen(Runtime::Apple)
+        );
+    }
+
+    #[test]
+    fn pick_ignora_un_recordado_desinstalado() {
+        let installed = [Runtime::Docker, Runtime::Apple];
+        assert_eq!(
+            pick_runtime(&installed, Some(Runtime::Podman)),
+            RuntimePick::Ambiguous(vec![Runtime::Docker, Runtime::Apple])
+        );
+    }
+
+    #[test]
+    fn pick_con_uno_solo_no_pregunta() {
+        assert_eq!(
+            pick_runtime(&[Runtime::Podman], None),
+            RuntimePick::Chosen(Runtime::Podman)
+        );
+        assert_eq!(
+            pick_runtime(&[Runtime::Podman], Some(Runtime::Docker)),
+            RuntimePick::Chosen(Runtime::Podman)
+        );
+    }
+
+    #[test]
+    fn pick_sin_runtimes_es_none() {
+        assert_eq!(pick_runtime(&[], None), RuntimePick::None);
+        assert_eq!(pick_runtime(&[], Some(Runtime::Docker)), RuntimePick::None);
+    }
+
+    #[test]
+    fn ambiguous_nunca_con_menos_de_dos() {
+        for installed in [vec![], vec![Runtime::Docker]] {
+            assert!(
+                !matches!(pick_runtime(&installed, None), RuntimePick::Ambiguous(_)),
+                "Ambiguous con {} instalados", installed.len()
+            );
+        }
     }
 }
