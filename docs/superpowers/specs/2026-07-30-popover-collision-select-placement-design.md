@@ -73,10 +73,19 @@ Queda **fuera**:
 
 ## Decisiones de diseño
 
-- **RAE gana sobre gramática.** Las violaciones RAE son reglas propias y deterministas, y su
-  popover ofrece el fix del conversor; LanguageTool es opinable y justo sobre rayas y verbos
-  dicendi es donde más falsea. El popover de gramática de esa palabra sigue alcanzable desde
-  el panel de gramática.
+- **RAE gana sobre gramática, salvo `pending-conversion`.** Las violaciones RAE son reglas
+  propias y deterministas, y su popover ofrece el fix del conversor; LanguageTool es opinable
+  y justo sobre rayas y verbos dicendi es donde más falsea. Pero no hay panel de gramática —
+  clickear la decoración es el único camino a ese popover, así que "RAE gana siempre" lo
+  vuelve inalcanzable de plano en cualquier palabra que también tenga `.rae-violation`.
+  `pending-conversion` (`validator.ts::pushPendingConversion`) decora el PÁRRAFO entero
+  (`length: para.length`), no la violación puntual, así que en un capítulo importado con
+  diálogo entre comillas eso es *casi todo el texto*: ninguna palabra de esos párrafos podría
+  abrir su popover de gramática, incluido el "+ diccionario" recién agregado en el PR #63 para
+  nombres propios marcados `TYPOS`. La excepción: si la violación RAE resuelta es
+  `pending-conversion` y la misma palabra también matchea `.grammar-error`, gana gramática. El
+  fix de `pending-conversion` no se pierde — sigue disponible vía "Aplicar RAE" a nivel
+  capítulo — así que cederle el popover puntual a gramática no le saca nada al autor.
 - **La prioridad se escribe, no se hereda del orden de registro.** Un solo handler con dos
   `if` en orden explícito, en vez de dos listeners y un `stopImmediatePropagation()` cuyo
   efecto depende de cuál se registró primero.
@@ -111,21 +120,34 @@ private onHostClick(event: MouseEvent): void {
   const target = event.target as HTMLElement | null;
   const raeSpan = target?.closest('.rae-violation') as HTMLElement | null;
   const grammarSpan = target?.closest('.grammar-error') as HTMLElement | null;
-  // RAE gana: regla propia y determinista, y su popover ofrece el fix del conversor.
-  if (raeSpan) {
-    this.openRaePopover(raeSpan, event);
+  const raeViolation = /* resuelto desde `data-rae-idx` contra raeViolations() */;
+  const grammarMatch = /* resuelto desde `data-grammar-idx` contra grammarMatches() */;
+  // RAE gana salvo la excepción de `pending-conversion` (ver "Decisiones de
+  // diseño"): decora el párrafo entero, así que le cede el popover a
+  // gramática cuando la misma palabra también matchea `.grammar-error`.
+  if (raeViolation && grammarMatch && raeViolation.category === 'pending-conversion') {
+    this.openGrammarPopover(grammarSpan, grammarMatch, event);
     return;
   }
-  if (grammarSpan) {
-    this.openGrammarPopover(grammarSpan, event);
+  if (raeViolation) {
+    this.openRaePopover(raeSpan, raeViolation, event);
     return;
   }
-  this.closeBothPopovers();
+  if (grammarMatch) {
+    this.openGrammarPopover(grammarSpan, grammarMatch, event);
+    return;
+  }
+  if (this.raePopover()) this.raePopover.set(null);
+  if (this.grammarPopover()) this.closeGrammarPopover();
 }
 ```
 
-Cerrar el otro popover al abrir uno ya pasaba de rebote: el early-return del handler que no
-matcheaba lo cerraba. Ahora es explícito y no depende de que los dos listeners corran.
+No hay un `closeBothPopovers()` — el código inline los dos `if` finales. Cerrar el otro
+popover al abrir uno ya pasaba de rebote en la versión de dos listeners: el early-return del
+handler que no matcheaba lo cerraba. Ahora es explícito y no depende de que los dos listeners
+corran. Los dos candidatos se resuelven ANTES de decidir (no dentro de `openRaePopover`/
+`openGrammarPopover`): si el índice de uno no resuelve, el otro conserva su chance en vez de
+que el early-return de un helper deje a los dos popovers sin cerrar.
 
 Los dos bloques de `removeEventListener` de `ngOnDestroy` (`editor.ts:665-672`) y los dos de
 `createEditor` (`editor.ts:1315-1324`) se reducen a uno cada uno.
@@ -214,3 +236,8 @@ propia versión sin cubrir.
    en vez de cortarse, y no aparece un scrollbar cuando el contenido entra.
 8. Scrollear el contenedor con un select abierto (el theme editor scrollea): el panel sigue
    al anchor.
+9. Abrir un select cerca del borde inferior, filtrar para achicar la lista, y redimensionar la
+   ventana con el panel abierto: el panel no debe superponerse con el trigger ni salirse de
+   pantalla en ningún paso intermedio.
+10. Scrollear el `.te-body` del theme editor (que tiene overflow propio) con un panel de
+    select abierto: el panel debe seguir al trigger, no quedar flotando en su posición vieja.

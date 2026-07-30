@@ -109,8 +109,14 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   listeners de click vivían en el **mismo** nodo (`.editor-host`) — el
   `stopPropagation()` que ya tenían corta el bubbling, no al listener hermano, y
   `stopImmediatePropagation()` habría dejado la prioridad atada al orden de
-  registro. Ahora hay un handler único con la prioridad escrita: **gana RAE**,
-  que es regla propia y determinista y cuyo popover ofrece el fix del conversor.
+  registro. Ahora hay un handler único con la prioridad escrita, así que lo que
+  cambia no es solo cuántos popovers se abren sino **cuál** de los dos gana:
+  **gana RAE**, que es regla propia y determinista y cuyo popover ofrece el fix
+  del conversor — excepto cuando la violación es `pending-conversion`
+  (`validator.ts::pushPendingConversion` decora el párrafo entero, no la
+  palabra puntual, así que tapaba gramática en casi todo un capítulo con
+  diálogo entre comillas sin convertir); ahí gana gramática, porque el fix de
+  esa violación ya está a mano vía "Aplicar RAE" al capítulo completo.
   (b) `shared/select.ts` usa `placePopover`: mide el panel ya renderizado en un
   `afterRenderEffect` (antes `measurePanel()` corría antes de `open.set(true)`,
   con el contenido detrás de un `@if`, así que medía 0 y de ahí el `320`
