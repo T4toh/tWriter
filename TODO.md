@@ -369,7 +369,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   → mensaje del daemon caído, el botón haciendo las dos capas, el chip copiando
   el comando pelado, el container detenido con el daemon arriba, y la lista de
   instalación sin runtime).
-- [ ] **`detect_installed` elige runtime sin saber cuál es dueño del container**:
+- [x] **`detect_installed` elige runtime sin saber cuál es dueño del container**:
   con el daemon caído, `detect_engine()` devuelve `None` y `detect_installed()`
   (`grammar.rs:265-269`) toma el **primer** runtime instalado por orden de
   `Runtime::ALL` (Docker, Podman, Apple), que no tiene nada que ver con cuál
@@ -393,7 +393,29 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   frontend vía `merge_backend_owned` (el front no conoce el campo). Cuando hay
   varios runtimes instalados, ninguno respondiendo y nada recordado, el status
   devuelve `runtime_choices` y la UI ofrece un botón por candidato en vez de
-  adivinar. **Falta la verificación a mano** (la hace el autor).
+  adivinar. Un daemon vivo gana la ambigüedad (`resolve_start_runtime`): sin
+  eso, una máquina con Docker levantado y Apple container instalado quedaba en
+  un callejón sin salida — el status decía "container detenido" y el botón
+  devolvía "ninguno está respondiendo", una pregunta que esa rama de la UI no
+  ofrece cómo contestar.
+  **Verificado a mano** en macOS (M5, Darwin 25.6, 2026-07-30) con la app en
+  dev y el container corriendo en Apple `container`: el autor confirmó que se
+  recuerda `"languagetoolRuntime": "apple"`, que el campo sobrevive a un
+  `set_settings` disparado desde el frontend (cambiar el tamaño de fuente del
+  editor — el test de regresión de `merge_backend_owned`), y que con el daemon
+  caído la UI nombra Apple container y el botón levanta las dos capas. La rama
+  de ambigüedad **no se probó a mano**: esta Mac tiene un solo runtime
+  instalado, así que `pick_runtime` siempre devuelve `Chosen` y esa rama no se
+  puede disparar sin stubear un binario. Queda cubierta solo por los tests de
+  Rust.
+
+  Diferido, anotado acá para no perderlo: el status puede describir el
+  container de un runtime mientras `start` opera sobre otro (recordado con
+  daemon caído + otro vivo sin container) — el comportamiento final es
+  correcto, lo falso es el diagnóstico; el arreglo bueno es unificar la
+  decisión entre `status`/`start`/`stop`. Tampoco hay forma in-app de corregir
+  un runtime recordado equivocado: una vez que el pick es `Chosen`, los botones
+  de elección no vuelven a aparecer.
 - [x] **Soporte multi-runtime de containers para LanguageTool** (`grammar.rs`):
   antes todo asumía el CLI `docker`. Ahora una abstracción `Runtime`/`Engine`
   autodetecta Docker, Podman o Apple `container` (prioridad: el que ya tenga el
