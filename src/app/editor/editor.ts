@@ -40,7 +40,7 @@ import {
   highlightFirstMatch,
 } from '../core/search-highlight';
 import { convertFragmentHtml } from './rae-convert';
-import { serializeRange } from './rae-apply';
+import { parseFragmentHtml, serializeRange } from './rae-apply';
 import {
   EDITOR_FONT_LABEL,
   EDITOR_FONT_PRESETS,
@@ -1173,7 +1173,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.tiptap
       .chain()
       .focus()
-      .insertContentAt({ from: v.paragraphFrom, to: v.paragraphTo }, converted)
+      .insertContentAt(
+        { from: v.paragraphFrom, to: v.paragraphTo },
+        parseFragmentHtml(converted, schema),
+      )
       .run();
     this.raePopover.set(null);
     this.raeViolations.update((list) => list.filter((m) => m.id !== v.id));
