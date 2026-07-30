@@ -307,6 +307,18 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   markup vía el path `<p>…</p>` del converter. Solución: serializar el slice
   ProseMirror del párrafo a HTML antes de invocar `convert()`, y replazar el
   rango con el HTML resultante en vez de `insertContent` plano.
+
+  **Estado**: implementado en `fix/rae-popover-markup` — spec en
+  `docs/superpowers/specs/2026-07-30-rae-popover-markup-design.md`.
+  `applyRaeParagraph` serializa el rango con `serializeRange`
+  (`getHTMLFromFragment` de `@tiptap/core`), lo pasa por `convertFragmentHtml` y
+  reinserta HTML con `insertContentAt` — es el rango y no el nodo, porque un
+  bloque con `<br>` cuenta como varios párrafos para el validador. De yapa,
+  `applyRaeFix` (los fixes puntuales, que tenían el mismo antipatrón con blast
+  radius más chico) pasó a una transacción que hereda las marcas vivas en
+  `fixFrom`. Tests: `scripts/run-rae-apply-smoke.mjs` (4 casos) + `pnpm build`;
+  la parte con DOM no es automatizable en este repo (no hay runner con DOM).
+  **Falta la verificación a mano** (la hace el autor).
 - **Jump-to-exact-offset desde el batch**: el click en una violación del
   panel usa el patrón `requestHighlight` de search (busca el término en el
   capítulo y scrollea al primer match). Funciona para violaciones con
