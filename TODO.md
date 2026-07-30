@@ -103,10 +103,22 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   candidatos del diccionario salen como los primeros chips de una fila que
   envuelve (`.reps` es `display: flex; flex-wrap: wrap`), no como una sección
   separada arriba; el chip "tu diccionario" alcanza para diferenciarlos, así
-  que se deja así. Deuda anotada aparte: una palabra con decoración de
-  gramática **y** de RAE abre los dos popovers superpuestos (preexistente,
-  necesita `stopImmediatePropagation()`), y `shared/select.ts` sigue con su
-  `panelHeight = 320` y su propio flip en vez de usar `placePopover`.
+  que se deja así. Deuda cobrada en `fix/popover-collision-select-placement` (spec en
+  `docs/superpowers/specs/2026-07-30-popover-collision-select-placement-design.md`):
+  (a) la palabra con las dos decoraciones abría los dos popovers porque los dos
+  listeners de click vivían en el **mismo** nodo (`.editor-host`) — el
+  `stopPropagation()` que ya tenían corta el bubbling, no al listener hermano, y
+  `stopImmediatePropagation()` habría dejado la prioridad atada al orden de
+  registro. Ahora hay un handler único con la prioridad escrita: **gana RAE**,
+  que es regla propia y determinista y cuyo popover ofrece el fix del conversor.
+  (b) `shared/select.ts` usa `placePopover`: mide el panel ya renderizado en un
+  `afterRenderEffect` (antes `measurePanel()` corría antes de `open.set(true)`,
+  con el contenido detrás de un `@if`, así que medía 0 y de ahí el `320`
+  hardcodeado). De yapa gana el clamp horizontal que no tenía — un select con
+  opciones largas cerca del borde derecho se salía de la pantalla — y el
+  `maxHeight` con scroll interno en vez de cortarse. Se fueron el
+  `transform: translateY(-100%)` y el keyframe `sel-fade-up`. **Falta
+  verificación manual del autor** con la app levantada.
 - **Performance en archivos grandes**: lag/scroll pesado en capítulos
   largos. Puede ser el scroll nativo de Windows/Linux, pero medir primero:
   si es el render de ProseMirror, evaluar virtualización o paginar el
