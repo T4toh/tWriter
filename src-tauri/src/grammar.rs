@@ -268,18 +268,73 @@ fn detect_installed() -> Option<Engine> {
         .find_map(|rt| rt.bin().map(|bin| Engine { rt, bin }))
 }
 
-fn no_runtime_message() -> String {
-    if cfg!(target_os = "macos") {
-        "No se encontró ningún runtime de containers. Instalá uno con Homebrew:\n\
-         • Apple container: brew install container && container system start\n\
-         • colima (Docker): brew install colima docker && colima start\n\
-         • Podman: brew install podman && podman machine init && podman machine start\n\
-         Después reabrí esta ventana."
-            .to_string()
-    } else {
-        "No se encontró Docker ni Podman. Instalá Docker (https://docs.docker.com/get-docker/) \
-         o Podman, y volvé a intentar."
-            .to_string()
+/// Una forma de instalar un runtime de containers. `command` solo se llena
+/// cuando existe un comando que no puede fallar por variación de distro
+/// (macOS: Homebrew). En Linux/Windows va `None` y queda solo la URL.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct InstallOption {
+    pub label: String,
+    pub command: Option<String>,
+    pub url: String,
+}
+
+fn install_options(os: Os) -> Vec<InstallOption> {
+    match os {
+        Os::MacOs => vec![
+            InstallOption {
+                label: "Apple container".into(),
+                command: Some("brew install container && container system start".into()),
+                url: "https://github.com/apple/container".into(),
+            },
+            InstallOption {
+                label: "colima (Docker)".into(),
+                command: Some("brew install colima docker && colima start".into()),
+                url: "https://github.com/abiosoft/colima".into(),
+            },
+            InstallOption {
+                label: "Podman".into(),
+                command: Some(
+                    "brew install podman && podman machine init && podman machine start".into(),
+                ),
+                url: "https://podman.io/get-started".into(),
+            },
+        ],
+        // El comando depende de la distro (apt/dnf/pacman) y de si hay que
+        // sumar el repo oficial. Damos el link a la guía y no adivinamos.
+        Os::Linux => vec![
+            InstallOption {
+                label: "Docker Engine".into(),
+                command: None,
+                url: "https://docs.docker.com/engine/install/".into(),
+            },
+            InstallOption {
+                label: "Podman".into(),
+                command: None,
+                url: "https://podman.io/get-started".into(),
+            },
+        ],
+        Os::Windows => vec![
+            InstallOption {
+                label: "Docker Desktop".into(),
+                command: None,
+                url: "https://docs.docker.com/desktop/install/windows-install/".into(),
+            },
+            InstallOption {
+                label: "Podman".into(),
+                command: None,
+                url: "https://podman.io/get-started".into(),
+            },
+        ],
+    }
+}
+
+/// Remedio cuando no hay ningún runtime instalado. Acá solo la prosa: el
+/// detalle accionable de cada opción va en `install_options`.
+fn no_runtime_remedy() -> Remedy {
+    Remedy {
+        message: "No se encontró ningún runtime de containers (Docker, Podman o Apple container). Instalá uno y volvé a abrir esta ventana.".into(),
+        command: None,
+        can_run: false,
     }
 }
 
@@ -837,7 +892,7 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
     emit_progress(&app, "checking", "Buscando un runtime de containers…");
     let engine = match detect_installed() {
         Some(e) => e,
-        None => return Err(no_runtime_message()),
+        None => return Err(no_runtime_remedy().message),
     };
     emit_progress(
         &app,
@@ -1279,5 +1334,77 @@ mod tests {
                 assert!(!argv[0].trim().is_empty(), "argv[0] vacío");
             }
         }
+    }
+
+    #[test]
+    fn macos_install_options_are_three_brew_commands() {
+        let opts = install_options(Os::MacOs);
+        assert_eq!(opts.len(), 3, "Apple container, colima y Podman");
+        for o in &opts {
+            let cmd = o
+                .command
+                .as_deref()
+                .unwrap_or_else(|| panic!("{} sin comando en macOS", o.label));
+            assert!(
+                cmd.starts_with("brew install "),
+                "{}: en macOS el comando es brew, no {:?}",
+                o.label,
+                cmd
+            );
+        }
+        assert!(
+            opts.iter().any(|o| o.label == "Apple container"),
+            "Apple container es el runtime nativo de macOS y tiene que estar"
+        );
+    }
+
+    #[test]
+    fn linux_and_windows_install_options_have_no_command() {
+        // No adivinamos apt vs dnf vs pacman: un comando que falla es peor que
+        // un link.
+        for os in [Os::Linux, Os::Windows] {
+            let opts = install_options(os);
+            assert!(!opts.is_empty(), "{:?} sin opciones de instalación", os);
+            for o in &opts {
+                assert_eq!(o.command, None, "{:?}/{} no debería traer comando", os, o.label);
+            }
+            assert!(
+                !opts.iter().any(|o| o.label == "Apple container"),
+                "Apple container solo existe en macOS"
+            );
+        }
+    }
+
+    #[test]
+    fn every_install_option_has_label_and_https_url() {
+        for os in [Os::MacOs, Os::Linux, Os::Windows] {
+            for o in install_options(os) {
+                assert!(!o.label.trim().is_empty(), "{:?}: option sin label", os);
+                assert!(
+                    o.url.starts_with("https://"),
+                    "{:?}/{}: url inválida {:?}",
+                    os,
+                    o.label,
+                    o.url
+                );
+                assert!(
+                    o.command.as_deref() != Some(""),
+                    "{:?}/{}: command vacío en vez de None",
+                    os,
+                    o.label
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn no_runtime_remedy_has_no_command_and_cannot_run() {
+        // Instalar un runtime no es algo que la app pueda hacer sola, y el
+        // detalle de cada opción va en install_options.
+        let r = no_runtime_remedy();
+        assert_eq!(r.command, None);
+        assert!(!r.can_run);
+        assert!(!r.message.trim().is_empty());
+        assert!(!r.message.contains('`'), "sin backticks en la prosa");
     }
 }
