@@ -31,20 +31,24 @@ Dos caminos distintos rompen por razones distintas, así que el fix no es uno so
 
 ### 1. "Aplicar RAE al párrafo" — round-trip por HTML
 
-Módulo nuevo `src/app/editor/rae-apply.ts`:
+Módulo nuevo `src/app/editor/rae-apply.ts`, partido a propósito en una mitad sin DOM y otra
+con DOM (ver la sección de testing — el repo no tiene runner de tests con DOM):
 
 ```ts
-serializeRange(doc: PmNode, from: number, to: number): string
-convertedHtmlForRange(doc: PmNode, from: number, to: number): string | null
+// Sin DOM: string → string. Testeable con el patrón de smoke runner de scripts/.
+convertFragmentHtml(html: string): string | null
+
+// Con DOM: envuelve getHTMLFromFragment de @tiptap/core.
+serializeRange(doc: PmNode, from: number, to: number, schema: Schema): string
 ```
 
-`serializeRange` usa el `DOMSerializer` del schema sobre `doc.slice(from, to).content`,
-serializando a un contenedor desprendido y devolviendo su `innerHTML`.
-`convertedHtmlForRange` encadena eso con `convert()` y devuelve `null` cuando el resultado no
-cambió respecto del input.
+`serializeRange` serializa `doc.slice(from, to).content` con
+`getHTMLFromFragment(fragment, schema)`. `convertFragmentHtml` pasa ese HTML por `convert()` y
+devuelve `null` cuando el resultado no cambió respecto del input.
 
-`applyRaeParagraph` (`editor.ts:1131-1147`) pasa a: serializar `paragraphFrom..paragraphTo` →
-`convert()` → `insertContentAt({ from, to }, html)`.
+`applyRaeParagraph` (`editor.ts:1131-1147`) pasa a: `serializeRange` sobre
+`paragraphFrom..paragraphTo` → `convertFragmentHtml` → `insertContentAt({ from, to }, html)`,
+y no hace nada si el convert devolvió `null`.
 
 Esto **no inventa un camino nuevo**. La fidelidad es idéntica a la del botón "RAE" del
 toolbar: ahí `convert()` ya recibe HTML con markup inline adentro y lo procesa con
@@ -77,8 +81,8 @@ Dos bordes:
 `mapViolationsToPm` (`rae-extension.ts:109`) permite que una violación `pending-conversion`
 tenga `from` y `to` en bloques distintos. Si `paragraphFrom`/`paragraphTo` caen así, el slice
 serializa con `<p>` adentro, `convert()` entra por su rama de `<p>` y `insertContentAt`
-reemplaza contenido de bloque. Funciona sin código extra — pero se verifica con un test, no
-se asume.
+reemplaza contenido de bloque. Funciona sin código extra — pero no se asume: el lado del
+converter va como caso del smoke runner, y el del `insertContentAt` al checklist manual.
 
 ## Lo que no cambia
 
@@ -89,20 +93,28 @@ que se ve y lo que se aplica.
 
 ## Testing
 
-`convert()` sobre fragmentos con markup ya está cubierto por el path del toolbar. Lo nuevo
-—serialización y reemplazo— necesita DOM real, así que va a Karma: `rae-apply.spec.ts`,
-armando un documento ProseMirror y verificando el HTML resultante.
+**El repo no tiene runner de tests con DOM.** `angular.json` no define target `test` y
+`package.json` no trae karma/jasmine/vitest/jsdom; los `.spec.ts` que existen están dormidos
+y lo que corre de verdad son los smoke runners de `scripts/` (`tsc` a un tmpdir + import del
+JS resultante). El comentario de cabecera de `search-highlight.spec.ts` ya deja sentado el
+criterio: lo que depende del DOM se valida por E2E manual.
 
-Casos:
+Por eso el módulo está partido en dos, y el testing sigue esa división:
 
-- Párrafo con diálogo entre comillas y un `<em>` adentro → convierte a raya y la itálica
-  sigue ahí, envolviendo las mismas palabras.
-- Bloque con `<br>` y dos diálogos → solo se reemplaza el segmento de la violación; el otro
-  segmento y el hard break quedan intactos.
-- Rango sin cambios → `convertedHtmlForRange` devuelve `null` y no se dispara transacción.
-- Rango que cruza bloques → reemplaza contenido de bloque sin romper el documento.
-- Fix puntual con marca activa en `fixFrom` → el texto nuevo la conserva.
-- Fix puntual con `replacement` vacío → borra sin excepción.
+**Automatizado** — `scripts/run-rae-apply-smoke.mjs`, mismo patrón que `run-rae-smoke.mjs`,
+sobre `convertFragmentHtml`, que es `string → string | null`:
+
+- Fragmento con diálogo entre comillas y un `<em>` adentro → convierte a raya y el `<em>`
+  sigue presente, envolviendo las mismas palabras.
+- Fragmento sin nada que convertir → `null`.
+- Fragmento con `<strong>` fuera del tramo de diálogo → intacto.
+- Fragmento que ya viene con `<p>` (el caso de rango cruzando bloques) → entra por la rama
+  `<p>` del converter y no colapsa los párrafos.
+
+**Manual + compilador** — `serializeRange`, `insertContentAt` y la transacción de marcas
+dependen del DOM y del schema vivo de TipTap: los cubre `pnpm build` (tipos) más el
+checklist de verificación de abajo. Es la misma decisión que se tomó para
+`highlightFirstMatch`.
 
 ## Verificación a mano (la hace el autor)
 
