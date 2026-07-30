@@ -369,7 +369,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   → mensaje del daemon caído, el botón haciendo las dos capas, el chip copiando
   el comando pelado, el container detenido con el daemon arriba, y la lista de
   instalación sin runtime).
-- **`detect_installed` elige runtime sin saber cuál es dueño del container**:
+- [x] **`detect_installed` elige runtime sin saber cuál es dueño del container**:
   con el daemon caído, `detect_engine()` devuelve `None` y `detect_installed()`
   (`grammar.rs:265-269`) toma el **primer** runtime instalado por orden de
   `Runtime::ALL` (Docker, Podman, Apple), que no tiene nada que ver con cuál
@@ -384,6 +384,16 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   `Runtime::ALL` cuando esté presente y siga instalado. Quedó fuera de alcance
   de la ronda final de `feat/languagetool-setup-seamless` porque pide tocar el
   modelo de settings, no solo `grammar.rs`.
+  **Estado**: implementado en `fix/lt-runtime-recordado` — spec en
+  `docs/superpowers/specs/2026-07-30-lt-runtime-recordado-design.md`.
+  `pick_runtime(installed, remembered)` es la única fuente de la decisión
+  (pura, testeada en matriz), el runtime se recuerda en el campo
+  `languagetoolRuntime` de `settings.json` cuando la app ve el container
+  corriendo o existente, y `set_settings` lo protege del round-trip del
+  frontend vía `merge_backend_owned` (el front no conoce el campo). Cuando hay
+  varios runtimes instalados, ninguno respondiendo y nada recordado, el status
+  devuelve `runtime_choices` y la UI ofrece un botón por candidato en vez de
+  adivinar. **Falta la verificación a mano** (la hace el autor).
 - [x] **Soporte multi-runtime de containers para LanguageTool** (`grammar.rs`):
   antes todo asumía el CLI `docker`. Ahora una abstracción `Runtime`/`Engine`
   autodetecta Docker, Podman o Apple `container` (prioridad: el que ya tenga el
