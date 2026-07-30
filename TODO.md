@@ -369,6 +369,21 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   system stop` → mensaje correcto, el botón haciendo las dos capas, el chip
   copiando el comando pelado, la lista de instalación sin runtime) — hasta
   entonces este item no se marca.
+- **`detect_installed` elige runtime sin saber cuál es dueño del container**:
+  con el daemon caído, `detect_engine()` devuelve `None` y `detect_installed()`
+  (`grammar.rs:265-269`) toma el **primer** runtime instalado por orden de
+  `Runtime::ALL` (Docker, Podman, Apple), que no tiene nada que ver con cuál
+  de ellos tiene levantado el container `twriter-languagetool`. Antes esto
+  solo afectaba un mensaje; ahora la app **ejecuta** el remedio
+  (`languagetool_docker_start`), así que en una máquina con `docker` y
+  `container` instalados y los dos daemons caídos, un click arranca Docker,
+  baja ~300MB de imagen y crea un **segundo** container ahí mientras el real
+  duerme en Apple `container`. **Fix propuesto**: persistir en settings el
+  último runtime que `detect_engine()` vio con el container corriendo o
+  existente, y que `detect_installed` lo prefiera sobre el orden fijo de
+  `Runtime::ALL` cuando esté presente y siga instalado. Quedó fuera de alcance
+  de la ronda final de `feat/languagetool-setup-seamless` porque pide tocar el
+  modelo de settings, no solo `grammar.rs`.
 - [x] **Soporte multi-runtime de containers para LanguageTool** (`grammar.rs`):
   antes todo asumía el CLI `docker`. Ahora una abstracción `Runtime`/`Engine`
   autodetecta Docker, Podman o Apple `container` (prioridad: el que ya tenga el
