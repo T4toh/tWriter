@@ -117,9 +117,12 @@ impl Engine {
     /// argv listo para `Command`, con el token del programa resuelto a ruta
     /// absoluta (el PATH de una app lanzada desde Finder no tiene Homebrew), y
     /// el flag de poll. `None` cuando el remedio no lo puede correr la app.
-    fn daemon_start_cmd(&self) -> Option<(Vec<String>, bool)> {
-        let plan = daemon_plan(self.rt, Os::current(), colima_bin().is_some());
-        let mut argv = plan.argv?;
+    /// Recibe el `DaemonPlan` ya resuelto (ver `daemon_plan_current`) en vez de
+    /// resolver `Os::current()` + `colima_bin()` acá adentro: así el caller
+    /// resuelve el entorno una sola vez y esta función queda pura salvo por el
+    /// único FS touch que le es propio (`colima_bin()` para el token "colima").
+    fn daemon_start_cmd(&self, plan: &DaemonPlan) -> Option<(Vec<String>, bool)> {
+        let mut argv = plan.argv.clone()?;
         argv[0] = match argv[0].as_str() {
             // El binario del runtime ya viene resuelto en `self.bin`.
             "container" | "podman" | "docker" => self.bin.clone(),
@@ -484,9 +487,25 @@ fn daemon_plan(rt: Runtime, os: Os, colima_present: bool) -> DaemonPlan {
     }
 }
 
+/// Único punto de entrada al entorno real: `Os::current()` + `colima_bin()`
+/// resueltos juntos. Antes `daemon_remedy`, `Engine::daemon_start_cmd` y el
+/// call site de `daemon_block_error` recomponían cada uno por su cuenta, así
+/// que `colima_bin()` (que toca el filesystem) se llamaba varias veces por
+/// invocación y había un TOCTOU teórico entre el `colima_present` que veía un
+/// consumidor y el que resolvía otro dentro de la misma operación.
+fn current_env() -> (Os, bool) {
+    (Os::current(), colima_bin().is_some())
+}
+
+/// `DaemonPlan` para `rt` resolviendo el entorno real una sola vez.
+fn daemon_plan_current(rt: Runtime) -> DaemonPlan {
+    let (os, colima_present) = current_env();
+    daemon_plan(rt, os, colima_present)
+}
+
 /// Remedio para el runtime detectado, leyendo el entorno real.
 fn daemon_remedy(rt: Runtime) -> Remedy {
-    daemon_plan(rt, Os::current(), colima_bin().is_some()).remedy
+    daemon_plan_current(rt).remedy
 }
 
 const PUBLIC_BASE: &str = "https://api.languagetool.org";
@@ -913,16 +932,46 @@ fn emit_progress(app: &AppHandle, phase: &'static str, message: impl Into<String
 /// tarda ~30s en aceptar conexiones). Con arranque sincrónico alcanza un
 /// margen corto: si `container system start` volvió bien, el daemon ya está.
 const DAEMON_POLL_SECS: u64 = 60;
-const DAEMON_SYNC_GRACE_SECS: u64 = 5;
+/// Margen para el arranque sincrónico (`container system start`, `podman
+/// machine start`, `colima start`). `podman machine start` puede devolver
+/// antes de que el socket acepte conexiones, así que 5s se quedaba corto y
+/// abortaba el flujo entero con un `Err` falso en vez de seguir con el
+/// container. El loop sale apenas `daemon_ok()` da true, así que un margen
+/// más generoso no cuesta nada en el caso feliz (Docker/Apple, que ya
+/// vuelven con el daemon arriba).
+const DAEMON_SYNC_GRACE_SECS: u64 = 15;
+/// Deadline propio de cada probe de `daemon_ok()`: es un `docker info` /
+/// `container system status` sin timeout interno, que puede colgarse contra
+/// un daemon medio muerto. Sin este timeout un solo probe colgado se lleva el
+/// loop (y el `await` de `languagetool_docker_start`) sin ningún deadline, y
+/// el botón queda en "Levantando…" para siempre. Un probe que timeoutea
+/// cuenta como "todavía no responde", no como error.
+const DAEMON_PROBE_TIMEOUT_SECS: u64 = 5;
 
 /// Texto del `Err` cuando la app no puede arrancar el daemon sola. Le pega el
 /// comando al final para que el mensaje del stepper sirva por sí mismo; el chip
 /// copiable de la UI sale del `remedy` del status, que se refresca al terminar.
 fn daemon_block_error(rt: Runtime, os: Os, colima_present: bool) -> String {
-    let r = daemon_plan(rt, os, colima_present).remedy;
-    match r.command {
+    format_remedy_as_error(&daemon_plan(rt, os, colima_present).remedy)
+}
+
+/// Formatea un `Remedy` como el `Err(String)` de un stepper: la prosa y, si
+/// hay comando, "Corré: {cmd}" al final (nunca embebido entre backticks, ver
+/// la convención de esta branch). Único uso: `daemon_block_error`.
+fn format_remedy_as_error(r: &Remedy) -> String {
+    match &r.command {
         Some(cmd) => format!("{} Corré: {}", r.message, cmd),
-        None => r.message,
+        None => r.message.clone(),
+    }
+}
+
+/// Detalle de un exit no exitoso cuando no hay stderr para mostrar (ej. el
+/// lanzador no imprimió nada al fallar). El exit code es lo único que queda
+/// para no dejar el mensaje colgado en "no se pudo arrancar X: ".
+fn describe_exit_status(status: &std::process::ExitStatus) -> String {
+    match status.code() {
+        Some(code) => format!("exit code {}", code),
+        None => "sin detalle".to_string(),
     }
 }
 
@@ -937,71 +986,134 @@ async fn start_daemon(
 ) -> Result<(), String> {
     let program = argv[0].clone();
     let rest: Vec<String> = argv[1..].to_vec();
-    let launch = tokio::task::spawn_blocking(move || Command::new(&program).args(&rest).output())
+
+    // Solo existe cuando `poll == true`: es el único caso donde lanzamos sin
+    // esperar (ver abajo) y necesitamos poder chequear si salió con error
+    // mientras pollea `daemon_ok()`.
+    let mut child: Option<std::process::Child> = None;
+
+    if poll {
+        // Arranques asincrónicos (apps de GUI). En Windows `Docker
+        // Desktop.exe` no termina nunca, así que `.output()` (que espera al
+        // proceso) jamás volvería: el `spawn_blocking` queda sin forma de
+        // cancelarse, el `invoke` nunca resuelve y el botón se traba toda la
+        // sesión. `open -a Docker` en Mac sí vuelve al instante, pero tampoco
+        // dice nada del daemon. En los dos casos lanzamos con `spawn()` y
+        // dejamos que el polling de abajo (`daemon_ok` + `try_wait` para
+        // detectar un exit con error) decida.
+        let program2 = program.clone();
+        let rest2 = rest.clone();
+        let spawned = tokio::task::spawn_blocking(move || {
+            Command::new(&program2)
+                .args(&rest2)
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+        })
         .await
         .map_err(|e| format!("spawn arranque del daemon: {}", e))?
         .map_err(|e| format!("no se pudo lanzar el arranque del daemon: {}", e))?;
-    if !launch.status.success() && !poll {
-        return Err(format!(
-            "no se pudo arrancar {}: {}",
-            engine.rt.label(),
-            String::from_utf8_lossy(&launch.stderr).trim()
-        ));
-    }
-    // Con poll seguimos de largo aunque el lanzador haya fallado: el exit code
-    // de una app de GUI (`open -a Docker`) no dice nada del daemon. Pero si
-    // falló de verdad (ej. "Docker" no está instalado), el timeout de abajo
-    // termina apuntando al síntoma equivocado ("no respondió") en vez de la
-    // causa real, así que guardamos el stderr para anexarlo si hace falta.
-    let launch_failure = if !launch.status.success() {
-        let stderr = String::from_utf8_lossy(&launch.stderr).trim().to_string();
-        tracing::warn!(target: "grammar", stderr = %stderr, "lanzador del daemon devolvió error, se sigue de largo a pollear (poll=true)");
-        Some(stderr)
+        child = Some(spawned);
     } else {
-        None
-    };
-    let timeout = if poll {
+        // Arranques sincrónicos (`container system start`, `podman machine
+        // start`, `colima start`): vuelven solos apenas terminan, así que
+        // esperamos con `.output()` y ahí el exit code sí dice algo del
+        // resultado.
+        let launch =
+            tokio::task::spawn_blocking(move || Command::new(&program).args(&rest).output())
+                .await
+                .map_err(|e| format!("spawn arranque del daemon: {}", e))?
+                .map_err(|e| format!("no se pudo lanzar el arranque del daemon: {}", e))?;
+        if !launch.status.success() {
+            let stderr = String::from_utf8_lossy(&launch.stderr).trim().to_string();
+            // Sin stderr (ej. el binario no imprimió nada al fallar), el exit
+            // code es lo único que queda para no dejar el mensaje colgado en
+            // "no se pudo arrancar X: ".
+            let detail = if stderr.is_empty() {
+                describe_exit_status(&launch.status)
+            } else {
+                stderr
+            };
+            return Err(format!(
+                "no se pudo arrancar {}: {}",
+                engine.rt.label(),
+                detail
+            ));
+        }
+    }
+
+    let timeout_secs = if poll {
         DAEMON_POLL_SECS
     } else {
         DAEMON_SYNC_GRACE_SECS
     };
-    for i in 0..timeout {
+    let start = Instant::now();
+    let mut next_emit_secs = 5u64;
+    loop {
+        if start.elapsed() >= Duration::from_secs(timeout_secs) {
+            break;
+        }
+        // Probe con deadline propio (fix del timeout de reloj): un
+        // `daemon_ok()` colgado no se puede llevar el loop entero con él. Un
+        // timeout de probe cuenta como "todavía no responde", no como error.
         let e = engine.clone();
-        let ok = tokio::task::spawn_blocking(move || e.daemon_ok())
-            .await
-            .unwrap_or(false);
-        if ok {
+        let probe = tokio::time::timeout(
+            Duration::from_secs(DAEMON_PROBE_TIMEOUT_SECS),
+            tokio::task::spawn_blocking(move || e.daemon_ok()),
+        )
+        .await;
+        if let Ok(Ok(true)) = probe {
             return Ok(());
         }
-        if poll && i % 5 == 0 {
-            emit_progress(
-                app,
-                "daemon",
-                format!(
-                    "Esperando a que {} acepte conexiones ({}s de {}s)…",
-                    engine.rt.label(),
-                    i,
-                    timeout
-                ),
-            );
+        // Solo aplica al lanzamiento asincrónico: si el proceso ya salió con
+        // error (ej. "open": Unable to find application named 'Docker'), no
+        // se lanzó nada y agotar el resto del timeout no tiene sentido.
+        // Cortamos apenas lo vemos en vez de esperar el resto de `timeout_secs`.
+        if let Some(c) = child.as_mut() {
+            if let Ok(Some(status)) = c.try_wait() {
+                if !status.success() {
+                    let mut stderr_buf = String::new();
+                    if let Some(mut se) = c.stderr.take() {
+                        use std::io::Read;
+                        let _ = se.read_to_string(&mut stderr_buf);
+                    }
+                    let stderr_buf = stderr_buf.trim();
+                    let detail = if stderr_buf.is_empty() {
+                        describe_exit_status(&status)
+                    } else {
+                        stderr_buf.to_string()
+                    };
+                    tracing::warn!(target: "grammar", stderr = %detail, "lanzador del daemon salió con error, corto el poll");
+                    return Err(format!(
+                        "no se pudo arrancar {}: {}",
+                        engine.rt.label(),
+                        detail
+                    ));
+                }
+            }
+        }
+        if poll {
+            let elapsed_secs = start.elapsed().as_secs();
+            if elapsed_secs >= next_emit_secs {
+                emit_progress(
+                    app,
+                    "daemon",
+                    format!(
+                        "Esperando a que {} acepte conexiones ({}s de {}s)…",
+                        engine.rt.label(),
+                        elapsed_secs,
+                        timeout_secs
+                    ),
+                );
+                next_emit_secs = elapsed_secs + 5;
+            }
         }
         sleep(Duration::from_secs(1)).await;
     }
-    match launch_failure {
-        // El lanzador ya había fallado: el timeout no es la causa, lo es el
-        // lanzamiento. Se lo decimos al usuario en vez de mandarlo a esperar
-        // de nuevo algo que nunca va a arrancar.
-        Some(stderr) if !stderr.is_empty() => Err(format!(
-            "no se pudo arrancar {}: {}",
-            engine.rt.label(),
-            stderr
-        )),
-        _ => Err(format!(
-            "{} no respondió después de {}s. Revisá que haya terminado de arrancar y volvé a intentar.",
-            engine.rt.label(),
-            timeout
-        )),
-    }
+    Err(format!(
+        "{} no respondió después de {}s. Revisá que haya terminado de arrancar y volvé a intentar.",
+        engine.rt.label(),
+        start.elapsed().as_secs()
+    ))
 }
 
 #[tauri::command]
@@ -1020,12 +1132,14 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
         ),
     );
     if !engine.daemon_ok() {
-        let Some((argv, poll)) = engine.daemon_start_cmd() else {
-            return Err(daemon_block_error(
-                engine.rt,
-                Os::current(),
-                colima_bin().is_some(),
-            ));
+        // Un solo `current_env()` para todo este bloque: `daemon_start_cmd` y
+        // el fallback de `daemon_block_error` comparten el mismo entorno
+        // resuelto en vez de pisarse cada uno un `Os::current()` +
+        // `colima_bin()` propio.
+        let (os, colima_present) = current_env();
+        let plan = daemon_plan(engine.rt, os, colima_present);
+        let Some((argv, poll)) = engine.daemon_start_cmd(&plan) else {
+            return Err(daemon_block_error(engine.rt, os, colima_present));
         };
         emit_progress(
             &app,
@@ -1100,7 +1214,7 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
     }
     tracing::error!(target: "grammar", "container levantado pero LT no responde tras 40s");
     Err(format!(
-        "Container levantado pero no responde después de 40s. Revisá `{} logs {}`.",
+        "Container levantado pero no responde después de 40s. Corré: {} logs {}",
         engine.rt.cmd(),
         LT_CONTAINER
     ))
@@ -1263,6 +1377,47 @@ mod tests {
         assert!(args.windows(2).any(|w| w == ["-p", "8081:8010"]));
         assert!(args.windows(2).any(|w| w == ["--name", LT_CONTAINER]));
         assert_eq!(*args.last().unwrap(), LT_IMAGE);
+    }
+
+    #[test]
+    fn daemon_start_cmd_resolves_argv0_to_engine_bin() {
+        // El token "container"/"podman"/"docker" del `DaemonPlan` (puro) tiene
+        // que resolver a `self.bin` — la ruta absoluta que ya resolvió
+        // `Runtime::bin()` — sin que `daemon_start_cmd` vuelva a tocar el
+        // filesystem. Barremos toda la matriz de `daemon_plan` y solo miramos
+        // los planes cuyo token de programa es justamente uno de esos tres:
+        // Docker en macOS/Windows usa "open"/la ruta del .exe (cubierto por
+        // `daemon_start_cmd_resolves_open_to_absolute_path`) y con colima usa
+        // "colima" (el único caso que sí toca el filesystem, sin cubrir acá).
+        for ((rt, os, colima), plan) in all_plans() {
+            let Some(argv) = plan.argv.clone() else {
+                continue;
+            };
+            if !matches!(argv[0].as_str(), "container" | "podman" | "docker") {
+                continue;
+            }
+            let e = engine(rt);
+            let (resolved, poll) = e.daemon_start_cmd(&plan).unwrap_or_else(|| {
+                panic!("{:?}/{:?}/colima={}: plan con argv debería resolver", rt, os, colima)
+            });
+            assert_eq!(
+                resolved[0], e.bin,
+                "{:?}/{:?}/colima={}: argv[0] debería ser self.bin",
+                rt, os, colima
+            );
+            assert_eq!(poll, plan.poll);
+        }
+    }
+
+    #[test]
+    fn daemon_start_cmd_resolves_open_to_absolute_path() {
+        // "open" es el lanzador de GUI de macOS (Docker Desktop) y vive en una
+        // ruta fija del sistema, no en el PATH de una app lanzada desde Finder.
+        let plan = daemon_plan(Runtime::Docker, Os::MacOs, false);
+        assert_eq!(plan.argv.as_ref().map(|a| a[0].as_str()), Some("open"));
+        let (argv, poll) = engine(Runtime::Docker).daemon_start_cmd(&plan).unwrap();
+        assert_eq!(argv[0], "/usr/bin/open");
+        assert!(poll);
     }
 
     #[test]
