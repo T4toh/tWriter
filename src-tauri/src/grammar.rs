@@ -909,6 +909,79 @@ fn emit_progress(app: &AppHandle, phase: &'static str, message: impl Into<String
     );
 }
 
+/// Timeout del poll cuando el arranque es asincrónico (abrir Docker Desktop
+/// tarda ~30s en aceptar conexiones). Con arranque sincrónico alcanza un
+/// margen corto: si `container system start` volvió bien, el daemon ya está.
+const DAEMON_POLL_SECS: u64 = 60;
+const DAEMON_SYNC_GRACE_SECS: u64 = 5;
+
+/// Texto del `Err` cuando la app no puede arrancar el daemon sola. Le pega el
+/// comando al final para que el mensaje del stepper sirva por sí mismo; el chip
+/// copiable de la UI sale del `remedy` del status, que se refresca al terminar.
+fn daemon_block_error(rt: Runtime, os: Os, colima_present: bool) -> String {
+    let r = daemon_plan(rt, os, colima_present).remedy;
+    match r.command {
+        Some(cmd) => format!("{} Corré: {}", r.message, cmd),
+        None => r.message,
+    }
+}
+
+/// Lanza el arranque del daemon y espera a que acepte conexiones. `poll` marca
+/// los arranques asincrónicos (apps de GUI): ahí el exit code del lanzador no
+/// dice nada del daemon, así que el veredicto lo da `daemon_ok`.
+async fn start_daemon(
+    app: &AppHandle,
+    engine: &Engine,
+    argv: Vec<String>,
+    poll: bool,
+) -> Result<(), String> {
+    let program = argv[0].clone();
+    let rest: Vec<String> = argv[1..].to_vec();
+    let launch = tokio::task::spawn_blocking(move || Command::new(&program).args(&rest).output())
+        .await
+        .map_err(|e| format!("spawn arranque del daemon: {}", e))?
+        .map_err(|e| format!("no se pudo lanzar el arranque del daemon: {}", e))?;
+    if !launch.status.success() && !poll {
+        return Err(format!(
+            "no se pudo arrancar {}: {}",
+            engine.rt.label(),
+            String::from_utf8_lossy(&launch.stderr).trim()
+        ));
+    }
+    let timeout = if poll {
+        DAEMON_POLL_SECS
+    } else {
+        DAEMON_SYNC_GRACE_SECS
+    };
+    for i in 0..timeout {
+        let e = engine.clone();
+        let ok = tokio::task::spawn_blocking(move || e.daemon_ok())
+            .await
+            .unwrap_or(false);
+        if ok {
+            return Ok(());
+        }
+        if poll && i % 5 == 0 {
+            emit_progress(
+                app,
+                "daemon",
+                format!(
+                    "Esperando a que {} acepte conexiones ({}s de {}s)…",
+                    engine.rt.label(),
+                    i,
+                    timeout
+                ),
+            );
+        }
+        sleep(Duration::from_secs(1)).await;
+    }
+    Err(format!(
+        "{} no respondió después de {}s. Revisá que haya terminado de arrancar y volvé a intentar.",
+        engine.rt.label(),
+        timeout
+    ))
+}
+
 #[tauri::command]
 pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String> {
     emit_progress(&app, "checking", "Buscando un runtime de containers…");
@@ -925,7 +998,24 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
         ),
     );
     if !engine.daemon_ok() {
-        return Err(daemon_remedy(engine.rt).message);
+        let Some((argv, poll)) = engine.daemon_start_cmd() else {
+            return Err(daemon_block_error(
+                engine.rt,
+                Os::current(),
+                colima_bin().is_some(),
+            ));
+        };
+        emit_progress(
+            &app,
+            "daemon",
+            format!("Arrancando {}…", engine.rt.label()),
+        );
+        start_daemon(&app, &engine, argv, poll).await?;
+        emit_progress(
+            &app,
+            "daemon",
+            format!("{} respondiendo.", engine.rt.label()),
+        );
     }
 
     if engine.running() {
@@ -1471,5 +1561,22 @@ mod tests {
         assert_eq!(v["install_options"].as_array().unwrap().len(), 3);
         assert_eq!(v["runtime"], serde_json::Value::Null);
         assert_eq!(v["remedy"]["can_run"], serde_json::json!(false));
+    }
+
+    #[test]
+    fn daemon_block_error_carries_the_command_for_sudo_cases() {
+        // Docker en Linux: la app no puede correrlo, así que el Err tiene que
+        // llevar el comando además de la explicación (el chip copiable de la UI
+        // viene del status, pero el mensaje del stepper tiene que servir solo).
+        let msg = daemon_block_error(Runtime::Docker, Os::Linux, false);
+        assert!(msg.contains("sudo systemctl start docker"), "msg: {}", msg);
+        assert!(msg.contains("root"), "msg: {}", msg);
+    }
+
+    #[test]
+    fn daemon_block_error_without_command_is_just_the_message() {
+        let msg = daemon_block_error(Runtime::Apple, Os::Linux, false);
+        let expected = daemon_plan(Runtime::Apple, Os::Linux, false).remedy.message;
+        assert_eq!(msg, expected, "sin comando no se le pega nada al mensaje");
     }
 }
