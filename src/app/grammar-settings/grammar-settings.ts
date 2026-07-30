@@ -21,9 +21,17 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { GrammarService, LtDockerStatus, SecretStatus } from '../core/grammar-service';
 import { SettingsService } from '../core/settings-service';
 import { Select } from '../shared/select';
+import { CopyCommand } from '../shared/copy-command';
 import { GrammarMode } from '../core/types';
 
-export type DockerPhase = 'checking' | 'pulling' | 'starting' | 'loading' | 'ready' | 'error';
+export type DockerPhase =
+  | 'checking'
+  | 'daemon'
+  | 'pulling'
+  | 'starting'
+  | 'loading'
+  | 'ready'
+  | 'error';
 
 interface LtProgressEvent {
   phase: DockerPhase;
@@ -34,7 +42,7 @@ interface LtProgressEvent {
   selector: 'app-grammar-settings',
   standalone: true,
   imports: [
-    FormsModule, Select,
+    FormsModule, Select, CopyCommand,
     LucideBan, LucideCheck, LucideCircle, LucideCircleAlert, LucideEye, LucideEyeOff,
     LucideLock, LucideX,
   ],
@@ -117,7 +125,7 @@ export class GrammarSettings {
   protected async startDocker(): Promise<void> {
     this.dockerBusy.set('starting');
     this.dockerPhase.set('checking');
-    this.dockerMessage.set('Chequeando que Docker esté instalado…');
+    this.dockerMessage.set('Buscando un runtime de containers…');
     await this.attachProgressListener();
     try {
       const msg = await this.grammar.dockerStart();
@@ -179,7 +187,7 @@ export class GrammarSettings {
 
   /** Devuelve true si la fase `p` ya pasó (la actual está más adelante en el flujo). */
   protected phaseDone(p: DockerPhase): boolean {
-    const order: DockerPhase[] = ['checking', 'pulling', 'starting', 'loading', 'ready'];
+    const order: DockerPhase[] = ['checking', 'daemon', 'pulling', 'starting', 'loading', 'ready'];
     const cur = this.dockerPhase();
     if (!cur || cur === 'error') return false;
     return order.indexOf(cur) > order.indexOf(p);

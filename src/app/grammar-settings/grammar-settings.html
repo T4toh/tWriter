@@ -106,13 +106,39 @@
               <div class="docker-panel">
                 @if (!ds.docker_installed) {
                   <div class="docker-status err">
-                    No se detectó ningún runtime de containers (Docker, Podman o Apple container).
-                    Instalá uno —
-                    <a href="https://docs.docker.com/get-docker/" target="_blank" rel="noopener">Docker</a>,
-                    <a href="https://podman.io/get-started" target="_blank" rel="noopener">Podman</a>
-                    o <a href="https://github.com/apple/container" target="_blank" rel="noopener">Apple container</a>
-                    — y volvé a abrir esta ventana.
+                    {{ ds.remedy?.message ?? 'No se detectó ningún runtime de containers (Docker, Podman o Apple container).' }}
                   </div>
+                  <ul class="install-options">
+                    @for (opt of ds.install_options; track opt.label) {
+                      <li>
+                        <a [href]="opt.url" target="_blank" rel="noopener">{{ opt.label }}</a>
+                        @if (opt.command; as cmd) {
+                          <app-copy-command [command]="cmd" />
+                        }
+                      </li>
+                    }
+                  </ul>
+                } @else if (!ds.daemon_running) {
+                  <!-- El daemon no responde: sin él el CLI no puede ni listar
+                       containers, así que container_running/exists no dicen nada. -->
+                  <div class="docker-status warn">
+                    {{ ds.remedy?.message ?? 'El daemon del runtime no responde.' }}
+                  </div>
+                  @if (ds.remedy; as rem) {
+                    @if (rem.command; as cmd) {
+                      <app-copy-command [command]="cmd" />
+                    }
+                    @if (rem.can_run) {
+                      <button
+                        type="button"
+                        class="btn btn-primary docker-btn"
+                        [disabled]="dockerBusy() !== null"
+                        (click)="startDocker()"
+                      >
+                        {{ dockerBusy() === 'starting' ? 'Levantando…' : 'Levantar LanguageTool' }}
+                      </button>
+                    }
+                  }
                 } @else if (ds.container_running && ds.api_responding) {
                   <div class="docker-status ok">
                     <svg lucideCircle [size]="10"></svg>
@@ -151,19 +177,24 @@
                       <span class="step-icon">①</span>
                       <span class="step-label">Chequeando runtime</span>
                     </li>
+                    <li [class.active]="dockerPhase() === 'daemon'"
+                        [class.done]="phaseDone('daemon')">
+                      <span class="step-icon">②</span>
+                      <span class="step-label">Arrancando el runtime</span>
+                    </li>
                     <li [class.active]="dockerPhase() === 'pulling'"
                         [class.done]="phaseDone('pulling')">
-                      <span class="step-icon">②</span>
+                      <span class="step-icon">③</span>
                       <span class="step-label">Bajando imagen (~300MB)</span>
                     </li>
                     <li [class.active]="dockerPhase() === 'starting'"
                         [class.done]="phaseDone('starting')">
-                      <span class="step-icon">③</span>
+                      <span class="step-icon">④</span>
                       <span class="step-label">Creando container</span>
                     </li>
                     <li [class.active]="dockerPhase() === 'loading'"
                         [class.done]="phaseDone('loading')">
-                      <span class="step-icon">④</span>
+                      <span class="step-icon">⑤</span>
                       <span class="step-label">Cargando modelos (~30s)</span>
                     </li>
                   </ol>
