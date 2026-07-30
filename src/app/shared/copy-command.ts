@@ -20,7 +20,7 @@ const COPIED_MS = 2000;
       [attr.aria-label]="'Copiar el comando ' + command()"
       (click)="copy()"
     >
-      {{ copied() ? 'copiado ✓' : 'copiar' }}
+      <span aria-live="polite">{{ copied() ? 'copiado ✓' : 'copiar' }}</span>
     </button>
   `,
   styles: [`
@@ -29,6 +29,11 @@ const COPIED_MS = 2000;
       align-items: center;
       gap: 6px;
       max-width: 100%;
+      /* Adentro de .docker-panel (flex-direction: column, align-items:
+         stretch por default) el host es un flex item estirado, así que sin
+         esto el chip ocupa todo el ancho del panel en vez de abrazar el
+         comando. */
+      align-self: flex-start;
     }
     .cc-cmd {
       font-family: var(--font-mono);

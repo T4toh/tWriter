@@ -137,6 +137,23 @@
                       >
                         {{ dockerBusy() === 'starting' ? 'Levantando…' : 'Levantar LanguageTool' }}
                       </button>
+                    } @else {
+                      <!-- No podemos arrancarlo solos (ej. Docker en Linux
+                           necesita sudo): el usuario corre el comando de arriba
+                           en su propia terminal y vuelve. El status solo se
+                           refresca al abrir el panel o después de start/stop,
+                           así que sin este botón queda diciendo "caído" hasta
+                           que el usuario cierra y reabre la ventana. No es un
+                           botón de arranque, no viola el constraint de
+                           `can_run: false`. -->
+                      <button
+                        type="button"
+                        class="btn btn-secondary docker-btn"
+                        [disabled]="dockerBusy() !== null"
+                        (click)="refreshDockerStatus()"
+                      >
+                        Volver a chequear
+                      </button>
                     }
                   }
                 } @else if (ds.container_running && ds.api_responding) {
