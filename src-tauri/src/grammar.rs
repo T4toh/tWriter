@@ -309,14 +309,6 @@ fn pick_runtime(installed: &[Runtime], remembered: Option<Runtime>) -> RuntimePi
     }
 }
 
-/// Cualquier runtime instalado (binario presente), aunque el daemon esté
-/// apagado. Distingue "no hay runtime" de "instalado pero apagado".
-fn detect_installed() -> Option<Engine> {
-    Runtime::ALL
-        .into_iter()
-        .find_map(|rt| rt.bin().map(|bin| Engine { rt, bin }))
-}
-
 /// Runtimes con binario presente, en el orden de `Runtime::ALL`.
 fn installed_runtimes() -> Vec<Runtime> {
     Runtime::ALL
@@ -325,9 +317,8 @@ fn installed_runtimes() -> Vec<Runtime> {
         .collect()
 }
 
-// Consumida en la Task 4 (migración de `languagetool_docker_start`/`_stop`
-// a `pick_installed`); hasta entonces queda sin uso.
-#[allow(dead_code)]
+/// Arma el `Engine` para un runtime ya elegido (por `pick_installed` o por la
+/// UI vía `runtime: Option<String>`).
 fn engine_for(rt: Runtime) -> Option<Engine> {
     rt.bin().map(|bin| Engine { rt, bin })
 }
@@ -1257,12 +1248,30 @@ async fn start_daemon(
 }
 
 #[tauri::command]
-pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String> {
+pub async fn languagetool_docker_start(
+    app: AppHandle,
+    runtime: Option<String>,
+) -> Result<String, String> {
     emit_progress(&app, "checking", "Buscando un runtime de containers…");
-    let engine = match detect_installed() {
-        Some(e) => e,
-        None => return Err(no_runtime_remedy().message),
+    // `runtime` viene lleno solo cuando el autor eligió en la UI (caso
+    // ambiguo). Sin elección explícita, decide `pick_installed`.
+    let rt = match runtime.as_deref().and_then(Runtime::from_key) {
+        Some(rt) => rt,
+        None => match pick_installed(&app) {
+            RuntimePick::Chosen(rt) => rt,
+            // La UI no llega acá: cuando `runtime_choices` no viene vacío
+            // muestra los botones. El comando no confía en eso igual.
+            RuntimePick::Ambiguous(rts) => return Err(ambiguous_remedy(&rts).message),
+            RuntimePick::None => return Err(no_runtime_remedy().message),
+        },
     };
+    let Some(engine) = engine_for(rt) else {
+        return Err(no_runtime_remedy().message);
+    };
+    // Se recuerda antes de bajar nada: si el pull se corta a la mitad, la
+    // próxima vez seguimos apuntando al mismo runtime y no al primero de la
+    // lista.
+    settings::remember_lt_runtime(&app, rt.key());
     emit_progress(
         &app,
         "checking",
@@ -1361,10 +1370,18 @@ pub async fn languagetool_docker_start(app: AppHandle) -> Result<String, String>
 }
 
 #[tauri::command]
-pub async fn languagetool_docker_stop() -> Result<(), String> {
-    let engine = match detect_engine().or_else(detect_installed) {
-        Some(e) => e,
-        None => return Ok(()), // sin runtime no hay nada que detener
+pub async fn languagetool_docker_stop(app: AppHandle) -> Result<(), String> {
+    let engine = match detect_engine() {
+        Some(e) => Some(e),
+        None => match pick_installed(&app) {
+            RuntimePick::Chosen(rt) => engine_for(rt),
+            // Frenar un container que no sabemos dónde vive no tiene sentido, y
+            // frenar el del runtime equivocado tampoco.
+            RuntimePick::Ambiguous(_) | RuntimePick::None => None,
+        },
+    };
+    let Some(engine) = engine else {
+        return Ok(()); // sin runtime resuelto no hay nada que detener
     };
     let out = engine
         .stop_container()
