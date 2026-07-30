@@ -329,6 +329,61 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Plataformas
 
+- [x] **Levantar LanguageTool sin saber de containers** — spec en
+  `docs/superpowers/specs/2026-07-30-languagetool-setup-seamless-design.md`.
+  **Bug de raíz**: `languagetool_docker_status` (`grammar.rs:643-667`) colapsa el
+  estado del daemon dentro de los flags del container (`if e.daemon_ok() { … }
+  else { (false, false) }`), así que "el daemon está caído" queda
+  indistinguible de "no hay container" y la UI dice **"Container detenido (no
+  existe todavía)"** — las dos afirmaciones falsas. Descubierto el 2026-07-30:
+  el autor reinició la Mac por primera vez desde que la compró, el apiserver de
+  Apple `container` no estaba registrado en launchd (`container system status`
+  → `apiserver is not running and not registered with launchd`), y sin
+  apiserver `container ls` falla con `XPC connection error`, así que el backend
+  no veía el container que sí existía. Lo irónico: `daemon_down_message`
+  (`grammar.rs:269-287`) ya produce el texto correcto ("Corré `container system
+  start`") pero solo se devuelve desde el path de arranque, no desde el status
+  que corre solo al abrir la ventana — y trae el comando embebido en la prosa,
+  imposible de copiar. **Plan**: (a) `Remedy { message, command, can_run }` con
+  el comando separado de la prosa, y `daemon_running` + `remedy` en
+  `LtDockerStatus`; (b) `daemon_start_cmd` por runtime y OS — `container system
+  start`, `podman machine start`, `colima start` o abrir Docker Desktop en
+  Mac/Windows con polling de 60s porque el daemon tarda ~30s en aceptar
+  conexiones, y `None` en Linux donde hace falta sudo; (c) **un** botón que hace
+  las dos capas (daemon + container), con una fase nueva al frente del stepper —
+  el usuario no tiene que aprender que son dos capas; (d)
+  `shared/copy-command.ts` (chip `<code>` + "copiado ✓") reusado por la rama del
+  daemon caído y por la lista de instalación, que reemplaza el blob de prosa de
+  `no_runtime_message` por opciones con comando copiable (los `brew` en macOS;
+  solo URL en Linux/Windows, porque el comando depende de la distro y un comando
+  que falla es peor que un link). Tests: `daemon_remedy` y `daemon_start_cmd`
+  son puras `(Runtime, OS)` y van a los tests de `grammar.rs`.
+  **Estado**: implementado en `feat/languagetool-setup-seamless` — `Remedy` +
+  `daemon_plan(Runtime, Os, colima)` puro como fuente única del diagnóstico,
+  `daemon_running`/`remedy`/`install_options` en `LtDockerStatus`, la fase
+  `daemon` al frente del arranque con polling de 60s para Docker Desktop, y
+  `shared/copy-command.ts`. Los tests de Rust cubren la matriz runtime × OS ×
+  colima, las invariantes (`can_run` ⟺ hay argv, nunca `command: Some("")`,
+  nunca el comando embebido en el `message`) y el contrato serializado del
+  status. **Verificado a mano en macOS** el 2026-07-30 (`container system stop`
+  → mensaje del daemon caído, el botón haciendo las dos capas, el chip copiando
+  el comando pelado, el container detenido con el daemon arriba, y la lista de
+  instalación sin runtime).
+- **`detect_installed` elige runtime sin saber cuál es dueño del container**:
+  con el daemon caído, `detect_engine()` devuelve `None` y `detect_installed()`
+  (`grammar.rs:265-269`) toma el **primer** runtime instalado por orden de
+  `Runtime::ALL` (Docker, Podman, Apple), que no tiene nada que ver con cuál
+  de ellos tiene levantado el container `twriter-languagetool`. Antes esto
+  solo afectaba un mensaje; ahora la app **ejecuta** el remedio
+  (`languagetool_docker_start`), así que en una máquina con `docker` y
+  `container` instalados y los dos daemons caídos, un click arranca Docker,
+  baja ~300MB de imagen y crea un **segundo** container ahí mientras el real
+  duerme en Apple `container`. **Fix propuesto**: persistir en settings el
+  último runtime que `detect_engine()` vio con el container corriendo o
+  existente, y que `detect_installed` lo prefiera sobre el orden fijo de
+  `Runtime::ALL` cuando esté presente y siga instalado. Quedó fuera de alcance
+  de la ronda final de `feat/languagetool-setup-seamless` porque pide tocar el
+  modelo de settings, no solo `grammar.rs`.
 - [x] **Soporte multi-runtime de containers para LanguageTool** (`grammar.rs`):
   antes todo asumía el CLI `docker`. Ahora una abstracción `Runtime`/`Engine`
   autodetecta Docker, Podman o Apple `container` (prioridad: el que ya tenga el

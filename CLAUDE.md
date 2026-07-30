@@ -82,6 +82,17 @@ Primera build de Rust tarda ~5 min. Después es incremental.
 - **Return types explícitos** en métodos.
 - **`inject()`** para DI dentro de funciones/constructores, no constructor params.
 - Spanish para UI, comments y nombres de variables de dominio.
+- **El remedio se da adentro de la app.** Si la app puede detectar un problema de
+  entorno (daemon caído, runtime ausente, sidecar faltante, credencial vencida),
+  tiene que decir **qué** pasó y dar el remedio **accionable** ahí mismo: un botón
+  si lo puede ejecutar ella, o el comando exacto en un chip copiable si necesita
+  sudo o una app de GUI ajena. Nunca un mensaje genérico, y nunca el comando
+  embebido en prosa entre backticks — que no se puede copiar sin arrastrar la
+  explicación. Que el autor sepa resolverlo a mano no cuenta: si la app detectó el
+  problema, ya tiene la información, y tirarla es hacerle perder tiempo a quien la
+  use. Cuando el diagnóstico no es accionable, decir eso también en vez de
+  inventar un comando que puede fallar (ej: no adivinar `apt` vs `dnf` — dar el
+  link).
 
 El scaffold inicial usa nombres `app.component.*` — refactorizar a convenciones al tocar esos archivos.
 

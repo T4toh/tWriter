@@ -15,14 +15,41 @@ interface GrammarCfg {
   variantEn: string;
 }
 
+/** Qué pasó y con qué se arregla. Espeja `Remedy` de `grammar.rs`. */
+export interface Remedy {
+  /** Qué pasó, en prosa, sin el comando embebido. */
+  message: string;
+  /** Comando exacto para copiar, o null si no hay uno (ej. abrir Docker Desktop). */
+  command: string | null;
+  /** La app puede ejecutarlo sola. Decide botón primario vs solo chip copiable. */
+  can_run: boolean;
+}
+
+/** Una forma de instalar un runtime. `command` solo viene en macOS (Homebrew). */
+export interface InstallOption {
+  label: string;
+  command: string | null;
+  url: string;
+}
+
 export interface LtDockerStatus {
   /** Hay al menos un runtime de containers instalado (Docker/Podman/Apple). */
   docker_installed: boolean;
   /** Nombre legible del runtime detectado (ej. "Apple container"), o null. */
   runtime: string | null;
+  /**
+   * ¿Responde el daemon del runtime? Cuando es false, `container_running` y
+   * `container_exists` NO significan nada: el CLI no puede listar containers
+   * sin daemon.
+   */
+  daemon_running: boolean;
   container_running: boolean;
   container_exists: boolean;
   api_responding: boolean;
+  /** Remedio accionable cuando falta el runtime o el daemon no responde. */
+  remedy: Remedy | null;
+  /** Cómo instalar un runtime. Solo viene con contenido si no hay ninguno. */
+  install_options: InstallOption[];
 }
 
 export type SecretBackend = 'keyring' | 'plain' | 'none';
