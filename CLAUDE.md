@@ -65,11 +65,25 @@ pnpm tauri dev        # dev mode (frontend en :1420 + backend Rust)
 pnpm start            # solo Angular en :1420 (sin backend, raro)
 pnpm build            # build Angular producción
 pnpm tauri build      # build app empaquetada (Linux/AppImage/.deb)
-ng test               # Karma tests (Angular)
 cargo test --manifest-path src-tauri/Cargo.toml   # tests Rust
+node scripts/run-<algo>-smoke.mjs                 # tests del frontend (ver abajo)
 ```
 
 Primera build de Rust tarda ~5 min. Después es incremental.
+
+**No hay runner de tests para el frontend.** `angular.json` no define target
+`test` y `package.json` no trae karma/jasmine/vitest/jsdom, así que `ng test`
+**no corre nada**. Los `.spec.ts` que hay en `src/app/` están dormidos: declaran
+`describe`/`it`/`expect` a mano y nadie los ejecuta. Lo que sí corre son los
+smoke runners de `scripts/`, que compilan los TS necesarios con `tsc` a un
+tmpdir e importan el JS resultante — y por eso solo sirven para **funciones
+puras**: nada que toque el DOM, `@tiptap/core` o el schema de ProseMirror se
+puede cargar desde node.
+
+Al sumar código nuevo al frontend, partirlo en una mitad pura (con su smoke
+runner nuevo, patrón de `scripts/run-rae-smoke.mjs`) y una mitad con DOM que se
+valida con `pnpm build` + verificación manual del autor. El comentario de
+cabecera de `src/app/core/search-highlight.spec.ts` deja sentado ese criterio.
 
 ## Convenciones (heredadas de la-cueva-de-tatoh)
 
