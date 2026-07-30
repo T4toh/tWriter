@@ -1118,11 +1118,27 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!popover || !this.tiptap) return;
     const v = popover.violation;
     if (!v.autoFix || v.fixFrom === undefined || v.fixTo === undefined) return;
+    const from = v.fixFrom;
+    const to = v.fixTo;
+    const replacement = v.autoFix.replacement;
     this.tiptap
       .chain()
       .focus()
-      .setTextSelection({ from: v.fixFrom, to: v.fixTo })
-      .insertContent(v.autoFix.replacement)
+      .command(({ tr, state, dispatch }) => {
+        if (!dispatch) return true;
+        // `insertContent` de texto plano dejaba el reemplazo sin marcas: un fix
+        // adentro de una itálica la borraba. Se heredan las marcas vivas en
+        // `from`. Con marcas mixtas adentro del span se homogeneiza — pérdida
+        // acotada en un span de pocos caracteres, contra perderlas todas.
+        const marks = tr.doc.resolve(from).marks();
+        if (replacement.length === 0) {
+          // `schema.text('')` tira excepción: un borrado va por `delete`.
+          tr.delete(from, to);
+        } else {
+          tr.replaceWith(from, to, state.schema.text(replacement, marks));
+        }
+        return true;
+      })
       .run();
     this.raePopover.set(null);
     this.raeViolations.update((list) => list.filter((m) => m.id !== v.id));
