@@ -838,34 +838,56 @@ pub struct LtDockerStatus {
     pub docker_installed: bool,
     /// Nombre legible del runtime detectado (ej. "Apple container"), o `null`.
     pub runtime: Option<String>,
+    /// ¿Responde el daemon del runtime detectado? Cuando es `false`,
+    /// `container_running` y `container_exists` NO significan nada: el CLI no
+    /// puede listar containers sin daemon.
+    pub daemon_running: bool,
     pub container_running: bool,
     pub container_exists: bool,
     pub api_responding: bool,
+    /// Remedio accionable cuando falta el runtime o el daemon no responde.
+    pub remedy: Option<Remedy>,
+    /// Cómo instalar un runtime. Solo se llena cuando no hay ninguno.
+    pub install_options: Vec<InstallOption>,
 }
 
 #[tauri::command]
 pub async fn languagetool_docker_status() -> LtDockerStatus {
     // Preferimos un runtime con daemon vivo; si ninguno responde pero hay uno
-    // instalado, lo reportamos igual (para el mensaje "apagado, levantalo").
+    // instalado, lo reportamos igual con el remedio para levantarlo.
     let engine = detect_engine().or_else(detect_installed);
-    let (docker_installed, runtime, container_running, container_exists) = match &engine {
-        Some(e) => {
-            let (running, exists) = if e.daemon_ok() {
-                (e.running(), e.exists())
-            } else {
-                (false, false)
-            };
-            (true, Some(e.rt.label().to_string()), running, exists)
-        }
-        None => (false, None, false, false),
-    };
     let api_responding = ping_local_lt().await;
+    let Some(e) = engine else {
+        return LtDockerStatus {
+            docker_installed: false,
+            runtime: None,
+            daemon_running: false,
+            container_running: false,
+            container_exists: false,
+            api_responding,
+            remedy: Some(no_runtime_remedy()),
+            install_options: install_options(Os::current()),
+        };
+    };
+    let daemon_running = e.daemon_ok();
+    // Sin daemon el CLI no puede listar containers (Apple `container ls` falla
+    // con XPC connection error), así que los flags quedan en false y
+    // `daemon_running` es el que explica por qué. Antes esto se colapsaba y la
+    // UI afirmaba "el container no existe" sobre un container que sí existía.
+    let (container_running, container_exists) = if daemon_running {
+        (e.running(), e.exists())
+    } else {
+        (false, false)
+    };
     LtDockerStatus {
-        docker_installed,
-        runtime,
+        docker_installed: true,
+        runtime: Some(e.rt.label().to_string()),
+        daemon_running,
         container_running,
         container_exists,
         api_responding,
+        remedy: (!daemon_running).then(|| daemon_remedy(e.rt)),
+        install_options: Vec::new(),
     }
 }
 
@@ -1406,5 +1428,48 @@ mod tests {
         assert!(!r.can_run);
         assert!(!r.message.trim().is_empty());
         assert!(!r.message.contains('`'), "sin backticks en la prosa");
+    }
+
+    #[test]
+    fn status_json_exposes_daemon_running_remedy_and_install_options() {
+        // Contrato con `LtDockerStatus` de grammar-service.ts. Si un campo se
+        // renombra acá y no allá, el front lee `undefined` en silencio.
+        let s = LtDockerStatus {
+            docker_installed: true,
+            runtime: Some(Runtime::Apple.label().to_string()),
+            daemon_running: false,
+            container_running: false,
+            container_exists: false,
+            api_responding: false,
+            remedy: Some(daemon_plan(Runtime::Apple, Os::MacOs, false).remedy),
+            install_options: Vec::new(),
+        };
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(v["daemon_running"], serde_json::json!(false));
+        assert_eq!(v["remedy"]["command"], serde_json::json!("container system start"));
+        assert_eq!(v["remedy"]["can_run"], serde_json::json!(true));
+        assert!(v["remedy"]["message"].as_str().unwrap().len() > 10);
+        assert_eq!(v["install_options"], serde_json::json!([]));
+        // Los campos viejos siguen ahí: el front los usa tal cual.
+        assert_eq!(v["docker_installed"], serde_json::json!(true));
+        assert_eq!(v["container_exists"], serde_json::json!(false));
+    }
+
+    #[test]
+    fn status_json_without_runtime_carries_install_options() {
+        let s = LtDockerStatus {
+            docker_installed: false,
+            runtime: None,
+            daemon_running: false,
+            container_running: false,
+            container_exists: false,
+            api_responding: false,
+            remedy: Some(no_runtime_remedy()),
+            install_options: install_options(Os::MacOs),
+        };
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(v["install_options"].as_array().unwrap().len(), 3);
+        assert_eq!(v["runtime"], serde_json::Value::Null);
+        assert_eq!(v["remedy"]["can_run"], serde_json::json!(false));
     }
 }
