@@ -929,8 +929,8 @@ fn emit_progress(app: &AppHandle, phase: &'static str, message: impl Into<String
 }
 
 /// Timeout del poll cuando el arranque es asincrónico (abrir Docker Desktop
-/// tarda ~30s en aceptar conexiones). Con arranque sincrónico alcanza un
-/// margen corto: si `container system start` volvió bien, el daemon ya está.
+/// tarda ~30s en aceptar conexiones, y el exit del lanzador no dice nada del
+/// daemon). El arranque sincrónico usa `DAEMON_SYNC_GRACE_SECS`, más corto.
 const DAEMON_POLL_SECS: u64 = 60;
 /// Margen para el arranque sincrónico (`container system start`, `podman
 /// machine start`, `colima start`). `podman machine start` puede devolver
@@ -1062,6 +1062,14 @@ async fn start_daemon(
         )
         .await;
         if let Ok(Ok(true)) = probe {
+            // El lanzador asincrónico (`open -a Docker`) ya salió hace rato:
+            // cosechamos su exit antes de irnos para no dejar un zombie
+            // colgado hasta que muere tWriter. Si todavía corre (el .exe de
+            // Docker Desktop en Windows), `try_wait` devuelve `None` y no
+            // bloquea.
+            if let Some(c) = child.as_mut() {
+                let _ = c.try_wait();
+            }
             return Ok(());
         }
         // Solo aplica al lanzamiento asincrónico: si el proceso ya salió con
@@ -1396,10 +1404,23 @@ mod tests {
             if !matches!(argv[0].as_str(), "container" | "podman" | "docker") {
                 continue;
             }
-            let e = engine(rt);
+            // Ojo: NO usamos el helper `engine(rt)`, que setea `bin` al
+            // nombre pelado del comando — o sea el mismo token que ya trae
+            // `argv[0]`, con lo cual el assert de abajo pasaría igual si se
+            // borrara el arm de resolución de `daemon_start_cmd`. Con una ruta
+            // absoluta distinta del token, el test prueba lo que dice probar.
+            let e = Engine {
+                rt,
+                bin: format!("/opt/homebrew/bin/{}", rt.cmd()),
+            };
             let (resolved, poll) = e.daemon_start_cmd(&plan).unwrap_or_else(|| {
                 panic!("{:?}/{:?}/colima={}: plan con argv debería resolver", rt, os, colima)
             });
+            assert_ne!(
+                resolved[0], argv[0],
+                "{:?}/{:?}/colima={}: argv[0] quedó sin resolver (sigue siendo el token)",
+                rt, os, colima
+            );
             assert_eq!(
                 resolved[0], e.bin,
                 "{:?}/{:?}/colima={}: argv[0] debería ser self.bin",
