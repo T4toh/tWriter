@@ -300,7 +300,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
     text. Implementar con patch quirúrgico HTML-aware: encontrar el rango en
     el HTML que corresponde al span del fix y reemplazar solo eso, sin tocar
     el resto del párrafo.
-- **Fix de `pending-conversion` desde popover inline**: hoy aplica el
+- [x] **Fix de `pending-conversion` desde popover inline**: hoy aplica el
   replacement del converter como plain text sobre el rango del párrafo, lo
   que strip-ea inline markup en ese párrafo. Para párrafos con markup, usar
   el botón "RAE" del toolbar (modal de capítulo entero) que sí preserva
@@ -319,7 +319,29 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   marcas vivas en el span `fixFrom..fixTo`. Tests:
   `scripts/run-rae-apply-smoke.mjs` (7 casos) + `pnpm build`; la parte con DOM
   no es automatizable en este repo (no hay runner con DOM).
-  **Falta la verificación a mano** (la hace el autor).
+
+  El review final encontró tres cosas que el spec no había visto, arregladas en
+  la misma PR. (a) Con markup abriendo el párrafo el ancla de D1 no dispara,
+  pero la normalización `“” → ""` sí cambia el string: la transacción se
+  disparaba igual, degradaba las comillas tipográficas y no ponía la raya — el
+  caso típico de un `.docx` importado con el diálogo en cursiva. Ahora
+  `convertFragmentHtml` compara contra el input normalizado (mismo guard que
+  `pushPendingConversion`) y devuelve `null`. (b) Ese `null` era un no-op mudo;
+  ahora cierra el popover y avisa por toast. (c) `insertContentAt` con un
+  **string** toma la rama `isOnlyTextContent` de TipTap y hace
+  `tr.insertText(string)`, así que un `&nbsp;` entraba literal al documento y se
+  acumulaba en cada aplicación: se parsea a `Fragment` antes de insertar. De
+  paso se corrigió la herencia de marcas — `resolve(from).marks()` toma el lado
+  equivocado del borde, y el `insertContent` viejo ya usaba `marksAcross`, o sea
+  que el primer intento regresaba en el borde izquierdo de una cursiva.
+
+  **Verificado a mano** en macOS (M5, Darwin 25.6, 2026-07-30) con la app en
+  dev: el autor probó los seis puntos del checklist — itálica en el medio del
+  diálogo sobreviviendo a la conversión, párrafo con markup de apertura cerrando
+  con el toast y sin tocar las comillas, mismo resultado por el botón "RAE" del
+  toolbar, hard breaks con un solo segmento reemplazado, fix puntual en el borde
+  izquierdo de una cursiva quedando en cursiva, y espacio duro sin `&nbsp;`
+  literal — y da el comportamiento por bueno.
 - **El ancla de D1 no tolera markup inline de apertura** (limitación del
   converter, no del popover): la regla D1 ancla el diálogo con `^(\s*)"`, o sea
   que la comilla de apertura tiene que ser el primer carácter no-espacio del
