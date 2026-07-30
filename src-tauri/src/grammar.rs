@@ -948,6 +948,18 @@ async fn start_daemon(
             String::from_utf8_lossy(&launch.stderr).trim()
         ));
     }
+    // Con poll seguimos de largo aunque el lanzador haya fallado: el exit code
+    // de una app de GUI (`open -a Docker`) no dice nada del daemon. Pero si
+    // falló de verdad (ej. "Docker" no está instalado), el timeout de abajo
+    // termina apuntando al síntoma equivocado ("no respondió") en vez de la
+    // causa real, así que guardamos el stderr para anexarlo si hace falta.
+    let launch_failure = if !launch.status.success() {
+        let stderr = String::from_utf8_lossy(&launch.stderr).trim().to_string();
+        tracing::warn!(target: "grammar", stderr = %stderr, "lanzador del daemon devolvió error, se sigue de largo a pollear (poll=true)");
+        Some(stderr)
+    } else {
+        None
+    };
     let timeout = if poll {
         DAEMON_POLL_SECS
     } else {
@@ -975,11 +987,21 @@ async fn start_daemon(
         }
         sleep(Duration::from_secs(1)).await;
     }
-    Err(format!(
-        "{} no respondió después de {}s. Revisá que haya terminado de arrancar y volvé a intentar.",
-        engine.rt.label(),
-        timeout
-    ))
+    match launch_failure {
+        // El lanzador ya había fallado: el timeout no es la causa, lo es el
+        // lanzamiento. Se lo decimos al usuario en vez de mandarlo a esperar
+        // de nuevo algo que nunca va a arrancar.
+        Some(stderr) if !stderr.is_empty() => Err(format!(
+            "no se pudo arrancar {}: {}",
+            engine.rt.label(),
+            stderr
+        )),
+        _ => Err(format!(
+            "{} no respondió después de {}s. Revisá que haya terminado de arrancar y volvé a intentar.",
+            engine.rt.label(),
+            timeout
+        )),
+    }
 }
 
 #[tauri::command]
