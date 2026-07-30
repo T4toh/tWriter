@@ -39,6 +39,8 @@ import {
   findAllMatchesInPlain,
   highlightFirstMatch,
 } from '../core/search-highlight';
+import { convertFragmentHtml } from './rae-convert';
+import { serializeRange } from './rae-apply';
 import {
   EDITOR_FONT_LABEL,
   EDITOR_FONT_PRESETS,
@@ -1133,12 +1135,17 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!popover || !this.tiptap) return;
     const v = popover.violation;
     if (v.paragraphFrom === undefined || v.paragraphTo === undefined) return;
-    if (!v.autoFix) return;
+    // NO se usa `v.autoFix.replacement`: es texto plano (el validador corre
+    // sobre el plano del documento) y reinsertarlo borraba las itálicas y
+    // negritas del párrafo. Se recalcula sobre el HTML del rango.
+    const { doc, schema } = this.tiptap.state;
+    const html = serializeRange(doc, v.paragraphFrom, v.paragraphTo, schema);
+    const converted = convertFragmentHtml(html);
+    if (converted === null) return;
     this.tiptap
       .chain()
       .focus()
-      .setTextSelection({ from: v.paragraphFrom, to: v.paragraphTo })
-      .insertContent(v.autoFix.replacement)
+      .insertContentAt({ from: v.paragraphFrom, to: v.paragraphTo }, converted)
       .run();
     this.raePopover.set(null);
     this.raeViolations.update((list) => list.filter((m) => m.id !== v.id));
