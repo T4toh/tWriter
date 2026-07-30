@@ -369,7 +369,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   → mensaje del daemon caído, el botón haciendo las dos capas, el chip copiando
   el comando pelado, el container detenido con el daemon arriba, y la lista de
   instalación sin runtime).
-- [x] **`detect_installed` elige runtime sin saber cuál es dueño del container**:
+- [ ] **`detect_installed` elige runtime sin saber cuál es dueño del container**:
   con el daemon caído, `detect_engine()` devuelve `None` y `detect_installed()`
   (`grammar.rs:265-269`) toma el **primer** runtime instalado por orden de
   `Runtime::ALL` (Docker, Podman, Apple), que no tiene nada que ver con cuál

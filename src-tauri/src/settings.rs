@@ -228,8 +228,14 @@ pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
 pub fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     let path = settings_path(&app)?;
     let mut settings = settings;
-    if let Ok(disk) = read_settings(&app) {
-        merge_backend_owned(&mut settings, &disk);
+    match read_settings(&app) {
+        Ok(disk) => merge_backend_owned(&mut settings, &disk),
+        Err(e) => {
+            // Justo el camino donde se pierde el runtime recordado si el
+            // disco falla: igual seguimos y escribimos lo que llegó del
+            // front (no cambia el comportamiento, solo deja rastro).
+            tracing::warn!(target: "grammar", error = %e, "no se pudo leer settings de disco para el merge");
+        }
     }
     let raw = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
     fs::write(&path, raw).map_err(|e| e.to_string())
@@ -244,7 +250,13 @@ pub fn remembered_lt_runtime(app: &AppHandle) -> Option<String> {
 /// que la próxima vez vuelva a preguntar es peor que no arrancar el container
 /// ahora.
 pub fn remember_lt_runtime(app: &AppHandle, key: &str) {
-    let Ok(mut s) = read_settings(app) else { return };
+    let mut s = match read_settings(app) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(target: "grammar", error = %e, "no se pudo leer settings para recordar el runtime");
+            return;
+        }
+    };
     if s.languagetool_runtime.as_deref() == Some(key) {
         return;
     }

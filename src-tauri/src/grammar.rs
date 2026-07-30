@@ -309,6 +309,32 @@ fn pick_runtime(installed: &[Runtime], remembered: Option<Runtime>) -> RuntimePi
     }
 }
 
+/// Qué hacer al arrancar, combinando el pick con el runtime que tiene daemon
+/// vivo. Pura: el caller resuelve el entorno.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum StartRuntime {
+    Use(Runtime),
+    AskWhich(Vec<Runtime>),
+    NoRuntime,
+}
+
+/// Un daemon vivo es evidencia — y es el que `languagetool_docker_status`
+/// acaba de mostrar. Sin esto, un `Ambiguous` con un daemon vivo (ej. Docker
+/// arrancado en el login + Apple `container` instalado, container todavía sin
+/// crear) deja al autor en un callejón sin salida: el error pregunta "¿cuál
+/// usás?" en una pantalla que solo ofrece botones por runtime cuando
+/// `!daemon_running`.
+fn resolve_start_runtime(pick: RuntimePick, live: Option<Runtime>) -> StartRuntime {
+    match pick {
+        RuntimePick::Chosen(rt) => StartRuntime::Use(rt),
+        RuntimePick::Ambiguous(rts) => match live {
+            Some(rt) => StartRuntime::Use(rt),
+            None => StartRuntime::AskWhich(rts),
+        },
+        RuntimePick::None => StartRuntime::NoRuntime,
+    }
+}
+
 /// Runtimes con binario presente, en el orden de `Runtime::ALL`.
 fn installed_runtimes() -> Vec<Runtime> {
     Runtime::ALL
@@ -1257,13 +1283,22 @@ pub async fn languagetool_docker_start(
     // ambiguo). Sin elección explícita, decide `pick_installed`.
     let rt = match runtime.as_deref().and_then(Runtime::from_key) {
         Some(rt) => rt,
-        None => match pick_installed(&app) {
-            RuntimePick::Chosen(rt) => rt,
-            // La UI no llega acá: cuando `runtime_choices` no viene vacío
-            // muestra los botones. El comando no confía en eso igual.
-            RuntimePick::Ambiguous(rts) => return Err(ambiguous_remedy(&rts).message),
-            RuntimePick::None => return Err(no_runtime_remedy().message),
-        },
+        None => {
+            let pick = pick_installed(&app);
+            // `detect_engine()` spawnea procesos: solo vale la pena pagarlo
+            // cuando el pick es ambiguo (es el único caso donde importa si hay
+            // un daemon vivo).
+            let live = if matches!(pick, RuntimePick::Ambiguous(_)) {
+                detect_engine().map(|e| e.rt)
+            } else {
+                None
+            };
+            match resolve_start_runtime(pick, live) {
+                StartRuntime::Use(rt) => rt,
+                StartRuntime::AskWhich(rts) => return Err(ambiguous_remedy(&rts).message),
+                StartRuntime::NoRuntime => return Err(no_runtime_remedy().message),
+            }
+        }
     };
     let Some(engine) = engine_for(rt) else {
         return Err(no_runtime_remedy().message);
@@ -1888,9 +1923,38 @@ mod tests {
         assert_eq!(v["remedy"]["can_run"], serde_json::json!(true));
         assert!(v["remedy"]["message"].as_str().unwrap().len() > 10);
         assert_eq!(v["install_options"], serde_json::json!([]));
+        assert_eq!(v["runtime_choices"], serde_json::json!([]));
         // Los campos viejos siguen ahí: el front los usa tal cual.
         assert_eq!(v["docker_installed"], serde_json::json!(true));
         assert_eq!(v["container_exists"], serde_json::json!(false));
+    }
+
+    #[test]
+    fn status_json_with_runtime_choices_exposes_key_and_label() {
+        // Caso ambiguo: varios runtimes instalados, ninguno respondiendo, nada
+        // recordado. El front arma un botón por elemento de `runtime_choices`
+        // usando `key` (lo que manda de vuelta a `languagetool_docker_start`)
+        // y `label` (lo que muestra). Si un campo se renombra acá y no allá,
+        // el botón queda mudo o manda `undefined` al backend.
+        let rts = vec![Runtime::Docker, Runtime::Apple];
+        let s = LtDockerStatus {
+            docker_installed: true,
+            runtime: None,
+            daemon_running: false,
+            container_running: false,
+            container_exists: false,
+            api_responding: false,
+            remedy: Some(ambiguous_remedy(&rts)),
+            install_options: Vec::new(),
+            runtime_choices: runtime_choices(&rts),
+        };
+        let v = serde_json::to_value(&s).unwrap();
+        let choices = v["runtime_choices"].as_array().unwrap();
+        assert_eq!(choices.len(), 2);
+        assert_eq!(choices[0]["key"], serde_json::json!("docker"));
+        assert_eq!(choices[0]["label"], serde_json::json!("Docker"));
+        assert_eq!(choices[1]["key"], serde_json::json!("apple"));
+        assert_eq!(choices[1]["label"], serde_json::json!("Apple container"));
     }
 
     #[test]
@@ -1994,6 +2058,49 @@ mod tests {
         // No hay un comando único que sirva: la UI ofrece un botón por runtime.
         assert_eq!(r.command, None);
         assert!(!r.can_run);
+    }
+
+    #[test]
+    fn resolve_start_chosen_gana_aunque_haya_un_live_distinto() {
+        // El recordado manda: si `pick_installed` ya resolvió `Chosen`, un
+        // daemon vivo en otro runtime no lo tiene que desplazar.
+        assert_eq!(
+            resolve_start_runtime(RuntimePick::Chosen(Runtime::Apple), Some(Runtime::Docker)),
+            StartRuntime::Use(Runtime::Apple)
+        );
+    }
+
+    #[test]
+    fn resolve_start_ambiguous_con_live_usa_el_live() {
+        // El caso del finding: Docker con daemon vivo + Apple container
+        // instalado, nada recordado todavía. El daemon vivo es evidencia y es
+        // el que el status ya mostró.
+        let rts = vec![Runtime::Docker, Runtime::Apple];
+        assert_eq!(
+            resolve_start_runtime(RuntimePick::Ambiguous(rts), Some(Runtime::Docker)),
+            StartRuntime::Use(Runtime::Docker)
+        );
+    }
+
+    #[test]
+    fn resolve_start_ambiguous_sin_live_pregunta_con_la_lista_completa() {
+        let rts = vec![Runtime::Docker, Runtime::Apple];
+        assert_eq!(
+            resolve_start_runtime(RuntimePick::Ambiguous(rts.clone()), None),
+            StartRuntime::AskWhich(rts)
+        );
+    }
+
+    #[test]
+    fn resolve_start_none_es_no_runtime_sin_importar_el_live() {
+        assert_eq!(
+            resolve_start_runtime(RuntimePick::None, None),
+            StartRuntime::NoRuntime
+        );
+        assert_eq!(
+            resolve_start_runtime(RuntimePick::None, Some(Runtime::Docker)),
+            StartRuntime::NoRuntime
+        );
     }
 
     #[test]
