@@ -1174,25 +1174,44 @@ export class Editor implements AfterViewInit, OnDestroy {
     const target = event.target as HTMLElement | null;
     const raeSpan = target?.closest('.rae-violation') as HTMLElement | null;
     const grammarSpan = target?.closest('.grammar-error') as HTMLElement | null;
-    // RAE gana: es regla propia y determinista, y su popover ofrece el fix del
-    // conversor. LanguageTool es opinable y justo sobre rayas y verbos dicendi
-    // es donde más falsea.
-    if (raeSpan) {
-      this.openRaePopover(raeSpan, event);
+    // Los dos candidatos se resuelven ANTES de decidir nada: si el índice de
+    // uno no matchea contra el array actual (remap tras una transacción que
+    // corrió entre el render de la decoración y el click), no lo tratamos
+    // como un match — así el otro candidato conserva su chance, y si ninguno
+    // resuelve caemos al bloque final que cierra los dos. Antes `openRaePopover`
+    // podía devolver temprano con el índice roto sin cerrar nada: gramática
+    // no se intentaba (aunque su span resolviera bien) y los dos popovers
+    // podían quedar huérfanos en pantalla.
+    const raeIdx = raeSpan ? parseInt(raeSpan.dataset['raeIdx'] ?? '-1', 10) : -1;
+    const raeViolation = raeIdx >= 0 ? this.raeViolations()[raeIdx] : undefined;
+    const grammarIdx = grammarSpan ? parseInt(grammarSpan.dataset['grammarIdx'] ?? '-1', 10) : -1;
+    const grammarMatch = grammarIdx >= 0 ? this.grammarMatches()[grammarIdx] : undefined;
+
+    // RAE gana salvo una excepción: `pending-conversion` (validator.ts,
+    // `pushPendingConversion`) decora el PÁRRAFO entero (`length: para.length`),
+    // no la violación puntual — así que toda palabra de un diálogo con
+    // comillas sin convertir queda con `.rae-violation`, tapando el popover
+    // de gramática de cualquier palabra de ese párrafo (incluido el
+    // "+ diccionario" de un nombre propio marcado TYPOS). Ese caso ya tiene
+    // su fix a mano vía el botón "Aplicar RAE" del capítulo entero, así que
+    // no necesita también ganarle a gramática acá.
+    if (raeViolation && grammarMatch && raeViolation.category === 'pending-conversion') {
+      this.openGrammarPopover(grammarSpan!, grammarMatch, event);
       return;
     }
-    if (grammarSpan) {
-      this.openGrammarPopover(grammarSpan, event);
+    if (raeViolation) {
+      this.openRaePopover(raeSpan!, raeViolation, event);
+      return;
+    }
+    if (grammarMatch) {
+      this.openGrammarPopover(grammarSpan!, grammarMatch, event);
       return;
     }
     if (this.raePopover()) this.raePopover.set(null);
     if (this.grammarPopover()) this.closeGrammarPopover();
   }
 
-  private openRaePopover(span: HTMLElement, event: MouseEvent): void {
-    const idx = parseInt(span.dataset['raeIdx'] ?? '-1', 10);
-    const v = this.raeViolations()[idx];
-    if (!v) return;
+  private openRaePopover(span: HTMLElement, v: RaeViolationPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
     if (this.grammarPopover()) this.closeGrammarPopover();
@@ -1203,10 +1222,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
-  private openGrammarPopover(span: HTMLElement, event: MouseEvent): void {
-    const idx = parseInt(span.dataset['grammarIdx'] ?? '-1', 10);
-    const m = this.grammarMatches()[idx];
-    if (!m) return;
+  private openGrammarPopover(span: HTMLElement, m: GrammarMatchPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
     if (this.raePopover()) this.raePopover.set(null);
