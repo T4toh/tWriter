@@ -329,7 +329,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Plataformas
 
-- **Levantar LanguageTool sin saber de containers** — spec en
+- [x] **Levantar LanguageTool sin saber de containers** — spec en
   `docs/superpowers/specs/2026-07-30-languagetool-setup-seamless-design.md`.
   **Bug de raíz**: `languagetool_docker_status` (`grammar.rs:643-667`) colapsa el
   estado del daemon dentro de los flags del container (`if e.daemon_ok() { … }
@@ -365,10 +365,10 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   `shared/copy-command.ts`. Los tests de Rust cubren la matriz runtime × OS ×
   colima, las invariantes (`can_run` ⟺ hay argv, nunca `command: Some("")`,
   nunca el comando embebido en el `message`) y el contrato serializado del
-  status. **Falta la verificación manual** del checklist del spec (`container
-  system stop` → mensaje correcto, el botón haciendo las dos capas, el chip
-  copiando el comando pelado, la lista de instalación sin runtime) — hasta
-  entonces este item no se marca.
+  status. **Verificado a mano en macOS** el 2026-07-30 (`container system stop`
+  → mensaje del daemon caído, el botón haciendo las dos capas, el chip copiando
+  el comando pelado, el container detenido con el daemon arriba, y la lista de
+  instalación sin runtime).
 - **`detect_installed` elige runtime sin saber cuál es dueño del container**:
   con el daemon caído, `detect_engine()` devuelve `None` y `detect_installed()`
   (`grammar.rs:265-269`) toma el **primer** runtime instalado por orden de
