@@ -490,7 +490,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   y verificado local en M5 (baseline roto → fix ok). Sigue sin notarizar
   (requiere Apple Developer ID), así que el workaround `xattr`/click-derecho
   se mantiene, pero ahora funciona de verdad.
-- **Verificar auto-update en macOS (app ad-hoc, sin notarizar)**: los builds
+- [x] **Verificar auto-update en macOS (app ad-hoc, sin notarizar)**: los builds
   macOS (`aarch64` + `x64`, desde v0.5.7) salen firmados ad-hoc pero sin
   notarizar. El updater Tauri
   descarga el `.app.tar.gz` firmado con minisign y reemplaza la app in-place,
@@ -503,4 +503,13 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   notarización (Apple Developer ID, $99/año) para que el auto-update sea
   seamless. Ver `tauri.conf.json::plugins.updater` y el job `build-macos` en
   `.github/workflows/release.yml`.
+
+  **Verificado a mano** en macOS (M5, Darwin 25.6, 2026-07-31) con el release
+  `v0.7.3`: el autor aceptó el banner de update sobre una instalación vieja y la
+  app se reemplazó y arrancó limpia. **Gatekeeper no puso el `.app` bajado en
+  cuarentena y no hizo falta ningún workaround** — ni `xattr` ni click derecho →
+  Abrir. O sea que la firma ad-hoc alcanza para el auto-update y no hace falta
+  el Developer ID ($99/año) para este flujo. La fricción del ad-hoc sigue siendo
+  solo la del **primer** arranque tras bajar el `.dmg` a mano, que ya está
+  documentada en las notas del release.
 - Mobile (no urgente, capaz solo un exportador a EPUB para ver archivos desde gh). Tomador de notas estaría piola, pero no veo que sea posible sincronizar git en el teléfono (Capaz que sí, investigar.) Estaría re zarpado poder tomar notas sobre partes o capítulos mientras leo en la kindle y que queden resgistrados en notas del libro o algo así.
