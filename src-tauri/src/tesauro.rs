@@ -153,20 +153,35 @@ impl Tesauro {
 
     fn entrada(&self, clave: &str) -> Option<Vec<Acepcion>> {
         let &(inicio, n) = self.indice.get(clave)?;
-        let mut out = Vec::new();
+        let mut out: Vec<Acepcion> = Vec::new();
+        // El dedupe es de la ENTRADA entera, no de cada acepción: WordNet trae
+        // varios sentidos de la misma categoría y repite sinónimos entre ellos
+        // (`rocky` lista `rough` en dos acepciones de adjetivo, y el popover
+        // mostraba el mismo chip dos veces). Y el 28,9% de las entradas
+        // inglesas se lista a sí misma (`light`, `word`, `night`, `run`): un
+        // chip que reemplaza la palabra por sí misma.
+        let mut vistos: HashSet<String> = HashSet::new();
         // `.get` en vez de indexar directo: un .dat truncado (cabecera sin
         // líneas de datos ni \n final) deja `inicio` justo en el borde del
         // buffer y el índice directo panickearía.
-        for linea in self.texto.get(inicio..)?.split('\n').take(n.min(MAX_ACEPCIONES)) {
+        for linea in self.texto.get(inicio..)?.split('\n').take(n) {
             let mut campos = linea.split('|');
-            let cat = campos.next().unwrap_or("-");
-            // El 28,9% de las entradas inglesas se lista a sí misma como
-            // sinónimo (`light`, `word`, `night`, `run`) y 493 acepciones
-            // repiten un sinónimo adentro de los primeros campos: un chip que
-            // reemplaza la palabra por sí misma, y chips duplicados que además
-            // rompen el `track s` del `@for` (NG0955). El tope va DESPUÉS del
-            // filtro, así un descarte no se come un sinónimo bueno.
-            let mut vistos: HashSet<String> = HashSet::new();
+            let categoria = match campos
+                .next()
+                .unwrap_or("-")
+                .trim()
+                .trim_start_matches('(')
+                .trim_end_matches(')')
+            {
+                "-" | "" => None,
+                c => Some(c.to_string()),
+            };
+            let ya = out.iter().position(|a| a.categoria == categoria);
+            // El tope cuenta grupos ya fusionados, así que en la práctica no se
+            // alcanza: el inglés tiene cuatro categorías y el español una.
+            if ya.is_none() && out.len() >= MAX_ACEPCIONES {
+                continue;
+            }
             let sinonimos: Vec<String> = campos
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty())
@@ -174,19 +189,26 @@ impl Tesauro {
                     let norm = s.to_lowercase();
                     norm != clave && vistos.insert(norm)
                 })
-                .take(MAX_SINONIMOS)
                 .map(|s| s.to_string())
                 .collect();
             if sinonimos.is_empty() {
                 continue;
             }
-            out.push(Acepcion {
-                categoria: match cat.trim().trim_start_matches('(').trim_end_matches(')') {
-                    "-" | "" => None,
-                    c => Some(c.to_string()),
-                },
-                sinonimos,
-            });
+            // Las acepciones que comparten categoría se fusionan: tres grupos
+            // "ADJETIVO" seguidos en el popover se leen como un bug, no como
+            // tres sentidos, y sin la etiqueta que los distinga no aportan nada.
+            match ya {
+                Some(i) => out[i].sinonimos.extend(sinonimos),
+                None => out.push(Acepcion {
+                    categoria,
+                    sinonimos,
+                }),
+            }
+        }
+        // El tope de sinónimos va al final, sobre el grupo fusionado: aplicarlo
+        // por línea dejaba entrar descartes que después se filtraban.
+        for acepcion in out.iter_mut() {
+            acepcion.sinonimos.truncate(MAX_SINONIMOS);
         }
         if out.is_empty() {
             None
@@ -329,6 +351,10 @@ calle|1\n\
 ship|2\n\
 (noun)|vessel|watercraft\n\
 (verb)|transport|send\n\
+rocky|3\n\
+(adj)|bouldery|bouldered|stony\n\
+(adj)|rough|bumpy|jolty\n\
+(adj)|rough\n\
 tab|1\n\
 (noun)|check|chit|bill\n\
 table|1\n\
@@ -415,6 +441,20 @@ crowded|1\n\
         assert_eq!(a[0].categoria.as_deref(), Some("noun"));
         assert_eq!(a[0].sinonimos, vec!["vessel", "watercraft"]);
         assert_eq!(a[1].categoria.as_deref(), Some("verb"));
+    }
+
+    /// Verificado a mano en la app: `rocky` salía con tres grupos "ADJETIVO"
+    /// seguidos y `rough` repetido en dos de ellos.
+    #[test]
+    fn los_sentidos_de_la_misma_categoria_se_fusionan_sin_repetir() {
+        let t = Tesauro::parse(EN, true);
+        let a = t.lookup("rocky");
+        assert_eq!(a.len(), 1, "tres sentidos de adjetivo son un solo grupo");
+        assert_eq!(a[0].categoria.as_deref(), Some("adj"));
+        assert_eq!(
+            a[0].sinonimos,
+            vec!["bouldery", "bouldered", "stony", "rough", "bumpy", "jolty"]
+        );
     }
 
     /// Los fixtures de arriba prueban el parser; este prueba **los datos que se
