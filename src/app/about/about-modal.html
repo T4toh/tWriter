@@ -3,7 +3,10 @@
   <div class="ab-modal" (click)="$event.stopPropagation()">
     @if (about.licencias(); as lic) {
       <header class="ab-header">
-        <h2>{{ lic.app.nombre }} <span class="ab-version">v{{ lic.app.version }}</span></h2>
+        <div class="ab-titulo">
+          <img src="assets/icon.png" alt="" class="ab-icono" />
+          <h2>{{ lic.app.nombre }} <span class="ab-version">v{{ lic.app.version }}</span></h2>
+        </div>
         <p>
           Editor de novelas: conversor de diálogos a estilo RAE, gramática, detector de
           repeticiones, tesauro y exportación a EPUB.
@@ -15,7 +18,10 @@
       </header>
     } @else {
       <header class="ab-header">
-        <h2>Acerca de tWriter</h2>
+        <div class="ab-titulo">
+          <img src="assets/icon.png" alt="" class="ab-icono" />
+          <h2>Acerca de tWriter</h2>
+        </div>
       </header>
     }
 
@@ -90,7 +96,7 @@
     </div>
 
     <div class="ab-actions">
-      <button type="button" class="btn btn-primary" (click)="close()">Cerrar</button>
+      <button type="button" class="btn btn-secondary" (click)="close()">Cerrar</button>
     </div>
   </div>
 }
