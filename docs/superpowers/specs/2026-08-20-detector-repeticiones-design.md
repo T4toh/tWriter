@@ -161,8 +161,18 @@ LT (PR #70). Piezas:
 
 - `checkRepeticiones(force = false)` en `editor.ts`: `extractPlainText` → `detectRepeticiones`
   → `mapRepeticionesToPm` → signal + decoraciones, con `lastRepPlain` para el early-return.
-- Categoría de decoración nueva, con su propio color junto a las que ya hay (typo,
-  grammar, style, misc, RAE).
+- Categoría de decoración nueva: `.repeticion`, **violeta `#8257e6` en
+  `text-decoration: underline wavy`** (con `text-decoration-skip-ink: none`).
+  Dos razones para no usar `border-bottom`: el hue y la forma. La paleta del editor es
+  cálida entera (`--accent` sepia `#5a3a1a`) y los cuatro colores de marca ya están
+  tomados — rojo `#d23030` (grammar typo, RAE char, RAE structure), naranja `#d27a1f`
+  (RAE pending), ámbar `#c89020` (grammar style, RAE typo), amarillo `#ffd500`
+  (`search-hit`). Violeta es lo primero que no choca, y no es verde, que en una marca
+  leería "está bien". Y **todas** las marcas de hoy pintan `border-bottom`
+  (`editor.scss:593-635`; los comentarios dicen "wavy" pero ninguna lo es), así que el
+  canal `text-decoration` está libre entero: una repetición nunca compite por el mismo
+  píxel que un typo. Un solo hex sin `prefers-color-scheme`, como el resto de las marcas
+  — `editor.scss` no tiene bloques de tema y `#8257e6` se lee en crema y en marrón oscuro.
 - Reusa `offsetToPm` y el remapeo por `tr.mapping` que ya existen. Nada nuevo de posiciones.
 - Popover: la palabra, "repetida N palabras antes" y la cuenta (`apariciones`), más dos
   acciones — **ir a la anterior** e **ignorar**. `ignorar` es **de sesión, no persistente**:
@@ -170,13 +180,22 @@ LT (PR #70). Piezas:
   aparecer en el próximo check. Misma semántica acá; lo persistente es el diccionario, y
   para eso está el diccionario. **Sin sinónimos**: el tesauro es otro item del TODO y otro
   PR; este feature dice *dónde*, no *con qué reemplazar*.
-- Toggle propio, `repeticionesAutoDisabled` en settings, calcado de `raeAutoDisabled`.
+- Toggle propio en la barra de arriba, etiqueta **`Repeticiones`**, al lado de `Auto` /
+  `LT` / `RAE`. Persistido como `repeticionesAutoDisabled` en settings, calcado de
+  `raeAutoDisabled` (`settings-service.ts:139` + `settings.rs:106`).
 
 ### Precedencia con las marcas que ya existen
 
 `editor.ts:1240` ya resuelve el solapamiento RAE vs gramática. Las repeticiones entran
 **último**: si un offset ya tiene marca de gramática o de RAE, gana la que estaba. Una
 repetición es una sugerencia de estilo, nunca un error — no debe tapar un typo.
+
+Ojo que el canal separado (`text-decoration` vs `border-bottom`) hace que las dos marcas
+**puedan** convivir en el mismo span sin pisarse visualmente. Aun así la repetición se
+suprime: el conflicto que importa no es el pixel, es el click — un solo popover por
+offset, y `onHostClick` (`editor.ts:1247`) ya resuelve la prioridad para dos categorías.
+Si la calibración muestra que perder repeticiones bajo un typo molesta, la vía es
+renderizar las dos y sumar la tercera rama al handler, no cambiar el color.
 
 ## Calibración (parte del trabajo, no un detalle posterior)
 
