@@ -45,12 +45,16 @@ que entre en un smoke runner:
 
 ```ts
 export interface OpcionesRepeticion {
-  /** Distancia máxima en palabras entre dos apariciones para que cuente. */
+  /** Distancia máxima en palabras entre apariciones para que cuenten juntas. */
   ventana: number;
-  /** Largo mínimo de palabra a considerar. */
+  /** Apariciones dentro de la ventana necesarias para marcar. Default 3. */
+  minApariciones: number;
+  /** Distancia bajo la cual 2 apariciones ya alcanzan (repetición pegada). Default 5. */
+  ventanaCorta: number;
+  /** Largo mínimo de palabra a considerar. Default 5. */
   largoMinimo: number;
-  /** Nombres propios del mundo, del diccionario per-saga. Normalizados. */
-  ignorar: ReadonlySet<string>;
+  /** Nombres propios del mundo, del diccionario per-saga. Se normalizan acá adentro. */
+  ignorar: Iterable<string>;
 }
 
 export function detectRepeticiones(
@@ -70,37 +74,74 @@ export interface Repeticion {
   palabra: string;
   /** Offset de la aparición previa, para el "ir a la anterior" del popover. */
   offsetPrevio: number;
-  /** Distancia en palabras entre las dos apariciones. */
+  /** Distancia en palabras contra la aparición previa. */
   distancia: number;
+  /** Cuántas veces aparece la forma en este párrafo, dentro de la ventana. */
+  apariciones: number;
 }
 ```
 
-Algoritmo: tokenizar con `/\p{L}+/gu`, normalizar (minúsculas + `NFD` sin diacríticos),
-recorrer una vez guardando la última posición de cada forma en un `Map`, y emitir cuando
-la reaparición cae dentro de `ventana`. Un solo pase, O(n).
+Algoritmo: **partir el plano en párrafos** por `\n\n` (que es exactamente el separador
+que ya emite `extractPlainText`, y `* * *` cae como párrafo propio), y correr cada párrafo
+por separado con su offset base. Adentro del párrafo: tokenizar con `/\p{L}+/gu`,
+normalizar (minúsculas + `NFD` sin diacríticos), un solo pase guardando las posiciones de
+cada forma. Un pase, O(n).
 
-### Las tres capas de exclusión — acá se gana o se pierde
+### Decisiones tomadas (2026-08-20, con el autor)
+
+Cuatro preguntas que el spec dejaba abiertas, respondidas antes de escribir código:
+
+- **La ventana NO cruza párrafo.** Reset en cada bloque. Es el caso que molesta al leer, y
+  es el recorte más grande de densidad que se consigue gratis. Se pierde la repetición
+  entre el final de un párrafo y el arranque del siguiente — aceptado.
+- **El umbral es 3 apariciones, con excepción por distancia corta.** Una forma se marca si
+  aparece `minApariciones` (3) veces dentro de `ventana`, **o** si aparece 2 veces a
+  `distancia <= ventanaCorta` (5 palabras). La excepción es la que cubre el caso 1 del
+  problema (`oscura, oscura`), que son 2 apariciones pegadas. Las dos perillas van a
+  settings, no hardcodeadas.
+- **Se marca cada aparición del grupo salvo la primera.** La primera queda limpia; cada
+  siguiente lleva su marca con `offsetPrevio` apuntando a la anterior, que es lo que le da
+  destino al "ir a la anterior" del popover.
+- **Inglés lleva su propia lista de dicendi, nueva, en este módulo.** `DIALOG_TAGS` es
+  español-only (40 verbos × 4 conjugaciones, cero `said`) y el módulo `dialogos/tags.ts`
+  es del validador RAE — no se le mete inglés. `DICENDI_EN` (~15: said, asked, replied,
+  whispered, shouted, muttered, murmured, added, answered…) vive en `detector.ts`.
+- **Quinta capa: nombres propios por heurística.** Token capitalizado que no arranca
+  oración = nombre propio, se ignora, esté o no en `diccionario.txt`. ~10 líneas, y tapa el
+  agujero que quedaba abierto: el autor no tiene todos los nombres de su mundo cargados en
+  el diccionario. Falso negativo conocido: una repetición legítima donde las dos
+  apariciones caen al principio de oración.
+
+### Las cinco capas de exclusión — acá se gana o se pierde
 
 El prototipo crudo, con una stopword list mínima y `ventana: 40`, tiró **6.095 hits en
-59 KB**. Inusable. El algoritmo no está mal; lo que falta son los filtros. Son cuatro y
+59 KB**. Inusable. El algoritmo no está mal; lo que falta son los filtros. Son cinco y
 ninguno es opcional:
 
 1. **Stopwords por idioma.** Listas propias en el módulo (`es` y `en`), no una dependencia.
    Sin esto `que`, `de`, `la` copan la salida.
 2. **Largo mínimo.** Arranque en 5 caracteres. Corta el resto del ruido funcional
-   (`sobre`, `desde`) sin tocar palabras de contenido.
+   (`sobre`, `desde`) sin tocar palabras de contenido. De paso tapa `said` gratis.
 3. **Verbos dicendi.** En diálogo, `dijo` repetido cada tres párrafos es la forma normal
-   del español narrativo, no un defecto. La lista ya existe y es reusable tal cual:
-   `DIALOG_TAGS` en `src/app/dialogos/tags.ts` — ~40 verbos con sus conjugaciones, módulo
-   puro sin DOM. Se importa, no se reescribe.
+   del español narrativo, no un defecto. Para español la lista ya existe y se importa tal
+   cual: `DIALOG_TAGS` en `src/app/dialogos/tags.ts` — módulo puro sin DOM. Para inglés se
+   escribe `DICENDI_EN` en `detector.ts` (ver decisiones arriba).
 4. **El diccionario per-saga.** Crítico y es la capa que no existiría en ninguna otra app:
    `<saga>/diccionario.txt` tiene los nombres propios inventados del mundo. Que `Kallai`
    aparezca cinco veces en una escena es **normal**, no un defecto, y marcarlo haría el
    feature inservible en la práctica. Se pasa `sagaCtx.dictionary()` como `opts.ignorar` —
    la misma fuente que ya filtra los `TYPOS` de LT en `editor.ts`.
+   **Ojo con la normalización**: `dictionary()` devuelve las palabras en minúscula pero
+   **con** diacríticos (`isInDictionary` solo hace `toLowerCase`). El detector normaliza
+   `opts.ignorar` con su propia función antes de comparar, en vez de confiar en que llegue
+   normalizado — sino `Kallái` no matchea nunca.
+5. **Capitalizado mid-oración = nombre propio.** La red de seguridad para los nombres que
+   todavía no están en `diccionario.txt`. Se decide con el token anterior: si no es fin de
+   oración (`.`, `?`, `!`, `…`, raya de diálogo, arranque de párrafo), la mayúscula es
+   nombre propio y no compite.
 
-Incluso con las cuatro, la `ventana` es una perilla de gusto, no un valor correcto. Ver la
-sección de calibración.
+Incluso con las cinco, `ventana` / `minApariciones` / `ventanaCorta` son perillas de gusto,
+no valores correctos. Ver la sección de calibración.
 
 ### Limitación aceptada: match exacto, sin lematizar
 
@@ -123,9 +164,12 @@ LT (PR #70). Piezas:
 - Categoría de decoración nueva, con su propio color junto a las que ya hay (typo,
   grammar, style, misc, RAE).
 - Reusa `offsetToPm` y el remapeo por `tr.mapping` que ya existen. Nada nuevo de posiciones.
-- Popover: la palabra, "repetida N palabras antes", y dos acciones — **ir a la anterior** e
-  **ignorar** (misma semántica que `dismissGrammarMatch`). **Sin sinónimos**: el tesauro es
-  otro item del TODO y otro PR; este feature dice *dónde*, no *con qué reemplazar*.
+- Popover: la palabra, "repetida N palabras antes" y la cuenta (`apariciones`), más dos
+  acciones — **ir a la anterior** e **ignorar**. `ignorar` es **de sesión, no persistente**:
+  `dismissGrammarMatch` (`editor.ts:1052`) solo filtra la lista en memoria y vuelve a
+  aparecer en el próximo check. Misma semántica acá; lo persistente es el diccionario, y
+  para eso está el diccionario. **Sin sinónimos**: el tesauro es otro item del TODO y otro
+  PR; este feature dice *dónde*, no *con qué reemplazar*.
 - Toggle propio, `repeticionesAutoDisabled` en settings, calcado de `raeAutoDisabled`.
 
 ### Precedencia con las marcas que ya existen
@@ -138,12 +182,14 @@ repetición es una sugerencia de estilo, nunca un error — no debe tapar un typ
 
 No se puede elegir `ventana` de memoria. El plan:
 
-1. Correr el detector sobre capítulos reales de `~/Repos/Personal/Novelas/`, en español y
-   en inglés.
-2. Reportar densidad — hits por 1.000 palabras — para `ventana` en 20 / 30 / 40 / 60.
+1. `scripts/densidad-repeticiones.mjs` — corre el detector sobre capítulos reales de
+   `~/Repos/Personal/Novelas/`, en español y en inglés. Script de reporte, no un test:
+   escupe la tabla y una muestra de hits con su contexto.
+2. Reportar densidad — hits por 1.000 palabras — para la grilla `ventana` 20/30/40/60 ×
+   `minApariciones` 2/3, con `ventanaCorta: 5` fijo.
 3. El autor mira una muestra de hits y dice cuáles son señal y cuáles ruido.
-4. Se fija el default con eso, y la `ventana` queda expuesta como "sensibilidad" en
-   settings porque es gusto, no corrección.
+4. Se fijan los defaults con eso, y las tres perillas quedan expuestas como
+   "sensibilidad" en settings porque son gusto, no corrección.
 
 Sin el paso 3 esto no se mergea. Un detector que marca 6.095 veces en un capítulo es peor
 que no tener detector.
@@ -166,10 +212,18 @@ Casos negativos, que son los que de verdad importan porque son los que hacen ins
 feature si fallan:
 
 - Nombre propio de la saga repetido cinco veces → **cero hits** (vía `opts.ignorar`).
+- El mismo nombre pero con diacríticos (`Kallái`) y el diccionario sin normalizar → cero
+  hits. Es el test que falla si el detector confía en que `ignorar` llega normalizado.
+- Nombre propio **ausente** del diccionario, repetido mid-oración → cero hits (capa 5).
 - Diálogo con `dijo` repetido → cero hits (vía `DIALOG_TAGS`).
+- Lo mismo en inglés con `whispered` → cero hits (vía `DICENDI_EN`).
 - Stopwords repetidas (`que`, `de`, `la`) → cero hits.
 - Palabra corta bajo `largoMinimo` → cero hits.
 - Misma palabra más allá de la `ventana` → cero hits.
+- Dos apariciones dentro de `ventana` pero más allá de `ventanaCorta`, con
+  `minApariciones: 3` → cero hits. Es el test del umbral.
+- Misma palabra a los dos lados de un `\n\n` → cero hits. Es el test del reset por
+  párrafo.
 
 La mitad con DOM (decoraciones, popover, precedencia) se valida con `pnpm build` +
 verificación a mano del autor, como manda el `CLAUDE.md`.
@@ -183,3 +237,4 @@ verificación a mano del autor, como manda el `CLAUDE.md`.
 4. Apagar el toggle → las marcas desaparecen y no vuelven.
 5. Un capítulo en inglés → mismo comportamiento.
 6. Una repetición encima de un typo de LT → gana el typo.
+7. Bajar `minApariciones` a 2 en settings → aparecen más marcas, sin reabrir el capítulo.
