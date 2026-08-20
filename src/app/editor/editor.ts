@@ -2,6 +2,7 @@ import {
   AfterViewInit,
   Component,
   ElementRef,
+  HostListener,
   OnDestroy,
   ViewChild,
   computed,
@@ -95,6 +96,7 @@ import {
   setRepeticiones,
 } from './repeticiones-extension';
 import { RepeticionesPopover } from './repeticiones-popover';
+import { palabraEn } from './palabra-en';
 
 interface ToolbarState {
   bold: boolean;
@@ -196,9 +198,11 @@ export class Editor implements AfterViewInit, OnDestroy {
   });
   protected readonly repeticiones = signal<RepeticionPos[]>([]);
   protected readonly repPopover = signal<{
-    repeticion: RepeticionPos;
+    repeticion: RepeticionPos | null;
     palabra: string;
     anchor: AnchorBox;
+    from: number;
+    to: number;
   } | null>(null);
   protected readonly repAcepciones = signal<Acepcion[] | null>(null);
   protected readonly repAuto = computed(() => {
@@ -1283,25 +1287,70 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.repPopover.set(null);
     this.repAcepciones.set(null);
     this.limpiarGrupo();
-    this.tiptap
-      .chain()
-      .focus()
-      .setTextSelection({ from: r.fromPrevio, to: r.toPrevio })
-      .scrollIntoView()
-      .run();
+    if (r) {
+      this.tiptap
+        .chain()
+        .focus()
+        .setTextSelection({ from: r.fromPrevio, to: r.toPrevio })
+        .scrollIntoView()
+        .run();
+    }
   }
 
   protected dismissRepeticion(): void {
     const popover = this.repPopover();
     if (!popover) return;
     this.limpiarGrupo();
-    const dismissedId = popover.repeticion.id;
-    // De sesión, no persistente: al próximo check vuelve. Lo persistente es el
-    // diccionario per-saga, y para eso está el diccionario.
-    this.repeticiones.update((list) => list.filter((r) => r.id !== dismissedId));
-    this.applyRepeticionesDecorations(this.repeticiones());
+    if (popover.repeticion) {
+      const dismissedId = popover.repeticion.id;
+      // De sesión, no persistente: al próximo check vuelve. Lo persistente es
+      // el diccionario per-saga, y para eso está el diccionario.
+      this.repeticiones.update((list) => list.filter((r) => r.id !== dismissedId));
+      this.applyRepeticionesDecorations(this.repeticiones());
+    }
     this.repPopover.set(null);
     this.repAcepciones.set(null);
+  }
+
+  /**
+   * Sinónimos de la palabra del cursor, sin que tenga que haber una repetición
+   * marcada. `Ctrl+Shift+S` sigue el estilo de los atajos que ya hay
+   * (`Ctrl+F` de búsqueda en `app.ts`).
+   */
+  @HostListener('window:keydown.control.shift.s', ['$event'])
+  protected onAtajoTesauro(event: Event): void {
+    if (!this.tiptap) return;
+    event.preventDefault();
+    const state = this.tiptap.state;
+    const $pos = state.selection.$from;
+    // `textBetween(0, content.size, undefined, ' ')` y no `textContent`: el
+    // schema permite `<br>`, que aporta 0 caracteres a `textContent` pero 1 a
+    // las posiciones del nodo. Con `leafText` de un espacio, offsets y
+    // posiciones quedan alineados.
+    const texto = $pos.parent.textBetween(0, $pos.parent.content.size, undefined, ' ');
+    const limites = palabraEn(texto, $pos.parentOffset);
+    if (!limites) return;
+    const inicio = $pos.start();
+    const from = inicio + limites.inicio;
+    const to = inicio + limites.fin;
+    const palabra = state.doc.textBetween(from, to, ' ').trim();
+    if (palabra.length === 0) return;
+    if (this.grammarPopover()) this.closeGrammarPopover();
+    if (this.raePopover()) this.raePopover.set(null);
+    this.limpiarGrupo();
+    const view = (this.tiptap as unknown as {
+      view: { coordsAtPos: (pos: number) => { left: number; top: number; bottom: number } };
+    }).view;
+    const coords = view.coordsAtPos(from);
+    this.repPopover.set({
+      repeticion: null,
+      palabra,
+      anchor: { left: coords.left, top: coords.top, bottom: coords.bottom },
+      from,
+      to,
+    });
+    this.repAcepciones.set(null);
+    void this.cargarSinonimos(palabra);
   }
 
   /** Las marcas que hereda un reemplazo del rango `from..to`. `marksAcross` es
@@ -1323,7 +1372,6 @@ export class Editor implements AfterViewInit, OnDestroy {
     const popover = this.repPopover();
     if (!popover || !this.tiptap) return;
     const r = popover.repeticion;
-    if (!r) return;
     // Dato roto, no una operación válida acá (a diferencia de `applyRaeFix`,
     // que sí puede recibir un borrado real de LT): un sinónimo vacío no
     // reemplaza nada, así que se corta antes de tocar el documento.
@@ -1336,8 +1384,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       original.charAt(0) !== original.charAt(0).toLowerCase()
         ? sinonimo.charAt(0).toUpperCase() + sinonimo.slice(1)
         : sinonimo;
-    const from = r.from;
-    const to = r.to;
+    const { from, to } = popover;
     this.tiptap
       .chain()
       .focus()
@@ -1351,8 +1398,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.limpiarGrupo();
     this.repAcepciones.set(null);
     this.repPopover.set(null);
-    this.repeticiones.update((list) => list.filter((x) => x.id !== r.id));
-    this.applyRepeticionesDecorations(this.repeticiones());
+    if (r) {
+      this.repeticiones.update((list) => list.filter((x) => x.id !== r.id));
+      this.applyRepeticionesDecorations(this.repeticiones());
+    }
     if (this.repAuto()) this.scheduleRepRecheck();
   }
 
@@ -1551,6 +1600,8 @@ export class Editor implements AfterViewInit, OnDestroy {
       // tildes, en minúscula) y mostrarla así se lee como un bug de la app.
       palabra: this.tiptap?.state.doc.textBetween(r.from, r.to, ' ').trim() ?? r.palabra,
       anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
+      from: r.from,
+      to: r.to,
     });
     this.resaltarGrupo(r);
     this.repAcepciones.set(null);

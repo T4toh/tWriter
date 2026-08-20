@@ -26,7 +26,7 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (repeticion(); as r) {
+    @if (anchor()) {
       <div
         #root
         class="rep-pop"
@@ -37,14 +37,20 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
         (click)="$event.stopPropagation()"
       >
         <div class="rep-pop-head">
-          <span class="rep-pop-tag">Repetición</span>
-          <span class="rep-pop-count">{{ r.apariciones }} veces acá cerca</span>
+          <span class="rep-pop-tag">{{ repeticion() ? 'Repetición' : 'Sinónimos' }}</span>
+          @if (repeticion(); as r) {
+            <span class="rep-pop-count">{{ r.apariciones }} veces acá cerca</span>
+          }
         </div>
-        <div class="rep-pop-msg">
-          <span class="rep-pop-word">{{ palabra() }}</span>
-          ya apareció {{ r.distancia }}
-          {{ r.distancia === 1 ? 'palabra' : 'palabras' }} más arriba.
-        </div>
+        @if (repeticion(); as r) {
+          <div class="rep-pop-msg">
+            <span class="rep-pop-word">{{ palabra() }}</span>
+            ya apareció {{ r.distancia }}
+            {{ r.distancia === 1 ? 'palabra' : 'palabras' }} más arriba.
+          </div>
+        } @else {
+          <div class="rep-pop-msg"><span class="rep-pop-word">{{ palabra() }}</span></div>
+        }
         @if (acepciones() === null) {
           <div class="rep-pop-sin">Buscando sinónimos…</div>
         } @else if (acepciones()!.length === 0) {
@@ -70,11 +76,13 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
           }
         }
         <footer class="rep-pop-footer">
-          <button type="button" class="rep-pop-goto" (click)="goToPrevious.emit()">
-            Ir a la anterior
-          </button>
+          @if (repeticion()) {
+            <button type="button" class="rep-pop-goto" (click)="goToPrevious.emit()">
+              Ir a la anterior
+            </button>
+          }
           <button type="button" class="rep-pop-dismiss" (click)="dismiss.emit()">
-            Ignorar
+            {{ repeticion() ? 'Ignorar' : 'Cerrar' }}
           </button>
         </footer>
       </div>
