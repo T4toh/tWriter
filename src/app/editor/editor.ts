@@ -25,6 +25,8 @@ import {
 } from '@lucide/angular';
 import { invoke } from '@tauri-apps/api/core';
 import { Editor as TipTapEditor } from '@tiptap/core';
+import { Mark } from '@tiptap/pm/model';
+import { Transaction } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
 import TextAlign from '@tiptap/extension-text-align';
@@ -1302,16 +1304,30 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.repAcepciones.set(null);
   }
 
+  /** Las marcas que hereda un reemplazo del rango `from..to`. `marksAcross` es
+   *  el lado correcto: toma las marcas que sobreviven de punta a punta del
+   *  span reemplazado, mientras que `marks()` a secas devuelve las del texto
+   *  ANTERIOR a `from`, que está fuera del span (en el borde izquierdo de un
+   *  `<em>` da `[]` y se pierde la cursiva). Con marcas mixtas adentro del
+   *  span se homogeneiza — pérdida acotada en un span de pocos caracteres.
+   *  Usado por `applyRaeFix` y `reemplazarRepeticion`. */
+  private marcasParaReemplazo(tr: Transaction, from: number, to: number): readonly Mark[] {
+    const $f = tr.doc.resolve(from);
+    return to > from ? ($f.marksAcross(tr.doc.resolve(to)) ?? $f.marks()) : $f.marks();
+  }
+
   /** Reemplaza la aparición que está mirando el popover por el sinónimo
-   *  elegido. La herencia de marcas es la misma de `applyRaeFix` — ver el
-   *  comentario largo de ahí: `marksAcross` y no `marks()`, porque en el borde
-   *  de un `<em>` `marks()` devuelve las del texto de afuera y se pierde la
-   *  cursiva. */
+   *  elegido. La herencia de marcas es la de `marcasParaReemplazo` — mismo
+   *  patrón que `applyRaeFix`. */
   protected reemplazarRepeticion(sinonimo: string): void {
     const popover = this.repPopover();
     if (!popover || !this.tiptap) return;
     const r = popover.repeticion;
     if (!r) return;
+    // Dato roto, no una operación válida acá (a diferencia de `applyRaeFix`,
+    // que sí puede recibir un borrado real de LT): un sinónimo vacío no
+    // reemplaza nada, así que se corta antes de tocar el documento.
+    if (sinonimo.trim().length === 0) return;
     const original = popover.palabra;
     // Si la palabra abría oración va con mayúscula, y el sinónimo del tesauro
     // viene siempre en minúscula.
@@ -1327,8 +1343,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       .focus()
       .command(({ tr, state, dispatch }) => {
         if (!dispatch) return true;
-        const $f = tr.doc.resolve(from);
-        const marks = to > from ? ($f.marksAcross(tr.doc.resolve(to)) ?? $f.marks()) : $f.marks();
+        const marks = this.marcasParaReemplazo(tr, from, to);
         tr.replaceWith(from, to, state.schema.text(reemplazo, marks));
         return true;
       })
@@ -1355,17 +1370,9 @@ export class Editor implements AfterViewInit, OnDestroy {
       .command(({ tr, state, dispatch }) => {
         if (!dispatch) return true;
         // La herencia de marcas se hace explícita acá en vez de depender de lo
-        // que decida `insertContent` adentro. `marksAcross` es el lado correcto:
-        // toma las marcas que sobreviven de punta a punta del span reemplazado,
-        // mientras que `marks()` a secas devuelve las del texto ANTERIOR a
-        // `from`, que está fuera del span (en el borde izquierdo de un `<em>`
-        // da `[]` y se pierde la cursiva). Con marcas mixtas adentro del span se
-        // homogeneiza — pérdida acotada en un span de pocos caracteres.
-        const $f = tr.doc.resolve(from);
-        const marks =
-          to > from
-            ? ($f.marksAcross(tr.doc.resolve(to)) ?? $f.marks())
-            : $f.marks();
+        // que decida `insertContent` adentro — ver `marcasParaReemplazo` para
+        // el porqué de `marksAcross`.
+        const marks = this.marcasParaReemplazo(tr, from, to);
         if (replacement.length === 0) {
           // `schema.text('')` tira excepción: un borrado va por `delete`.
           tr.delete(from, to);
