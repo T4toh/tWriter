@@ -10,13 +10,12 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { Repeticion } from '../core/types';
+import { Acepcion, Repeticion } from '../core/types';
 import { AnchorBox, Placement, placePopover } from './popover-position';
 
 /**
- * Popover de una repetición cercana. Dice DÓNDE está la repetición, no con qué
- * reemplazarla: los sinónimos son otro item del TODO (el tesauro de rla-es) y
- * otro PR.
+ * Popover de una repetición cercana. Dice DÓNDE está la repetición y, con los
+ * chips de sinónimos del tesauro embebido, ofrece con qué reemplazarla.
  *
  * La mecánica de medición y colocación es la misma que `RaePopover` — ver el
  * comentario largo de ahí para por qué se mide el elemento real en vez de
@@ -46,6 +45,30 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
           ya apareció {{ r.distancia }}
           {{ r.distancia === 1 ? 'palabra' : 'palabras' }} más arriba.
         </div>
+        @if (acepciones() === null) {
+          <div class="rep-pop-sin">Buscando sinónimos…</div>
+        } @else if (acepciones()!.length === 0) {
+          <div class="rep-pop-sin">Sin sinónimos para «{{ palabra() }}»</div>
+        } @else {
+          @for (a of acepciones()!; track $index) {
+            <div class="rep-pop-acepcion">
+              @if (a.categoria) {
+                <span class="rep-pop-cat">{{ categoriaEs(a.categoria) }}</span>
+              }
+              <div class="rep-pop-chips">
+                @for (s of a.sinonimos; track s) {
+                  <button
+                    type="button"
+                    class="rep-pop-chip"
+                    (click)="reemplazar.emit(s)"
+                  >
+                    {{ s }}
+                  </button>
+                }
+              </div>
+            </div>
+          }
+        }
         <footer class="rep-pop-footer">
           <button type="button" class="rep-pop-goto" (click)="goToPrevious.emit()">
             Ir a la anterior
@@ -66,8 +89,24 @@ export class RepeticionesPopover {
    *  error de la app. */
   palabra = input<string>('');
   anchor = input<AnchorBox | null>(null);
+  /** `null` mientras la consulta está en vuelo; `[]` cuando no hay sinónimos. */
+  acepciones = input<Acepcion[] | null>(null);
   goToPrevious = output<void>();
   dismiss = output<void>();
+  reemplazar = output<string>();
+
+  /** Las categorías vienen del dato en inglés (`noun`, `verb`, …) y la UI es en
+   *  español. Lo que no está en la tabla se muestra tal cual en vez de tragarse
+   *  la etiqueta. */
+  protected categoriaEs(cat: string): string {
+    const tabla: Record<string, string> = {
+      noun: 'sustantivo',
+      verb: 'verbo',
+      adj: 'adjetivo',
+      adv: 'adverbio',
+    };
+    return tabla[cat] ?? cat;
+  }
 
   private readonly root = viewChild<ElementRef<HTMLElement>>('root');
   protected readonly placed = signal<Placement | null>(null);

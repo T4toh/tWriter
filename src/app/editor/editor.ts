@@ -52,7 +52,8 @@ import {
 import { SystemFontsService } from '../core/system-fonts-service';
 import { FontsService } from '../core/fonts-service';
 import { Select, SelectGroup, SelectOption } from '../shared/select';
-import { GrammarMatch, RaeViolation } from '../core/types';
+import { Acepcion, GrammarMatch, RaeViolation } from '../core/types';
+import { TesauroService } from '../core/tesauro-service';
 import { convert as convertRae } from '../dialogos/converter';
 import { suggestFromDictionary } from '../dictionary/suggest';
 import { educateQuotes } from '../quotes/educate';
@@ -138,6 +139,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private cursorRestore = inject(CursorRestoreService);
   private debug = inject(DebugService);
   private toast = inject(ToastService);
+  private readonly tesauro = inject(TesauroService);
 
   /** Pane que renderiza este editor. Default 0 = principal. 1 = secundario (split). */
   readonly paneId = input<PaneId>(0);
@@ -196,6 +198,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     palabra: string;
     anchor: AnchorBox;
   } | null>(null);
+  protected readonly repAcepciones = signal<Acepcion[] | null>(null);
   protected readonly repAuto = computed(() => {
     if (!this.canCheckRepeticiones()) return false;
     return !this.settings.repeticionesAutoDisabled();
@@ -1276,6 +1279,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!popover || !this.tiptap) return;
     const r = popover.repeticion;
     this.repPopover.set(null);
+    this.repAcepciones.set(null);
     this.limpiarGrupo();
     this.tiptap
       .chain()
@@ -1295,6 +1299,46 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.repeticiones.update((list) => list.filter((r) => r.id !== dismissedId));
     this.applyRepeticionesDecorations(this.repeticiones());
     this.repPopover.set(null);
+    this.repAcepciones.set(null);
+  }
+
+  /** Reemplaza la aparición que está mirando el popover por el sinónimo
+   *  elegido. La herencia de marcas es la misma de `applyRaeFix` — ver el
+   *  comentario largo de ahí: `marksAcross` y no `marks()`, porque en el borde
+   *  de un `<em>` `marks()` devuelve las del texto de afuera y se pierde la
+   *  cursiva. */
+  protected reemplazarRepeticion(sinonimo: string): void {
+    const popover = this.repPopover();
+    if (!popover || !this.tiptap) return;
+    const r = popover.repeticion;
+    if (!r) return;
+    const original = popover.palabra;
+    // Si la palabra abría oración va con mayúscula, y el sinónimo del tesauro
+    // viene siempre en minúscula.
+    const reemplazo =
+      original.charAt(0) === original.charAt(0).toUpperCase() &&
+      original.charAt(0) !== original.charAt(0).toLowerCase()
+        ? sinonimo.charAt(0).toUpperCase() + sinonimo.slice(1)
+        : sinonimo;
+    const from = r.from;
+    const to = r.to;
+    this.tiptap
+      .chain()
+      .focus()
+      .command(({ tr, state, dispatch }) => {
+        if (!dispatch) return true;
+        const $f = tr.doc.resolve(from);
+        const marks = to > from ? ($f.marksAcross(tr.doc.resolve(to)) ?? $f.marks()) : $f.marks();
+        tr.replaceWith(from, to, state.schema.text(reemplazo, marks));
+        return true;
+      })
+      .run();
+    this.limpiarGrupo();
+    this.repAcepciones.set(null);
+    this.repPopover.set(null);
+    this.repeticiones.update((list) => list.filter((x) => x.id !== r.id));
+    this.applyRepeticionesDecorations(this.repeticiones());
+    if (this.repAuto()) this.scheduleRepRecheck();
   }
 
   protected applyRaeFix(): void {
@@ -1502,6 +1546,18 @@ export class Editor implements AfterViewInit, OnDestroy {
       anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
     });
     this.resaltarGrupo(r);
+    this.repAcepciones.set(null);
+    void this.cargarSinonimos(this.repPopover()!.palabra);
+  }
+
+  /** La consulta es asincrónica y el popover se puede haber cerrado o movido a
+   *  otra palabra mientras estaba en vuelo: se descarta el resultado viejo
+   *  comparando contra la palabra que está abierta ahora. */
+  private async cargarSinonimos(palabra: string): Promise<void> {
+    const idioma = this.meta().idioma === 'en' ? 'en' : 'es';
+    const res = await this.tesauro.lookup(palabra, idioma);
+    if (this.repPopover()?.palabra !== palabra) return;
+    this.repAcepciones.set(res);
   }
 
   /**
