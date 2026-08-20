@@ -371,6 +371,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   private skipNextRaeRemap = false;
   private lastGrammarUserDisabled = false;
   private lastGrammarAvailable = false;
+  /** Firma de la config de LT que produjo las marcas actuales. Cambiarla
+   *  invalida los matches aunque el texto no se haya tocado. */
+  private lastGrammarCfgKey: string | null = null;
   private lastCheckedPlain: string | null = null;
   private lastRaePlain: string | null = null;
   private lastRaeAuto = false;
@@ -528,6 +531,24 @@ export class Editor implements AfterViewInit, OnDestroy {
       if (!avail) return;
       if (!this.viewReady() || !this.tiptap) return;
       if (this.canCheckGrammar()) void this.checkGrammar();
+    });
+
+    // La config de LT cambió (nivel picky, variante regional) desde el modal
+    // de gramática. El texto no cambió, así que el early-return por
+    // `lastCheckedPlain` se comería el recheck — de ahí el `force`. Sin esto
+    // el toggle parece no hacer nada hasta que el autor tipea algo.
+    effect(() => {
+      const key = [
+        this.settings.grammarPicky() ? 'picky' : 'default',
+        this.settings.grammarVariantEs(),
+        this.settings.grammarVariantEn(),
+      ].join('|');
+      if (key === this.lastGrammarCfgKey) return;
+      const first = this.lastGrammarCfgKey === null;
+      this.lastGrammarCfgKey = key;
+      if (first) return;
+      if (!this.viewReady() || !this.tiptap) return;
+      if (this.canCheckGrammar()) void this.checkGrammar(true);
     });
 
     // Re-filtrado en vivo cuando el diccionario de la saga cambia. Caso
@@ -938,8 +959,20 @@ export class Editor implements AfterViewInit, OnDestroy {
       return;
     }
     this.grammarUsed.set(true);
+    // Snapshot del doc para detectar staleness: `ranges` se calculó contra ESTE
+    // doc, y el round-trip a LT tarda segundos. Si el autor sigue escribiendo
+    // mientras el request vuela, mapear los offsets viejos contra el doc nuevo
+    // corre las marcas. Los docs de ProseMirror son inmutables, así que la
+    // comparación por identidad es O(1) (una transacción de selección o de
+    // decoraciones no cambia el objeto doc — solo las que tocan contenido).
+    const docAtRequest = this.tiptap.state.doc;
     try {
       const matches = await this.grammar.check(plain, lang);
+      if (!this.tiptap || this.tiptap.state.doc !== docAtRequest) {
+        this.debug.info('grammar', 'resultado descartado: el doc cambió durante el check');
+        this.scheduleGrammarRecheck();
+        return;
+      }
       const positioned = mapMatchesToPm(
         matches,
         ranges,

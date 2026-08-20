@@ -7,6 +7,112 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
+- **Wizard de revisión de errores** (paralelo al chequeo inline, a pedido del
+  autor): botón al lado de `Auto` / `LT` en la barra de arriba que abre un
+  popup y camina los matches del capítulo **uno por uno** — mostrar contexto,
+  la sugerencia, y Aceptar / Ignorar / Agregar al diccionario / Siguiente.
+  No reemplaza las marcas inline: se apoya en `grammarMatches()`, que ya
+  tiene los `from`/`to` mapeados a posiciones PM (`GrammarMatchPos`), así que
+  el wizard solo necesita ordenarlos por `from`, hacer `scrollIntoView` +
+  selección en cada paso y reusar el apply de `grammar-popover.ts`. Ojo con
+  dos cosas: (a) aceptar una sugerencia cambia el doc y por lo tanto invalida
+  los offsets de los matches siguientes — remapear con `tr.mapping` como ya
+  hace el plugin, NO re-chequear en cada paso; (b) el `Auto` puede disparar un
+  `checkGrammar` a mitad del recorrido y pisar la lista — pausar el auto-check
+  mientras el wizard está abierto. Decidir si incluye también violaciones RAE
+  (`raeViolations()`) o solo gramática.
+- **Ortografía y semántica sin depender de un servicio que el autor levante**
+  (pedido del autor; prioriza **embebido o de fondo** sobre "instalate un
+  runtime"). El criterio: si hay que explicarle al usuario cómo levantar un
+  daemon, ya perdimos — vale para él mismo, que tiene todo para correr un
+  Ollama y aun así lo considera demasiado. Ordenado por cuán realista es:
+  - **`zspell` (Rust puro) o `hunspell-rs` + diccionarios de LibreOffice**
+    (`es_AR` de la RLA, `en_US`/`en_GB`). Ortografía **solamente**, cero
+    gramática, pero se linkea en `src-tauri` y funciona offline y sin
+    container. Valor concreto: seguís teniendo typos marcados cuando LT está
+    caído, que hoy es un agujero. Es el más barato de los tres y el que
+    menos promete de más.
+  - **Harper** (`harper-core`, Automattic) — checker gramatical en Rust,
+    offline, lints en milisegundos. Arquitectónicamente es el calce ideal:
+    es un **crate**, se linkea directo en `src-tauri`, sin container, sin
+    sidecar, sin HTTP — y con eso se evapora toda la clase de bugs de la que
+    salió el guard de staleness (chunking, rate limit, offsets viejos).
+    **Bloqueante**: el README oficial dice "Harper currently only supports
+    English". El español no existe ni de cerca. Sumarlo hoy significa dos
+    motores distintos según el idioma del capítulo — decidir si esa
+    complejidad vale por la mitad inglesa, o esperar.
+  - **Semántica / estilo por LLM** — es lo único que de verdad supera a LT
+    en prosa literaria española (ve registro, repetición, ritmo, cosas que
+    ningún motor de reglas alcanza). **Descartado por ahora, decisión
+    explícita del autor**: levantar un Ollama es demasiada carga operativa
+    para el usuario final. Si algún día entra, entra **embebido** (modelo
+    chico bundleado o llama.cpp linkeado), nunca como "instalate esto
+    aparte". Ojo con dos cosas cuando se retome: no devuelve offsets
+    estables — hay que mapear por diff en vez de por `offset`+`length` — y
+    va como feature aparte, jamás reemplazando el inline.
+- **Capacidades de LanguageTool que hoy NO usamos** (relevadas contra el
+  swagger oficial + probadas contra el container local, LT 6.8 OSS):
+  - [x] `level=picky` en `/v2/check` — **implementado**: toggle "Modo exigente
+    (picky)" en el modal de gramática, off por default, persistido como
+    `grammarPicky` en `settings.json`. El nivel se resuelve en
+    `grammar.rs::level_for`. Verificado que **funciona** en el container libre:
+    activa reglas extra de texto formal (`TOO_LONG_SENTENCE` aparece en `picky`
+    y no en `default`). **Pero solo en inglés**: probado con muestras de
+    redundancia y de oración larga en español, `picky` no agregó ni un match
+    sobre `default` — el ruleset ES de LT es mucho más flaco; el texto del
+    toggle lo avisa. Al cambiarlo, un effect en `editor.ts` dispara
+    `checkGrammar(true)` (el `force` es necesario: el texto no cambió, así que
+    el early-return por `lastCheckedPlain` se comería el recheck). El mismo
+    effect cubre los cambios de variante regional, que arrastraban el mismo
+    bug.
+  - `disabledRules` / `enabledOnly` — el silenciado per-saga hoy solo puede
+    tapar **palabras** (diccionario, filtro de `TYPOS` en `editor.ts`). Con
+    `disabledRules` se podría silenciar una **regla** entera que moleste en
+    prosa de ficción, persistida en `saga.json`. Requiere exponer el
+    `rule.id` en el popover para que el autor sepa qué desactivar.
+    **Regla concreta ya identificada**: con `picky` prendido, LT marca `Shit`
+    en diálogo con `PROFANITY_XML` (categoría `STYLE`, "This word is
+    considered offensive"). Verificado que es picky-only (en `default` no
+    aparece) y que `disabledRules=PROFANITY_XML` la apaga limpio. No es un
+    bug — el toggle está haciendo exactamente lo que promete — pero en
+    ficción con personajes que putean es una regla que el autor va a querer
+    apagar sin perder el resto de `picky`. Junto con `TOO_LONG_SENTENCE`,
+    son las dos primeras candidatas de la lista per-saga.
+  - `motherTongue` — habilita chequeos de false friends. Probado con
+    `motherTongue=es` sobre texto en inglés: cero matches en las muestras,
+    el archivo de false friends es-en parece muy chico. Bajo valor.
+  - `data` (AnnotatedText) — mandar markup marcado en vez de texto plano.
+    **No sirve acá**: nuestra fuente es un doc de ProseMirror, no un string
+    con markup, y `extractPlainText` + `ranges` ya resuelve el mapeo de
+    offsets de forma equivalente. Descartado.
+  - **N-gramas (`langtool_languageModel`) — PROBADO Y DESCARTADO PARA ESPAÑOL.**
+    La idea era detectar pares confundibles que el motor de reglas no ve
+    (`haber`/`a ver`, `hecho`/`echo`). Se probó de verdad: bajado
+    `ngrams-es-20150915.zip` (1.6 GB zip / 3.1 GB desplegado) a
+    `~/.twriter/ngrams`, montado en un container aparte en `:8082` con
+    `-e langtool_languageModel=/ngrams -v ~/.twriter/ngrams:/ngrams:ro`
+    (el log confirma `languageModel=/ngrams`, el mount se ve adentro), y
+    A/B contra el container normal de `:8081` con 12 oraciones de pares
+    confundibles típicos del español. **Resultado: 0/12 casos donde los
+    ngramas agregan un solo match.** La causa está en el propio LT, no en el
+    setup: `org/languagetool/resource/<lang>/confusion_sets.txt` trae **5
+    pares para español** (`casa;caza`, `ciento;siento`, `cima;sima`,
+    `honda;onda`, `sumo;zumo` — todos seseo, inútiles para un autor
+    argentino) contra **782 para inglés**. Ni forzando una oración con uno de
+    los 5 pares reales dispara. Conclusión: 3.1 GB de disco por nada.
+    **Pendiente**: el inglés es otra historia — 782 pares es donde esto
+    pagaría. Cuesta 9.0 GB (`ngrams-en-20150817.zip`, ~17 GB desplegado).
+    Si se decide que vale, el cambio en código es `run_args()` en
+    `grammar.rs:220`, que hoy devuelve `Vec<&'static str>` hardcodeado y
+    habría que pasar a `Vec<String>` para poder inyectar el path del mount.
+  - **Lo que LT NO tiene** (no volver a buscarlo): no hay endpoint de
+    **sinónimos** — el swagger completo son `/v2/check`, `/v2/languages`,
+    `/v2/words`, `/v2/words/add`, `/v2/words/delete` y nada más; los
+    sinónimos del editor web de LT son un servicio propietario que no está
+    en la API. Y `/v2/words` (diccionario personal) es **Premium**: el
+    container local contesta `403 AuthException` incluso con credenciales.
+    Confirma la decisión ya tomada en la sección de Búsqueda: el
+    diccionario per-saga (`<saga>/diccionario.txt`) es el camino.
 - **Marcador huérfano post jump-to-term**: el highlight naranja de
   `requestHighlight` (search → click resultado) o de la selección nativa
   del jump queda pegado sobre el carácter (típicamente un em-dash) aún

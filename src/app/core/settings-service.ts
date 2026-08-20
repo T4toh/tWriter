@@ -91,6 +91,7 @@ interface Settings {
   grammarLtUsername?: string | null;
   grammarVariantEs?: string | null;
   grammarVariantEn?: string | null;
+  grammarPicky?: boolean;
   grammarAutoDisabled?: boolean;
   raeAutoDisabled?: boolean;
   rightPanelWidth?: RightPanelWidth;
@@ -128,6 +129,10 @@ export class SettingsService {
   readonly grammarLtUsername = signal<string | null>(null);
   readonly grammarVariantEs = signal<string>('es-AR');
   readonly grammarVariantEn = signal<string>('en-US');
+  /** `level=picky` en LanguageTool: reglas extra de texto formal. Off por
+   *  default — en prosa de novela las oraciones largas son deliberadas, y
+   *  además el ruleset picky de LT solo agrega algo en inglés. */
+  readonly grammarPicky = signal<boolean>(false);
   /** Auto-check de gramática desactivado por el usuario. Persiste cross-session. */
   readonly grammarAutoDisabled = signal<boolean>(false);
   /** Auto-check del validador RAE desactivado por el usuario. Persiste cross-session. */
@@ -174,6 +179,7 @@ export class SettingsService {
       this.grammarLtUsername.set(s.grammarLtUsername ?? null);
       this.grammarVariantEs.set(s.grammarVariantEs ?? 'es-AR');
       this.grammarVariantEn.set(s.grammarVariantEn ?? 'en-US');
+      this.grammarPicky.set(s.grammarPicky ?? false);
       this.grammarAutoDisabled.set(s.grammarAutoDisabled ?? false);
       this.raeAutoDisabled.set(s.raeAutoDisabled ?? false);
       this.rightPanelWidth.set(s.rightPanelWidth ?? RIGHT_PANEL_DEFAULT);
@@ -335,6 +341,11 @@ export class SettingsService {
     await this.persist();
   }
 
+  async setGrammarPicky(picky: boolean): Promise<void> {
+    this.grammarPicky.set(picky);
+    await this.persist();
+  }
+
   async setGrammarAutoDisabled(disabled: boolean): Promise<void> {
     this.grammarAutoDisabled.set(disabled);
     await this.persist();
@@ -393,6 +404,7 @@ export class SettingsService {
       grammarLtUsername: this.grammarLtUsername(),
       grammarVariantEs: this.grammarVariantEs(),
       grammarVariantEn: this.grammarVariantEn(),
+      grammarPicky: this.grammarPicky() || undefined,
       grammarAutoDisabled: this.grammarAutoDisabled(),
       raeAutoDisabled: this.raeAutoDisabled(),
       rightPanelWidth: this.rightPanelWidth(),

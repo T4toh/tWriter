@@ -65,6 +65,7 @@ export class GrammarSettings {
   protected readonly clearKeyOnSave = signal<boolean>(false);
   protected readonly variantEs = signal<string>('es-AR');
   protected readonly variantEn = signal<string>('en-US');
+  protected readonly picky = signal<boolean>(false);
   protected readonly testing = signal<boolean>(false);
   protected readonly testResult = signal<'ok' | 'fail' | null>(null);
   protected readonly saving = signal<boolean>(false);
@@ -86,6 +87,7 @@ export class GrammarSettings {
         void this.refreshApiKeyStatus();
         this.variantEs.set(this.settings.grammarVariantEs());
         this.variantEn.set(this.settings.grammarVariantEn());
+        this.picky.set(this.settings.grammarPicky());
         this.testResult.set(null);
         this.dockerMessage.set(null);
         this.dockerPhase.set(null);
@@ -206,6 +208,7 @@ export class GrammarSettings {
         ltApiKey: this.ltApiKey().trim() || null,
         variantEs: this.variantEs(),
         variantEn: this.variantEn(),
+        picky: this.picky(),
       };
       const ok = await invoke<boolean>('check_grammar_available', { cfg });
       this.testResult.set(ok ? 'ok' : 'fail');
@@ -223,6 +226,7 @@ export class GrammarSettings {
       const user = this.ltUsername().trim() || null;
       const newKey = this.ltApiKey().trim();
       await this.settings.setGrammarVariants(this.variantEs(), this.variantEn());
+      await this.settings.setGrammarPicky(this.picky());
       await this.grammar.setMode(this.mode(), url, user);
 
       // apiKey va al keyring por separado. Solo tocar si:
