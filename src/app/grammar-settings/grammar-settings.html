@@ -425,6 +425,62 @@
           </span>
         </div>
       </label>
+
+      <div class="gs-section-divider">Repeticiones cercanas</div>
+
+      <p class="gs-muted-note">
+        Detector local: marca palabras de contenido que se repiten a poca
+        distancia, algo que LanguageTool no ve en ningún idioma. No usa LT ni
+        manda texto a ninguna parte. Se prende y apaga desde el botón
+        <strong>Repeticiones</strong> de la barra del editor; acá se elige qué
+        formas de repetición <em>deliberada</em> se filtran.
+      </p>
+
+      <label class="gs-option">
+        <input
+          type="checkbox"
+          [checked]="excConstruccion()"
+          (change)="excConstruccion.set(!excConstruccion())"
+        />
+        <div class="gs-option-text">
+          <strong>Construcciones hechas</strong>
+          <span class="muted">
+            <em>cuerpo a cuerpo</em>, <em>cara a cara</em>, <em>side by side</em>.
+            La repetición es la construcción misma.
+          </span>
+        </div>
+      </label>
+
+      <label class="gs-option">
+        <input
+          type="checkbox"
+          [checked]="excFraseRepetida()"
+          (change)="excFraseRepetida.set(!excFraseRepetida())"
+        />
+        <div class="gs-option-text">
+          <strong>Frases repetidas y locuciones</strong>
+          <span class="muted">
+            <em>—¡Guía nocturno! ¡Guía nocturno!</em> (énfasis de diálogo) y
+            <em>a veces… a veces</em> (locución fija).
+          </span>
+        </div>
+      </label>
+
+      <label class="gs-option">
+        <input
+          type="checkbox"
+          [checked]="excAnafora()"
+          (change)="excAnafora.set(!excAnafora())"
+        />
+        <div class="gs-option-text">
+          <strong>Anáfora</strong>
+          <span class="muted">
+            La misma palabra abriendo cláusulas paralelas:
+            <em>loved traveling…, loved hearing…, loved watching…</em>. Es figura
+            de estilo, no descuido.
+          </span>
+        </div>
+      </label>
     </div>
 
     <footer class="gs-actions">

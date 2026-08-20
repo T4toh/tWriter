@@ -66,6 +66,11 @@ export class GrammarSettings {
   protected readonly variantEs = signal<string>('es-AR');
   protected readonly variantEn = signal<string>('en-US');
   protected readonly picky = signal<boolean>(false);
+  /** Las tres formas de repetición deliberada que filtra el detector local.
+   *  Prendidas = se filtran, que es el default. */
+  protected readonly excConstruccion = signal<boolean>(true);
+  protected readonly excFraseRepetida = signal<boolean>(true);
+  protected readonly excAnafora = signal<boolean>(true);
   protected readonly testing = signal<boolean>(false);
   protected readonly testResult = signal<'ok' | 'fail' | null>(null);
   protected readonly saving = signal<boolean>(false);
@@ -88,6 +93,10 @@ export class GrammarSettings {
         this.variantEs.set(this.settings.grammarVariantEs());
         this.variantEn.set(this.settings.grammarVariantEn());
         this.picky.set(this.settings.grammarPicky());
+        const exc = this.settings.repeticionesExcepciones();
+        this.excConstruccion.set(exc.construccion);
+        this.excFraseRepetida.set(exc.fraseRepetida);
+        this.excAnafora.set(exc.anafora);
         this.testResult.set(null);
         this.dockerMessage.set(null);
         this.dockerPhase.set(null);
@@ -227,6 +236,11 @@ export class GrammarSettings {
       const newKey = this.ltApiKey().trim();
       await this.settings.setGrammarVariants(this.variantEs(), this.variantEn());
       await this.settings.setGrammarPicky(this.picky());
+      await this.settings.setRepeticionesExcepciones({
+        construccion: this.excConstruccion(),
+        fraseRepetida: this.excFraseRepetida(),
+        anafora: this.excAnafora(),
+      });
       await this.grammar.setMode(this.mode(), url, user);
 
       // apiKey va al keyring por separado. Solo tocar si:

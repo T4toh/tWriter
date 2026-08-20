@@ -634,6 +634,19 @@
   border-bottom: 2px dotted #c89020;
 }
 
+/* ─── Repeticiones cercanas ─── */
+/* Violeta y `text-decoration`, no `border-bottom`: la paleta del editor es
+ * cálida entera y sus cuatro colores de marca ya están tomados (rojo #d23030,
+ * naranja #d27a1f, ámbar #c89020, amarillo #ffd500), y todas las marcas de
+ * arriba pintan el borde inferior. Con el canal separado, una repetición sobre
+ * un typo no compite por el mismo pixel. Verde queda descartado: en una marca
+ * leería "está bien". */
+.editor-host ::ng-deep .repeticion {
+  cursor: pointer;
+  text-decoration: underline wavy #8257e6;
+  text-decoration-skip-ink: none;
+}
+
 /* ─── Search highlights ─── */
 /* Marca de todas las ocurrencias de la query mientras el panel de búsqueda
  * esté abierto. Convive con grammar/rae sin romper sus borders. */

@@ -134,6 +134,19 @@
       }
     }
 
+    @if (canCheckRepeticiones()) {
+      <span class="sep"></span>
+      <button
+        type="button"
+        class="tb-btn tb-text"
+        [class.active]="repAuto()"
+        (click)="toggleAutoRepeticiones()"
+        title="Marca palabras que se repiten cerca. 100% local, no usa LanguageTool"
+      >
+        Repeticiones
+      </button>
+    }
+
     @if (canApplyQuotes()) {
       <span class="sep"></span>
       <button
@@ -399,5 +412,15 @@
     (apply)="applyRaeFix()"
     (applyParagraph)="applyRaeParagraph()"
     (dismiss)="dismissRae()"
+  />
+}
+
+@if (repPopover(); as pp) {
+  <app-repeticiones-popover
+    [repeticion]="pp.repeticion"
+    [palabra]="pp.palabra"
+    [anchor]="pp.anchor"
+    (goToPrevious)="goToPreviousRepeticion()"
+    (dismiss)="dismissRepeticion()"
   />
 }
