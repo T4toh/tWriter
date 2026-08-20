@@ -197,10 +197,16 @@ impl Tesauro {
 /// menudo de lo que falla; hacerlo bien pide morfología que no vale la pena
 /// acá. El usuario ve el resultado antes de aceptarlo.
 fn pluralizar_en(s: &str) -> String {
+    let anteultima = s.chars().rev().nth(1);
     if s.ends_with('s') {
         s.to_string()
     } else if s.ends_with('x') || s.ends_with('z') || s.ends_with("ch") || s.ends_with("sh") {
         format!("{s}es")
+    // Consonante + `y` → `ies` (`extremity` → `extremities`). Con vocal antes
+    // de la `y` cae al `+s` de siempre, que es el caso fácil (`boy` → `boys`):
+    // esa distinción es toda la regla.
+    } else if s.ends_with('y') && matches!(anteultima, Some(c) if !"aeiou".contains(c)) {
+        format!("{}ies", s.trim_end_matches('y'))
     } else {
         format!("{s}s")
     }
@@ -318,6 +324,8 @@ dog|1\n\
 (noun)|domestic dog|Canis familiaris|canine|canid\n\
 stone|1\n\
 (noun)|rock|natural object\n\
+hand|1\n\
+(noun)|manus|mitt|paw|extremity\n\
 word|1\n\
 (noun)|Son|Word|Logos|Logos|hypostasis\n\
 crowded|1\n\
@@ -496,6 +504,9 @@ crowded|1\n\
             t.lookup("stones")[0].sinonimos,
             vec!["rocks", "natural objects"]
         );
+        let h = &t.lookup("hands")[0].sinonimos;
+        assert_eq!(h, &vec!["manus", "mitts", "paws", "extremities"]);
+        assert!(!h.iter().any(|x| x.ends_with("ys")), "`y` sin convertir: {h:?}");
     }
 
     #[test]
@@ -506,6 +517,9 @@ crowded|1\n\
         assert_eq!(pluralizar_en("church"), "churches");
         assert_eq!(pluralizar_en("bush"), "bushes");
         assert_eq!(pluralizar_en("rock"), "rocks");
+        // Las dos ramas de la `y`.
+        assert_eq!(pluralizar_en("extremity"), "extremities");
+        assert_eq!(pluralizar_en("boy"), "boys");
     }
 
     #[test]
