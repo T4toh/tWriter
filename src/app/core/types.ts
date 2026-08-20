@@ -145,3 +145,10 @@ export interface Repeticion {
    *  largo de un párrafo largo da varios hits con cuentas chicas. */
   apariciones: number;
 }
+
+/** Una acepción del tesauro. `categoria` es `null` en español (el dato MyThes no
+ *  la trae) y `'noun'` / `'verb'` / `'adj'` / `'adv'` en inglés. */
+export interface Acepcion {
+  categoria: string | null;
+  sinonimos: string[];
+}
