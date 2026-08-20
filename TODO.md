@@ -290,9 +290,10 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   encontró `th_en_US_v2.dat` en la extensión `dict-en` de LibreOffice
   (`/Applications/LibreOffice.app/Contents/Resources/extensions/`), que sale
   de WordNet 2.1 (Princeton) y no de rla-es. Crudo: 145.866 entradas, 18,5
-  MB. El inglés sí distingue categoría gramatical y trae hiperónimos
-  etiquetados (`(generic term)`) que WordNet no separa de los sinónimos
-  reales:
+  MB. El inglés trae categoría gramatical en todas sus acepciones (el español
+  también la trae, pero solo en ~810 de las suyas, con las abreviaturas de la
+  RAE: `(m.)`, `(adj.)`, `(prnl.)`, …) y trae hiperónimos etiquetados
+  (`(generic term)`) que WordNet no separa de los sinónimos reales:
   ```
   ship|6
   (noun)|vessel (generic term)|watercraft (generic term)
@@ -336,7 +337,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   **Implementado sin cerrar** (`feat/tesauro-embebido`), spec en
   `docs/superpowers/specs/2026-08-20-tesauro-design.md`. Backend en
   `src-tauri/src/tesauro.rs` (parser MyThes, normalizaciones, caché
-  `OnceLock` por idioma, comando `tesauro_lookup`, 10 tests inline).
+  `OnceLock` por idioma, comando `tesauro_lookup`, 16 tests inline).
   Frontend en `src/app/core/tesauro-service.ts` (caché de 50 consultas) y los
   chips del popover de repeticiones (ver el sub-item de más arriba), más
   `Ctrl+Shift+S` sobre la palabra bajo el cursor (`src/app/editor/palabra-en.ts`

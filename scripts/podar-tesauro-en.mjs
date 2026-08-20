@@ -5,7 +5,7 @@
 // se los manda al final de la acepción: para cambiar una palabra repetida en
 // una novela un hiperónimo es un reemplazo aceptable y el autor lo ve antes de
 // aceptarlo, pero lo bueno (los sinónimos reales) tiene que salir primero
-// porque el popover corta en 12. Los etiquetados `(related term)`,
+// porque `MAX_SINONIMOS` de `tesauro.rs` corta la acepción en 12. Los etiquetados `(related term)`,
 // `(similar term)` y `(antonym)` sí se descartan enteros: no son sinónimos.
 //
 // Recalcula el N de cada entrada y descarta las que quedan sin ninguna acepción,

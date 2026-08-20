@@ -35,14 +35,20 @@ licencia es más permisiva que la del español (basta reproducir el aviso de cop
 disclaimer; permite modificar).
 
 Formato MyThes, primera línea el encoding, después `palabra|N` y N líneas de acepción. El
-español no distingue categoría gramatical:
+español casi nunca trae la categoría gramatical — el campo es `-`:
 
 ```
 nave|8
 -|bajel|buque|barco|navío|nao|embarcación|galera|carabela
 ```
 
-El inglés sí, y trae hiperónimos etiquetados:
+**Pero a veces sí**: ~810 acepciones de `th_es_v2.dat` la traen, con las abreviaturas de la
+RAE — `(m.)` 197, `(adj.)` 181, `(f.)` 170, `(tr.)` 162, `(prnl.)` 40, `(intr.)` 37,
+`(m. fig.)` 13, `(f. fig.)` 3, `(fig.)` 5, `(intr.-prnl.)` 5, `(interj.)` 2, `(adv.)` 2 — y
+alcanzan palabras de uso corriente (`abajo`, `abalanzarse`, `abadía`). El frontend tiene que
+traducir las dos tablas, la inglesa y la española.
+
+El inglés la trae siempre, y trae hiperónimos etiquetados:
 
 ```
 ship|6
@@ -117,8 +123,9 @@ imagen que ya baja LanguageTool.
 
 ```rust
 #[tauri::command]
-fn tesauro_lookup(palabra: String, idioma: String) -> Vec<Acepcion>
+fn tesauro_lookup(palabra: String, idioma: String) -> RespuestaTesauro
 
+struct RespuestaTesauro { disponible: bool, acepciones: Vec<Acepcion> }
 struct Acepcion { categoria: Option<String>, sinonimos: Vec<String> }
 ```
 
@@ -132,19 +139,33 @@ proceso Rust (~11 MB por el inglés), no del heap del webview, que es lo que imp
 evitar.
 
 La normalización (minúsculas, enclíticos, plural, re-pluralización de los sinónimos) vive
-**toda acá**, en un solo lugar, para que la cubra `cargo test`. Sin entrada devuelve `[]`,
-nunca error — "no hay sinónimos" no es una falla.
+**toda acá**, en un solo lugar, para que la cubra `cargo test`. Sin entrada devuelve
+`acepciones: []`, nunca error — "no hay sinónimos" no es una falla. Es **por idioma**: los
+enclíticos y la regla de plural vocal/consonante son del español y sobre datos ingleses
+producen no-palabras, así que `Tesauro` guarda un flag `ingles` y en inglés saltea los
+enclíticos y repone en el plural el mismo sufijo por el que entró (`rifle` + `s`). El plural
+se prueba antes que los enclíticos: hay 116 colisiones en el `.dat` español y dos son
+palabras de novela (`calles` → `cal`, `caballos` → `cabal`).
 
-`categoria` es `None` para el español, porque el dato no la trae, y `Some("noun")` /
-`Some("verb")` para el inglés.
+`entrada` descarta el sinónimo que es la palabra consultada (28,9% de las entradas inglesas
+se listan a sí mismas) y deduplica; el tope de `MAX_SINONIMOS` se aplica **después** de
+filtrar.
+
+`disponible: false` es "el tesauro del idioma no cargó" (recurso ausente del bundle), que no
+es lo mismo que una palabra sin entrada: sin la distinción, un empaquetado roto se ve igual
+que "sin sinónimos" y el usuario busca el problema en la palabra.
+
+`categoria` es `Some("noun")` / `Some("verb")` para el inglés y, en español, `None` en la
+enorme mayoría de las entradas — pero no siempre (ver arriba: ~810 acepciones traen la
+abreviatura de la RAE).
 
 ## Frontend
 
 - **`core/tesauro-service.ts`** — envuelve el invoke y cachea las últimas ~50 consultas en
   un `Map`. Sin signals: es request/response puro, no estado observable.
 - **`repeticiones-popover.ts`** — suma chips de sinónimos clickeables. Agrupados con
-  encabezado de categoría cuando el idioma la trae (inglés), lista sola cuando no
-  (español). El click emite un `output` `reemplazar(sinonimo)`.
+  encabezado de categoría cuando la acepción la trae — siempre en inglés, en ~810 acepciones
+  del español — y lista sola cuando no. La tabla de traducción cubre los dos idiomas. El click emite un `output` `reemplazar(sinonimo)`.
 - **El reemplazo** sigue el patrón de `applyRaeFix`: un `tr.replaceWith` con las marcas de
   `marksAcross`, **no** `marks()` — la palabra puede caer en el borde de un `<em>` y ahí
   `marks()` devuelve las marcas del texto de afuera y se pierde la cursiva. Después, la baja
@@ -159,6 +180,10 @@ nunca error — "no hay sinónimos" no es una falla.
 
 - Sin entrada en el tesauro: el popover dice "sin sinónimos para «X»" y el resto del
   popover (distancia, ir a la anterior, ignorar) sigue funcionando igual.
+- Tesauro que no cargó (`disponible: false`): dice "El tesauro no se pudo cargar", que es
+  distinto de "sin sinónimos para «X»" — el problema es del empaquetado, no de la palabra.
+  Sin remedio accionable del lado del usuario, así que no hay botón ni comando: la ruta que
+  se intentó ya queda en el log del backend.
 - El popover nunca promete lo que no hay: no muestra la sección de sinónimos vacía ni un
   spinner colgado si el invoke falla.
 
