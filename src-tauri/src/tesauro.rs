@@ -144,6 +144,64 @@ fn pluralizar(s: &str) -> String {
     }
 }
 
+use std::path::Path;
+use std::sync::OnceLock;
+use tauri::path::BaseDirectory;
+use tauri::{AppHandle, Manager};
+
+static ES: OnceLock<Option<Tesauro>> = OnceLock::new();
+static EN: OnceLock<Option<Tesauro>> = OnceLock::new();
+
+/// Lee un `.dat` de disco y lo parsea. El español viene en **ISO-8859-1** y el
+/// inglés en UTF-8; latin-1 mapea 1:1 a los primeros 256 codepoints de Unicode,
+/// así que la conversión es un `as char` por byte y no hace falta ninguna crate.
+fn cargar_desde(ruta: &str) -> Option<Tesauro> {
+    let bytes = std::fs::read(Path::new(ruta)).ok()?;
+    let texto = if bytes.starts_with(b"ISO8859-1") {
+        bytes.iter().map(|b| *b as char).collect::<String>()
+    } else {
+        String::from_utf8_lossy(&bytes).into_owned()
+    };
+    Some(Tesauro::parse(&texto))
+}
+
+/// El tesauro del idioma, cargado una sola vez. Si el recurso no está donde
+/// debería, se loggea la ruta que se intentó — sin eso, un bundle mal armado se
+/// ve igual que una palabra sin sinónimos.
+fn tesauro(app: &AppHandle, idioma: &str) -> Option<&'static Tesauro> {
+    let ingles = idioma.starts_with("en");
+    let archivo = if ingles {
+        "resources/tesauro/th_en_us.dat"
+    } else {
+        "resources/tesauro/th_es_v2.dat"
+    };
+    let celda = if ingles { &EN } else { &ES };
+    celda
+        .get_or_init(|| {
+            let ruta = match app.path().resolve(archivo, BaseDirectory::Resource) {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::warn!(archivo, error = %e, "no pude resolver la ruta del tesauro");
+                    return None;
+                }
+            };
+            let cargado = cargar_desde(&ruta.to_string_lossy());
+            if cargado.is_none() {
+                tracing::warn!(ruta = %ruta.display(), "no se pudo leer el tesauro");
+            }
+            cargado
+        })
+        .as_ref()
+}
+
+#[tauri::command]
+pub fn tesauro_lookup(app: AppHandle, palabra: String, idioma: String) -> Vec<Acepcion> {
+    match tesauro(&app, &idioma) {
+        Some(t) => t.lookup(&palabra),
+        None => Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,5 +286,32 @@ ship|2\n\
         assert_eq!(a[0].categoria.as_deref(), Some("noun"));
         assert_eq!(a[0].sinonimos, vec!["vessel", "watercraft"]);
         assert_eq!(a[1].categoria.as_deref(), Some("verb"));
+    }
+
+    /// Los fixtures de arriba prueban el parser; este prueba **los datos que se
+    /// shipean**: que el `.dat` español esté donde va, que la decodificación
+    /// ISO-8859-1 deje las claves acentuadas consultables, y que el inglés
+    /// podado no haya quedado con la cuenta de acepciones desfasada.
+    #[test]
+    fn datos_reales_vendoreados() {
+        let es = cargar_desde(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/resources/tesauro/th_es_v2.dat"
+        ))
+        .expect("falta th_es_v2.dat");
+        assert!(es.lookup("nave").iter().any(|a| a.sinonimos.contains(&"bajel".to_string())));
+        assert!(!es.lookup("perdón").is_empty(), "clave acentuada no consultable");
+
+        let en = cargar_desde(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/resources/tesauro/th_en_us.dat"
+        ))
+        .expect("falta th_en_us.dat");
+        let ship = en.lookup("ship");
+        assert!(ship.iter().any(|a| a.categoria.as_deref() == Some("noun")));
+        assert!(
+            !ship.iter().any(|a| a.sinonimos.iter().any(|s| s.contains("generic term"))),
+            "el podado dejó hiperónimos adentro"
+        );
     }
 }

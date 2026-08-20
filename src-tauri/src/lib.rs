@@ -66,6 +66,7 @@ use split_chapter::{list_part_paths, split_chapter_apply, split_chapter_preview}
 use stats::write_chapter_stats;
 use storage::detect_storage_backend;
 use system_fonts::{list_system_fonts, refresh_system_fonts};
+use tesauro::tesauro_lookup;
 use themes::{
     add_theme_font, create_theme, delete_theme, duplicate_theme, get_chapter_theme_fonts,
     get_theme, list_font_usage, list_theme_fonts, list_themes, remove_theme_font, rename_theme,
@@ -207,6 +208,7 @@ pub fn run() {
             joplin_import_apply,
             lt_api_key_status,
             lt_api_key_save,
+            tesauro_lookup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
