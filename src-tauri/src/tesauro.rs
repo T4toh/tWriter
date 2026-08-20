@@ -102,7 +102,10 @@ impl Tesauro {
     fn entrada(&self, clave: &str) -> Option<Vec<Acepcion>> {
         let &(inicio, n) = self.indice.get(clave)?;
         let mut out = Vec::new();
-        for linea in self.texto[inicio..].split('\n').take(n.min(MAX_ACEPCIONES)) {
+        // `.get` en vez de indexar directo: un .dat truncado (cabecera sin
+        // líneas de datos ni \n final) deja `inicio` justo en el borde del
+        // buffer y el índice directo panickearía.
+        for linea in self.texto.get(inicio..)?.split('\n').take(n.min(MAX_ACEPCIONES)) {
             let mut campos = linea.split('|');
             let cat = campos.next().unwrap_or("-");
             let sinonimos: Vec<String> = campos
@@ -207,6 +210,14 @@ ship|2\n\
     fn palabra_ausente_da_vacio_no_error() {
         let t = Tesauro::parse(ES);
         assert!(t.lookup("xyzzy").is_empty());
+    }
+
+    #[test]
+    fn dat_truncado_no_panickea() {
+        // Cabecera sin líneas de acepción ni \n final: `inicio` cae justo
+        // fuera del buffer.
+        let t = Tesauro::parse("word|5");
+        assert!(t.lookup("word").is_empty());
     }
 
     #[test]
