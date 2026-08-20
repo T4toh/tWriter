@@ -28,6 +28,9 @@
   },
   "bundle": {
     "active": true,
+    "resources": [
+      "resources/tesauro/*"
+    ],
     "targets": ["deb", "nsis", "app", "dmg"],
     "createUpdaterArtifacts": true,
     "publisher": "Tatoh <tatukis@gmail.com>",
