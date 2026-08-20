@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 // Poda el tesauro inglés de WordNet (el que shipea LibreOffice) para bundlearlo
-// en tWriter. Tira los sinónimos etiquetados `(generic term)`, `(related term)`,
-// `(similar term)` y `(antonym)`: son hiperónimos y relaciones de WordNet, ruido
-// para un novelista (`move` como sinónimo de `ship`). Medido: 18,5 MB → ~6,3 MB.
+// en tWriter. A los sinónimos etiquetados `(generic term)` se les pela la
+// etiqueta y se conserva la palabra (`vessel (generic term)` → `vessel`), pero
+// se los manda al final de la acepción: para cambiar una palabra repetida en
+// una novela un hiperónimo es un reemplazo aceptable y el autor lo ve antes de
+// aceptarlo, pero lo bueno (los sinónimos reales) tiene que salir primero
+// porque el popover corta en 12. Los etiquetados `(related term)`,
+// `(similar term)` y `(antonym)` sí se descartan enteros: no son sinónimos.
 //
 // Recalcula el N de cada entrada y descarta las que quedan sin ninguna acepción,
 // porque el parser de `tesauro.rs` confía en que el N coincida con las líneas
@@ -17,7 +21,8 @@ if (!src || !dst) {
   process.exit(2);
 }
 
-const RUIDO = /\((generic|related|similar) term\)|\(antonym\)/;
+const DESCARTAR = /\((related|similar) term\)|\(antonym\)/;
+const GENERICO = /\s*\(generic term\)\s*/;
 const lineas = readFileSync(src, 'utf8').split('\n');
 const out = ['UTF-8'];
 let entradas = 0;
@@ -34,9 +39,14 @@ while (i < lineas.length) {
   const acepciones = [];
   for (let k = 0; k < n && i < lineas.length; k += 1, i += 1) {
     const campos = lineas[i].split('|');
-    const sinonimos = campos
-      .slice(1)
-      .filter((s) => s.trim() !== '' && !RUIDO.test(s));
+    const normales = [];
+    const genericos = [];
+    for (const s of campos.slice(1)) {
+      if (s.trim() === '' || DESCARTAR.test(s)) continue;
+      if (GENERICO.test(s)) genericos.push(s.replace(GENERICO, '').trim());
+      else normales.push(s);
+    }
+    const sinonimos = [...normales, ...genericos];
     if (sinonimos.length > 0) acepciones.push([campos[0], ...sinonimos].join('|'));
   }
   if (acepciones.length === 0) continue;

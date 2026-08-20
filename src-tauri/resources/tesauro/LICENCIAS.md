@@ -17,8 +17,10 @@ Derivado del tesauro `th_en_US_v2.dat` de la extensión `dict-en` de
 LibreOffice, generado a partir de **WordNet 2.1**, Copyright 2005 by
 Princeton University. Licencia completa en `WordNet_license.txt`.
 
-**Modificado**: `scripts/podar-tesauro-en.mjs` eliminó los sinónimos
-etiquetados `(generic term)`, `(related term)`, `(similar term)` y
-`(antonym)`, recalculó la cantidad de acepciones de cada entrada y descartó
-las entradas que quedaron sin ninguna. El resto del contenido y el formato
-MyThes están intactos. Encoding UTF-8.
+**Modificado**: `scripts/podar-tesauro-en.mjs` les peló la etiqueta a los
+sinónimos marcados `(generic term)` (queda la palabra sola, ej. `vessel
+(generic term)` → `vessel`) y los reordenó al final de cada acepción, después
+de los sinónimos verdaderos. Eliminó enteros los sinónimos etiquetados
+`(related term)`, `(similar term)` y `(antonym)`. Recalculó la cantidad de
+acepciones de cada entrada y descartó las que quedaron sin ninguna. El resto
+del contenido y el formato MyThes están intactos. Encoding UTF-8.
