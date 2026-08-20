@@ -7,112 +7,6 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
 - Buscar más alternativas para la gramática.
-- **Wizard de revisión de errores** (paralelo al chequeo inline, a pedido del
-  autor): botón al lado de `Auto` / `LT` en la barra de arriba que abre un
-  popup y camina los matches del capítulo **uno por uno** — mostrar contexto,
-  la sugerencia, y Aceptar / Ignorar / Agregar al diccionario / Siguiente.
-  No reemplaza las marcas inline: se apoya en `grammarMatches()`, que ya
-  tiene los `from`/`to` mapeados a posiciones PM (`GrammarMatchPos`), así que
-  el wizard solo necesita ordenarlos por `from`, hacer `scrollIntoView` +
-  selección en cada paso y reusar el apply de `grammar-popover.ts`. Ojo con
-  dos cosas: (a) aceptar una sugerencia cambia el doc y por lo tanto invalida
-  los offsets de los matches siguientes — remapear con `tr.mapping` como ya
-  hace el plugin, NO re-chequear en cada paso; (b) el `Auto` puede disparar un
-  `checkGrammar` a mitad del recorrido y pisar la lista — pausar el auto-check
-  mientras el wizard está abierto. Decidir si incluye también violaciones RAE
-  (`raeViolations()`) o solo gramática.
-- **Ortografía y semántica sin depender de un servicio que el autor levante**
-  (pedido del autor; prioriza **embebido o de fondo** sobre "instalate un
-  runtime"). El criterio: si hay que explicarle al usuario cómo levantar un
-  daemon, ya perdimos — vale para él mismo, que tiene todo para correr un
-  Ollama y aun así lo considera demasiado. Ordenado por cuán realista es:
-  - **`zspell` (Rust puro) o `hunspell-rs` + diccionarios de LibreOffice**
-    (`es_AR` de la RLA, `en_US`/`en_GB`). Ortografía **solamente**, cero
-    gramática, pero se linkea en `src-tauri` y funciona offline y sin
-    container. Valor concreto: seguís teniendo typos marcados cuando LT está
-    caído, que hoy es un agujero. Es el más barato de los tres y el que
-    menos promete de más.
-  - **Harper** (`harper-core`, Automattic) — checker gramatical en Rust,
-    offline, lints en milisegundos. Arquitectónicamente es el calce ideal:
-    es un **crate**, se linkea directo en `src-tauri`, sin container, sin
-    sidecar, sin HTTP — y con eso se evapora toda la clase de bugs de la que
-    salió el guard de staleness (chunking, rate limit, offsets viejos).
-    **Bloqueante**: el README oficial dice "Harper currently only supports
-    English". El español no existe ni de cerca. Sumarlo hoy significa dos
-    motores distintos según el idioma del capítulo — decidir si esa
-    complejidad vale por la mitad inglesa, o esperar.
-  - **Semántica / estilo por LLM** — es lo único que de verdad supera a LT
-    en prosa literaria española (ve registro, repetición, ritmo, cosas que
-    ningún motor de reglas alcanza). **Descartado por ahora, decisión
-    explícita del autor**: levantar un Ollama es demasiada carga operativa
-    para el usuario final. Si algún día entra, entra **embebido** (modelo
-    chico bundleado o llama.cpp linkeado), nunca como "instalate esto
-    aparte". Ojo con dos cosas cuando se retome: no devuelve offsets
-    estables — hay que mapear por diff en vez de por `offset`+`length` — y
-    va como feature aparte, jamás reemplazando el inline.
-- **Capacidades de LanguageTool que hoy NO usamos** (relevadas contra el
-  swagger oficial + probadas contra el container local, LT 6.8 OSS):
-  - [x] `level=picky` en `/v2/check` — **implementado**: toggle "Modo exigente
-    (picky)" en el modal de gramática, off por default, persistido como
-    `grammarPicky` en `settings.json`. El nivel se resuelve en
-    `grammar.rs::level_for`. Verificado que **funciona** en el container libre:
-    activa reglas extra de texto formal (`TOO_LONG_SENTENCE` aparece en `picky`
-    y no en `default`). **Pero solo en inglés**: probado con muestras de
-    redundancia y de oración larga en español, `picky` no agregó ni un match
-    sobre `default` — el ruleset ES de LT es mucho más flaco; el texto del
-    toggle lo avisa. Al cambiarlo, un effect en `editor.ts` dispara
-    `checkGrammar(true)` (el `force` es necesario: el texto no cambió, así que
-    el early-return por `lastCheckedPlain` se comería el recheck). El mismo
-    effect cubre los cambios de variante regional, que arrastraban el mismo
-    bug.
-  - `disabledRules` / `enabledOnly` — el silenciado per-saga hoy solo puede
-    tapar **palabras** (diccionario, filtro de `TYPOS` en `editor.ts`). Con
-    `disabledRules` se podría silenciar una **regla** entera que moleste en
-    prosa de ficción, persistida en `saga.json`. Requiere exponer el
-    `rule.id` en el popover para que el autor sepa qué desactivar.
-    **Regla concreta ya identificada**: con `picky` prendido, LT marca `Shit`
-    en diálogo con `PROFANITY_XML` (categoría `STYLE`, "This word is
-    considered offensive"). Verificado que es picky-only (en `default` no
-    aparece) y que `disabledRules=PROFANITY_XML` la apaga limpio. No es un
-    bug — el toggle está haciendo exactamente lo que promete — pero en
-    ficción con personajes que putean es una regla que el autor va a querer
-    apagar sin perder el resto de `picky`. Junto con `TOO_LONG_SENTENCE`,
-    son las dos primeras candidatas de la lista per-saga.
-  - `motherTongue` — habilita chequeos de false friends. Probado con
-    `motherTongue=es` sobre texto en inglés: cero matches en las muestras,
-    el archivo de false friends es-en parece muy chico. Bajo valor.
-  - `data` (AnnotatedText) — mandar markup marcado en vez de texto plano.
-    **No sirve acá**: nuestra fuente es un doc de ProseMirror, no un string
-    con markup, y `extractPlainText` + `ranges` ya resuelve el mapeo de
-    offsets de forma equivalente. Descartado.
-  - **N-gramas (`langtool_languageModel`) — PROBADO Y DESCARTADO PARA ESPAÑOL.**
-    La idea era detectar pares confundibles que el motor de reglas no ve
-    (`haber`/`a ver`, `hecho`/`echo`). Se probó de verdad: bajado
-    `ngrams-es-20150915.zip` (1.6 GB zip / 3.1 GB desplegado) a
-    `~/.twriter/ngrams`, montado en un container aparte en `:8082` con
-    `-e langtool_languageModel=/ngrams -v ~/.twriter/ngrams:/ngrams:ro`
-    (el log confirma `languageModel=/ngrams`, el mount se ve adentro), y
-    A/B contra el container normal de `:8081` con 12 oraciones de pares
-    confundibles típicos del español. **Resultado: 0/12 casos donde los
-    ngramas agregan un solo match.** La causa está en el propio LT, no en el
-    setup: `org/languagetool/resource/<lang>/confusion_sets.txt` trae **5
-    pares para español** (`casa;caza`, `ciento;siento`, `cima;sima`,
-    `honda;onda`, `sumo;zumo` — todos seseo, inútiles para un autor
-    argentino) contra **782 para inglés**. Ni forzando una oración con uno de
-    los 5 pares reales dispara. Conclusión: 3.1 GB de disco por nada.
-    **Pendiente**: el inglés es otra historia — 782 pares es donde esto
-    pagaría. Cuesta 9.0 GB (`ngrams-en-20150817.zip`, ~17 GB desplegado).
-    Si se decide que vale, el cambio en código es `run_args()` en
-    `grammar.rs:220`, que hoy devuelve `Vec<&'static str>` hardcodeado y
-    habría que pasar a `Vec<String>` para poder inyectar el path del mount.
-  - **Lo que LT NO tiene** (no volver a buscarlo): no hay endpoint de
-    **sinónimos** — el swagger completo son `/v2/check`, `/v2/languages`,
-    `/v2/words`, `/v2/words/add`, `/v2/words/delete` y nada más; los
-    sinónimos del editor web de LT son un servicio propietario que no está
-    en la API. Y `/v2/words` (diccionario personal) es **Premium**: el
-    container local contesta `403 AuthException` incluso con credenciales.
-    Confirma la decisión ya tomada en la sección de Búsqueda: el
-    diccionario per-saga (`<saga>/diccionario.txt`) es el camino.
 - **Marcador huérfano post jump-to-term**: el highlight naranja de
   `requestHighlight` (search → click resultado) o de la selección nativa
   del jump queda pegado sobre el carácter (típicamente un em-dash) aún
@@ -268,6 +162,259 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   (grid item) tenía `min-height:auto` → crecía con el contenido y `.rae-content`
   nunca activaba su `overflow-y`, scrolleando el archivo de fondo. Fix:
   `grid-template-rows: minmax(0,1fr)` + `min-height:0` + `overscroll-behavior:contain`.
+
+## Gramática, ortografía y tesauro
+
+> **Relevamiento del 2026-08-20.** Todo lo de abajo está medido contra el
+> container local (LT 6.8 OSS, `premium: false`) y contra
+> [`sbosio/rla-es`](https://github.com/sbosio/rla-es) clonado, no supuesto.
+> Punto de partida: el español de LT es flaco y queríamos saber cuánto y por qué.
+>
+> **El número que resume todo**, contado dentro del container:
+>
+> | | `grammar.xml` | reglas `<rule>` | pares en `confusion_sets.txt` |
+> |---|---|---|---|
+> | en | 142.323 líneas | **1.772** | **782** |
+> | es | 36.419 líneas | **296** | **5** |
+>
+> Seis veces menos reglas y 156 veces menos pares de confusión. El motor es el
+> mismo — lo que falta son las reglas escritas.
+
+- **Detector de repeticiones cercanas** (es + en). El agujero más claro que
+  encontramos, y no es del español: LT detecta **solo duplicados literales
+  pegados** (`la nave nave`, `SPANISH_WORD_REPEAT_RULE` /
+  `ENGLISH_WORD_REPEAT_RULE`) y nada más. Verificado que estos tres casos no
+  dan ni una marca, **ni en `es-AR` ni en `en-US`, ni en `default` ni en
+  `picky`**:
+  ```
+  "Era una nave oscura, oscura como el vacío."
+  "El capitán oscuro miró el pasillo oscuro del casco oscuro."
+  "Caminó lentamente y habló lentamente y respiró lentamente."
+  ```
+  **Va en TS, no en Rust** — la pregunta se hizo y se midió. El escaneo es una
+  ventana deslizante sobre el texto plano que ya extrae `extractPlainText`:
+  59 KB / 10.008 palabras tardan **1,07 ms** en Node (media de 50 corridas).
+  Cruzar el bridge a Rust cuesta más que eso: hay que serializar el capítulo
+  entero de ida y los hits de vuelta. La regla de división del CLAUDE.md manda
+  a Rust lo que toca **muchos archivos**; esto toca el capítulo activo, que ya
+  está en memoria del frontend. Precedente exacto en el repo: el validador RAE
+  (`validator.ts`) hace esta misma clase de trabajo en TS.
+  **Cuándo sí sería Rust**: "buscar repeticiones en el libro/saga entero" —
+  eso es N archivos y va al lado de `search.rs`.
+  Diseño: normalizar (minúsculas + sin diacríticos), descartar stopwords por
+  idioma, marcar la palabra de contenido que reaparece dentro de una ventana
+  de N palabras. Sin POS tagger — parece que hiciera falta para distinguir
+  "adjetivo repetido", pero la señal útil es la palabra de contenido, así que
+  no hay que sumar FreeLing ni spaCy ni ninguna dependencia. Queda función
+  pura → smoke runner propio, patrón de `scripts/run-rae-smoke.mjs`.
+  **Ojo con la calibración**: el prototipo con una stopword list mínima y
+  ventana de 40 palabras tiró **6.095 hits** en 59 KB. Inusable así. La
+  ventana, el largo mínimo de palabra y la stopword list son perillas que hay
+  que tunear contra prosa real antes de mostrarle esto a alguien; el número
+  crudo no es un bug del algoritmo, es que sin calibrar marca todo.
+
+- **Tesauro de sinónimos embebido** (español). rla-es trae
+  `sinonimos/palabras/th_es_v2.dat` — **21.846 entradas**, 2,7 MB, formato
+  MyThes (`palabra|N` y N líneas `-|sinónimo|sinónimo|…`), más un `.idx` de
+  361 KB con offsets. Encoding **ISO-8859-1**, no UTF-8 — hay que convertir al
+  bundlear. Ejemplo real:
+  ```
+  nave|8
+  -|bajel|buque|barco|navío|nao|embarcación|galera|carabela
+  ```
+  Esto es lo que LT **no** tiene: su API no expone ningún endpoint de
+  sinónimos (ver el item de capacidades más abajo). Parsear MyThes es trivial
+  y acá sí conviene Rust: son 3 MB de datos que no queremos mandar por el
+  bridge ni tener en el heap del webview — se leen con el `.idx` y se
+  devuelve solo la entrada consultada.
+  **Sin equivalente en inglés en este repo**: rla-es es solo español. Para la
+  mitad inglesa habría que buscar otro MyThes aparte.
+  **Licencia**: el tesauro tiene su propio `COPYING` en **LGPL 2.1** (el resto
+  de rla-es es triple GPL3/LGPL3/MPL1.1). tWriter es MIT. Bundlear datos LGPL
+  se puede, pero hay que shipear el `.dat` sin modificar, con su licencia al
+  lado y el crédito a la fuente. Para el resto de rla-es conviene elegir
+  **MPL 1.1**, que es la vía limpia para distribuir en un producto MIT (la
+  misma que usa LibreOffice).
+
+- **Guionado para el EPUB**. rla-es trae `separacion/hyph_es.dic`, **6.207
+  patrones** (Javier Bezos / CervanTeX). Sirve para justificado con separación
+  en sílabas en el export. Nada que ver con el corrector, pero sale del mismo
+  repo y es acotado. Cruza con el item de tipografía del EPUB.
+
+- **Escribir reglas propias de LT en XML** — el camino más realista si algún
+  día se encara el español en serio, y **no requiere construir un motor**. Las
+  296 reglas de español son patrones XML en
+  `/LanguageTool/org/languagetool/rules/es/grammar.xml`, y está verificado que
+  es un **archivo suelto en el filesystem del container, NO adentro de un
+  jar** — o sea que un bind-mount lo puede sobrescribir sin recompilar.
+  **Pendiente de spike**: confirmar que el server levanta el override montado
+  (que el archivo exista y sea montable no prueba que lo lea desde ahí).
+  Alternativa sin container en el medio: sumar reglas al validador que ya
+  existe (`converter.ts` + `rules-dedicated.ts` + `validator.ts`), que es el
+  precedente probado del repo para reglas del español.
+
+- **Fuentes normativas del español: no hay corpus libre.** La *Nueva gramática
+  de la lengua española*, la *Ortografía* y el DPD son de la RAE, con
+  copyright y sin formato máquina. No existe un "manual de la lengua española"
+  parseable para usar de base. Lo que sí hay como sustrato son **FreeLing**
+  (morfología + parsing de dependencias, UPC, open source) y los modelos de
+  spaCy en español — pero ojo: para el detector de repeticiones **no hacen
+  falta**, y son la clase de dependencia que conviene no sumar sin un caso que
+  la exija.
+
+- **Aportar upstream — cuál de los dos repos conviene.** Los dos aceptan
+  contribuciones, pero solo uno le vuelve a tWriter:
+  - **LanguageTool** es el que **sí** nos vuelve, porque es el motor que
+    corremos. El agujero está identificado y es chico de describir:
+    `es/confusion_sets.txt` tiene **5 pares** (`casa;caza`, `ciento;siento`,
+    `cima;sima`, `honda;onda`, `sumo;zumo` — todos seseo, inútiles para un
+    autor argentino) contra 782 del inglés. Sumar pares de confusión del
+    español rioplatense (`haber`/`a ver`, `hecho`/`echo`, `sino`/`si no`) es
+    una contribución acotada, medible y que arregla justo lo que medimos que
+    falta. Ojo: los pares necesitan datos de n-gramas para evaluarse, y los
+    n-gramas de español ya se probaron y descartaron para nuestro uso (ver
+    item más abajo) — hay que entender esa interacción antes de prometer algo.
+  - **rla-es** (`sbosio/rla-es`) — 258 stars, 53 forks, 21 issues abiertos,
+    PR #355 mergeado, último push 2025-11-26 (semi-dormido, pero con historia
+    real de contribuciones). El `CONTRIBUTING.md` invita explícitamente a
+    mejorar las **variantes regionales** y lista es_AR entre 23 variantes; el
+    detalle está en el wiki del proyecto. Hueco concreto: los regionalismos
+    es_AR (`ortografia/palabras/noRAE/l10n/es_AR/`) son **364 líneas en
+    total**. Verificado que tiene `laburo`, `quilombo` y `boludo`, y que le
+    faltan `bondi`, `pibe` y `hagás`. Un autor argentino es exactamente quien
+    puede llenar eso.
+    **Pero que quede claro**: mejorar rla-es **no mejora tWriter**, porque el
+    speller de LT no usa rla-es — usa su propio `es-ES.dict` Morfologik (ver
+    item de abajo). Es una contribución al mundo, no a nuestro corrector. Vale
+    hacerla por eso, no esperando que vuelva.
+
+- **Por qué NO cambiar el speller de español** (evaluado y descartado el
+  2026-08-20, para no volver a discutirlo). La hipótesis era que los
+  diccionarios de LibreOffice/rla-es le ganaran a LT en español. Medido: no.
+  - El speller de LT ES **no es hunspell**: es `es-ES.dict`, un FSA Morfologik
+    de 2,6 MB (`libs/spanish-pos-dict.jar`) con `frequency-included=true` y
+    reglas de sugerencia afinadas para español — equivalencias `b v`, `y i`,
+    `g j` y pares de reemplazo para seseo (`ci si`, `ce se`, `ll y`, `güe hue`).
+  - **`es-AR` ya resuelve el voseo.** Sobre 12 oraciones argentinas:
+    `language=es` y `es-ES` dan **8 falsos positivos** (marcan `vení`, `mirá`,
+    `andate`, `fijate`, `cerrá`); **`es-AR` da 3** (`bondi`, `laburo`,
+    `hagás`). Y ya estamos usando la variante correcta: `map_lang`
+    (`grammar.rs:780`) mapea `es` → `variante_es`, default `es-AR`.
+  - De esos 3 que quedan, rla-es solo cubriría `laburo`. Los otros dos ya los
+    tapa el **diccionario per-saga** (`<saga>/diccionario.txt`, filtro de
+    `TYPOS` en `editor.ts`, con `merge=union` en `.gitattributes` vía
+    `git.rs:424`), que es el lugar correcto para lunfardo y nombres propios
+    inventados.
+  - Conclusión: un subsistema entero para caso y medio. No vale. El item de
+    ortografía offline de abajo sigue en pie, pero por **disponibilidad**
+    (seguir marcando typos con LT caído), nunca por precisión.
+
+- **Wizard de revisión de errores** (paralelo al chequeo inline, a pedido del
+  autor): botón al lado de `Auto` / `LT` en la barra de arriba que abre un
+  popup y camina los matches del capítulo **uno por uno** — mostrar contexto,
+  la sugerencia, y Aceptar / Ignorar / Agregar al diccionario / Siguiente.
+  No reemplaza las marcas inline: se apoya en `grammarMatches()`, que ya
+  tiene los `from`/`to` mapeados a posiciones PM (`GrammarMatchPos`), así que
+  el wizard solo necesita ordenarlos por `from`, hacer `scrollIntoView` +
+  selección en cada paso y reusar el apply de `grammar-popover.ts`. Ojo con
+  dos cosas: (a) aceptar una sugerencia cambia el doc y por lo tanto invalida
+  los offsets de los matches siguientes — remapear con `tr.mapping` como ya
+  hace el plugin, NO re-chequear en cada paso; (b) el `Auto` puede disparar un
+  `checkGrammar` a mitad del recorrido y pisar la lista — pausar el auto-check
+  mientras el wizard está abierto. Decidir si incluye también violaciones RAE
+  (`raeViolations()`) o solo gramática.
+- **Ortografía y semántica sin depender de un servicio que el autor levante**
+  (pedido del autor; prioriza **embebido o de fondo** sobre "instalate un
+  runtime"). El criterio: si hay que explicarle al usuario cómo levantar un
+  daemon, ya perdimos — vale para él mismo, que tiene todo para correr un
+  Ollama y aun así lo considera demasiado. Ordenado por cuán realista es:
+  - **`zspell` (Rust puro) o `hunspell-rs` + diccionarios de LibreOffice**
+    (`es_AR` de la RLA, `en_US`/`en_GB`). Ortografía **solamente**, cero
+    gramática, pero se linkea en `src-tauri` y funciona offline y sin
+    container. Valor concreto: seguís teniendo typos marcados cuando LT está
+    caído, que hoy es un agujero. Es el más barato de los tres y el que
+    menos promete de más.
+  - **Harper** (`harper-core`, Automattic) — checker gramatical en Rust,
+    offline, lints en milisegundos. Arquitectónicamente es el calce ideal:
+    es un **crate**, se linkea directo en `src-tauri`, sin container, sin
+    sidecar, sin HTTP — y con eso se evapora toda la clase de bugs de la que
+    salió el guard de staleness (chunking, rate limit, offsets viejos).
+    **Bloqueante**: el README oficial dice "Harper currently only supports
+    English". El español no existe ni de cerca. Sumarlo hoy significa dos
+    motores distintos según el idioma del capítulo — decidir si esa
+    complejidad vale por la mitad inglesa, o esperar.
+  - **Semántica / estilo por LLM** — es lo único que de verdad supera a LT
+    en prosa literaria española (ve registro, repetición, ritmo, cosas que
+    ningún motor de reglas alcanza). **Descartado por ahora, decisión
+    explícita del autor**: levantar un Ollama es demasiada carga operativa
+    para el usuario final. Si algún día entra, entra **embebido** (modelo
+    chico bundleado o llama.cpp linkeado), nunca como "instalate esto
+    aparte". Ojo con dos cosas cuando se retome: no devuelve offsets
+    estables — hay que mapear por diff en vez de por `offset`+`length` — y
+    va como feature aparte, jamás reemplazando el inline.
+- **Capacidades de LanguageTool que hoy NO usamos** (relevadas contra el
+  swagger oficial + probadas contra el container local, LT 6.8 OSS):
+  - [x] `level=picky` en `/v2/check` — **implementado**: toggle "Modo exigente
+    (picky)" en el modal de gramática, off por default, persistido como
+    `grammarPicky` en `settings.json`. El nivel se resuelve en
+    `grammar.rs::level_for`. Verificado que **funciona** en el container libre:
+    activa reglas extra de texto formal (`TOO_LONG_SENTENCE` aparece en `picky`
+    y no en `default`). **Pero solo en inglés**: probado con muestras de
+    redundancia y de oración larga en español, `picky` no agregó ni un match
+    sobre `default` — el ruleset ES de LT es mucho más flaco; el texto del
+    toggle lo avisa. Al cambiarlo, un effect en `editor.ts` dispara
+    `checkGrammar(true)` (el `force` es necesario: el texto no cambió, así que
+    el early-return por `lastCheckedPlain` se comería el recheck). El mismo
+    effect cubre los cambios de variante regional, que arrastraban el mismo
+    bug.
+  - `disabledRules` / `enabledOnly` — el silenciado per-saga hoy solo puede
+    tapar **palabras** (diccionario, filtro de `TYPOS` en `editor.ts`). Con
+    `disabledRules` se podría silenciar una **regla** entera que moleste en
+    prosa de ficción, persistida en `saga.json`. Requiere exponer el
+    `rule.id` en el popover para que el autor sepa qué desactivar.
+    **Regla concreta ya identificada**: con `picky` prendido, LT marca `Shit`
+    en diálogo con `PROFANITY_XML` (categoría `STYLE`, "This word is
+    considered offensive"). Verificado que es picky-only (en `default` no
+    aparece) y que `disabledRules=PROFANITY_XML` la apaga limpio. No es un
+    bug — el toggle está haciendo exactamente lo que promete — pero en
+    ficción con personajes que putean es una regla que el autor va a querer
+    apagar sin perder el resto de `picky`. Junto con `TOO_LONG_SENTENCE`,
+    son las dos primeras candidatas de la lista per-saga.
+  - `motherTongue` — habilita chequeos de false friends. Probado con
+    `motherTongue=es` sobre texto en inglés: cero matches en las muestras,
+    el archivo de false friends es-en parece muy chico. Bajo valor.
+  - `data` (AnnotatedText) — mandar markup marcado en vez de texto plano.
+    **No sirve acá**: nuestra fuente es un doc de ProseMirror, no un string
+    con markup, y `extractPlainText` + `ranges` ya resuelve el mapeo de
+    offsets de forma equivalente. Descartado.
+  - **N-gramas (`langtool_languageModel`) — PROBADO Y DESCARTADO PARA ESPAÑOL.**
+    La idea era detectar pares confundibles que el motor de reglas no ve
+    (`haber`/`a ver`, `hecho`/`echo`). Se probó de verdad: bajado
+    `ngrams-es-20150915.zip` (1.6 GB zip / 3.1 GB desplegado) a
+    `~/.twriter/ngrams`, montado en un container aparte en `:8082` con
+    `-e langtool_languageModel=/ngrams -v ~/.twriter/ngrams:/ngrams:ro`
+    (el log confirma `languageModel=/ngrams`, el mount se ve adentro), y
+    A/B contra el container normal de `:8081` con 12 oraciones de pares
+    confundibles típicos del español. **Resultado: 0/12 casos donde los
+    ngramas agregan un solo match.** La causa está en el propio LT, no en el
+    setup: `org/languagetool/resource/<lang>/confusion_sets.txt` trae **5
+    pares para español** (`casa;caza`, `ciento;siento`, `cima;sima`,
+    `honda;onda`, `sumo;zumo` — todos seseo, inútiles para un autor
+    argentino) contra **782 para inglés**. Ni forzando una oración con uno de
+    los 5 pares reales dispara. Conclusión: 3.1 GB de disco por nada.
+    **Pendiente**: el inglés es otra historia — 782 pares es donde esto
+    pagaría. Cuesta 9.0 GB (`ngrams-en-20150817.zip`, ~17 GB desplegado).
+    Si se decide que vale, el cambio en código es `run_args()` en
+    `grammar.rs:220`, que hoy devuelve `Vec<&'static str>` hardcodeado y
+    habría que pasar a `Vec<String>` para poder inyectar el path del mount.
+  - **Lo que LT NO tiene** (no volver a buscarlo): no hay endpoint de
+    **sinónimos** — el swagger completo son `/v2/check`, `/v2/languages`,
+    `/v2/words`, `/v2/words/add`, `/v2/words/delete` y nada más; los
+    sinónimos del editor web de LT son un servicio propietario que no está
+    en la API. Y `/v2/words` (diccionario personal) es **Premium**: el
+    container local contesta `403 AuthException` incluso con credenciales.
+    Confirma la decisión ya tomada en la sección de Búsqueda: el
+    diccionario per-saga (`<saga>/diccionario.txt`) es el camino.
 
 ## Búsqueda
 
