@@ -25,6 +25,7 @@ mod split_chapter;
 mod stats;
 mod storage;
 mod system_fonts;
+mod tesauro;
 mod theme;
 mod themes;
 mod util;
