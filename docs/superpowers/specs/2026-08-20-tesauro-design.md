@@ -138,10 +138,11 @@ nunca error — "no hay sinónimos" no es una falla.
 - **`repeticiones-popover.ts`** — suma chips de sinónimos clickeables. Agrupados con
   encabezado de categoría cuando el idioma la trae (inglés), lista sola cuando no
   (español). El click emite un `output` `reemplazar(sinonimo)`.
-- **`repeticiones-extension.ts`** — aplica el reemplazo con los helpers de `rae-apply.ts`
-  (`serializeRange` + `parseFragmentHtml`), **no** con `marks()`: la palabra puede caer en
-  el borde de un `<em>` y ahí `marks()` pierde la cursiva. Después, el remapeo de
-  decoraciones que ya hace RAE.
+- **El reemplazo** sigue el patrón de `applyRaeFix`: un `tr.replaceWith` con las marcas de
+  `marksAcross`, **no** `marks()` — la palabra puede caer en el borde de un `<em>` y ahí
+  `marks()` devuelve las marcas del texto de afuera y se pierde la cursiva. Después, la baja
+  de la marca y el recheck que ya hace RAE. Los helpers `serializeRange`/`parseFragmentHtml`
+  de `rae-apply.ts` no entran: son para reemplazar un párrafo entero por HTML.
 - **Bajo demanda** — un atajo sobre la palabra del cursor abre el mismo popover en modo
   tesauro, sin la línea de "ya apareció N palabras más arriba". El atajo concreto se elige
   revisando colisiones con los que ya existen en el editor.
@@ -167,8 +168,9 @@ nunca error — "no hay sinónimos" no es una falla.
 
 ## Testing
 
-- **`cargo test`** — parser MyThes y normalización, con un fixture chico de 5 entradas en
-  `src-tauri/tests/`. Cubre: acepción única sin categoría (español), varias acepciones con
+- **`cargo test`** — parser MyThes y normalización, con un fixture chico en un
+  `#[cfg(test)] mod tests` dentro de `tesauro.rs`, que es el patrón del repo (`grammar.rs`,
+  `split_chapter.rs`, `create.rs`), más un test contra los datos reales vendoreados. Cubre: acepción única sin categoría (español), varias acepciones con
   categoría (inglés), enclítico, plural con re-pluralización, palabra ausente devolviendo
   vacío, y decodificación de una entrada acentuada del `.dat` ISO-8859-1.
 - **`pnpm build`** — la mitad con DOM (popover, extensión, atajo) no tiene runner: el
