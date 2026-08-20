@@ -94,9 +94,19 @@ impl Tesauro {
         // Va ANTES que los enclíticos a propósito: en el `.dat` español hay 116
         // plurales reales que también se leen como enclítico, y dos son palabras
         // de novela — `calles` daba sinónimos de `cal` y `caballos` de `cabal`.
-        for suf in ["es", "s"] {
-            if let Some(base) = clave.strip_suffix(suf) {
-                if base.chars().count() >= 3 {
+        // Sufijo del plural → con qué se lo reemplaza en el singular. El
+        // `ies` → `y` es solo del inglés (el español no tiene la alternancia) y
+        // va PRIMERO: si no, el `es` se lo come (`cities` → `citi`, que no es
+        // clave) y nunca se llega a `city`.
+        let plurales: &[(&str, &str)] = if self.ingles {
+            &[("ies", "y"), ("es", ""), ("s", "")]
+        } else {
+            &[("es", ""), ("s", "")]
+        };
+        for (suf, reemplazo) in plurales {
+            if let Some(raiz) = clave.strip_suffix(suf) {
+                if raiz.chars().count() >= 3 {
+                    let base = &format!("{raiz}{reemplazo}");
                     if let Some(a) = self.entrada(base) {
                         return a
                             .into_iter()
@@ -192,10 +202,15 @@ impl Tesauro {
 /// `Canis familiariss`. Con esto, `dog` → `canid` → `canids`, `stone` → `rock`
 /// → `rocks`, `box` → `boxes`.
 ///
-/// ponytail: las frases multipalabra se pluralizan por la última palabra
-/// (`movable barrier` → `movable barriers`), que es lo correcto en inglés más a
-/// menudo de lo que falla; hacerlo bien pide morfología que no vale la pena
-/// acá. El usuario ve el resultado antes de aceptarlo.
+/// ponytail: techo conocido, medido contra el `.dat` real y parkeado a
+/// propósito — nada de esto se deduce del string sin morfología de verdad, y el
+/// autor ve el chip antes de aceptarlo. (1) Plurales irregulares: `male child` →
+/// `male childs`, `caput` → `caputs`, `vox` → `voxes`. (2) El núcleo de la frase
+/// no siempre es la última palabra: `source of illumination` →
+/// `source of illuminations` en vez de `sources of illumination`. (3)
+/// Incontables y adjetivos sustantivados que WordNet mezcla con los sustantivos:
+/// `watercraft` → `watercrafts`, `light-colored` → `light-coloreds`. Upgrade
+/// path para (1): tabla de irregulares.
 fn pluralizar_en(s: &str) -> String {
     let anteultima = s.chars().rev().nth(1);
     if s.ends_with('s') {
@@ -326,6 +341,8 @@ stone|1\n\
 (noun)|rock|natural object\n\
 hand|1\n\
 (noun)|manus|mitt|paw|extremity\n\
+city|1\n\
+(noun)|metropolis|urban center|municipality\n\
 word|1\n\
 (noun)|Son|Word|Logos|Logos|hypostasis\n\
 crowded|1\n\
@@ -507,6 +524,20 @@ crowded|1\n\
         let h = &t.lookup("hands")[0].sinonimos;
         assert_eq!(h, &vec!["manus", "mitts", "paws", "extremities"]);
         assert!(!h.iter().any(|x| x.ends_with("ys")), "`y` sin convertir: {h:?}");
+    }
+
+    #[test]
+    fn el_plural_ingles_en_ies_encuentra_el_singular_en_y() {
+        // `cities` no resolvía: `es` daba `citi` y `s` daba `citie`, ninguno
+        // clave. Es el espejo del `y` → `ies` de `pluralizar_en`.
+        let t = Tesauro::parse(EN, true);
+        // `metropolis` queda igual por la regla 1 de `pluralizar_en` (ya
+        // termina en `s`): mismo techo que `Canis familiaris`, y preferible a
+        // `metropoliss`.
+        assert_eq!(
+            t.lookup("cities")[0].sinonimos,
+            vec!["metropolis", "urban centers", "municipalities"]
+        );
     }
 
     #[test]
