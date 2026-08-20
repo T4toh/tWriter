@@ -277,11 +277,12 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   ```
   Esto es lo que LT **no** tiene: su API no expone ningún endpoint de
   sinónimos (ver el item de capacidades más abajo). Parsear MyThes es trivial
-  y acá sí conviene Rust: son ~3 MB de datos que no queremos mandar por el
-  bridge ni tener en el heap del webview — se lee el `.dat` entero una vez
-  por idioma a un `String` en el heap de Rust (cacheado en un `OnceLock`) y
-  por el bridge cruza solo la entrada consultada. Sin `.idx` ni `seek`: con
-  9 MB entre los dos idiomas una pasada entera al arrancar no se nota.
+  y acá sí conviene Rust: son ~14 MB de datos entre los dos idiomas que no
+  queremos mandar por el bridge ni tener en el heap del webview — se lee el
+  `.dat` entero una vez por idioma a un `String` en el heap de Rust (cacheado
+  en un `OnceLock`) y por el bridge cruza solo la entrada consultada. Sin
+  `.idx` ni `seek`: una pasada entera al arrancar no se nota ni con los 14 MB
+  juntos.
 
   **Corrección al relevamiento de acá arriba**: la línea vieja decía "sin
   equivalente en inglés en este repo: rla-es es solo español, para la mitad
