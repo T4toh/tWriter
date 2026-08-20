@@ -134,6 +134,19 @@
       }
     }
 
+    @if (canCheckRepeticiones()) {
+      <span class="sep"></span>
+      <button
+        type="button"
+        class="tb-btn tb-text"
+        [class.active]="repAuto()"
+        (click)="toggleAutoRepeticiones()"
+        title="Repeticiones cercanas: marca la misma palabra repetida a poca distancia. Click en una marca resalta las otras"
+      >
+        Repeticiones
+      </button>
+    }
+
     @if (canApplyQuotes()) {
       <span class="sep"></span>
       <button
@@ -399,5 +412,15 @@
     (apply)="applyRaeFix()"
     (applyParagraph)="applyRaeParagraph()"
     (dismiss)="dismissRae()"
+  />
+}
+
+@if (repPopover(); as pp) {
+  <app-repeticiones-popover
+    [repeticion]="pp.repeticion"
+    [palabra]="pp.palabra"
+    [anchor]="pp.anchor"
+    (goToPrevious)="goToPreviousRepeticion()"
+    (dismiss)="dismissRepeticion()"
   />
 }

@@ -128,3 +128,20 @@ export interface RaeViolation {
   autoFix?: RaeAutoFix;
   paragraphRange?: RaeParagraphRange;
 }
+
+/** Repetición cercana de una palabra de contenido. La marca va en la aparición
+ *  repetida, nunca en la primera del grupo. */
+export interface Repeticion {
+  offset: number;
+  length: number;
+  /** Forma normalizada que disparó el match (minúsculas, sin diacríticos). */
+  palabra: string;
+  /** Offset de la aparición previa, para el "ir a la anterior" del popover. */
+  offsetPrevio: number;
+  /** Distancia en palabras contra la aparición previa. */
+  distancia: number;
+  /** Cuántas veces aparece la forma dentro de la ventana que termina en esta
+   *  aparición. NO es el total del párrafo: una forma repetida diez veces a lo
+   *  largo de un párrafo largo da varios hits con cuentas chicas. */
+  apariciones: number;
+}

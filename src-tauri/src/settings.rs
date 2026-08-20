@@ -14,6 +14,35 @@ pub struct LastSession {
     pub pm_pos: usize,
 }
 
+/// Las tres excepciones de repetición deliberada del detector. Espeja
+/// `ExcepcionesDeliberadas` de `src/app/repeticiones/detector.ts`.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RepeticionesExcepciones {
+    /// `cuerpo a cuerpo`, `side by side`.
+    #[serde(default = "bool_true")]
+    pub construccion: bool,
+    /// `¡Guía nocturno! ¡Guía nocturno!`, `a veces… a veces`.
+    #[serde(default = "bool_true", rename = "fraseRepetida")]
+    pub frase_repetida: bool,
+    /// `loved traveling…, loved hearing…`.
+    #[serde(default = "bool_true")]
+    pub anafora: bool,
+}
+
+fn bool_true() -> bool {
+    true
+}
+
+impl Default for RepeticionesExcepciones {
+    fn default() -> Self {
+        Self {
+            construccion: true,
+            frase_repetida: true,
+            anafora: true,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Settings {
     #[serde(default)]
@@ -107,6 +136,26 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub rae_auto_disabled: Option<bool>,
+    /// Si true, el detector de repeticiones cercanas queda apagado.
+    /// Default false (marca mientras se escribe, como el validador RAE).
+    #[serde(
+        default,
+        rename = "repeticionesAutoDisabled",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub repeticiones_auto_disabled: Option<bool>,
+    /// Qué formas de repetición deliberada filtra el detector. Las tres
+    /// prendidas por default: son legítimas (frase hecha, anáfora, énfasis de
+    /// diálogo) y marcarlas hace ruido. Primera clave no escalar de `Settings`,
+    /// de ahí el `default` en cada campo de la struct anidada: un
+    /// settings.json viejo, o uno escrito por una versión con menos flags, no
+    /// tiene que romper el parseo.
+    #[serde(
+        default,
+        rename = "repeticionesExcepciones",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub repeticiones_excepciones: Option<RepeticionesExcepciones>,
     /// Ancho del panel derecho ("compact" | "normal" | "wide" | "full").
     #[serde(
         default,
@@ -288,6 +337,35 @@ pub fn remember_lt_runtime(app: &AppHandle, key: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repeticiones_excepciones_roundtrip_and_absent_default() {
+        // Primera clave no escalar de Settings. Un settings.json previo a la
+        // feature no la trae y tiene que leerse como None sin romper.
+        let old: Settings = serde_json::from_str("{}").unwrap();
+        assert_eq!(old.repeticiones_excepciones, None);
+        assert_eq!(old.repeticiones_auto_disabled, None);
+
+        // Y uno escrito por una versión con menos flags: los que falten
+        // arrancan en true, que es el default de cada excepción.
+        let parcial: Settings =
+            serde_json::from_str(r#"{"repeticionesExcepciones":{"anafora":false}}"#).unwrap();
+        let exc = parcial.repeticiones_excepciones.unwrap();
+        assert!(!exc.anafora);
+        assert!(exc.construccion, "los ausentes arrancan prendidos");
+        assert!(exc.frase_repetida);
+
+        let mut s = Settings::default();
+        s.repeticiones_excepciones = Some(RepeticionesExcepciones {
+            construccion: true,
+            frase_repetida: false,
+            anafora: true,
+        });
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(json.contains("\"fraseRepetida\":false"), "json: {}", json);
+        let back: Settings = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.repeticiones_excepciones, s.repeticiones_excepciones);
+    }
 
     #[test]
     fn grammar_picky_roundtrip_and_absent_default() {

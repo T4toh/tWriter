@@ -1,0 +1,91 @@
+/* Hermano de `rae-popover.scss` con el violeta del detector. Se mantiene
+ * aparte y no se factoriza a un mixin: son dos archivos de 40 líneas que
+ * cambian por razones distintas. */
+.rep-pop {
+  position: fixed;
+  z-index: 1000;
+  min-width: 220px;
+  max-width: 320px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-left: 3px solid #8257e6;
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  padding: 8px 10px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.rep-pop--measuring {
+  visibility: hidden;
+}
+
+.rep-pop-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.rep-pop-tag {
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rep-pop-count {
+  font-size: 10px;
+  color: var(--fg-muted);
+}
+
+.rep-pop-word {
+  font-family: var(--font-body);
+  font-style: italic;
+}
+
+.rep-pop-footer {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.rep-pop-goto {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.rep-pop-goto:hover {
+  background: var(--bg-soft);
+}
+
+.rep-pop-dismiss {
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font-ui);
+  padding: 3px 8px;
+  border-radius: 3px;
+}
+
+.rep-pop-dismiss:hover {
+  background: var(--border);
+  color: var(--fg);
+}

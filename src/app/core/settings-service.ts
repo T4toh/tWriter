@@ -2,6 +2,10 @@ import { Injectable, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { NativeDialogsService } from './native-dialogs-service';
 import { GrammarMode } from './types';
+import {
+  EXCEPCIONES_DEFAULT,
+  ExcepcionesDeliberadas,
+} from '../repeticiones/detector';
 
 export type EditorWidth = 'narrow' | 'wide' | 'full';
 export type ParagraphSpacing = 'tight' | 'normal' | 'loose';
@@ -94,6 +98,8 @@ interface Settings {
   grammarPicky?: boolean;
   grammarAutoDisabled?: boolean;
   raeAutoDisabled?: boolean;
+  repeticionesAutoDisabled?: boolean;
+  repeticionesExcepciones?: ExcepcionesDeliberadas;
   rightPanelWidth?: RightPanelWidth;
   searchScope?: SearchScope;
   /** Si está true, cada hit del panel de búsqueda muestra su score BM25 debajo
@@ -137,6 +143,11 @@ export class SettingsService {
   readonly grammarAutoDisabled = signal<boolean>(false);
   /** Auto-check del validador RAE desactivado por el usuario. Persiste cross-session. */
   readonly raeAutoDisabled = signal<boolean>(false);
+  /** Detector de repeticiones cercanas desactivado por el usuario. */
+  readonly repeticionesAutoDisabled = signal<boolean>(false);
+  /** Formas de repetición deliberada que se filtran. Las tres prendidas por
+   *  default: son legítimas y marcarlas hace ruido. */
+  readonly repeticionesExcepciones = signal<ExcepcionesDeliberadas>(EXCEPCIONES_DEFAULT);
   readonly rightPanelWidth = signal<RightPanelWidth>(RIGHT_PANEL_DEFAULT);
   readonly searchScope = signal<SearchScope>(SEARCH_SCOPE_DEFAULT);
   readonly searchDebug = signal<boolean>(false);
@@ -182,6 +193,11 @@ export class SettingsService {
       this.grammarPicky.set(s.grammarPicky ?? false);
       this.grammarAutoDisabled.set(s.grammarAutoDisabled ?? false);
       this.raeAutoDisabled.set(s.raeAutoDisabled ?? false);
+      this.repeticionesAutoDisabled.set(s.repeticionesAutoDisabled ?? false);
+      this.repeticionesExcepciones.set({
+        ...EXCEPCIONES_DEFAULT,
+        ...(s.repeticionesExcepciones ?? {}),
+      });
       this.rightPanelWidth.set(s.rightPanelWidth ?? RIGHT_PANEL_DEFAULT);
       this.searchScope.set(s.searchScope ?? SEARCH_SCOPE_DEFAULT);
       this.searchDebug.set(s.searchDebug ?? false);
@@ -356,6 +372,16 @@ export class SettingsService {
     await this.persist();
   }
 
+  async setRepeticionesAutoDisabled(disabled: boolean): Promise<void> {
+    this.repeticionesAutoDisabled.set(disabled);
+    await this.persist();
+  }
+
+  async setRepeticionesExcepciones(exc: ExcepcionesDeliberadas): Promise<void> {
+    this.repeticionesExcepciones.set(exc);
+    await this.persist();
+  }
+
   async setRightPanelWidth(width: RightPanelWidth): Promise<void> {
     this.rightPanelWidth.set(width);
     await this.persist();
@@ -407,6 +433,8 @@ export class SettingsService {
       grammarPicky: this.grammarPicky() || undefined,
       grammarAutoDisabled: this.grammarAutoDisabled(),
       raeAutoDisabled: this.raeAutoDisabled(),
+      repeticionesAutoDisabled: this.repeticionesAutoDisabled() || undefined,
+      repeticionesExcepciones: this.repeticionesExcepciones(),
       rightPanelWidth: this.rightPanelWidth(),
       searchScope: this.searchScope(),
       searchDebug: this.searchDebug() || undefined,

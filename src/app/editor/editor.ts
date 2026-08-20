@@ -82,6 +82,16 @@ import {
   setRaeViolations,
 } from './rae-extension';
 import { RaePopover } from './rae-popover';
+import { detectRepeticiones, DEFAULTS as REP_DEFAULTS } from '../repeticiones/detector';
+import {
+  RangoPm,
+  RepeticionPos,
+  RepeticionesExtension,
+  mapRepeticionesToPm,
+  setGrupoRepeticion,
+  setRepeticiones,
+} from './repeticiones-extension';
+import { RepeticionesPopover } from './repeticiones-popover';
 
 interface ToolbarState {
   bold: boolean;
@@ -110,7 +120,7 @@ const EMPTY_STATE: ToolbarState = {
 @Component({
   selector: 'app-editor',
   imports: [
-    Landing, GrammarPopover, RaePopover, Select, FormsModule,
+    Landing, GrammarPopover, RaePopover, RepeticionesPopover, Select, FormsModule,
     LucideCircleAlert, LucideDynamicIcon, Spinner,
   ],
   templateUrl: './editor.html',
@@ -179,6 +189,23 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!this.canEdit()) return false;
     const lang = this.meta().idioma;
     return lang === 'es';
+  });
+  protected readonly repeticiones = signal<RepeticionPos[]>([]);
+  protected readonly repPopover = signal<{
+    repeticion: RepeticionPos;
+    palabra: string;
+    anchor: AnchorBox;
+  } | null>(null);
+  protected readonly repAuto = computed(() => {
+    if (!this.canCheckRepeticiones()) return false;
+    return !this.settings.repeticionesAutoDisabled();
+  });
+  /** A diferencia del validador RAE, este corre en los dos idiomas: el agujero
+   *  de repetición cercana que tapa es de LanguageTool, no del español. */
+  protected readonly canCheckRepeticiones = computed(() => {
+    if (!this.canEdit()) return false;
+    const lang = this.meta().idioma;
+    return lang === 'es' || lang === 'en';
   });
   protected readonly grammarBannerDismissed = signal<boolean>(false);
   private grammarUsed = signal<boolean>(false);
@@ -369,6 +396,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private raeDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private skipNextGrammarRemap = false;
   private skipNextRaeRemap = false;
+  private skipNextRepRemap = false;
   private lastGrammarUserDisabled = false;
   private lastGrammarAvailable = false;
   /** Firma de la config de LT que produjo las marcas actuales. Cambiarla
@@ -376,7 +404,10 @@ export class Editor implements AfterViewInit, OnDestroy {
   private lastGrammarCfgKey: string | null = null;
   private lastCheckedPlain: string | null = null;
   private lastRaePlain: string | null = null;
+  private lastRepPlain: string | null = null;
+  private repDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private lastRaeAuto = false;
+  private lastRepAuto = false;
 
   constructor() {
     effect(() => {
@@ -399,6 +430,10 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.applyRaeDecorations([]);
       this.raePopover.set(null);
       this.lastRaePlain = null;
+      this.repeticiones.set([]);
+      this.applyRepeticionesDecorations([]);
+      this.repPopover.set(null);
+      this.lastRepPlain = null;
       if (this.grammarDebounceHandle !== null) {
         clearTimeout(this.grammarDebounceHandle);
         this.grammarDebounceHandle = null;
@@ -407,8 +442,13 @@ export class Editor implements AfterViewInit, OnDestroy {
         clearTimeout(this.raeDebounceHandle);
         this.raeDebounceHandle = null;
       }
+      if (this.repDebounceHandle !== null) {
+        clearTimeout(this.repDebounceHandle);
+        this.repDebounceHandle = null;
+      }
       this.skipNextGrammarRemap = true;
       this.skipNextRaeRemap = true;
+      this.skipNextRepRemap = true;
 
       if (!this.tiptap) {
         this.createEditor(editable ? html : '', editable);
@@ -497,6 +537,9 @@ export class Editor implements AfterViewInit, OnDestroy {
       }
       if (editable && this.raeAuto()) {
         this.checkRae();
+      }
+      if (editable && this.repAuto()) {
+        this.checkRepeticiones();
       }
     });
 
@@ -660,6 +703,32 @@ export class Editor implements AfterViewInit, OnDestroy {
       }
     });
 
+    // Detector de repeticiones: mismo patrón que RAE.
+    effect(() => {
+      const on = this.repAuto();
+      if (on === this.lastRepAuto) return;
+      this.lastRepAuto = on;
+      if (!this.viewReady() || !this.tiptap) return;
+      if (on) {
+        this.checkRepeticiones(true);
+      } else {
+        this.repeticiones.set([]);
+        this.applyRepeticionesDecorations([]);
+        this.repPopover.set(null);
+        this.lastRepPlain = null;
+      }
+    });
+
+    // Los tres flags de repetición deliberada. `force` obligatorio: el texto no
+    // cambió, así que sin él el early-return por `lastRepPlain` se comería el
+    // recheck y los checks del modal no harían nada visible — el mismo bug que
+    // arrastraba el toggle de `picky` (PR #70).
+    effect(() => {
+      this.settings.repeticionesExcepciones();
+      if (!this.viewReady() || !this.tiptap) return;
+      if (untracked(() => this.repAuto())) this.checkRepeticiones(true);
+    });
+
     // El respiro del caret escala con la línea, así que cambia con la fuente.
     // `setOptions` termina en `view.updateState(state)` sin flag de scroll →
     // path "preserve" de ProseMirror: reaplica los props sin mover la vista.
@@ -704,6 +773,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (this.raeDebounceHandle !== null) {
       clearTimeout(this.raeDebounceHandle);
       this.raeDebounceHandle = null;
+    }
+    if (this.repDebounceHandle !== null) {
+      clearTimeout(this.repDebounceHandle);
+      this.repDebounceHandle = null;
     }
     this.tiptap?.destroy();
     this.tiptap = null;
@@ -1146,6 +1219,84 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.lastRaePlain = plain;
   }
 
+  protected toggleAutoRepeticiones(): void {
+    void this.settings.setRepeticionesAutoDisabled(!this.settings.repeticionesAutoDisabled());
+  }
+
+  /**
+   * Sincrónico como `checkRae()` — el detector es una función pura local, no
+   * hay round-trip a ningún servicio, así que no aplica la clase de bug de
+   * staleness del chequeo de LT (PR #70).
+   */
+  protected checkRepeticiones(force = false): void {
+    if (!this.tiptap || !this.canCheckRepeticiones()) return;
+    const { plain, ranges } = extractPlainText(this.tiptap.state.doc);
+    if (!plain.trim()) {
+      this.repeticiones.set([]);
+      this.applyRepeticionesDecorations([]);
+      this.lastRepPlain = '';
+      return;
+    }
+    if (!force && plain === this.lastRepPlain) return;
+    const lang = this.meta().idioma === 'en' ? 'en' : 'es';
+    const raw = detectRepeticiones(plain, lang, {
+      ...REP_DEFAULTS,
+      excepciones: this.settings.repeticionesExcepciones(),
+      // Los nombres propios inventados del mundo. Que `Kallai` se repita cinco
+      // veces en una escena es normal; misma fuente que filtra los TYPOS de LT.
+      ignorar: this.sagaCtx.dictionary(),
+    });
+    const positioned = mapRepeticionesToPm(raw, ranges);
+    this.repeticiones.set(positioned);
+    this.applyRepeticionesDecorations(positioned);
+    this.lastRepPlain = plain;
+  }
+
+  private applyRepeticionesDecorations(reps: RepeticionPos[]): void {
+    const view = (this.tiptap as unknown as { view?: { dispatch: (tr: unknown) => void; state: { tr: unknown } } } | null)?.view;
+    if (!view) return;
+    setRepeticiones(view, reps);
+  }
+
+  private scheduleRepRecheck(): void {
+    if (this.repDebounceHandle !== null) {
+      clearTimeout(this.repDebounceHandle);
+    }
+    this.repDebounceHandle = setTimeout(() => {
+      this.repDebounceHandle = null;
+      this.checkRepeticiones();
+    }, 1500);
+  }
+
+  /** Salta a la aparición previa y la selecciona. No cierra el popover del
+   *  todo por gusto: la selección mueve el doc-view y el ancla quedaría
+   *  colgada del span viejo. */
+  protected goToPreviousRepeticion(): void {
+    const popover = this.repPopover();
+    if (!popover || !this.tiptap) return;
+    const r = popover.repeticion;
+    this.repPopover.set(null);
+    this.limpiarGrupo();
+    this.tiptap
+      .chain()
+      .focus()
+      .setTextSelection({ from: r.fromPrevio, to: r.toPrevio })
+      .scrollIntoView()
+      .run();
+  }
+
+  protected dismissRepeticion(): void {
+    const popover = this.repPopover();
+    if (!popover) return;
+    this.limpiarGrupo();
+    const dismissedId = popover.repeticion.id;
+    // De sesión, no persistente: al próximo check vuelve. Lo persistente es el
+    // diccionario per-saga, y para eso está el diccionario.
+    this.repeticiones.update((list) => list.filter((r) => r.id !== dismissedId));
+    this.applyRepeticionesDecorations(this.repeticiones());
+    this.repPopover.set(null);
+  }
+
   protected applyRaeFix(): void {
     const popover = this.raePopover();
     if (!popover || !this.tiptap) return;
@@ -1265,10 +1416,13 @@ export class Editor implements AfterViewInit, OnDestroy {
     // podía devolver temprano con el índice roto sin cerrar nada: gramática
     // no se intentaba (aunque su span resolviera bien) y los dos popovers
     // podían quedar huérfanos en pantalla.
+    const repSpan = target?.closest('.repeticion') as HTMLElement | null;
     const raeIdx = raeSpan ? parseInt(raeSpan.dataset['raeIdx'] ?? '-1', 10) : -1;
     const raeViolation = raeIdx >= 0 ? this.raeViolations()[raeIdx] : undefined;
     const grammarIdx = grammarSpan ? parseInt(grammarSpan.dataset['grammarIdx'] ?? '-1', 10) : -1;
     const grammarMatch = grammarIdx >= 0 ? this.grammarMatches()[grammarIdx] : undefined;
+    const repIdx = repSpan ? parseInt(repSpan.dataset['repeticionIdx'] ?? '-1', 10) : -1;
+    const repeticion = repIdx >= 0 ? this.repeticiones()[repIdx] : undefined;
 
     // RAE gana salvo una excepción: `pending-conversion` (validator.ts,
     // `pushPendingConversion`) decora el PÁRRAFO entero (`length: para.length`),
@@ -1290,8 +1444,20 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.openGrammarPopover(grammarSpan!, grammarMatch, event);
       return;
     }
+    // La repetición va última siempre: es una sugerencia de estilo, nunca un
+    // error, así que no le puede tapar el popover a un typo. La decoración sí
+    // convive con las otras (usa `text-decoration`, no `border-bottom`), pero
+    // un offset abre un solo popover.
+    if (repeticion) {
+      this.openRepPopover(repSpan!, repeticion, event);
+      return;
+    }
     if (this.raePopover()) this.raePopover.set(null);
     if (this.grammarPopover()) this.closeGrammarPopover();
+    if (this.repPopover()) {
+      this.repPopover.set(null);
+      this.limpiarGrupo();
+    }
   }
 
   /**
@@ -1309,19 +1475,86 @@ export class Editor implements AfterViewInit, OnDestroy {
    * click, no dos.
    */
   private onDocumentClick(event: MouseEvent): void {
-    if (!this.grammarPopover() && !this.raePopover()) return;
+    if (!this.grammarPopover() && !this.raePopover() && !this.repPopover()) return;
     const target = event.target as HTMLElement | null;
     // Defensa en profundidad: si algún día un elemento interno del popover
     // dejara de burbujear hasta su root, el guard evita que se cierre solo.
-    if (target?.closest('.grammar-pop, .rae-pop')) return;
+    if (target?.closest('.grammar-pop, .rae-pop, .rep-pop')) return;
     if (this.grammarPopover()) this.closeGrammarPopover();
     if (this.raePopover()) this.raePopover.set(null);
+    if (this.repPopover()) {
+      this.repPopover.set(null);
+      this.limpiarGrupo();
+    }
+  }
+
+  private openRepPopover(span: HTMLElement, r: RepeticionPos, event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.grammarPopover()) this.closeGrammarPopover();
+    if (this.raePopover()) this.raePopover.set(null);
+    const rect = span.getBoundingClientRect();
+    this.repPopover.set({
+      repeticion: r,
+      // La palabra tal cual está escrita: `r.palabra` viene normalizada (sin
+      // tildes, en minúscula) y mostrarla así se lee como un bug de la app.
+      palabra: this.tiptap?.state.doc.textBetween(r.from, r.to, ' ').trim() ?? r.palabra,
+      anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
+    });
+    this.resaltarGrupo(r);
+  }
+
+  /**
+   * Resalta TODAS las apariciones del grupo mientras el popover está abierto:
+   * la sugerencia se entiende mucho mejor viendo dónde están las otras que
+   * leyendo "25 palabras más arriba".
+   *
+   * El grupo se arma con las marcas que comparten forma y párrafo, más la
+   * aparición previa de cada una — que es la única forma de incluir la primera
+   * del grupo, que nunca lleva marca propia.
+   */
+  private resaltarGrupo(r: RepeticionPos): void {
+    const editor = this.tiptap;
+    if (!editor) return;
+    const bloqueDe = (pos: number): number => editor.state.doc.resolve(pos).start();
+    const bloque = bloqueDe(r.from);
+    const rangos: RangoPm[] = [];
+    const vistos = new Set<number>();
+    const sumar = (from: number, to: number): void => {
+      if (vistos.has(from)) return;
+      vistos.add(from);
+      rangos.push({ from, to });
+    };
+    for (const otra of this.repeticiones()) {
+      if (otra.palabra !== r.palabra || bloqueDe(otra.from) !== bloque) continue;
+      sumar(otra.from, otra.to);
+      sumar(otra.fromPrevio, otra.toPrevio);
+    }
+    this.aplicarGrupo(rangos);
+  }
+
+  /** Apaga el resaltado del grupo. Se llama en todo cierre del popover. */
+  private limpiarGrupo(): void {
+    this.aplicarGrupo([]);
+  }
+
+  /** El cast es el mismo que usan `applyRaeDecorations` y
+   *  `applyRepeticionesDecorations`: el `EditorView` de TipTap no encaja en el
+   *  shim mínimo que expone la extensión. */
+  private aplicarGrupo(rangos: RangoPm[]): void {
+    const view = (this.tiptap as unknown as { view?: { dispatch: (tr: unknown) => void; state: { tr: unknown } } } | null)?.view;
+    if (!view) return;
+    setGrupoRepeticion(view, rangos);
   }
 
   private openRaePopover(span: HTMLElement, v: RaeViolationPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
     if (this.grammarPopover()) this.closeGrammarPopover();
+    if (this.repPopover()) {
+      this.repPopover.set(null);
+      this.limpiarGrupo();
+    }
     const rect = span.getBoundingClientRect();
     this.raePopover.set({
       violation: v,
@@ -1368,6 +1601,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         TextAlign.configure({ types: ['paragraph', 'heading'] }),
         Grammar,
         RaeExtension,
+        RepeticionesExtension,
         SearchHighlight,
       ],
       content,
@@ -1393,8 +1627,22 @@ export class Editor implements AfterViewInit, OnDestroy {
         if (this.skipNextGrammarRemap) {
           // Transacción inducida por el cambio de capítulo: no remapear,
           // no agendar recheck (el effect ya disparó el check inmediato).
+          //
+          // Las TRES flags se consumen acá, no cada una en su bloque. Se
+          // prenden juntas (una sola transacción de `setContent` las justifica)
+          // pero este `return` cortaba antes de llegar a los bloques de RAE y
+          // repeticiones, así que sus flags sobrevivían hasta la PRIMERA
+          // edición real del autor — y ahí suprimían el remap Y el recheck de
+          // esa edición. Resultado: las marcas quedaban corridas por el delta
+          // de ese primer tecleo y, si el autor paraba de escribir, nadie las
+          // volvía a calcular. El bug estaba latente en RAE desde antes; se
+          // hizo visible con repeticiones porque marca mucho más seguido.
           this.skipNextGrammarRemap = false;
+          this.skipNextRaeRemap = false;
+          this.skipNextRepRemap = false;
           if (this.grammarPopover()) this.grammarPopover.set(null);
+          if (this.raePopover()) this.raePopover.set(null);
+          if (this.repPopover()) this.repPopover.set(null);
           return;
         }
         if (this.grammarMatches().length > 0) {
@@ -1436,6 +1684,28 @@ export class Editor implements AfterViewInit, OnDestroy {
           }
           if (this.raePopover()) this.raePopover.set(null);
           if (this.raeAuto()) this.scheduleRaeRecheck();
+        }
+
+        if (this.skipNextRepRemap) {
+          this.skipNextRepRemap = false;
+          if (this.repPopover()) this.repPopover.set(null);
+        } else {
+          if (this.repeticiones().length > 0) {
+            const docSize = transaction.doc.content.size;
+            const remappedRep = this.repeticiones()
+              .map((r) => ({
+                ...r,
+                from: transaction.mapping.map(r.from, -1),
+                to: transaction.mapping.map(r.to, 1),
+                fromPrevio: transaction.mapping.map(r.fromPrevio, -1),
+                toPrevio: transaction.mapping.map(r.toPrevio, 1),
+              }))
+              .filter((r) => r.from < r.to && r.to <= docSize);
+            this.repeticiones.set(remappedRep);
+            this.applyRepeticionesDecorations(remappedRep);
+          }
+          if (this.repPopover()) this.repPopover.set(null);
+          if (this.repAuto()) this.scheduleRepRecheck();
         }
       },
     });

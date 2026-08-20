@@ -180,7 +180,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 > Seis veces menos reglas y 156 veces menos pares de confusión. El motor es el
 > mismo — lo que falta son las reglas escritas.
 
-- **Detector de repeticiones cercanas** (es + en). El agujero más claro que
+- [x] **Detector de repeticiones cercanas** (es + en). El agujero más claro que
   encontramos, y no es del español: LT detecta **solo duplicados literales
   pegados** (`la nave nave`, `SPANISH_WORD_REPEAT_RULE` /
   `ENGLISH_WORD_REPEAT_RULE`) y nada más. Verificado que estos tres casos no
@@ -212,6 +212,52 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   ventana, el largo mínimo de palabra y la stopword list son perillas que hay
   que tunear contra prosa real antes de mostrarle esto a alguien; el número
   crudo no es un bug del algoritmo, es que sin calibrar marca todo.
+
+  **Implementado (`feat/detector-repeticiones`)**, spec en
+  `docs/superpowers/specs/2026-08-20-detector-repeticiones-design.md`.
+  `src/app/repeticiones/detector.ts` es la función pura (32 casos en
+  `scripts/run-repeticiones-smoke.mjs`), `repeticiones-extension.ts` +
+  `repeticiones-popover.ts` la mitad con DOM. Calibrado contra dos libros
+  enteros de `Novelas/` con `scripts/densidad-repeticiones.mjs`: **0,8 hits por
+  1.000 palabras en español y 0,7 en inglés**, contra ~8 con `minApariciones`
+  en 2. Seis capas de exclusión (stopwords, largo mínimo, verbos dicendi,
+  diccionario per-saga, capitalizado mid-oración y repetición deliberada), y
+  las tres formas deliberadas — construcción hecha, frase/locución repetida,
+  anáfora — tienen un flag cada una en el modal de gramática.
+  **Verificado a mano por el autor el 2026-08-20** — anda. De ahí salieron tres
+  arreglos: las marcas quedaban corridas tras la primera edición de cada
+  capítulo (las tres flags `skipNext*Remap` se prendían juntas pero el `return`
+  del bloque de gramática en `onTransaction` cortaba antes de consumir las de
+  RAE y repeticiones, así que sobrevivían hasta el primer tecleo real y ahí
+  suprimían el remap Y el recheck — bug latente en RAE desde antes), el popover
+  decía "N veces en el párrafo" cuando la cuenta es dentro de la ventana, y
+  "25 palabras antes" se leía como "apareció 25 veces". Sumado en la misma
+  vuelta: al abrir el popover se resalta el grupo entero, que es lo que hace
+  entendible la sugerencia.
+
+  **Sinónimos en el popover de repetición** (pedido del autor durante la
+  verificación). Hoy el popover dice *dónde* está la repetición y nada más: la
+  acción que falta es reemplazar la palabra ahí mismo, sin salir del editor. Es
+  el cruce natural con el item del **tesauro embebido** de más abajo — `nave`
+  repetida y el popover ofreciendo `bajel`, `buque`, `navío` de
+  `th_es_v2.dat`. Dos cosas a resolver cuando se encare: (a) el reemplazo tiene
+  que heredar las marcas del span como hace `applyRaeFix` (`marksAcross`, no
+  `marks()`, o se pierde la cursiva en el borde de un `<em>`); (b) el tesauro es
+  español-only en rla-es, así que la mitad inglesa del detector se queda sin
+  sugerencias hasta que aparezca un MyThes en inglés — el popover tiene que
+  degradar a "sin sugerencias" sin quedar roto ni prometer lo que no hay.
+
+- **Dashboard de estilo por novela** (idea del autor, no para ahora). Lo que hoy
+  se ve capítulo por capítulo — repeticiones, violaciones RAE, matches de
+  gramática, palabras por capítulo — agregado a nivel libro o saga: densidades,
+  qué capítulos están peor, qué formas se repiten en todo el libro. Es el caso
+  que sí justifica Rust y no TS: son N archivos, así que va al lado de
+  `search.rs` (el detector de repeticiones vive en TS justamente porque toca
+  solo el capítulo activo, que ya está en memoria del frontend). Ojo con el
+  alcance: un dashboard que solo muestra números es un juguete; lo útil es que
+  cada fila lleve al capítulo y al offset, o sea que necesita las mismas
+  posiciones que ya calculan `validator.ts` y `detector.ts`, pero corridas
+  server-side.
 
 - **Tesauro de sinónimos embebido** (español). rla-es trae
   `sinonimos/palabras/th_es_v2.dat` — **21.846 entradas**, 2,7 MB, formato
