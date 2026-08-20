@@ -66,3 +66,56 @@ body {
   animation: twriter-search-flash 2.5s ease-out 1;
   border-radius: 3px;
 }
+
+// Botones de diálogo. Vivían copiados en diez `.scss` de componente, con cuatro
+// variantes distintas del mismo bloque: acá arriba aplica igual (los estilos
+// globales no los encapsula Angular, solo los del componente) y hay un solo
+// lugar donde tocarlos.
+//
+// El criterio de las variantes, que estaba implícito: `btn-primary` es la acción
+// que confirma algo (Aplicar, Guardar, Exportar), `btn-secondary` la que cancela
+// o solo cierra, `btn-danger` la destructiva.
+.btn {
+  padding: 0.5em 1.25em;
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+
+  &.btn-secondary {
+    background: transparent;
+    color: var(--fg);
+  }
+
+  &.btn-secondary:hover {
+    background: var(--border);
+  }
+
+  &.btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+
+  &.btn-primary:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  &.btn-danger {
+    background: #c14b4b;
+    color: #fff;
+    border-color: #c14b4b;
+    font-weight: 600;
+  }
+
+  &.btn-danger:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

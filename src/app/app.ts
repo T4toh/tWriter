@@ -41,6 +41,8 @@ import { ImportJoplin } from './import-joplin/import-joplin';
 import { ImportWizard } from './import-wizard/import-wizard';
 import { UpdateBanner } from './update-banner/update-banner';
 import { StorageHelpModal } from './storage-help/storage-help-modal';
+import { AboutModal } from './about/about-modal';
+import { AboutService } from './core/about-service';
 import { Spinner } from './shared/spinner';
 import { ModalHost } from './shared/modal-host';
 import { ModalService } from './shared/modal-service';
@@ -52,6 +54,7 @@ import {
   LucideArrowDownToLine,
   LucideArrowUpDown,
   LucideBug,
+  LucideInfo,
   LucideChevronDown,
   LucideChevronRight,
   LucideCircleQuestionMark,
@@ -74,11 +77,11 @@ import {
   imports: [
     Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, DictionaryModal, SplitChapterModal,
     ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, ToastContainer,
-    GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, Spinner, ModalHost, ContextMenuHost,
+    GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, AboutModal, Spinner, ModalHost, ContextMenuHost,
     LucideArrowDownToLine, LucideArrowUpDown, LucideBug, LucideChevronDown, LucideChevronRight,
     LucideCircleQuestionMark, LucideDownload, LucideDynamicIcon, LucideFolder, LucideMoveHorizontal,
     LucideMoveVertical, LucideNotebook, LucideNotebookPen, LucidePlus, LucideRefreshCw,
-    LucideSearch, LucideSettings, LucideX,
+    LucideSearch, LucideSettings, LucideX, LucideInfo,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -97,6 +100,7 @@ export class App {
 
   private project = inject(ProjectService);
   protected settings = inject(SettingsService);
+  private about = inject(AboutService);
   protected chapter = inject(ChapterService);
   protected note = inject(NoteService);
   private cursorRestore = inject(CursorRestoreService);
@@ -480,6 +484,10 @@ export class App {
 
   protected openGrammarSettings(): void {
     this.grammarSettings?.show();
+  }
+
+  protected openAbout(): void {
+    void this.about.openAbout();
   }
 
   protected openImportWizard(): void {

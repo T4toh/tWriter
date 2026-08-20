@@ -54,6 +54,14 @@
           >
             <svg lucideBug [size]="16"></svg>
           </button>
+          <button
+            type="button"
+            class="icon-btn"
+            (click)="openAbout()"
+            title="Acerca de tWriter y licencias"
+          >
+            <svg lucideInfo [size]="16"></svg>
+          </button>
         </div>
       </div>
     </header>
@@ -323,6 +331,7 @@
 <app-import-wizard />
 <app-import-joplin />
 <app-storage-help-modal />
+<app-about-modal />
 <app-toast-container />
 <app-update-banner />
 <app-modal-host />

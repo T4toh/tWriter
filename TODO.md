@@ -611,6 +611,13 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 ## Archivos
 
 - Changelog screen in-app: panel/modal accesible desde el header (junto a 🐛) parseando `CHANGELOG.md` o release notes de GitHub. Útil para gente nueva post-AUR.
+- **En el modal "Acerca de", cuando se retome** (ideas del autor al construirlo, no
+  para ahora): el chequeo de versión nueva — hoy vive en el `UpdateBanner` y el
+  plugin `updater`, así que sería exponer el "buscar actualizaciones" a mano desde
+  ahí — y el toggle de idioma de la interfaz de la app, que hoy es español fijo y
+  no tiene infraestructura de i18n de ningún tipo (los strings están hardcodeados
+  en los templates, así que eso es un item propio y grande, no un agregado al
+  modal).
 - Guía in-app de primer uso: tour con flechas la primera vez que se abre la app (tree explorer, idioma, RAE, gramática, sync). Persiste flag en `settings.json`.
 - Botón "Abrir en terminal" dentro del modal storage-help (`xdg-open` / `konsole` / `gnome-terminal` / `wt`).
 - **Sincronizar `settings.json` entre PCs**: hoy la config vive en

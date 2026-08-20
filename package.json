@@ -1,9 +1,11 @@
 {
   "name": "twriter",
   "version": "0.7.3",
+  "license": "MIT",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "prebuild": "node scripts/generar-licencias.mjs",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "tauri": "tauri"
