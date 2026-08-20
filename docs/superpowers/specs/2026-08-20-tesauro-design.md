@@ -91,10 +91,16 @@ del detector.
 - `th_es_v2.dat` — **crudo, sin modificar**, tal como viene. Es la vía limpia para la LGPL
   2.1: se shipea sin tocar, con su `COPYING` al lado y el crédito a OpenThesaurus-es
   (Marcelo Garrone). Son 2,8 MB, no hay nada que ganar podándolo.
-- `th_en_us.dat` — podado por `scripts/podar-tesauro-en.mjs`, que tira las entradas
-  `(generic term)`, `(related term)`, `(similar term)` y `(antonym)`. **18,5 MB → 6,3 MB
-  medidos**, y mejora la calidad: los hiperónimos de WordNet son ruido para un novelista
-  (`move` como sinónimo de `ship`). La licencia WordNet permite modificar con aviso, así
+- `th_en_us.dat` — podado por `scripts/podar-tesauro-en.mjs`. Descarta enteras las
+  entradas `(related term)`, `(similar term)` y `(antonym)`; a los `(generic term)`
+  les pela la etiqueta y conserva la palabra, reordenada al final de su acepción,
+  detrás de los sinónimos reales. **18,5 MB → 11,2 MB medidos, 140.835 entradas.**
+  La primera versión tiraba el `(generic term)` entero — eso borraba 28.000
+  entradas, entre ellas la acepción de sustantivo de `ship` (`vessel`/`watercraft`
+  son hiperónimos, no ruido cuando son el único sinónimo que le queda a la palabra).
+  Conservarlos pelados cuesta ~5 MB contra la poda original, y es el costo correcto:
+  perder la entrada entera no tiene remedio, un hiperónimo de más el autor lo ve y
+  lo descarta con un click. La licencia WordNet permite modificar con aviso, así
   que va el `WordNet_license.txt` más una nota de qué se modificó.
 - Los `.idx` originales **no van**. Al podar el inglés los offsets dejan de servir, y
   regenerarlos es complejidad que el punto siguiente no necesita.
@@ -102,7 +108,8 @@ del detector.
 El script de poda corre una vez y su salida se commitea. Nada de bajar datos en build time:
 mete red en el build y no ahorra un byte en el artefacto final.
 
-**Costo aceptado explícitamente por el autor**: ~9 MB más en el bundle, en cada artefacto
+**Costo aceptado explícitamente por el autor**: ~14 MB más en el bundle (2,8 del
+español + 11,2 del inglés), en cada artefacto
 del updater (`createUpdaterArtifacts: true`) y en el repo. Barato contra los ~300 MB de
 imagen que ya baja LanguageTool.
 
@@ -120,8 +127,8 @@ ISO-8859-1 en el español — y armar un `HashMap<clave, (inicio, fin)>` de una 
 archivo queda en el heap de Rust, el índice son solo las claves, y por el bridge cruza
 únicamente la entrada consultada. Cacheado en un `OnceLock` por idioma.
 
-Sin `seek`, sin índice binario, sin `.idx`: son 9 MB y una pasada. El costo es memoria del
-proceso Rust (~10 MB por el inglés), no del heap del webview, que es lo que importaba
+Sin `seek`, sin índice binario, sin `.idx`: son 14 MB y una pasada. El costo es memoria del
+proceso Rust (~11 MB por el inglés), no del heap del webview, que es lo que importaba
 evitar.
 
 La normalización (minúsculas, enclíticos, plural, re-pluralización de los sinónimos) vive
