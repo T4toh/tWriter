@@ -2,6 +2,7 @@ import {
   AfterViewInit,
   Component,
   ElementRef,
+  HostListener,
   OnDestroy,
   ViewChild,
   computed,
@@ -25,6 +26,8 @@ import {
 } from '@lucide/angular';
 import { invoke } from '@tauri-apps/api/core';
 import { Editor as TipTapEditor } from '@tiptap/core';
+import { Mark } from '@tiptap/pm/model';
+import { Transaction } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
 import TextAlign from '@tiptap/extension-text-align';
@@ -52,7 +55,8 @@ import {
 import { SystemFontsService } from '../core/system-fonts-service';
 import { FontsService } from '../core/fonts-service';
 import { Select, SelectGroup, SelectOption } from '../shared/select';
-import { GrammarMatch, RaeViolation } from '../core/types';
+import { GrammarMatch, RaeViolation, RespuestaTesauro } from '../core/types';
+import { TesauroService } from '../core/tesauro-service';
 import { convert as convertRae } from '../dialogos/converter';
 import { suggestFromDictionary } from '../dictionary/suggest';
 import { educateQuotes } from '../quotes/educate';
@@ -92,6 +96,8 @@ import {
   setRepeticiones,
 } from './repeticiones-extension';
 import { RepeticionesPopover } from './repeticiones-popover';
+import { palabraEn } from './palabra-en';
+import { atajo } from '../shared/atajo';
 
 interface ToolbarState {
   bold: boolean;
@@ -117,6 +123,14 @@ const EMPTY_STATE: ToolbarState = {
   canRedo: false,
 };
 
+/** Una palabra del documento con su rango, para consultarle el tesauro. */
+interface ObjetivoTesauro {
+  from: number;
+  to: number;
+  palabra: string;
+}
+
+
 @Component({
   selector: 'app-editor',
   imports: [
@@ -127,6 +141,8 @@ const EMPTY_STATE: ToolbarState = {
   styleUrl: './editor.scss',
 })
 export class Editor implements AfterViewInit, OnDestroy {
+  /** Etiquetas de atajos por plataforma (⌘ en Mac). Ver `shared/atajo.ts`. */
+  protected readonly atajo = atajo;
   protected chapter = inject(ChapterService);
   protected settings = inject(SettingsService);
   protected grammar = inject(GrammarService);
@@ -138,6 +154,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private cursorRestore = inject(CursorRestoreService);
   private debug = inject(DebugService);
   private toast = inject(ToastService);
+  private readonly tesauro = inject(TesauroService);
 
   /** Pane que renderiza este editor. Default 0 = principal. 1 = secundario (split). */
   readonly paneId = input<PaneId>(0);
@@ -192,10 +209,13 @@ export class Editor implements AfterViewInit, OnDestroy {
   });
   protected readonly repeticiones = signal<RepeticionPos[]>([]);
   protected readonly repPopover = signal<{
-    repeticion: RepeticionPos;
+    repeticion: RepeticionPos | null;
     palabra: string;
     anchor: AnchorBox;
+    from: number;
+    to: number;
   } | null>(null);
+  protected readonly repResultado = signal<RespuestaTesauro | null>(null);
   protected readonly repAuto = computed(() => {
     if (!this.canCheckRepeticiones()) return false;
     return !this.settings.repeticionesAutoDisabled();
@@ -787,33 +807,44 @@ export class Editor implements AfterViewInit, OnDestroy {
       return; // dejá burbujar al handler global de App
     }
     this.refreshState();
-    this.ctxMenu.open(event, this.buildEditorItems());
+    // La palabra sale de las COORDENADAS del click, no de la selección: WebKit
+    // no mueve el caret al hacer click derecho, así que si no, "Sinónimos" te
+    // ofrecería los de donde quedó el cursor la última vez.
+    const at = this.tiptap.view.posAtCoords({ left: event.clientX, top: event.clientY });
+    this.ctxMenu.open(event, this.buildEditorItems(at ? this.palabraEnPos(at.pos) : null));
   }
 
-  private buildEditorItems(): CtxMenuEntry[] {
+  private buildEditorItems(tesauro: ObjetivoTesauro | null = null): CtxMenuEntry[] {
     const s = this.state();
     const entries: CtxMenuEntry[] = [
-      { label: 'Deshacer', kbd: 'Ctrl+Z', disabled: !s.canUndo, onClick: () => this.undo() },
-      { label: 'Rehacer', kbd: 'Ctrl+Shift+Z', disabled: !s.canRedo, onClick: () => this.redo() },
+      { label: 'Deshacer', kbd: atajo('Z'), disabled: !s.canUndo, onClick: () => this.undo() },
+      { label: 'Rehacer', kbd: atajo('Z', true), disabled: !s.canRedo, onClick: () => this.redo() },
       { kind: 'separator' },
-      { label: 'Cortar', kbd: 'Ctrl+X', disabled: !s.hasSelection, onClick: () => this.cut() },
-      { label: 'Copiar', kbd: 'Ctrl+C', disabled: !s.hasSelection, onClick: () => this.copy() },
-      { label: 'Pegar', kbd: 'Ctrl+V', onClick: () => this.paste() },
-      { label: 'Pegar como texto plano', kbd: 'Ctrl+Shift+V', onClick: () => this.pastePlain() },
-      { label: 'Seleccionar todo', kbd: 'Ctrl+A', onClick: () => this.selectAll() },
+      { label: 'Cortar', kbd: atajo('X'), disabled: !s.hasSelection, onClick: () => this.cut() },
+      { label: 'Copiar', kbd: atajo('C'), disabled: !s.hasSelection, onClick: () => this.copy() },
+      { label: 'Pegar', kbd: atajo('V'), onClick: () => this.paste() },
+      { label: 'Pegar como texto plano', kbd: atajo('V', true), onClick: () => this.pastePlain() },
+      { label: 'Seleccionar todo', kbd: atajo('A'), onClick: () => this.selectAll() },
     ];
     if (s.hasSelection) {
       entries.push(
         { kind: 'separator' },
-        { label: 'Negrita', kbd: 'Ctrl+B', onClick: () => this.toggleBold() },
-        { label: 'Itálica', kbd: 'Ctrl+I', onClick: () => this.toggleItalic() },
-        { label: 'Subrayado', kbd: 'Ctrl+U', onClick: () => this.toggleUnderline() },
+        { label: 'Negrita', kbd: atajo('B'), onClick: () => this.toggleBold() },
+        { label: 'Itálica', kbd: atajo('I'), onClick: () => this.toggleItalic() },
+        { label: 'Subrayado', kbd: atajo('U'), onClick: () => this.toggleUnderline() },
       );
     }
     entries.push(
       { kind: 'separator' },
       { label: 'Salto de escena', kbd: '— —', onClick: () => this.insertSceneBreak() },
     );
+    if (tesauro) {
+      entries.push({
+        label: `Sinónimos de «${tesauro.palabra}»`,
+        kbd: atajo('Y', true),
+        onClick: () => this.abrirTesauro(tesauro),
+      });
+    }
     return entries;
   }
 
@@ -1276,25 +1307,154 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!popover || !this.tiptap) return;
     const r = popover.repeticion;
     this.repPopover.set(null);
+    this.repResultado.set(null);
     this.limpiarGrupo();
-    this.tiptap
-      .chain()
-      .focus()
-      .setTextSelection({ from: r.fromPrevio, to: r.toPrevio })
-      .scrollIntoView()
-      .run();
+    if (r) {
+      this.tiptap
+        .chain()
+        .focus()
+        .setTextSelection({ from: r.fromPrevio, to: r.toPrevio })
+        .scrollIntoView()
+        .run();
+    }
   }
 
   protected dismissRepeticion(): void {
     const popover = this.repPopover();
     if (!popover) return;
     this.limpiarGrupo();
-    const dismissedId = popover.repeticion.id;
-    // De sesión, no persistente: al próximo check vuelve. Lo persistente es el
-    // diccionario per-saga, y para eso está el diccionario.
-    this.repeticiones.update((list) => list.filter((r) => r.id !== dismissedId));
-    this.applyRepeticionesDecorations(this.repeticiones());
+    if (popover.repeticion) {
+      const dismissedId = popover.repeticion.id;
+      // De sesión, no persistente: al próximo check vuelve. Lo persistente es
+      // el diccionario per-saga, y para eso está el diccionario.
+      this.repeticiones.update((list) => list.filter((r) => r.id !== dismissedId));
+      this.applyRepeticionesDecorations(this.repeticiones());
+    }
     this.repPopover.set(null);
+    this.repResultado.set(null);
+  }
+
+  /**
+   * Sinónimos de la palabra del cursor, sin que tenga que haber una repetición
+   * marcada. Se bindean los dos modificadores porque Angular mapea `meta` a Cmd
+   * y `control` a Ctrl, y el mismo build corre en Mac, Linux y Windows.
+   *
+   * La `S` quedó descartada: `⌘⇧S` es "Guardar como" o "Duplicar" en casi toda
+   * app de escritorio.
+   */
+  @HostListener('window:keydown.meta.shift.y', ['$event'])
+  @HostListener('window:keydown.control.shift.y', ['$event'])
+  protected onAtajoTesauro(event: Event): void {
+    if (!this.tiptap) return;
+    // Este componente se instancia DOS veces (los dos panes del split, ver
+    // `app.html`), así que el `window:keydown` llega a los dos: sin esta guarda
+    // el pane sin foco abre un popover sobre la palabra donde quedó su cursor
+    // viejo y un chip de ahí muta el capítulo que el autor no está mirando.
+    if (!this.tiptap.isFocused) return;
+    event.preventDefault();
+    const objetivo = this.palabraEnPos(this.tiptap.state.selection.from);
+    if (objetivo) this.abrirTesauro(objetivo);
+  }
+
+  /**
+   * La palabra que toca la posición dada, con su rango en el documento. `null`
+   * si ahí no hay ninguna.
+   *
+   * Lo comparten el atajo (que resuelve la posición del cursor) y el menú
+   * contextual (que la saca de las coordenadas del click).
+   */
+  private palabraEnPos(pos: number): ObjetivoTesauro | null {
+    const editor = this.tiptap;
+    if (!editor) return null;
+    const $pos = editor.state.doc.resolve(pos);
+    // Con una `NodeSelection` sobre un leaf (el `<hr class="scene-break">`)
+    // `$pos.parent` es el doc, y ahí `textBetween` concatena los párrafos sin
+    // aportar las 2 posiciones que cada uno ocupa: los offsets salen corridos y
+    // el reemplazo cae en otro párrafo.
+    if (!$pos.parent.isTextblock) return null;
+    // `textBetween(0, content.size, undefined, ' ')` y no `textContent`: el
+    // schema permite `<br>`, que aporta 0 caracteres a `textContent` pero 1 a
+    // las posiciones del nodo. Con `leafText` de un espacio, offsets y
+    // posiciones quedan alineados.
+    const texto = $pos.parent.textBetween(0, $pos.parent.content.size, undefined, ' ');
+    const limites = palabraEn(texto, $pos.parentOffset);
+    if (!limites) return null;
+    const inicio = $pos.start();
+    const from = inicio + limites.inicio;
+    const to = inicio + limites.fin;
+    const palabra = editor.state.doc.textBetween(from, to, ' ').trim();
+    return palabra.length > 0 ? { from, to, palabra } : null;
+  }
+
+  /** Abre el popover en modo tesauro sobre un rango ya resuelto. */
+  private abrirTesauro(objetivo: ObjetivoTesauro): void {
+    const editor = this.tiptap;
+    if (!editor) return;
+    if (this.grammarPopover()) this.closeGrammarPopover();
+    if (this.raePopover()) this.raePopover.set(null);
+    this.limpiarGrupo();
+    const coords = editor.view.coordsAtPos(objetivo.from);
+    this.repPopover.set({
+      repeticion: null,
+      palabra: objetivo.palabra,
+      anchor: { left: coords.left, top: coords.top, bottom: coords.bottom },
+      from: objetivo.from,
+      to: objetivo.to,
+    });
+    this.repResultado.set(null);
+    void this.cargarSinonimos(objetivo.palabra);
+  }
+
+  /** Las marcas que hereda un reemplazo del rango `from..to`. `marksAcross` es
+   *  el lado correcto: toma las marcas que sobreviven de punta a punta del
+   *  span reemplazado, mientras que `marks()` a secas devuelve las del texto
+   *  ANTERIOR a `from`, que está fuera del span (en el borde izquierdo de un
+   *  `<em>` da `[]` y se pierde la cursiva). Con marcas mixtas adentro del
+   *  span se homogeneiza — pérdida acotada en un span de pocos caracteres.
+   *  Usado por `applyRaeFix` y `reemplazarRepeticion`. */
+  private marcasParaReemplazo(tr: Transaction, from: number, to: number): readonly Mark[] {
+    const $f = tr.doc.resolve(from);
+    return to > from ? ($f.marksAcross(tr.doc.resolve(to)) ?? $f.marks()) : $f.marks();
+  }
+
+  /** Reemplaza la aparición que está mirando el popover por el sinónimo
+   *  elegido. La herencia de marcas es la de `marcasParaReemplazo` — mismo
+   *  patrón que `applyRaeFix`. */
+  protected reemplazarRepeticion(sinonimo: string): void {
+    const popover = this.repPopover();
+    if (!popover || !this.tiptap) return;
+    const r = popover.repeticion;
+    // Dato roto, no una operación válida acá (a diferencia de `applyRaeFix`,
+    // que sí puede recibir un borrado real de LT): un sinónimo vacío no
+    // reemplaza nada, así que se corta antes de tocar el documento.
+    if (sinonimo.trim().length === 0) return;
+    const original = popover.palabra;
+    // Si la palabra abría oración va con mayúscula, y el sinónimo del tesauro
+    // viene siempre en minúscula.
+    const reemplazo =
+      original.charAt(0) === original.charAt(0).toUpperCase() &&
+      original.charAt(0) !== original.charAt(0).toLowerCase()
+        ? sinonimo.charAt(0).toUpperCase() + sinonimo.slice(1)
+        : sinonimo;
+    const { from, to } = popover;
+    this.tiptap
+      .chain()
+      .focus()
+      .command(({ tr, state, dispatch }) => {
+        if (!dispatch) return true;
+        const marks = this.marcasParaReemplazo(tr, from, to);
+        tr.replaceWith(from, to, state.schema.text(reemplazo, marks));
+        return true;
+      })
+      .run();
+    this.limpiarGrupo();
+    this.repResultado.set(null);
+    this.repPopover.set(null);
+    if (r) {
+      this.repeticiones.update((list) => list.filter((x) => x.id !== r.id));
+      this.applyRepeticionesDecorations(this.repeticiones());
+    }
+    if (this.repAuto()) this.scheduleRepRecheck();
   }
 
   protected applyRaeFix(): void {
@@ -1311,17 +1471,9 @@ export class Editor implements AfterViewInit, OnDestroy {
       .command(({ tr, state, dispatch }) => {
         if (!dispatch) return true;
         // La herencia de marcas se hace explícita acá en vez de depender de lo
-        // que decida `insertContent` adentro. `marksAcross` es el lado correcto:
-        // toma las marcas que sobreviven de punta a punta del span reemplazado,
-        // mientras que `marks()` a secas devuelve las del texto ANTERIOR a
-        // `from`, que está fuera del span (en el borde izquierdo de un `<em>`
-        // da `[]` y se pierde la cursiva). Con marcas mixtas adentro del span se
-        // homogeneiza — pérdida acotada en un span de pocos caracteres.
-        const $f = tr.doc.resolve(from);
-        const marks =
-          to > from
-            ? ($f.marksAcross(tr.doc.resolve(to)) ?? $f.marks())
-            : $f.marks();
+        // que decida `insertContent` adentro — ver `marcasParaReemplazo` para
+        // el porqué de `marksAcross`.
+        const marks = this.marcasParaReemplazo(tr, from, to);
         if (replacement.length === 0) {
           // `schema.text('')` tira excepción: un borrado va por `delete`.
           tr.delete(from, to);
@@ -1500,8 +1652,22 @@ export class Editor implements AfterViewInit, OnDestroy {
       // tildes, en minúscula) y mostrarla así se lee como un bug de la app.
       palabra: this.tiptap?.state.doc.textBetween(r.from, r.to, ' ').trim() ?? r.palabra,
       anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
+      from: r.from,
+      to: r.to,
     });
     this.resaltarGrupo(r);
+    this.repResultado.set(null);
+    void this.cargarSinonimos(this.repPopover()!.palabra);
+  }
+
+  /** La consulta es asincrónica y el popover se puede haber cerrado o movido a
+   *  otra palabra mientras estaba en vuelo: se descarta el resultado viejo
+   *  comparando contra la palabra que está abierta ahora. */
+  private async cargarSinonimos(palabra: string): Promise<void> {
+    const idioma = this.meta().idioma === 'en' ? 'en' : 'es';
+    const res = await this.tesauro.lookup(palabra, idioma);
+    if (this.repPopover()?.palabra !== palabra) return;
+    this.repResultado.set(res);
   }
 
   /**

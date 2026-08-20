@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ImportJoplinService } from '../core/import-joplin-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
 import { SettingsService } from '../core/settings-service';
+import { atajo } from '../shared/atajo';
 
 @Component({
   selector: 'app-import-joplin',
@@ -11,6 +12,8 @@ import { SettingsService } from '../core/settings-service';
   styleUrl: './import-joplin.scss',
 })
 export class ImportJoplin {
+  /** Etiquetas de atajos por plataforma (⌘ en Mac). Ver `shared/atajo.ts`. */
+  protected readonly atajo = atajo;
   protected wizard = inject(ImportJoplinService);
   protected settings = inject(SettingsService);
   private dialogs = inject(NativeDialogsService);

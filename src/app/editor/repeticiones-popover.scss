@@ -89,3 +89,44 @@
   background: var(--border);
   color: var(--fg);
 }
+
+.rep-pop-sin {
+  font-size: 0.82rem;
+  opacity: 0.7;
+  margin-top: 0.4rem;
+}
+
+.rep-pop-acepcion {
+  margin-top: 0.45rem;
+}
+
+.rep-pop-cat {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+  margin-bottom: 0.2rem;
+}
+
+.rep-pop-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.rep-pop-chip {
+  cursor: pointer;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font: inherit;
+  font-size: 0.82rem;
+  background: transparent;
+  color: inherit;
+  opacity: 0.85;
+
+  &:hover {
+    opacity: 1;
+  }
+}

@@ -47,6 +47,7 @@ import { ModalService } from './shared/modal-service';
 import { ContextMenuHost } from './shared/context-menu-host';
 import { ContextMenuService } from './shared/context-menu-service';
 import { TreeNode } from './core/types';
+import { atajo } from './shared/atajo';
 import {
   LucideArrowDownToLine,
   LucideArrowUpDown,
@@ -83,6 +84,8 @@ import {
   styleUrl: './app.scss',
 })
 export class App {
+  /** Etiquetas de atajos por plataforma (⌘ en Mac). Ver `shared/atajo.ts`. */
+  protected readonly atajo = atajo;
   @ViewChild(GrammarSettings) private grammarSettings?: GrammarSettings;
   protected importWizard = inject(ImportWizardService);
   protected importJoplin = inject(ImportJoplinService);
@@ -499,6 +502,10 @@ export class App {
     this.settings.toggleFocusMode();
   }
 
+  // Los dos modificadores: Angular mapea `meta` a Cmd y `control` a Ctrl, y en
+  // Mac buscar es ⌘F. Antes solo estaba `control`, así que el tooltip que ahora
+  // dice ⌘F habría quedado mintiendo.
+  @HostListener('window:keydown.meta.f', ['$event'])
   @HostListener('window:keydown.control.f', ['$event'])
   protected onCtrlF(event: Event): void {
     event.preventDefault();

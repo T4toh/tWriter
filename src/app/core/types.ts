@@ -145,3 +145,18 @@ export interface Repeticion {
    *  largo de un párrafo largo da varios hits con cuentas chicas. */
   apariciones: number;
 }
+
+/** Una acepción del tesauro. `categoria` es `null` en español (el dato MyThes no
+ *  la trae) y `'noun'` / `'verb'` / `'adj'` / `'adv'` en inglés. */
+export interface Acepcion {
+  categoria: string | null;
+  sinonimos: string[];
+}
+
+/** Respuesta de `tesauro_lookup`. `disponible: false` es "el tesauro del idioma
+ *  no cargó" (recurso ausente del bundle), que no es lo mismo que una palabra
+ *  sin entrada: eso es `disponible: true` con `acepciones` vacío. */
+export interface RespuestaTesauro {
+  disponible: boolean;
+  acepciones: Acepcion[];
+}

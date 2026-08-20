@@ -38,6 +38,7 @@ import { SettingsService } from '../core/settings-service';
 import { FALLBACK_FONT_SIZE } from '../editor/caret-scrolloff';
 import { buildEditorProps } from '../editor/editor-props';
 import { extractPlainText, offsetToPm } from '../editor/grammar-extension';
+import { atajo } from '../shared/atajo';
 import {
   SearchHighlight,
   setSearchHighlights,
@@ -74,6 +75,8 @@ const EMPTY_STATE: ToolbarState = {
   styleUrl: './markdown-reader.scss',
 })
 export class MarkdownReader implements AfterViewInit, OnDestroy {
+  /** Etiquetas de atajos por plataforma (⌘ en Mac). Ver `shared/atajo.ts`. */
+  protected readonly atajo = atajo;
   private svc = inject(MarkdownReaderService);
   private settings = inject(SettingsService);
   private search = inject(SearchService);

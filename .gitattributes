@@ -1,0 +1,8 @@
+# Los `.dat` del tesauro se shipean tal cual vienen de LibreOffice y la LGPL 2.1
+# del español lo exige byte por byte (ver `src-tauri/resources/tesauro/
+# LICENCIAS.md`). No tienen bytes NUL, así que git los clasifica como texto y un
+# clone en Windows con el `core.autocrlf=true` que instala Git for Windows por
+# default les reescribiría los LF a CRLF: rompe la condición de la licencia y el
+# md5 de reproducibilidad. `tauri.conf.json` buildea `nsis`, así que el escenario
+# no es hipotético.
+src-tauri/resources/tesauro/*.dat -text
