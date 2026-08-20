@@ -55,7 +55,7 @@ import {
 import { SystemFontsService } from '../core/system-fonts-service';
 import { FontsService } from '../core/fonts-service';
 import { Select, SelectGroup, SelectOption } from '../shared/select';
-import { Acepcion, GrammarMatch, RaeViolation } from '../core/types';
+import { GrammarMatch, RaeViolation, RespuestaTesauro } from '../core/types';
 import { TesauroService } from '../core/tesauro-service';
 import { convert as convertRae } from '../dialogos/converter';
 import { suggestFromDictionary } from '../dictionary/suggest';
@@ -204,7 +204,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     from: number;
     to: number;
   } | null>(null);
-  protected readonly repAcepciones = signal<Acepcion[] | null>(null);
+  protected readonly repResultado = signal<RespuestaTesauro | null>(null);
   protected readonly repAuto = computed(() => {
     if (!this.canCheckRepeticiones()) return false;
     return !this.settings.repeticionesAutoDisabled();
@@ -1285,7 +1285,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!popover || !this.tiptap) return;
     const r = popover.repeticion;
     this.repPopover.set(null);
-    this.repAcepciones.set(null);
+    this.repResultado.set(null);
     this.limpiarGrupo();
     if (r) {
       this.tiptap
@@ -1309,7 +1309,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.applyRepeticionesDecorations(this.repeticiones());
     }
     this.repPopover.set(null);
-    this.repAcepciones.set(null);
+    this.repResultado.set(null);
   }
 
   /**
@@ -1320,9 +1320,19 @@ export class Editor implements AfterViewInit, OnDestroy {
   @HostListener('window:keydown.control.shift.s', ['$event'])
   protected onAtajoTesauro(event: Event): void {
     if (!this.tiptap) return;
+    // Este componente se instancia DOS veces (los dos panes del split, ver
+    // `app.html`), así que el `window:keydown` llega a los dos: sin esta guarda
+    // el pane sin foco abre un popover sobre la palabra donde quedó su cursor
+    // viejo y un chip de ahí muta el capítulo que el autor no está mirando.
+    if (!this.tiptap.isFocused) return;
     event.preventDefault();
     const state = this.tiptap.state;
     const $pos = state.selection.$from;
+    // Con una `NodeSelection` sobre un leaf (el `<hr class="scene-break">`)
+    // `$pos.parent` es el doc, y ahí `textBetween` concatena los párrafos sin
+    // aportar las 2 posiciones que cada uno ocupa: los offsets salen corridos y
+    // el reemplazo cae en otro párrafo.
+    if (!$pos.parent.isTextblock) return;
     // `textBetween(0, content.size, undefined, ' ')` y no `textContent`: el
     // schema permite `<br>`, que aporta 0 caracteres a `textContent` pero 1 a
     // las posiciones del nodo. Con `leafText` de un espacio, offsets y
@@ -1338,10 +1348,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (this.grammarPopover()) this.closeGrammarPopover();
     if (this.raePopover()) this.raePopover.set(null);
     this.limpiarGrupo();
-    const view = (this.tiptap as unknown as {
-      view: { coordsAtPos: (pos: number) => { left: number; top: number; bottom: number } };
-    }).view;
-    const coords = view.coordsAtPos(from);
+    const coords = this.tiptap.view.coordsAtPos(from);
     this.repPopover.set({
       repeticion: null,
       palabra,
@@ -1349,7 +1356,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       from,
       to,
     });
-    this.repAcepciones.set(null);
+    this.repResultado.set(null);
     void this.cargarSinonimos(palabra);
   }
 
@@ -1396,7 +1403,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       })
       .run();
     this.limpiarGrupo();
-    this.repAcepciones.set(null);
+    this.repResultado.set(null);
     this.repPopover.set(null);
     if (r) {
       this.repeticiones.update((list) => list.filter((x) => x.id !== r.id));
@@ -1604,7 +1611,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       to: r.to,
     });
     this.resaltarGrupo(r);
-    this.repAcepciones.set(null);
+    this.repResultado.set(null);
     void this.cargarSinonimos(this.repPopover()!.palabra);
   }
 
@@ -1615,7 +1622,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     const idioma = this.meta().idioma === 'en' ? 'en' : 'es';
     const res = await this.tesauro.lookup(palabra, idioma);
     if (this.repPopover()?.palabra !== palabra) return;
-    this.repAcepciones.set(res);
+    this.repResultado.set(res);
   }
 
   /**
