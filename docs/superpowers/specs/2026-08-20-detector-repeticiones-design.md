@@ -140,8 +140,13 @@ ninguno es opcional:
    oración (`.`, `?`, `!`, `…`, raya de diálogo, arranque de párrafo), la mayúscula es
    nombre propio y no compite.
 
-Incluso con las cinco, `ventana` / `minApariciones` / `ventanaCorta` son perillas de gusto,
-no valores correctos. Ver la sección de calibración.
+6. **Construcción con nexo.** Dos apariciones separadas por un solo nexo (`a`, `de`, `por`,
+   `by`, `after`…) son la construcción misma, no un descuido: `cuerpo a cuerpo`,
+   `cara a cara`, `poco a poco`, `side by side`. Salió de la calibración, no del diseño —
+   aparecía en la muestra de hits de las dos novelas.
+
+Incluso con las seis, `ventana` / `minApariciones` / `ventanaCorta` / `largoMinimo` son
+perillas de gusto, no valores correctos. Ver la sección de calibración.
 
 ### Limitación aceptada: match exacto, sin lematizar
 
@@ -213,6 +218,44 @@ No se puede elegir `ventana` de memoria. El plan:
 Sin el paso 3 esto no se mergea. Un detector que marca 6.095 veces en un capítulo es peor
 que no tener detector.
 
+### Medido (2026-08-20)
+
+Corrido sobre dos libros enteros del repo `Novelas/`: *La Caballera Esmeralda* (Meridian
+2.0, `es`, 48 capítulos / 66.368 palabras, diccionario de 160 entradas) y *Deployment*
+(Milky Way, `en`, 40 capítulos / 35.295 palabras, diccionario de 265). Densidad en hits por
+1.000 palabras:
+
+| `minApariciones` | ventana 20 | 30 | 40 | 60 |
+|---|---|---|---|---|
+| 2 (es / en) | 4,4 / 4,1 | 6,4 / 5,9 | 7,8 / 7,1 | 9,8 / 9,4 |
+| **3** (es / en) | 0,9 / 0,6 | 1,0 / 0,7 | **1,1 / 0,8** | 1,6 / 1,1 |
+| 4 (es / en) | 0,9 / 0,6 | 0,9 / 0,6 | 0,9 / 0,6 | 0,9 / 0,6 |
+
+`minApariciones: 2` es inusable — 8 marcas cada 1.000 palabras, y casi todas son la
+excepción por `ventanaCorta` disparando sobre repetición deliberada. Con 3 quedan 76 hits
+en el libro español y 29 en el inglés: **una marca cada ~900 palabras**, que es del orden
+de lo que se puede leer sin que estorbe. De 3 a 4 casi no baja, así que 3 no está pagando
+ruido.
+
+`largoMinimo` con ventana 40 y `minApariciones` 3: 4 chars → 76/29 hits, 5 → 55/18,
+6 → 35/13. **Se bajó el default de 5 a 4**: con 5 se caen `nave`, `dark`, `mano`, `casa`,
+que son justo los sustantivos repetidos que se quieren ver. El ruido funcional lo cortan
+las stopword lists, que es su trabajo.
+
+Dos filtros salieron de mirar la muestra, no del diseño: las stopword lists se ampliaron
+con auxiliares y modales de alta frecuencia que sobreviven a `largoMinimo` (`tengo`,
+`pudo`, `podía`, `your`, `will`, `know`), y se sumó la capa 6 (construcción con nexo).
+Entre las dos bajaron el español de 88 a 76 hits, todo ruido.
+
+Performance: **16 ms el libro español entero** (48 capítulos), 8 ms el inglés. El
+presupuesto era un capítulo por vez, así que sobra de largo.
+
+**Pendiente el paso 3**: el autor mira la muestra de hits y dice qué es señal. Lo que se ve
+en la muestra y no está decidido: repetición deliberada de diálogo (`—¡Guía nocturno! ¡Guía
+nocturno!`), enumeración paralela (`unas flexiones, unas sentadillas`; `a veces… a veces`)
+y anáfora de estilo (`loved traveling…, loved hearing…`). Las tres son formas legítimas, y
+las tres caen hoy por la excepción de `ventanaCorta`.
+
 ## Lo que no cambia
 
 - LanguageTool: ni un parámetro nuevo, ni una llamada más. Esto es 100% local.
@@ -224,6 +267,11 @@ que no tener detector.
 
 `scripts/run-repeticiones-smoke.mjs`, patrón de `run-rae-smoke.mjs` — compila el TS con
 `tsc` a un tmpdir e importa el JS. Sirve porque `detector.ts` es puro por construcción.
+**25 ok, 0 fail** al cierre de la mitad pura.
+
+`scripts/densidad-repeticiones.mjs` es el otro, y no es un test: toma un dir de saga,
+corre la grilla de perillas y escupe la tabla de densidad más una muestra de hits con
+contexto. Es la herramienta del paso 3 de la calibración.
 
 Casos positivos: los tres del problema, en español y en inglés.
 
