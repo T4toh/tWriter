@@ -180,7 +180,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 > Seis veces menos reglas y 156 veces menos pares de confusión. El motor es el
 > mismo — lo que falta son las reglas escritas.
 
-- **Detector de repeticiones cercanas** (es + en). El agujero más claro que
+- [x] **Detector de repeticiones cercanas** (es + en). El agujero más claro que
   encontramos, y no es del español: LT detecta **solo duplicados literales
   pegados** (`la nave nave`, `SPANISH_WORD_REPEAT_RULE` /
   `ENGLISH_WORD_REPEAT_RULE`) y nada más. Verificado que estos tres casos no
@@ -224,8 +224,16 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   diccionario per-saga, capitalizado mid-oración y repetición deliberada), y
   las tres formas deliberadas — construcción hecha, frase/locución repetida,
   anáfora — tienen un flag cada una en el modal de gramática.
-  **Pendiente la verificación a mano del autor** (marcas en pantalla, popover,
-  precedencia contra un typo) — recién ahí se cierra el item.
+  **Verificado a mano por el autor el 2026-08-20** — anda. De ahí salieron tres
+  arreglos: las marcas quedaban corridas tras la primera edición de cada
+  capítulo (las tres flags `skipNext*Remap` se prendían juntas pero el `return`
+  del bloque de gramática en `onTransaction` cortaba antes de consumir las de
+  RAE y repeticiones, así que sobrevivían hasta el primer tecleo real y ahí
+  suprimían el remap Y el recheck — bug latente en RAE desde antes), el popover
+  decía "N veces en el párrafo" cuando la cuenta es dentro de la ventana, y
+  "25 palabras antes" se leía como "apareció 25 veces". Sumado en la misma
+  vuelta: al abrir el popover se resalta el grupo entero, que es lo que hace
+  entendible la sugerencia.
 
   **Sinónimos en el popover de repetición** (pedido del autor durante la
   verificación). Hoy el popover dice *dónde* está la repetición y nada más: la
