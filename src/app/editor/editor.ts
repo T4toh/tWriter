@@ -122,6 +122,21 @@ const EMPTY_STATE: ToolbarState = {
   canRedo: false,
 };
 
+/** Una palabra del documento con su rango, para consultarle el tesauro. */
+interface ObjetivoTesauro {
+  from: number;
+  to: number;
+  palabra: string;
+}
+
+/**
+ * Etiqueta del atajo del tesauro en el menú contextual. Los otros `kbd` de ese
+ * menú dicen `Ctrl+…` en las tres plataformas, y en Mac eso está mal — los
+ * atajos de TipTap se bindean con `Mod-`, que ahí es Cmd. No lo arreglo de paso,
+ * pero el del tesauro sale bien.
+ */
+const ATAJO_TESAURO = navigator.userAgent.includes('Mac') ? '⌘⇧Y' : 'Ctrl+Shift+Y';
+
 @Component({
   selector: 'app-editor',
   imports: [
@@ -796,10 +811,14 @@ export class Editor implements AfterViewInit, OnDestroy {
       return; // dejá burbujar al handler global de App
     }
     this.refreshState();
-    this.ctxMenu.open(event, this.buildEditorItems());
+    // La palabra sale de las COORDENADAS del click, no de la selección: WebKit
+    // no mueve el caret al hacer click derecho, así que si no, "Sinónimos" te
+    // ofrecería los de donde quedó el cursor la última vez.
+    const at = this.tiptap.view.posAtCoords({ left: event.clientX, top: event.clientY });
+    this.ctxMenu.open(event, this.buildEditorItems(at ? this.palabraEnPos(at.pos) : null));
   }
 
-  private buildEditorItems(): CtxMenuEntry[] {
+  private buildEditorItems(tesauro: ObjetivoTesauro | null = null): CtxMenuEntry[] {
     const s = this.state();
     const entries: CtxMenuEntry[] = [
       { label: 'Deshacer', kbd: 'Ctrl+Z', disabled: !s.canUndo, onClick: () => this.undo() },
@@ -823,6 +842,13 @@ export class Editor implements AfterViewInit, OnDestroy {
       { kind: 'separator' },
       { label: 'Salto de escena', kbd: '— —', onClick: () => this.insertSceneBreak() },
     );
+    if (tesauro) {
+      entries.push({
+        label: `Sinónimos de «${tesauro.palabra}»`,
+        kbd: ATAJO_TESAURO,
+        onClick: () => this.abrirTesauro(tesauro),
+      });
+    }
     return entries;
   }
 
@@ -1314,10 +1340,14 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   /**
    * Sinónimos de la palabra del cursor, sin que tenga que haber una repetición
-   * marcada. `Ctrl+Shift+S` sigue el estilo de los atajos que ya hay
-   * (`Ctrl+F` de búsqueda en `app.ts`).
+   * marcada. Se bindean los dos modificadores porque Angular mapea `meta` a Cmd
+   * y `control` a Ctrl, y el mismo build corre en Mac, Linux y Windows.
+   *
+   * La `S` quedó descartada: `⌘⇧S` es "Guardar como" o "Duplicar" en casi toda
+   * app de escritorio.
    */
-  @HostListener('window:keydown.control.shift.s', ['$event'])
+  @HostListener('window:keydown.meta.shift.y', ['$event'])
+  @HostListener('window:keydown.control.shift.y', ['$event'])
   protected onAtajoTesauro(event: Event): void {
     if (!this.tiptap) return;
     // Este componente se instancia DOS veces (los dos panes del split, ver
@@ -1326,38 +1356,57 @@ export class Editor implements AfterViewInit, OnDestroy {
     // viejo y un chip de ahí muta el capítulo que el autor no está mirando.
     if (!this.tiptap.isFocused) return;
     event.preventDefault();
-    const state = this.tiptap.state;
-    const $pos = state.selection.$from;
+    const objetivo = this.palabraEnPos(this.tiptap.state.selection.from);
+    if (objetivo) this.abrirTesauro(objetivo);
+  }
+
+  /**
+   * La palabra que toca la posición dada, con su rango en el documento. `null`
+   * si ahí no hay ninguna.
+   *
+   * Lo comparten el atajo (que resuelve la posición del cursor) y el menú
+   * contextual (que la saca de las coordenadas del click).
+   */
+  private palabraEnPos(pos: number): ObjetivoTesauro | null {
+    const editor = this.tiptap;
+    if (!editor) return null;
+    const $pos = editor.state.doc.resolve(pos);
     // Con una `NodeSelection` sobre un leaf (el `<hr class="scene-break">`)
     // `$pos.parent` es el doc, y ahí `textBetween` concatena los párrafos sin
     // aportar las 2 posiciones que cada uno ocupa: los offsets salen corridos y
     // el reemplazo cae en otro párrafo.
-    if (!$pos.parent.isTextblock) return;
+    if (!$pos.parent.isTextblock) return null;
     // `textBetween(0, content.size, undefined, ' ')` y no `textContent`: el
     // schema permite `<br>`, que aporta 0 caracteres a `textContent` pero 1 a
     // las posiciones del nodo. Con `leafText` de un espacio, offsets y
     // posiciones quedan alineados.
     const texto = $pos.parent.textBetween(0, $pos.parent.content.size, undefined, ' ');
     const limites = palabraEn(texto, $pos.parentOffset);
-    if (!limites) return;
+    if (!limites) return null;
     const inicio = $pos.start();
     const from = inicio + limites.inicio;
     const to = inicio + limites.fin;
-    const palabra = state.doc.textBetween(from, to, ' ').trim();
-    if (palabra.length === 0) return;
+    const palabra = editor.state.doc.textBetween(from, to, ' ').trim();
+    return palabra.length > 0 ? { from, to, palabra } : null;
+  }
+
+  /** Abre el popover en modo tesauro sobre un rango ya resuelto. */
+  private abrirTesauro(objetivo: ObjetivoTesauro): void {
+    const editor = this.tiptap;
+    if (!editor) return;
     if (this.grammarPopover()) this.closeGrammarPopover();
     if (this.raePopover()) this.raePopover.set(null);
     this.limpiarGrupo();
-    const coords = this.tiptap.view.coordsAtPos(from);
+    const coords = editor.view.coordsAtPos(objetivo.from);
     this.repPopover.set({
       repeticion: null,
-      palabra,
+      palabra: objetivo.palabra,
       anchor: { left: coords.left, top: coords.top, bottom: coords.bottom },
-      from,
-      to,
+      from: objetivo.from,
+      to: objetivo.to,
     });
     this.repResultado.set(null);
-    void this.cargarSinonimos(palabra);
+    void this.cargarSinonimos(objetivo.palabra);
   }
 
   /** Las marcas que hereda un reemplazo del rango `from..to`. `marksAcross` es

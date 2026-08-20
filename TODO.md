@@ -337,13 +337,17 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   **Implementado sin cerrar** (`feat/tesauro-embebido`), spec en
   `docs/superpowers/specs/2026-08-20-tesauro-design.md`. Backend en
   `src-tauri/src/tesauro.rs` (parser MyThes, normalizaciones, caché
-  `OnceLock` por idioma, comando `tesauro_lookup`, 16 tests inline).
+  `OnceLock` por idioma, comando `tesauro_lookup`, 19 tests inline).
   Frontend en `src/app/core/tesauro-service.ts` (caché de 50 consultas) y los
   chips del popover de repeticiones (ver el sub-item de más arriba), más
-  `Ctrl+Shift+S` sobre la palabra bajo el cursor (`src/app/editor/palabra-en.ts`
-  + `scripts/run-tesauro-smoke.mjs`, 10 casos) para abrir el mismo popover en
-  modo tesauro sin estar sobre una repetición. **Falta la verificación a mano
-  del autor** con la app levantada — no se marca `[x]` hasta entonces.
+  dos formas de pedirlo sin estar sobre una repetición: `⌘⇧Y` (`Ctrl+Shift+Y`
+  fuera de Mac) sobre la palabra del cursor, y una entrada "Sinónimos de «X»" en
+  el menú contextual, que resuelve la palabra por las **coordenadas del click**
+  porque WebKit no mueve el caret al hacer click derecho
+  (`src/app/editor/palabra-en.ts` + `scripts/run-tesauro-smoke.mjs`, 10 casos).
+  La `S` de `⌘⇧S` quedó descartada: es "Guardar como" en casi toda app de
+  escritorio. **Falta la verificación a mano del autor** con la app levantada —
+  no se marca `[x]` hasta entonces.
 
 - **Guionado para el EPUB**. rla-es trae `separacion/hyph_es.dic`, **6.207
   patrones** (Javier Bezos / CervanTeX). Sirve para justificado con separación
