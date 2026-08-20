@@ -143,7 +143,9 @@ La normalización (minúsculas, enclíticos, plural, re-pluralización de los si
 `acepciones: []`, nunca error — "no hay sinónimos" no es una falla. Es **por idioma**: los
 enclíticos y la regla de plural vocal/consonante son del español y sobre datos ingleses
 producen no-palabras, así que `Tesauro` guarda un flag `ingles` y en inglés saltea los
-enclíticos y repone en el plural el mismo sufijo por el que entró (`rifle` + `s`). El plural
+enclíticos y forma el plural del sinónimo por **su propia terminación** — se deja tal cual si
+ya termina en `s` (`Canis familiaris`, y las entradas latinas de WordNet en general), `+es`
+si termina en `x`/`z`/`ch`/`sh`, `+s` en el resto. El plural
 se prueba antes que los enclíticos: hay 116 colisiones en el `.dat` español y dos son
 palabras de novela (`calles` → `cal`, `caballos` → `cabal`).
 

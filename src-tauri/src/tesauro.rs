@@ -105,7 +105,7 @@ impl Tesauro {
                                 sinonimos: ac
                                     .sinonimos
                                     .iter()
-                                    .map(|s| self.pluralizar(s, suf))
+                                    .map(|s| self.pluralizar(s))
                                     .collect(),
                             })
                             .collect();
@@ -132,12 +132,10 @@ impl Tesauro {
     }
 
     /// El plural del sinónimo tiene que concordar con el de la palabra
-    /// consultada. En inglés se repone el mismo sufijo por el que entró
-    /// (`rifle` + `s` → `rifles`); la regla vocal/consonante del español ahí
-    /// devolvía no-palabras (`firearmes`, `rockes`, `vocalizationes`).
-    fn pluralizar(&self, s: &str, suf: &str) -> String {
+    /// consultada, y cada idioma lo forma distinto.
+    fn pluralizar(&self, s: &str) -> String {
         if self.ingles {
-            format!("{s}{suf}")
+            pluralizar_en(s)
         } else {
             pluralizar_es(s)
         }
@@ -185,6 +183,26 @@ impl Tesauro {
         } else {
             Some(out)
         }
+    }
+}
+
+/// Plural inglés por la **terminación del sinónimo**, no por el sufijo con el
+/// que entró la consulta: WordNet trae sinónimos que ya terminan en `s`
+/// (`Canis familiaris`, y las entradas latinas en general) y reponer otra daba
+/// `Canis familiariss`. Con esto, `dog` → `canid` → `canids`, `stone` → `rock`
+/// → `rocks`, `box` → `boxes`.
+///
+/// ponytail: las frases multipalabra se pluralizan por la última palabra
+/// (`movable barrier` → `movable barriers`), que es lo correcto en inglés más a
+/// menudo de lo que falla; hacerlo bien pide morfología que no vale la pena
+/// acá. El usuario ve el resultado antes de aceptarlo.
+fn pluralizar_en(s: &str) -> String {
+    if s.ends_with('s') {
+        s.to_string()
+    } else if s.ends_with('x') || s.ends_with('z') || s.ends_with("ch") || s.ends_with("sh") {
+        format!("{s}es")
+    } else {
+        format!("{s}s")
     }
 }
 
@@ -296,6 +314,10 @@ table|1\n\
 (noun)|tabular array|array\n\
 rifle|1\n\
 (noun)|firearm|piece|small-arm\n\
+dog|1\n\
+(noun)|domestic dog|Canis familiaris|canine|canid\n\
+stone|1\n\
+(noun)|rock|natural object\n\
 word|1\n\
 (noun)|Son|Word|Logos|Logos|hypostasis\n\
 crowded|1\n\
@@ -453,12 +475,37 @@ crowded|1\n\
     }
 
     #[test]
-    fn el_plural_ingles_repone_el_sufijo_consultado() {
+    fn el_plural_ingles_no_devuelve_no_palabras() {
         let t = Tesauro::parse(EN, true);
         assert_eq!(
             t.lookup("rifles")[0].sinonimos,
             vec!["firearms", "pieces", "small-arms"]
         );
+    }
+
+    #[test]
+    fn el_plural_ingles_no_duplica_la_s_del_sinonimo() {
+        let t = Tesauro::parse(EN, true);
+        let s = &t.lookup("dogs")[0].sinonimos;
+        assert_eq!(
+            s,
+            &vec!["domestic dogs", "Canis familiaris", "canines", "canids"]
+        );
+        assert!(!s.iter().any(|x| x.ends_with("ss")), "una `s` de más: {s:?}");
+        assert_eq!(
+            t.lookup("stones")[0].sinonimos,
+            vec!["rocks", "natural objects"]
+        );
+    }
+
+    #[test]
+    fn el_plural_ingles_usa_es_solo_donde_corresponde() {
+        assert_eq!(pluralizar_en("Canis familiaris"), "Canis familiaris");
+        assert_eq!(pluralizar_en("box"), "boxes");
+        assert_eq!(pluralizar_en("waltz"), "waltzes");
+        assert_eq!(pluralizar_en("church"), "churches");
+        assert_eq!(pluralizar_en("bush"), "bushes");
+        assert_eq!(pluralizar_en("rock"), "rocks");
     }
 
     #[test]
