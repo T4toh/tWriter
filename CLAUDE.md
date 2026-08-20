@@ -26,6 +26,7 @@ src/app/                     src-tauri/src/
   core/      services          pandoc.rs  sidecar import .docx/.odt
                                storage.rs detección git/cloud/local
                                secrets.rs apiKey al keyring del OS
+                               tesauro.rs sinónimos MyThes es+en
 ```
 
 **Detección de storage backend** (`storage.rs`): al elegir/cargar root,
@@ -67,6 +68,7 @@ pnpm build            # build Angular producción
 pnpm tauri build      # build app empaquetada (Linux/AppImage/.deb)
 cargo test --manifest-path src-tauri/Cargo.toml   # tests Rust
 node scripts/run-<algo>-smoke.mjs                 # tests del frontend (ver abajo)
+node scripts/run-tesauro-smoke.mjs                # casos de palabraEn() bajo el cursor
 ```
 
 Primera build de Rust tarda ~5 min. Después es incremental.
@@ -120,6 +122,17 @@ El scaffold inicial usa nombres `app.component.*` — refactorizar a convencione
 
 - **Pandoc**: bundleado como `external bin` en `src-tauri/binaries/pandoc-<target>`, declarado en `tauri.conf.json`. Usado solo al importar `.docx`/`.odt`.
 - **LanguageTool**: NO sidecar. Corre como Docker container del usuario (`localhost:8081`). La feature de gramática se habilita solo si se detecta el endpoint.
+- **Tesauro de sinónimos**: `src-tauri/resources/tesauro/` shipea dos `.dat`
+  MyThes de terceros, declarados como `resources` en `tauri.conf.json` (van
+  al bundle, no son sidecar). `th_es_v2.dat` (español, LGPL 2.1, de
+  OpenThesaurus-es vía `rla-es`) va **sin modificar** — es la condición de la
+  licencia — con su `COPYING` al lado. `th_en_us.dat` (inglés, WordNet 2.1
+  vía LibreOffice, licencia permisiva que sí deja modificar con aviso) sale
+  de `dict-en/th_en_US_v2.dat` podado por `scripts/podar-tesauro-en.mjs`, que
+  pela las etiquetas `(generic term)` y descarta enteros `(related term)`/
+  `(similar term)`/`(antonym)`; el script corre una vez y su salida se
+  commitea, nunca en build time. Detalle de licencias en
+  `src-tauri/resources/tesauro/LICENCIAS.md`.
 
 ## Git auto-sync
 

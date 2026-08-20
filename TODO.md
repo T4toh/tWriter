@@ -236,16 +236,22 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   entendible la sugerencia.
 
   **Sinónimos en el popover de repetición** (pedido del autor durante la
-  verificación). Hoy el popover dice *dónde* está la repetición y nada más: la
-  acción que falta es reemplazar la palabra ahí mismo, sin salir del editor. Es
-  el cruce natural con el item del **tesauro embebido** de más abajo — `nave`
-  repetida y el popover ofreciendo `bajel`, `buque`, `navío` de
-  `th_es_v2.dat`. Dos cosas a resolver cuando se encare: (a) el reemplazo tiene
-  que heredar las marcas del span como hace `applyRaeFix` (`marksAcross`, no
-  `marks()`, o se pierde la cursiva en el borde de un `<em>`); (b) el tesauro es
-  español-only en rla-es, así que la mitad inglesa del detector se queda sin
-  sugerencias hasta que aparezca un MyThes en inglés — el popover tiene que
-  degradar a "sin sugerencias" sin quedar roto ni prometer lo que no hay.
+  verificación). **Implementado sin cerrar** en la misma tanda del tesauro
+  embebido de más abajo: `nave` repetida y el popover ofreciendo `bajel`,
+  `buque`, `navío` de `th_es_v2.dat` vía chips clickeables. El reemplazo
+  hereda las marcas del span como hace `applyRaeFix` — se sacó el bloque
+  duplicado a un método compartido, `marcasParaReemplazo` en `editor.ts`,
+  porque los dos call sites (RAE y repeticiones) hacían el mismo
+  `marksAcross`/`marks()` copiado. Y la mitad inglesa del detector **sí**
+  tiene sugerencias — la afirmación de acá arriba de que rla-es es solo
+  español estaba mal (ver el item del tesauro): el popover en inglés muestra
+  los chips agrupados por categoría (`sustantivo`/`verbo`). El "degradar a
+  sin sugerencias" queda igual pero por lo que realmente pasa — huecos
+  léxicos y conjugaciones sin lematizar, no falta de datos en inglés. Falta
+  la verificación a mano del autor: `pnpm tauri dev`, click en un chip sobre
+  una repetición, reemplazar una palabra pegada al borde de una cursiva y
+  otra adentro (que no se pierda la itálica en ningún caso), y un capítulo en
+  inglés para ver la agrupación por categoría.
 
 - **Dashboard de estilo por novela** (idea del autor, no para ahora). Lo que hoy
   se ve capítulo por capítulo — repeticiones, violaciones RAE, matches de
@@ -259,28 +265,83 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   posiciones que ya calculan `validator.ts` y `detector.ts`, pero corridas
   server-side.
 
-- **Tesauro de sinónimos embebido** (español). rla-es trae
-  `sinonimos/palabras/th_es_v2.dat` — **21.846 entradas**, 2,7 MB, formato
+- **Tesauro de sinónimos embebido** (español **e inglés**). rla-es trae
+  `sinonimos/palabras/th_es_v2.dat` — **21.846 entradas**, 2,8 MB, formato
   MyThes (`palabra|N` y N líneas `-|sinónimo|sinónimo|…`), más un `.idx` de
-  361 KB con offsets. Encoding **ISO-8859-1**, no UTF-8 — hay que convertir al
-  bundlear. Ejemplo real:
+  361 KB con offsets que **no se bundlea** (ver más abajo). Encoding
+  **ISO-8859-1**, no UTF-8 — se decodifica a mano en Rust (latin-1 mapea 1:1
+  a los primeros 256 codepoints, cero crates de encoding). Ejemplo real:
   ```
   nave|8
   -|bajel|buque|barco|navío|nao|embarcación|galera|carabela
   ```
   Esto es lo que LT **no** tiene: su API no expone ningún endpoint de
   sinónimos (ver el item de capacidades más abajo). Parsear MyThes es trivial
-  y acá sí conviene Rust: son 3 MB de datos que no queremos mandar por el
-  bridge ni tener en el heap del webview — se leen con el `.idx` y se
-  devuelve solo la entrada consultada.
-  **Sin equivalente en inglés en este repo**: rla-es es solo español. Para la
-  mitad inglesa habría que buscar otro MyThes aparte.
-  **Licencia**: el tesauro tiene su propio `COPYING` en **LGPL 2.1** (el resto
-  de rla-es es triple GPL3/LGPL3/MPL1.1). tWriter es MIT. Bundlear datos LGPL
-  se puede, pero hay que shipear el `.dat` sin modificar, con su licencia al
-  lado y el crédito a la fuente. Para el resto de rla-es conviene elegir
+  y acá sí conviene Rust: son ~3 MB de datos que no queremos mandar por el
+  bridge ni tener en el heap del webview — se lee el `.dat` entero una vez
+  por idioma a un `String` en el heap de Rust (cacheado en un `OnceLock`) y
+  por el bridge cruza solo la entrada consultada. Sin `.idx` ni `seek`: con
+  9 MB entre los dos idiomas una pasada entera al arrancar no se nota.
+
+  **Corrección al relevamiento de acá arriba**: la línea vieja decía "sin
+  equivalente en inglés en este repo: rla-es es solo español, para la mitad
+  inglesa habría que buscar otro MyThes aparte". **Eso es falso** — se
+  encontró `th_en_US_v2.dat` en la extensión `dict-en` de LibreOffice
+  (`/Applications/LibreOffice.app/Contents/Resources/extensions/`), que sale
+  de WordNet 2.1 (Princeton) y no de rla-es. Crudo: 145.866 entradas, 18,5
+  MB. El inglés sí distingue categoría gramatical y trae hiperónimos
+  etiquetados (`(generic term)`) que WordNet no separa de los sinónimos
+  reales:
+  ```
+  ship|6
+  (noun)|vessel (generic term)|watercraft (generic term)
+  (verb)|transport|send|move (generic term)|displace (generic term)
+  ```
+  `scripts/podar-tesauro-en.mjs` pela la etiqueta y conserva la palabra
+  (`vessel (generic term)` → `vessel`, reordenado al final de su acepción,
+  detrás de los sinónimos reales) y descarta enteros `(related term)`,
+  `(similar term)` y `(antonym)`. **Ojo con la primera versión del script**:
+  tirar el `(generic term)` entero en vez de pelar la etiqueta borraba 28.000
+  entradas — entre ellas la acepción de sustantivo de `ship`, que se quedaba
+  sin ningún sinónimo. Con el fix, `th_en_us.dat` queda en **140.835
+  entradas, 11,2 MB** (subió de 6,3 MB con el filtro viejo — el costo de no
+  perder esas 28.000 entradas). El español se bundlea **crudo, sin tocar un
+  byte** (obligación de la LGPL); el inglés se regenera corriendo el script
+  sobre la fuente de LibreOffice, nunca se toca el `.dat` a mano.
+
+  **Cobertura medida**, no supuesta — contra `Buenos Aires 2077` (90
+  capítulos, 109 hits del detector de repeticiones con los defaults
+  calibrados): de las formas que el detector **realmente marca**, 14 de 20
+  tienen entrada en el tesauro (~70%). Con las normalizaciones de enclítico
+  (`mirarlo` → `mirar`) y plural simple (`naves` → `nave`, re-pluralizando
+  los sinónimos), sube a ~75-80%. El resto son conjugaciones (`eres`) y
+  huecos léxicos puntuales (`rifle`, `moto`). **No se lematiza a propósito**:
+  un lema sin re-conjugar da sugerencias que no concuerdan con la oración
+  (`eres` → lema `ser` → ofrecer `existir` rompe la frase al insertarlo), y
+  re-conjugar pide un conjugador de español propio — un subsistema entero
+  para el último 20%.
+
+  **Licencia**: el tesauro español tiene su propio `COPYING` en **LGPL 2.1**
+  (el resto de rla-es es triple GPL3/LGPL3/MPL1.1). El inglés es WordNet
+  2.1, licencia más permisiva que la LGPL (basta el aviso de copyright y el
+  disclaimer, permite modificar). tWriter es MIT — bundlear LGPL se puede
+  shipeando el `.dat` sin modificar con su licencia al lado, y el inglés
+  modificado con `WordNet_license.txt` más una nota de qué se modificó.
+  Detalle completo en `src-tauri/resources/tesauro/LICENCIAS.md`. Para el
+  resto de rla-es (guionado, reglas de diálogos) conviene seguir eligiendo
   **MPL 1.1**, que es la vía limpia para distribuir en un producto MIT (la
   misma que usa LibreOffice).
+
+  **Implementado sin cerrar** (`feat/tesauro-embebido`), spec en
+  `docs/superpowers/specs/2026-08-20-tesauro-design.md`. Backend en
+  `src-tauri/src/tesauro.rs` (parser MyThes, normalizaciones, caché
+  `OnceLock` por idioma, comando `tesauro_lookup`, 10 tests inline).
+  Frontend en `src/app/core/tesauro-service.ts` (caché de 50 consultas) y los
+  chips del popover de repeticiones (ver el sub-item de más arriba), más
+  `Ctrl+Shift+S` sobre la palabra bajo el cursor (`src/app/editor/palabra-en.ts`
+  + `scripts/run-tesauro-smoke.mjs`, 10 casos) para abrir el mismo popover en
+  modo tesauro sin estar sobre una repetición. **Falta la verificación a mano
+  del autor** con la app levantada — no se marca `[x]` hasta entonces.
 
 - **Guionado para el EPUB**. rla-es trae `separacion/hyph_es.dic`, **6.207
   patrones** (Javier Bezos / CervanTeX). Sirve para justificado con separación
