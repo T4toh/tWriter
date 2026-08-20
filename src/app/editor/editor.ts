@@ -84,9 +84,11 @@ import {
 import { RaePopover } from './rae-popover';
 import { detectRepeticiones, DEFAULTS as REP_DEFAULTS } from '../repeticiones/detector';
 import {
+  RangoPm,
   RepeticionPos,
   RepeticionesExtension,
   mapRepeticionesToPm,
+  setGrupoRepeticion,
   setRepeticiones,
 } from './repeticiones-extension';
 import { RepeticionesPopover } from './repeticiones-popover';
@@ -1274,6 +1276,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!popover || !this.tiptap) return;
     const r = popover.repeticion;
     this.repPopover.set(null);
+    this.limpiarGrupo();
     this.tiptap
       .chain()
       .focus()
@@ -1285,6 +1288,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected dismissRepeticion(): void {
     const popover = this.repPopover();
     if (!popover) return;
+    this.limpiarGrupo();
     const dismissedId = popover.repeticion.id;
     // De sesión, no persistente: al próximo check vuelve. Lo persistente es el
     // diccionario per-saga, y para eso está el diccionario.
@@ -1450,7 +1454,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     }
     if (this.raePopover()) this.raePopover.set(null);
     if (this.grammarPopover()) this.closeGrammarPopover();
-    if (this.repPopover()) this.repPopover.set(null);
+    if (this.repPopover()) {
+      this.repPopover.set(null);
+      this.limpiarGrupo();
+    }
   }
 
   /**
@@ -1475,7 +1482,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (target?.closest('.grammar-pop, .rae-pop, .rep-pop')) return;
     if (this.grammarPopover()) this.closeGrammarPopover();
     if (this.raePopover()) this.raePopover.set(null);
-    if (this.repPopover()) this.repPopover.set(null);
+    if (this.repPopover()) {
+      this.repPopover.set(null);
+      this.limpiarGrupo();
+    }
   }
 
   private openRepPopover(span: HTMLElement, r: RepeticionPos, event: MouseEvent): void {
@@ -1491,13 +1501,60 @@ export class Editor implements AfterViewInit, OnDestroy {
       palabra: this.tiptap?.state.doc.textBetween(r.from, r.to, ' ').trim() ?? r.palabra,
       anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
     });
+    this.resaltarGrupo(r);
+  }
+
+  /**
+   * Resalta TODAS las apariciones del grupo mientras el popover está abierto:
+   * la sugerencia se entiende mucho mejor viendo dónde están las otras que
+   * leyendo "25 palabras más arriba".
+   *
+   * El grupo se arma con las marcas que comparten forma y párrafo, más la
+   * aparición previa de cada una — que es la única forma de incluir la primera
+   * del grupo, que nunca lleva marca propia.
+   */
+  private resaltarGrupo(r: RepeticionPos): void {
+    const editor = this.tiptap;
+    if (!editor) return;
+    const bloqueDe = (pos: number): number => editor.state.doc.resolve(pos).start();
+    const bloque = bloqueDe(r.from);
+    const rangos: RangoPm[] = [];
+    const vistos = new Set<number>();
+    const sumar = (from: number, to: number): void => {
+      if (vistos.has(from)) return;
+      vistos.add(from);
+      rangos.push({ from, to });
+    };
+    for (const otra of this.repeticiones()) {
+      if (otra.palabra !== r.palabra || bloqueDe(otra.from) !== bloque) continue;
+      sumar(otra.from, otra.to);
+      sumar(otra.fromPrevio, otra.toPrevio);
+    }
+    this.aplicarGrupo(rangos);
+  }
+
+  /** Apaga el resaltado del grupo. Se llama en todo cierre del popover. */
+  private limpiarGrupo(): void {
+    this.aplicarGrupo([]);
+  }
+
+  /** El cast es el mismo que usan `applyRaeDecorations` y
+   *  `applyRepeticionesDecorations`: el `EditorView` de TipTap no encaja en el
+   *  shim mínimo que expone la extensión. */
+  private aplicarGrupo(rangos: RangoPm[]): void {
+    const view = (this.tiptap as unknown as { view?: { dispatch: (tr: unknown) => void; state: { tr: unknown } } } | null)?.view;
+    if (!view) return;
+    setGrupoRepeticion(view, rangos);
   }
 
   private openRaePopover(span: HTMLElement, v: RaeViolationPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
     if (this.grammarPopover()) this.closeGrammarPopover();
-    if (this.repPopover()) this.repPopover.set(null);
+    if (this.repPopover()) {
+      this.repPopover.set(null);
+      this.limpiarGrupo();
+    }
     const rect = span.getBoundingClientRect();
     this.raePopover.set({
       violation: v,
@@ -1570,8 +1627,22 @@ export class Editor implements AfterViewInit, OnDestroy {
         if (this.skipNextGrammarRemap) {
           // Transacción inducida por el cambio de capítulo: no remapear,
           // no agendar recheck (el effect ya disparó el check inmediato).
+          //
+          // Las TRES flags se consumen acá, no cada una en su bloque. Se
+          // prenden juntas (una sola transacción de `setContent` las justifica)
+          // pero este `return` cortaba antes de llegar a los bloques de RAE y
+          // repeticiones, así que sus flags sobrevivían hasta la PRIMERA
+          // edición real del autor — y ahí suprimían el remap Y el recheck de
+          // esa edición. Resultado: las marcas quedaban corridas por el delta
+          // de ese primer tecleo y, si el autor paraba de escribir, nadie las
+          // volvía a calcular. El bug estaba latente en RAE desde antes; se
+          // hizo visible con repeticiones porque marca mucho más seguido.
           this.skipNextGrammarRemap = false;
+          this.skipNextRaeRemap = false;
+          this.skipNextRepRemap = false;
           if (this.grammarPopover()) this.grammarPopover.set(null);
+          if (this.raePopover()) this.raePopover.set(null);
+          if (this.repPopover()) this.repPopover.set(null);
           return;
         }
         if (this.grammarMatches().length > 0) {

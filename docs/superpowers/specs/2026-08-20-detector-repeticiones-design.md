@@ -179,6 +179,12 @@ LT (PR #70). Piezas:
   píxel que un typo. Un solo hex sin `prefers-color-scheme`, como el resto de las marcas
   — `editor.scss` no tiene bloques de tema y `#8257e6` se lee en crema y en marrón oscuro.
 - Reusa `offsetToPm` y el remapeo por `tr.mapping` que ya existen. Nada nuevo de posiciones.
+- Al abrir el popover se resalta **todo el grupo** con fondo violeta
+  (`.repeticion-grupo`), no solo la aparición clickeada: leer "25 palabras más arriba" no
+  ubica nada, ver las otras subrayadas sí. El grupo se arma con las marcas que comparten
+  forma y párrafo más el `fromPrevio` de cada una — que es la única manera de incluir la
+  primera aparición, que nunca lleva marca propia. Se apaga en todo cierre del popover y en
+  la primera edición.
 - Popover: la palabra, "repetida N palabras antes" y la cuenta (`apariciones`), más dos
   acciones — **ir a la anterior** e **ignorar**. `ignorar` es **de sesión, no persistente**:
   `dismissGrammarMatch` (`editor.ts:1052`) solo filtra la lista en memoria y vuelve a
@@ -312,6 +318,21 @@ la primera clave no escalar de `Settings`, así que lleva su test de roundtrip c
 `grammar_picky_roundtrip_and_absent_default` (`settings.rs:293`). En la UI son tres checks
 adentro del modal de gramática, agrupados bajo el toggle `Repeticiones`; con los tres
 prendidos (default) el autor no ve nada de esto.
+
+## Bugs encontrados en la verificación a mano
+
+- **Marcas corridas tras la primera edición de cada capítulo.** Las tres flags
+  `skipNext*Remap` se prenden juntas (una sola transacción de `setContent` las justifica),
+  pero el `return` del bloque de gramática en `onTransaction` cortaba antes de llegar a los
+  bloques de RAE y repeticiones, así que sus flags sobrevivían hasta la **primera edición
+  real** del autor — y ahí suprimían el remap Y el recheck de esa edición. Si el autor
+  paraba de escribir, las marcas quedaban corridas por el delta de ese tecleo y nadie las
+  volvía a calcular. Arreglado consumiendo las tres en un solo lugar. **El bug estaba
+  latente en RAE desde antes**; se hizo visible con repeticiones porque marca más seguido.
+- **"N veces en el párrafo" era mentira.** `apariciones` cuenta dentro de la ventana que
+  termina en esa aparición, no en el párrafo entero. Dice "N veces acá cerca".
+- **"25 palabras antes" se leyó como "apareció 25 veces".** Dice "más arriba", que no se
+  confunde con una cuenta.
 
 ## Lo que no cambia
 

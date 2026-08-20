@@ -39,12 +39,12 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
       >
         <div class="rep-pop-head">
           <span class="rep-pop-tag">Repetición</span>
-          <span class="rep-pop-count">{{ r.apariciones }} veces en el párrafo</span>
+          <span class="rep-pop-count">{{ r.apariciones }} veces acá cerca</span>
         </div>
         <div class="rep-pop-msg">
           <span class="rep-pop-word">{{ palabra() }}</span>
           ya apareció {{ r.distancia }}
-          {{ r.distancia === 1 ? 'palabra' : 'palabras' }} antes.
+          {{ r.distancia === 1 ? 'palabra' : 'palabras' }} más arriba.
         </div>
         <footer class="rep-pop-footer">
           <button type="button" class="rep-pop-goto" (click)="goToPrevious.emit()">

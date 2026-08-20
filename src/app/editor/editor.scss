@@ -647,6 +647,14 @@
   text-decoration-skip-ink: none;
 }
 
+/* Las otras apariciones del grupo, mientras el popover está abierto. Fondo y
+ * no subrayado: el subrayado ya lo usan las marcas permanentes, y acá lo que se
+ * quiere es que el ojo las encuentre de un barrido. */
+.editor-host ::ng-deep .repeticion-grupo {
+  background: rgba(130, 87, 230, 0.22);
+  border-radius: 2px;
+}
+
 /* ─── Search highlights ─── */
 /* Marca de todas las ocurrencias de la query mientras el panel de búsqueda
  * esté abierto. Convive con grammar/rae sin romper sus borders. */

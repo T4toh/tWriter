@@ -140,6 +140,8 @@ export interface Repeticion {
   offsetPrevio: number;
   /** Distancia en palabras contra la aparición previa. */
   distancia: number;
-  /** Cuántas veces aparece la forma en este párrafo, dentro de la ventana. */
+  /** Cuántas veces aparece la forma dentro de la ventana que termina en esta
+   *  aparición. NO es el total del párrafo: una forma repetida diez veces a lo
+   *  largo de un párrafo largo da varios hits con cuentas chicas. */
   apariciones: number;
 }

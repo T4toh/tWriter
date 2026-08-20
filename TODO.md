@@ -227,6 +227,30 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   **Pendiente la verificación a mano del autor** (marcas en pantalla, popover,
   precedencia contra un typo) — recién ahí se cierra el item.
 
+  **Sinónimos en el popover de repetición** (pedido del autor durante la
+  verificación). Hoy el popover dice *dónde* está la repetición y nada más: la
+  acción que falta es reemplazar la palabra ahí mismo, sin salir del editor. Es
+  el cruce natural con el item del **tesauro embebido** de más abajo — `nave`
+  repetida y el popover ofreciendo `bajel`, `buque`, `navío` de
+  `th_es_v2.dat`. Dos cosas a resolver cuando se encare: (a) el reemplazo tiene
+  que heredar las marcas del span como hace `applyRaeFix` (`marksAcross`, no
+  `marks()`, o se pierde la cursiva en el borde de un `<em>`); (b) el tesauro es
+  español-only en rla-es, así que la mitad inglesa del detector se queda sin
+  sugerencias hasta que aparezca un MyThes en inglés — el popover tiene que
+  degradar a "sin sugerencias" sin quedar roto ni prometer lo que no hay.
+
+- **Dashboard de estilo por novela** (idea del autor, no para ahora). Lo que hoy
+  se ve capítulo por capítulo — repeticiones, violaciones RAE, matches de
+  gramática, palabras por capítulo — agregado a nivel libro o saga: densidades,
+  qué capítulos están peor, qué formas se repiten en todo el libro. Es el caso
+  que sí justifica Rust y no TS: son N archivos, así que va al lado de
+  `search.rs` (el detector de repeticiones vive en TS justamente porque toca
+  solo el capítulo activo, que ya está en memoria del frontend). Ojo con el
+  alcance: un dashboard que solo muestra números es un juguete; lo útil es que
+  cada fila lleve al capítulo y al offset, o sea que necesita las mismas
+  posiciones que ya calculan `validator.ts` y `detector.ts`, pero corridas
+  server-side.
+
 - **Tesauro de sinónimos embebido** (español). rla-es trae
   `sinonimos/palabras/th_es_v2.dat` — **21.846 entradas**, 2,7 MB, formato
   MyThes (`palabra|N` y N líneas `-|sinónimo|sinónimo|…`), más un `.idx` de
