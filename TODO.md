@@ -213,6 +213,20 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   que tunear contra prosa real antes de mostrarle esto a alguien; el número
   crudo no es un bug del algoritmo, es que sin calibrar marca todo.
 
+  **Implementado (`feat/detector-repeticiones`)**, spec en
+  `docs/superpowers/specs/2026-08-20-detector-repeticiones-design.md`.
+  `src/app/repeticiones/detector.ts` es la función pura (32 casos en
+  `scripts/run-repeticiones-smoke.mjs`), `repeticiones-extension.ts` +
+  `repeticiones-popover.ts` la mitad con DOM. Calibrado contra dos libros
+  enteros de `Novelas/` con `scripts/densidad-repeticiones.mjs`: **0,8 hits por
+  1.000 palabras en español y 0,7 en inglés**, contra ~8 con `minApariciones`
+  en 2. Seis capas de exclusión (stopwords, largo mínimo, verbos dicendi,
+  diccionario per-saga, capitalizado mid-oración y repetición deliberada), y
+  las tres formas deliberadas — construcción hecha, frase/locución repetida,
+  anáfora — tienen un flag cada una en el modal de gramática.
+  **Pendiente la verificación a mano del autor** (marcas en pantalla, popover,
+  precedencia contra un typo) — recién ahí se cierra el item.
+
 - **Tesauro de sinónimos embebido** (español). rla-es trae
   `sinonimos/palabras/th_es_v2.dat` — **21.846 entradas**, 2,7 MB, formato
   MyThes (`palabra|N` y N líneas `-|sinónimo|sinónimo|…`), más un `.idx` de
