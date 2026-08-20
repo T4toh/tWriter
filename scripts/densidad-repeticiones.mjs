@@ -108,6 +108,18 @@ for (const largoMinimo of [4, 5, 6]) {
   console.log(`  ${largoMinimo} chars → ${String(hits.length).padStart(5)} hits · ${d} por 1.000 palabras`);
 }
 
+// Cuánto saca cada excepción deliberada por su cuenta, para que la config
+// granular se decida con números y no de memoria.
+console.log('\nexcepciones deliberadas (ventana 40, minApariciones 3)');
+const todas = { construccion: true, fraseRepetida: true, anafora: true };
+const base = run({ excepciones: { construccion: false, fraseRepetida: false, anafora: false } }).hits.length;
+console.log(`  sin ninguna       → ${String(base).padStart(4)} hits`);
+for (const k of ['construccion', 'fraseRepetida', 'anafora']) {
+  const sola = run({ excepciones: { construccion: false, fraseRepetida: false, anafora: false, [k]: true } }).hits.length;
+  console.log(`  solo ${k.padEnd(14)}→ ${String(sola).padStart(4)} hits (saca ${base - sola})`);
+}
+console.log(`  las tres          → ${String(run({ excepciones: todas }).hits.length).padStart(4)} hits`);
+
 const { hits, ms, opts } = run({});
 console.log(`\ndefaults (${JSON.stringify({ ...opts, ignorar: `${diccionario.length} palabras` })})`);
 console.log(`${hits.length} hits · ${((hits.length / palabras) * 1000).toFixed(1)} por 1.000 palabras · ${ms.toFixed(0)} ms para toda la saga`);

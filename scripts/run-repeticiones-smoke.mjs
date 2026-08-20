@@ -144,6 +144,36 @@ console.log('negativos — los que hacen inservible al feature si fallan');
   const plain = 'They fought side by side until the end.';
   check('inglés: `side by side` → cero hits', det(plain, 'en').length === 0, det(plain, 'en'));
 }
+console.log('excepciones deliberadas (las tres son configurables)');
+{
+  const plain = '—¡Guía nocturno! ¡Guía nocturno!';
+  check('frase duplicada pegada → cero hits', det(plain, 'es').length === 0, det(plain, 'es'));
+  check(
+    'con fraseRepetida en false → vuelve a marcar',
+    det(plain, 'es', { excepciones: { construccion: true, fraseRepetida: false, anafora: true } }).length > 0,
+  );
+}
+{
+  const plain = '—Depende de la semana; a veces nos tocan guardias, a veces aprendices de caballero.';
+  check('locución repetida (`a veces`) → cero hits', det(plain, 'es').length === 0, det(plain, 'es'));
+}
+{
+  const plain = 'John loved traveling at subluminal speed, loved hearing the sounds of the ship, and loved watching the space go by.';
+  check('anáfora inglesa → cero hits', det(plain, 'en').length === 0, det(plain, 'en'));
+  check(
+    'con anafora en false → vuelve a marcar',
+    det(plain, 'en', { excepciones: { construccion: true, fraseRepetida: true, anafora: false } }).length > 0,
+  );
+}
+{
+  // El que NO se tiene que ir con la anáfora: abre cláusula, pero pegada.
+  const h = det('Era una nave oscura, oscura como el vacío.', 'es');
+  check('`oscura, oscura` sobrevive a la capa de anáfora', h.length === 1, h);
+}
+{
+  const plain = 'Se apoyó en el agua; seguido, juntó el agua sucia y la tiró al patio junto al agua limpia.';
+  check('`el agua… el agua` sobrevive (repetición real)', det(plain, 'es').length > 0, det(plain, 'es'));
+}
 {
   // Test del reset por párrafo.
   const plain = 'Cerró la escotilla de la nave.\n\nLa nave crujió y la nave se apagó.';

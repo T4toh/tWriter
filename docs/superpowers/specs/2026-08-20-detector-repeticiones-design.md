@@ -140,10 +140,10 @@ ninguno es opcional:
    oración (`.`, `?`, `!`, `…`, raya de diálogo, arranque de párrafo), la mayúscula es
    nombre propio y no compite.
 
-6. **Construcción con nexo.** Dos apariciones separadas por un solo nexo (`a`, `de`, `por`,
-   `by`, `after`…) son la construcción misma, no un descuido: `cuerpo a cuerpo`,
-   `cara a cara`, `poco a poco`, `side by side`. Salió de la calibración, no del diseño —
-   aparecía en la muestra de hits de las dos novelas.
+6. **Repetición deliberada.** Tres formas legítimas que no son descuido: construcción con
+   nexo (`cuerpo a cuerpo`), frase duplicada o locución fija (`¡Guía nocturno! ¡Guía
+   nocturno!`, `a veces… a veces`) y anáfora (`loved traveling…, loved hearing…`). Salieron
+   de la calibración, no del diseño, y cada una tiene su flag — ver el paso 3 más abajo.
 
 Incluso con las seis, `ventana` / `minApariciones` / `ventanaCorta` / `largoMinimo` son
 perillas de gusto, no valores correctos. Ver la sección de calibración.
@@ -185,6 +185,10 @@ LT (PR #70). Piezas:
   aparecer en el próximo check. Misma semántica acá; lo persistente es el diccionario, y
   para eso está el diccionario. **Sin sinónimos**: el tesauro es otro item del TODO y otro
   PR; este feature dice *dónde*, no *con qué reemplazar*.
+- Los tres flags de `ExcepcionesDeliberadas` viajan desde settings a `opts.excepciones`.
+  Cambiar cualquiera necesita `checkRepeticiones(true)`: el texto no cambió, así que el
+  early-return por `lastRepPlain` se comería el recheck — el mismo bug que arrastraba el
+  toggle de `picky` (PR #70).
 - Toggle propio en la barra de arriba, etiqueta **`Repeticiones`**, al lado de `Auto` /
   `LT` / `RAE`. Persistido como `repeticionesAutoDisabled` en settings, calcado de
   `raeAutoDisabled` (`settings-service.ts:139` + `settings.rs:106`).
@@ -250,11 +254,64 @@ Entre las dos bajaron el español de 88 a 76 hits, todo ruido.
 Performance: **16 ms el libro español entero** (48 capítulos), 8 ms el inglés. El
 presupuesto era un capítulo por vez, así que sobra de largo.
 
-**Pendiente el paso 3**: el autor mira la muestra de hits y dice qué es señal. Lo que se ve
-en la muestra y no está decidido: repetición deliberada de diálogo (`—¡Guía nocturno! ¡Guía
-nocturno!`), enumeración paralela (`unas flexiones, unas sentadillas`; `a veces… a veces`)
-y anáfora de estilo (`loved traveling…, loved hearing…`). Las tres son formas legítimas, y
-las tres caen hoy por la excepción de `ventanaCorta`.
+### Paso 3, resuelto: las tres formas deliberadas se filtran, y son configurables
+
+El autor miró la muestra y dictaminó que las tres formas que caían por la excepción de
+`ventanaCorta` son deliberadas: repetición enfática de diálogo (`—¡Guía nocturno! ¡Guía
+nocturno!`), enumeración paralela (`a veces… a veces`) y anáfora de estilo (`loved
+traveling…, loved hearing…`). Se filtran, **con un flag cada una** — son decisiones de
+gusto distintas, y un autor puede querer ver su propia anáfora y no las frases hechas:
+
+```ts
+export interface ExcepcionesDeliberadas {
+  construccion: boolean;   // `cuerpo a cuerpo`, `side by side`
+  fraseRepetida: boolean;  // `¡Guía nocturno! ¡Guía nocturno!`, `a veces… a veces`
+  anafora: boolean;        // `loved traveling…, loved hearing…`
+}
+```
+
+Las firmas costaron dos intentos, y el primero es la parte instructiva:
+
+- **`fraseRepetida` no puede ser "un vecino coincide".** `a veces… a veces` y `the dark
+  captain… the dark corridor` tienen la misma pinta — comparten la palabra funcional de al
+  lado — y solo la primera es deliberada. La firma que sí sirve es **bloque duplicado**: las
+  `distancia` palabras que arrancan (o terminan) en cada aparición son idénticas. Se prueba
+  para los dos lados porque en `¡Guía nocturno! ¡Guía nocturno!` el bloque de `guía` cierra
+  a la derecha y el de `nocturno` a la izquierda, y las dos apariciones tienen que caer.
+  Con `distancia` 1 el bloque es la palabra sola y siempre coincide, así que ahí se exige
+  además corte de oración: separa `Trucks… Trucks?` (enfático) de `oscura, oscura como el
+  vacío` (el caso 1 del problema). Lo que el bloque no alcanza son las **locuciones fijas**
+  (`a veces`, `poco a poco`, `at least`): el par es una unidad léxica y no se deduce de la
+  forma, así que va una lista corta enumerada — se le suma lo que aparezca en la
+  calibración, no lo que se pueda imaginar.
+- **`anafora` no puede ser "abre cláusula".** Así se lleva puesto `oscura, oscura como el
+  vacío`, que también abre cláusula. Hace falta el `distancia >= 3`: la anáfora tiene
+  material en medio, la repetición pegada no. Los sustantivos repetidos por descuido caen
+  adentro de la cláusula, detrás de su artículo (`el agua… el agua`), así que este filtro no
+  los toca.
+
+Cuánto saca cada una, medido sobre los mismos dos libros (ventana 40, `minApariciones` 3):
+
+| | es | en |
+|---|---|---|
+| sin ninguna excepción | 76 | 29 |
+| solo `construccion` | −2 | −0 |
+| solo `fraseRepetida` | −14 | −1 |
+| solo `anafora` | −7 | −3 |
+| **las tres** | **53** | **25** |
+
+**0,8 hits por 1.000 palabras en español y 0,7 en inglés** — una marca cada ~1.300
+palabras. La muestra que queda es casi toda repetición real: `torre… torre`, `del fantasma…
+el fantasma`, `del monstruo… el monstruo`, `la palma de su mano… su mano`, `the ship… the
+ship`, `his hand… his hand`, `the town… The town`.
+
+**Persistencia**: `repeticionesExcepciones` en `settings.json`, objeto anidado con los tres
+booleanos y `#[serde(default)]` en Rust, al lado de `grammarPicky` (`settings.rs:88`). Es
+la primera clave no escalar de `Settings`, así que lleva su test de roundtrip con un
+`settings.json` viejo que no la trae — el mismo patrón que
+`grammar_picky_roundtrip_and_absent_default` (`settings.rs:293`). En la UI son tres checks
+adentro del modal de gramática, agrupados bajo el toggle `Repeticiones`; con los tres
+prendidos (default) el autor no ve nada de esto.
 
 ## Lo que no cambia
 
@@ -267,7 +324,8 @@ las tres caen hoy por la excepción de `ventanaCorta`.
 
 `scripts/run-repeticiones-smoke.mjs`, patrón de `run-rae-smoke.mjs` — compila el TS con
 `tsc` a un tmpdir e importa el JS. Sirve porque `detector.ts` es puro por construcción.
-**25 ok, 0 fail** al cierre de la mitad pura.
+**32 ok, 0 fail** al cierre de la mitad pura. Cada excepción deliberada lleva dos casos: se
+filtra con el flag prendido, y vuelve a marcar con el flag apagado.
 
 `scripts/densidad-repeticiones.mjs` es el otro, y no es un test: toma un dir de saga,
 corre la grilla de perillas y escupe la tabla de densidad más una muestra de hits con

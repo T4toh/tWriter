@@ -22,9 +22,34 @@ export interface OpcionesRepeticion {
   largoMinimo: number;
   /** Nombres propios del mundo, del diccionario per-saga. Se normalizan acá. */
   ignorar: Iterable<string>;
+  /** Formas de repetición deliberada que NO son descuido. `true` = se filtra. */
+  excepciones: ExcepcionesDeliberadas;
 }
 
+/**
+ * Las tres formas legítimas que salieron de la calibración contra prosa real.
+ * Van separadas y no en un solo flag porque son decisiones de gusto distintas:
+ * un autor puede querer ver su propia anáfora y no las frases hechas.
+ */
+export interface ExcepcionesDeliberadas {
+  /** `cuerpo a cuerpo`, `side by side` — dos apariciones con un nexo en medio. */
+  construccion: boolean;
+  /** `¡Guía nocturno! ¡Guía nocturno!`, `Trucks… Trucks?` — el bloque entero se
+   *  duplica pegado, más las locuciones fijas (`a veces`, `poco a poco`). */
+  fraseRepetida: boolean;
+  /** `loved traveling…, loved hearing…` — la repetición abre cláusula y tiene
+   *  material en medio: la puso ahí el paralelismo. */
+  anafora: boolean;
+}
+
+export const EXCEPCIONES_DEFAULT: ExcepcionesDeliberadas = {
+  construccion: true,
+  fraseRepetida: true,
+  anafora: true,
+};
+
 export const DEFAULTS: Omit<OpcionesRepeticion, 'ignorar'> = {
+  excepciones: EXCEPCIONES_DEFAULT,
   ventana: 40,
   minApariciones: 3,
   ventanaCorta: 5,
@@ -53,7 +78,7 @@ function setNormalizado(palabras: Iterable<string>): Set<string> {
 // Funcionales largas: las cortas ya las tapa `largoMinimo`, así que acá solo
 // van las que sobreviven a ese filtro y aun así no son palabras de contenido.
 const STOPWORDS_ES = setNormalizado([
-  'pues', 'ante', 'cada', 'algo', 'nada', 'todo', 'toda', 'ella', 'ellos',
+  'unas', 'unos', 'pues', 'ante', 'cada', 'algo', 'nada', 'todo', 'toda', 'ella', 'ellos',
   'ellas', 'esto', 'esos', 'esas', 'este', 'esta', 'muy', 'más', 'bien',
   'porque', 'cuando', 'aunque', 'entonces', 'también', 'tampoco', 'después',
   'antes', 'mientras', 'todavía', 'siempre', 'nunca', 'donde', 'sobre',
@@ -118,6 +143,23 @@ const NEXO_CONSTRUCCION = new Set([
  *  turno de diálogo también arranca oración. */
 const CORTE_ORACION = /[.?!…:;—\n]/;
 
+/** Apertura de cláusula: lo de arriba más la coma y las conjunciones. Es más
+ *  laxo que el corte de oración porque la anáfora vive justo ahí — `…speed,
+ *  loved hearing…`. */
+const CORTE_CLAUSULA = /[.?!…:;—,\n]/;
+const CONJUNCIONES = new Set(['y', 'e', 'o', 'u', 'pero', 'and', 'or', 'but']);
+
+/** Locuciones fijas: el par es una unidad léxica, así que repetirlo es usar la
+ *  locución dos veces, no gastar la palabra. No se pueden deducir de la forma —
+ *  `a veces… a veces` y `the dark… the dark` tienen la misma pinta y solo una es
+ *  deliberada — así que van enumeradas. Lista corta a propósito: se suma lo que
+ *  aparezca en la calibración, no lo que se pueda imaginar. */
+const LOCUCIONES = new Set([
+  'a veces', 'a vez', 'cada vez', 'de vez', 'por fin', 'por eso', 'poco a',
+  'tal vez', 'de nuevo', 'a la vez', 'sobre todo', 'en fin',
+  'at times', 'of course', 'at least', 'at last', 'once again', 'no longer',
+]);
+
 interface Token {
   /** Forma normalizada. */
   norm: string;
@@ -128,6 +170,8 @@ interface Token {
   idx: number;
   /** Arranca oración: descarta la heurística de nombre propio. */
   inicioOracion: boolean;
+  /** Arranca cláusula: oración, o después de coma o conjunción. */
+  inicioClausula: boolean;
   /** Primera letra en mayúscula. */
   capitalizado: boolean;
 }
@@ -142,12 +186,17 @@ function tokenizar(parrafo: string, base: number): Token[] {
     const raw = m[0];
     const start = m.index;
     const separador = parrafo.slice(finPrevio, start);
+    const previo = tokens[idx - 1];
     tokens.push({
       norm: normalizar(raw),
       offset: base + start,
       length: raw.length,
       idx,
       inicioOracion: idx === 0 || CORTE_ORACION.test(separador),
+      inicioClausula:
+        idx === 0 ||
+        CORTE_CLAUSULA.test(separador) ||
+        (previo !== undefined && CONJUNCIONES.has(previo.norm)),
       capitalizado: raw[0] !== raw[0].toLowerCase(),
     });
     finPrevio = start + raw.length;
@@ -209,12 +258,51 @@ export function detectRepeticiones(
       const distancia = t.idx - previa.idx;
       if (distancia > opts.ventana) continue;
 
-      // `cuerpo a cuerpo` no es un descuido. Con las dos apariciones separadas
-      // por un solo nexo, la repetición es la construcción misma.
-      if (distancia === 2) {
+      // Las tres formas deliberadas. Solo se miran contra la aparición previa:
+      // si el paralelismo se rompió, la repetición vuelve a ser un descuido.
+      const exc = opts.excepciones;
+      // `cuerpo a cuerpo` — con las dos apariciones separadas por un solo nexo,
+      // la repetición es la construcción misma.
+      if (exc.construccion && distancia === 2) {
         const medio = tokens[previa.idx + 1];
         if (medio !== undefined && NEXO_CONSTRUCCION.has(medio.norm)) continue;
       }
+      if (exc.fraseRepetida) {
+        // `¡Guía nocturno! ¡Guía nocturno!` — el bloque de `distancia` palabras
+        // que arranca en la aparición previa se repite idéntico. Ojo que NO
+        // alcanza con que coincida un vecino: `the dark captain… the dark
+        // corridor` comparte el `the` y es justo lo que se quiere marcar.
+        // Se prueba para adelante y para atrás: en `¡Guía nocturno! ¡Guía
+        // nocturno!` el bloque de `guia` cierra a la derecha y el de `nocturno`
+        // a la izquierda, y las dos apariciones tienen que caer.
+        const duplicado = (paso: number): boolean => {
+          for (let k = 0; k < distancia; k += 1) {
+            const izq = tokens[previa.idx + k * paso];
+            const der = tokens[t.idx + k * paso];
+            if (izq === undefined || der === undefined || izq.norm !== der.norm) return false;
+          }
+          return true;
+        };
+        // Con `distancia` 1 el bloque es la palabra sola y siempre coincide, así
+        // que ahí hace falta el corte de oración para distinguir `Trucks…
+        // Trucks?` (una repetición enfática) de `oscura, oscura como el vacío`
+        // (el caso 1 del problema).
+        const bloqueVale = distancia >= 2 || t.inicioOracion;
+        if (bloqueVale && (duplicado(1) || duplicado(-1))) continue;
+        // `a veces… a veces` — locución fija, con la palabra anterior o la
+        // siguiente.
+        const anterior = tokens[t.idx - 1];
+        const siguiente = tokens[t.idx + 1];
+        const conAnterior = anterior !== undefined && LOCUCIONES.has(`${anterior.norm} ${t.norm}`);
+        const conSiguiente = siguiente !== undefined && LOCUCIONES.has(`${t.norm} ${siguiente.norm}`);
+        if (conAnterior || conSiguiente) continue;
+      }
+      // `loved traveling…, loved hearing…` — abre cláusula Y tiene material en
+      // medio: eso es paralelismo. Con `distancia` 1 o 2 no lo es — `oscura,
+      // oscura como el vacío` también abre cláusula y es el caso 1 del problema.
+      // Los sustantivos repetidos por descuido caen adentro de la cláusula,
+      // detrás de su artículo (`el agua… el agua`), así que no los toca.
+      if (exc.anafora && t.inicioClausula && distancia >= 3) continue;
 
       // Cuántas apariciones caen en la ventana que termina en esta.
       let apariciones = 1;
