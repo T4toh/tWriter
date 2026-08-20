@@ -63,7 +63,8 @@
     background: var(--bg-soft);
   }
 
-  input[type='radio'] {
+  input[type='radio'],
+  input[type='checkbox'] {
     margin-top: 2px;
   }
 }

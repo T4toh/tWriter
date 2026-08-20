@@ -658,6 +658,10 @@ pub struct GrammarConfig {
     pub variant_es: Option<String>,
     #[serde(default, rename = "variantEn")]
     pub variant_en: Option<String>,
+    /// `level=picky` en vez de `default`: activa reglas extra de texto formal.
+    /// `None` == false.
+    #[serde(default)]
+    pub picky: Option<bool>,
     /// LanguageTool Premium / self-hosted con auth. Solo aplica si `mode == "custom"`.
     #[serde(default, rename = "ltUsername")]
     pub lt_username: Option<String>,
@@ -677,6 +681,7 @@ impl std::fmt::Debug for GrammarConfig {
             .field("custom_url", &self.custom_url)
             .field("variant_es", &self.variant_es)
             .field("variant_en", &self.variant_en)
+            .field("picky", &self.picky)
             .field("lt_username", &self.lt_username)
             .field("lt_api_key", &self.lt_api_key.as_ref().map(|_| "***"))
             .finish()
@@ -874,6 +879,15 @@ pub async fn check_grammar(
     Ok(all_matches)
 }
 
+/// `level` del request a LT. `None` (settings viejo, sin la clave) == default.
+fn level_for(cfg: &GrammarConfig) -> &'static str {
+    if cfg.picky.unwrap_or(false) {
+        "picky"
+    } else {
+        "default"
+    }
+}
+
 async fn post_check(
     client: &reqwest::Client,
     base: &str,
@@ -885,7 +899,7 @@ async fn post_check(
     let mut params: Vec<(&str, String)> = vec![
         ("text", text.to_string()),
         ("language", lang.to_string()),
-        ("level", "default".to_string()),
+        ("level", level_for(cfg).to_string()),
     ];
     if lang == "auto" {
         params.push(("preferredVariants", preferred_variants(cfg)));
@@ -1485,6 +1499,23 @@ mod tests {
 
     fn utf16_len(s: &str) -> usize {
         s.chars().map(|c| c.len_utf16()).sum()
+    }
+
+    #[test]
+    fn level_picky_only_when_opted_in() {
+        // El bridge JS manda `picky` sin rename; un settings.json viejo no manda
+        // la clave y tiene que caer en "default" (nunca activar reglas extra
+        // sin que el autor las pida).
+        let base = r#"{"mode":"local"}"#;
+        let cfg: GrammarConfig = serde_json::from_str(base).unwrap();
+        assert_eq!(cfg.picky, None);
+        assert_eq!(level_for(&cfg), "default");
+
+        let on: GrammarConfig = serde_json::from_str(r#"{"mode":"local","picky":true}"#).unwrap();
+        assert_eq!(level_for(&on), "picky");
+
+        let off: GrammarConfig = serde_json::from_str(r#"{"mode":"local","picky":false}"#).unwrap();
+        assert_eq!(level_for(&off), "default");
     }
 
     #[test]

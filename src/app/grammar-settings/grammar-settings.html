@@ -405,6 +405,26 @@
           />
         </label>
       </div>
+
+      <div class="gs-section-divider">Nivel de chequeo</div>
+
+      <label class="gs-option">
+        <input
+          type="checkbox"
+          [checked]="picky()"
+          (change)="picky.set(!picky())"
+        />
+        <div class="gs-option-text">
+          <strong>Modo exigente (picky)</strong>
+          <span class="muted">
+            Activa reglas extra de texto formal — por ejemplo avisa cuando una
+            oración se pasa de larga. En prosa de novela eso suele ser
+            deliberado, así que viene apagado. Ojo: casi solo suma reglas en
+            <strong>inglés</strong>; en español LanguageTool no trae
+            prácticamente nada en este nivel.
+          </span>
+        </div>
+      </label>
     </div>
 
     <footer class="gs-actions">

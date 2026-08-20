@@ -13,6 +13,8 @@ interface GrammarCfg {
   ltApiKey: string | null;
   variantEs: string;
   variantEn: string;
+  /** `level=picky` en `/v2/check`: reglas extra de texto formal. */
+  picky: boolean;
 }
 
 /** Qué pasó y con qué se arregla. Espeja `Remedy` de `grammar.rs`. */
@@ -115,6 +117,7 @@ export class GrammarService {
       ltApiKey: null,
       variantEs: this.sagaCtx.varianteEs() ?? this.settings.grammarVariantEs(),
       variantEn: this.sagaCtx.varianteEn() ?? this.settings.grammarVariantEn(),
+      picky: this.settings.grammarPicky(),
     };
   }
 

@@ -80,6 +80,17 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub grammar_variant_en: Option<String>,
+    /// Si true, se manda `level=picky` a LanguageTool en vez de `default`,
+    /// activando reglas extra de texto formal (ej. `TOO_LONG_SENTENCE`).
+    /// Default false: en prosa de novela las oraciones largas suelen ser
+    /// deliberadas. Verificado que solo agrega matches en inglés — el ruleset
+    /// picky de español de LT 6.8 está prácticamente vacío.
+    #[serde(
+        default,
+        rename = "grammarPicky",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub grammar_picky: Option<bool>,
     /// Si true, el auto-check de gramática queda apagado aunque LT esté
     /// disponible. Default false (auto se activa solo cuando LT responde).
     #[serde(
@@ -277,6 +288,21 @@ pub fn remember_lt_runtime(app: &AppHandle, key: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn grammar_picky_roundtrip_and_absent_default() {
+        // La clave persistida es `grammarPicky` (camelCase). Un settings.json
+        // previo a la feature no la trae y tiene que leerse como None.
+        let old: Settings = serde_json::from_str("{}").unwrap();
+        assert_eq!(old.grammar_picky, None);
+
+        let mut s = Settings::default();
+        s.grammar_picky = Some(true);
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(json.contains("\"grammarPicky\":true"), "json: {}", json);
+        let back: Settings = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.grammar_picky, Some(true));
+    }
 
     #[test]
     fn last_session_roundtrip() {
