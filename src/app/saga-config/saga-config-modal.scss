@@ -234,36 +234,3 @@ textarea {
   flex-shrink: 0;
 }
 
-.btn {
-  padding: 0.5em 1.25em;
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 13px;
-  cursor: pointer;
-  border: 1px solid var(--border);
-
-  &.btn-secondary {
-    background: transparent;
-    color: var(--fg);
-  }
-
-  &.btn-secondary:hover {
-    background: var(--border);
-  }
-
-  &.btn-primary {
-    background: var(--accent);
-    color: var(--bg);
-    border-color: var(--accent);
-    font-weight: 600;
-  }
-
-  &.btn-primary:hover:not(:disabled) {
-    filter: brightness(1.1);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}

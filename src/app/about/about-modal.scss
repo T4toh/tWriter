@@ -147,27 +147,6 @@
   justify-content: flex-end;
 }
 
-// `.btn` no es global: cada modal define el suyo. Este es el mismo bloque que
-// `grammar-settings.scss` y `theme-editor-modal.scss`, así el botón se ve igual
-// que en el resto de los diálogos. Solo cierra, así que va `btn-secondary` — el
-// primario es para la acción que confirma algo, y acá no hay nada que confirmar.
-.btn {
-  padding: 0.5em 1.25em;
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 13px;
-  cursor: pointer;
-  border: 1px solid var(--border);
-
-  &.btn-secondary {
-    background: transparent;
-    color: var(--fg);
-  }
-
-  &.btn-secondary:hover {
-    background: var(--border);
-  }
-}
 
 .ab-titulo {
   display: flex;

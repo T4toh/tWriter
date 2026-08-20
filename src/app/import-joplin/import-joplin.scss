@@ -256,35 +256,3 @@
   gap: 0.5rem;
 }
 
-.btn {
-  padding: 6px 14px;
-  font-size: 13px;
-  font-family: var(--font-ui);
-  border-radius: 4px;
-  cursor: pointer;
-  border: 1px solid var(--border);
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-}
-
-.btn-primary {
-  background: var(--accent);
-  color: var(--bg);
-  border-color: var(--accent);
-
-  &:hover:not(:disabled) {
-    filter: brightness(1.05);
-  }
-}
-
-.btn-secondary {
-  background: var(--bg);
-  color: var(--fg);
-
-  &:hover:not(:disabled) {
-    background: var(--bg-soft);
-  }
-}
