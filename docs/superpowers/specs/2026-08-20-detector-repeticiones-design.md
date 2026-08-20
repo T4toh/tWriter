@@ -49,7 +49,7 @@ export interface OpcionesRepeticion {
   ventana: number;
   /** Largo mínimo de palabra a considerar. */
   largoMinimo: number;
-  /** Palabras a ignorar siempre (nombres propios de la saga, etc). */
+  /** Nombres propios del mundo, del diccionario per-saga. Normalizados. */
   ignorar: ReadonlySet<string>;
 }
 
@@ -82,20 +82,24 @@ la reaparición cae dentro de `ventana`. Un solo pase, O(n).
 ### Las tres capas de exclusión — acá se gana o se pierde
 
 El prototipo crudo, con una stopword list mínima y `ventana: 40`, tiró **6.095 hits en
-59 KB**. Inusable. El algoritmo no está mal; lo que falta son los filtros. Son tres y
+59 KB**. Inusable. El algoritmo no está mal; lo que falta son los filtros. Son cuatro y
 ninguno es opcional:
 
 1. **Stopwords por idioma.** Listas propias en el módulo (`es` y `en`), no una dependencia.
    Sin esto `que`, `de`, `la` copan la salida.
 2. **Largo mínimo.** Arranque en 5 caracteres. Corta el resto del ruido funcional
    (`sobre`, `desde`) sin tocar palabras de contenido.
-3. **El diccionario per-saga.** Crítico y es la capa que no existiría en ninguna otra app:
+3. **Verbos dicendi.** En diálogo, `dijo` repetido cada tres párrafos es la forma normal
+   del español narrativo, no un defecto. La lista ya existe y es reusable tal cual:
+   `DIALOG_TAGS` en `src/app/dialogos/tags.ts` — ~40 verbos con sus conjugaciones, módulo
+   puro sin DOM. Se importa, no se reescribe.
+4. **El diccionario per-saga.** Crítico y es la capa que no existiría en ninguna otra app:
    `<saga>/diccionario.txt` tiene los nombres propios inventados del mundo. Que `Kallai`
    aparezca cinco veces en una escena es **normal**, no un defecto, y marcarlo haría el
    feature inservible en la práctica. Se pasa `sagaCtx.dictionary()` como `opts.ignorar` —
    la misma fuente que ya filtra los `TYPOS` de LT en `editor.ts`.
 
-Incluso con las tres, la `ventana` es una perilla de gusto, no un valor correcto. Ver la
+Incluso con las cuatro, la `ventana` es una perilla de gusto, no un valor correcto. Ver la
 sección de calibración.
 
 ### Limitación aceptada: match exacto, sin lematizar
@@ -116,7 +120,8 @@ LT (PR #70). Piezas:
 
 - `checkRepeticiones(force = false)` en `editor.ts`: `extractPlainText` → `detectRepeticiones`
   → `mapRepeticionesToPm` → signal + decoraciones, con `lastRepPlain` para el early-return.
-- Categoría de decoración nueva, cuarto color junto a typo / grammar / style / RAE.
+- Categoría de decoración nueva, con su propio color junto a las que ya hay (typo,
+  grammar, style, misc, RAE).
 - Reusa `offsetToPm` y el remapeo por `tr.mapping` que ya existen. Nada nuevo de posiciones.
 - Popover: la palabra, "repetida N palabras antes", y dos acciones — **ir a la anterior** e
   **ignorar** (misma semántica que `dismissGrammarMatch`). **Sin sinónimos**: el tesauro es
@@ -161,7 +166,7 @@ Casos negativos, que son los que de verdad importan porque son los que hacen ins
 feature si fallan:
 
 - Nombre propio de la saga repetido cinco veces → **cero hits** (vía `opts.ignorar`).
-- Diálogo con `dijo` repetido → cero hits (stopword de dominio).
+- Diálogo con `dijo` repetido → cero hits (vía `DIALOG_TAGS`).
 - Stopwords repetidas (`que`, `de`, `la`) → cero hits.
 - Palabra corta bajo `largoMinimo` → cero hits.
 - Misma palabra más allá de la `ventana` → cero hits.
