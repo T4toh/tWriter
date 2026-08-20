@@ -5,7 +5,7 @@
       class="tb-btn"
       [class.active]="state().bold"
       (click)="toggleBold()"
-      title="Negrita (Ctrl+B)"
+      title="Negrita ({{ atajo('B') }})"
     >
       <span class="ico bold">B</span>
     </button>
@@ -14,7 +14,7 @@
       class="tb-btn"
       [class.active]="state().italic"
       (click)="toggleItalic()"
-      title="Itálica (Ctrl+I)"
+      title="Itálica ({{ atajo('I') }})"
     >
       <span class="ico italic">I</span>
     </button>
@@ -32,7 +32,7 @@
       class="tb-btn"
       [class.active]="state().code"
       (click)="toggleCode()"
-      title="Código inline (Ctrl+E)"
+      title="Código inline ({{ atajo('E') }})"
     >
       <span class="ico">&#96;</span>
     </button>

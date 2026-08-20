@@ -97,6 +97,7 @@ import {
 } from './repeticiones-extension';
 import { RepeticionesPopover } from './repeticiones-popover';
 import { palabraEn } from './palabra-en';
+import { atajo } from '../shared/atajo';
 
 interface ToolbarState {
   bold: boolean;
@@ -129,13 +130,6 @@ interface ObjetivoTesauro {
   palabra: string;
 }
 
-/**
- * Etiqueta del atajo del tesauro en el menú contextual. Los otros `kbd` de ese
- * menú dicen `Ctrl+…` en las tres plataformas, y en Mac eso está mal — los
- * atajos de TipTap se bindean con `Mod-`, que ahí es Cmd. No lo arreglo de paso,
- * pero el del tesauro sale bien.
- */
-const ATAJO_TESAURO = navigator.userAgent.includes('Mac') ? '⌘⇧Y' : 'Ctrl+Shift+Y';
 
 @Component({
   selector: 'app-editor',
@@ -147,6 +141,8 @@ const ATAJO_TESAURO = navigator.userAgent.includes('Mac') ? '⌘⇧Y' : 'Ctrl+Sh
   styleUrl: './editor.scss',
 })
 export class Editor implements AfterViewInit, OnDestroy {
+  /** Etiquetas de atajos por plataforma (⌘ en Mac). Ver `shared/atajo.ts`. */
+  protected readonly atajo = atajo;
   protected chapter = inject(ChapterService);
   protected settings = inject(SettingsService);
   protected grammar = inject(GrammarService);
@@ -821,21 +817,21 @@ export class Editor implements AfterViewInit, OnDestroy {
   private buildEditorItems(tesauro: ObjetivoTesauro | null = null): CtxMenuEntry[] {
     const s = this.state();
     const entries: CtxMenuEntry[] = [
-      { label: 'Deshacer', kbd: 'Ctrl+Z', disabled: !s.canUndo, onClick: () => this.undo() },
-      { label: 'Rehacer', kbd: 'Ctrl+Shift+Z', disabled: !s.canRedo, onClick: () => this.redo() },
+      { label: 'Deshacer', kbd: atajo('Z'), disabled: !s.canUndo, onClick: () => this.undo() },
+      { label: 'Rehacer', kbd: atajo('Z', true), disabled: !s.canRedo, onClick: () => this.redo() },
       { kind: 'separator' },
-      { label: 'Cortar', kbd: 'Ctrl+X', disabled: !s.hasSelection, onClick: () => this.cut() },
-      { label: 'Copiar', kbd: 'Ctrl+C', disabled: !s.hasSelection, onClick: () => this.copy() },
-      { label: 'Pegar', kbd: 'Ctrl+V', onClick: () => this.paste() },
-      { label: 'Pegar como texto plano', kbd: 'Ctrl+Shift+V', onClick: () => this.pastePlain() },
-      { label: 'Seleccionar todo', kbd: 'Ctrl+A', onClick: () => this.selectAll() },
+      { label: 'Cortar', kbd: atajo('X'), disabled: !s.hasSelection, onClick: () => this.cut() },
+      { label: 'Copiar', kbd: atajo('C'), disabled: !s.hasSelection, onClick: () => this.copy() },
+      { label: 'Pegar', kbd: atajo('V'), onClick: () => this.paste() },
+      { label: 'Pegar como texto plano', kbd: atajo('V', true), onClick: () => this.pastePlain() },
+      { label: 'Seleccionar todo', kbd: atajo('A'), onClick: () => this.selectAll() },
     ];
     if (s.hasSelection) {
       entries.push(
         { kind: 'separator' },
-        { label: 'Negrita', kbd: 'Ctrl+B', onClick: () => this.toggleBold() },
-        { label: 'Itálica', kbd: 'Ctrl+I', onClick: () => this.toggleItalic() },
-        { label: 'Subrayado', kbd: 'Ctrl+U', onClick: () => this.toggleUnderline() },
+        { label: 'Negrita', kbd: atajo('B'), onClick: () => this.toggleBold() },
+        { label: 'Itálica', kbd: atajo('I'), onClick: () => this.toggleItalic() },
+        { label: 'Subrayado', kbd: atajo('U'), onClick: () => this.toggleUnderline() },
       );
     }
     entries.push(
@@ -845,7 +841,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (tesauro) {
       entries.push({
         label: `Sinónimos de «${tesauro.palabra}»`,
-        kbd: ATAJO_TESAURO,
+        kbd: atajo('Y', true),
         onClick: () => this.abrirTesauro(tesauro),
       });
     }

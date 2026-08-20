@@ -33,7 +33,7 @@
             [class.active]="search.open()"
             [disabled]="!root()"
             (click)="toggleSearch()"
-            title="Buscar (Ctrl+F)"
+            title="Buscar ({{ atajo('F') }})"
           >
             <svg lucideSearch [size]="16"></svg>
           </button>

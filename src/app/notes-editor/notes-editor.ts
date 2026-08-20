@@ -38,6 +38,7 @@ import {
 } from '../editor/search-highlight-extension';
 import { buildEditorProps } from '../editor/editor-props';
 import { PARAGRAPH_SPACING_EM, SettingsService } from '../core/settings-service';
+import { atajo } from '../shared/atajo';
 import {
   ContextMenuService,
   CtxMenuEntry,
@@ -84,6 +85,8 @@ const EMPTY_STATE: ToolbarState = {
   styleUrl: './notes-editor.scss',
 })
 export class NotesEditor implements AfterViewInit, OnDestroy {
+  /** Etiquetas de atajos por plataforma (⌘ en Mac). Ver `shared/atajo.ts`. */
+  protected readonly atajo = atajo;
   protected note = inject(NoteService);
   protected settings = inject(SettingsService);
   private ctxMenu = inject(ContextMenuService);
@@ -247,19 +250,19 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
   private buildEditorItems(): CtxMenuEntry[] {
     const s = this.state();
     const entries: CtxMenuEntry[] = [
-      { label: 'Deshacer', kbd: 'Ctrl+Z', disabled: !s.canUndo, onClick: () => this.undo() },
-      { label: 'Rehacer', kbd: 'Ctrl+Shift+Z', disabled: !s.canRedo, onClick: () => this.redo() },
+      { label: 'Deshacer', kbd: atajo('Z'), disabled: !s.canUndo, onClick: () => this.undo() },
+      { label: 'Rehacer', kbd: atajo('Z', true), disabled: !s.canRedo, onClick: () => this.redo() },
       { kind: 'separator' },
-      { label: 'Cortar', kbd: 'Ctrl+X', disabled: !s.hasSelection, onClick: () => this.cut() },
-      { label: 'Copiar', kbd: 'Ctrl+C', disabled: !s.hasSelection, onClick: () => this.copy() },
-      { label: 'Pegar', kbd: 'Ctrl+V', onClick: () => this.paste() },
-      { label: 'Seleccionar todo', kbd: 'Ctrl+A', onClick: () => this.selectAll() },
+      { label: 'Cortar', kbd: atajo('X'), disabled: !s.hasSelection, onClick: () => this.cut() },
+      { label: 'Copiar', kbd: atajo('C'), disabled: !s.hasSelection, onClick: () => this.copy() },
+      { label: 'Pegar', kbd: atajo('V'), onClick: () => this.paste() },
+      { label: 'Seleccionar todo', kbd: atajo('A'), onClick: () => this.selectAll() },
     ];
     if (s.hasSelection) {
       entries.push(
         { kind: 'separator' },
-        { label: 'Negrita', kbd: 'Ctrl+B', onClick: () => this.toggleBold() },
-        { label: 'Itálica', kbd: 'Ctrl+I', onClick: () => this.toggleItalic() },
+        { label: 'Negrita', kbd: atajo('B'), onClick: () => this.toggleBold() },
+        { label: 'Itálica', kbd: atajo('I'), onClick: () => this.toggleItalic() },
       );
     }
     return entries;

@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import type { LucideIcon } from '@lucide/angular';
+import { atajo } from './atajo';
 
 export interface CtxMenuItem {
   kind?: 'item';
@@ -61,7 +62,7 @@ export class ContextMenuService {
     const entries: CtxMenuEntry[] = [
       {
         label: 'Copiar',
-        kbd: 'Ctrl+C',
+        kbd: atajo('C'),
         onClick: async () => {
           try {
             await navigator.clipboard.writeText(sel);
@@ -72,7 +73,7 @@ export class ContextMenuService {
       },
       {
         label: 'Seleccionar todo',
-        kbd: 'Ctrl+A',
+        kbd: atajo('A'),
         onClick: () => {
           const target = event.target as HTMLElement | null;
           if (

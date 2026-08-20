@@ -5,7 +5,7 @@
       class="tb-btn"
       [disabled]="!state().canUndo"
       (click)="undo()"
-      title="Deshacer (Ctrl+Z)"
+      title="Deshacer ({{ atajo('Z') }})"
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 7h6a3 3 0 0 1 0 6H6"/>
@@ -17,7 +17,7 @@
       class="tb-btn"
       [disabled]="!state().canRedo"
       (click)="redo()"
-      title="Rehacer (Ctrl+Shift+Z / Ctrl+Y)"
+      title="Rehacer ({{ atajo('Z', true) }} / {{ atajo('Y') }})"
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M11 7H5a3 3 0 0 0 0 6h3"/>
@@ -32,7 +32,7 @@
       class="tb-btn"
       [class.active]="state().bold"
       (click)="toggleBold()"
-      title="Negrita (Ctrl+B)"
+      title="Negrita ({{ atajo('B') }})"
     >
       <span class="ico bold">B</span>
     </button>
@@ -41,7 +41,7 @@
       class="tb-btn"
       [class.active]="state().italic"
       (click)="toggleItalic()"
-      title="Itálica (Ctrl+I)"
+      title="Itálica ({{ atajo('I') }})"
     >
       <span class="ico italic">I</span>
     </button>
@@ -50,7 +50,7 @@
       class="tb-btn"
       [class.active]="state().underline"
       (click)="toggleUnderline()"
-      title="Subrayado (Ctrl+U)"
+      title="Subrayado ({{ atajo('U') }})"
     >
       <span class="ico underline">U</span>
     </button>
@@ -62,7 +62,7 @@
       class="tb-btn"
       [class.active]="state().alignLeft"
       (click)="setAlign('left')"
-      title="Alinear izquierda (Ctrl+Shift+L)"
+      title="Alinear izquierda ({{ atajo('L', true) }})"
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
         <line x1="2" y1="3" x2="12" y2="3"/>
@@ -76,7 +76,7 @@
       class="tb-btn"
       [class.active]="state().alignCenter"
       (click)="setAlign('center')"
-      title="Centrar (Ctrl+Shift+E)"
+      title="Centrar ({{ atajo('E', true) }})"
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
         <line x1="2" y1="3" x2="12" y2="3"/>
@@ -90,7 +90,7 @@
       class="tb-btn"
       [class.active]="state().alignRight"
       (click)="setAlign('right')"
-      title="Alinear derecha (Ctrl+Shift+R)"
+      title="Alinear derecha ({{ atajo('R', true) }})"
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
         <line x1="2" y1="3" x2="12" y2="3"/>

@@ -92,7 +92,7 @@
   }
   @if (!query() && !reindexing()) {
     <p class="sp-status sp-hint">
-      Buscá texto en notas (.md) y capítulos (.html), o títulos de carpetas. Ctrl+F abre y cierra.
+      Buscá texto en notas (.md) y capítulos (.html), o títulos de carpetas. {{ atajo('F') }} abre y cierra.
     </p>
   }
   @if (results().length > 0) {

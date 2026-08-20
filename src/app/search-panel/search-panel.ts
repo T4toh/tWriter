@@ -34,6 +34,7 @@ import { SearchHit, SearchService } from '../core/search-service';
 import { SearchScope, SettingsService } from '../core/settings-service';
 import { Select, SelectOption } from '../shared/select';
 import { TreeNode } from '../core/types';
+import { atajo } from '../shared/atajo';
 
 @Component({
   selector: 'app-search-panel',
@@ -45,6 +46,8 @@ import { TreeNode } from '../core/types';
   styleUrl: './search-panel.scss',
 })
 export class SearchPanel implements AfterViewInit {
+  /** Etiquetas de atajos por plataforma (⌘ en Mac). Ver `shared/atajo.ts`. */
+  protected readonly atajo = atajo;
   private svc = inject(SearchService);
   private chapter = inject(ChapterService);
   private mdReader = inject(MarkdownReaderService);
