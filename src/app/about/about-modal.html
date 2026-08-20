@@ -1,0 +1,96 @@
+@if (about.open()) {
+  <div class="ab-backdrop" (click)="close()"></div>
+  <div class="ab-modal" (click)="$event.stopPropagation()">
+    @if (about.licencias(); as lic) {
+      <header class="ab-header">
+        <h2>{{ lic.app.nombre }} <span class="ab-version">v{{ lic.app.version }}</span></h2>
+        <p>
+          Editor de novelas: conversor de diálogos a estilo RAE, gramática, detector de
+          repeticiones, tesauro y exportación a EPUB.
+        </p>
+        <p class="ab-muted">
+          Software libre bajo licencia {{ lic.app.licencia }} —
+          <a [href]="lic.app.repo" target="_blank" rel="noopener">{{ lic.app.repo }}</a>
+        </p>
+      </header>
+    } @else {
+      <header class="ab-header">
+        <h2>Acerca de tWriter</h2>
+      </header>
+    }
+
+    <div class="ab-body">
+      @if (about.error(); as err) {
+        <p class="ab-error">{{ err }}</p>
+      }
+
+      @if (about.licencias(); as lic) {
+        <section>
+          <h3>Licencia de tWriter</h3>
+          <button type="button" class="ab-toggle" (click)="alternar('app')">
+            {{ abierto() === 'app' ? '−' : '+' }} {{ lic.app.licencia }}
+          </button>
+          @if (abierto() === 'app') {
+            <pre class="ab-texto">{{ lic.app.texto }}</pre>
+          }
+        </section>
+
+        <section>
+          <h3>Datos de terceros incluidos</h3>
+          <p class="ab-muted">
+            Los tesauros que la app trae adentro. Cada uno mantiene su licencia, que no es
+            la de tWriter.
+          </p>
+          @for (d of lic.datos; track d.nombre) {
+            <div class="ab-dato">
+              <strong>{{ d.nombre }}</strong>
+              <span class="ab-chip">{{ d.licencia }}</span>
+              <p class="ab-muted">{{ d.descripcion }}</p>
+              <button type="button" class="ab-toggle" (click)="alternar('dato:' + d.nombre)">
+                {{ abierto() === 'dato:' + d.nombre ? '−' : '+' }} Ver licencia completa
+              </button>
+              @if (abierto() === 'dato:' + d.nombre) {
+                <pre class="ab-texto">{{ d.texto }}</pre>
+              }
+            </div>
+          }
+        </section>
+
+        <section>
+          <h3>Dependencias directas ({{ totalPaquetes() }})</h3>
+          <p class="ab-muted">
+            Las bibliotecas que tWriter usa de forma directa, agrupadas por licencia. No
+            incluye el árbol transitivo.
+          </p>
+          @for (g of lic.grupos; track g.licencia) {
+            <div class="ab-grupo">
+              <h4>{{ g.licencia }} <span class="ab-muted">({{ g.paquetes.length }})</span></h4>
+              <ul class="ab-paquetes">
+                @for (p of g.paquetes; track p.nombre + p.version) {
+                  <li>
+                    <button
+                      type="button"
+                      class="ab-paquete"
+                      [disabled]="textoDe(p) === null"
+                      (click)="alternar('pkg:' + p.nombre + p.version)"
+                    >
+                      {{ p.nombre }}
+                      <span class="ab-muted">{{ p.version }} · {{ p.origen }}</span>
+                    </button>
+                    @if (abierto() === 'pkg:' + p.nombre + p.version) {
+                      <pre class="ab-texto">{{ textoDe(p) }}</pre>
+                    }
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+        </section>
+      }
+    </div>
+
+    <div class="ab-actions">
+      <button type="button" class="btn btn-primary" (click)="close()">Cerrar</button>
+    </div>
+  </div>
+}
