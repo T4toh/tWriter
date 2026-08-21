@@ -482,6 +482,66 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   resuelven no existe en esta obra. Pueden valer como aporte upstream para
   otros escritores rioplatenses, no para este repo.
 
+  **Reescritas para upstream y mandadas — y con una corrección al párrafo de
+  arriba** (2026-08-21). Al reescribirlas contra el código de LT (no contra el
+  recuerdo) resultó que **dos de las cuatro ya tenían dónde vivir** y que el
+  "0 hits" era del enfoque viejo, no del problema:
+
+  - **`tú` + verbo voseante → PR [#12132](https://github.com/languagetool-org/languagetool/pull/12132)**,
+    y no es regla nueva: `AGREEMENT_PRONOUNSUBJECT_VERB` (`grammar.xml:24789`)
+    ya tiene reglas dedicadas para `tú` y para `vos` — es la que marca
+    `Vos tienes razón`. La de `tú` matchea `V.[^M].[13]..|V.[^M].2P.`, o sea
+    persona 1, 3 o 2ª del plural, y las formas voseantes son **persona 2 número
+    `V`** (`tenés` = `VMIP2V0`), así que se caían del alternador. El aporte es
+    **un token**: sumar `2[PV]`. De yapa, el mecanismo de sugerencia que ya
+    estaba (`postag_replace="$12S."`) da la forma tuteante sola:
+    `Tú tenés` → `tienes`, `Tú sos` → `eres`.
+  - **La ambigüedad que nos había quemado la calibración la resuelve el tagger,
+    gratis.** `estás` y `vas` son idénticas en tuteo, y LT las etiqueta
+    `V...2S.`, que ya estaba en la `<exception>` de la regla — así que
+    `Tú estás cansado` no marca sin hacer nada. Los imperativos (`Tú marchá`)
+    los tapa un antipattern que también estaba. Moraleja para la próxima:
+    **matchear por postag, nunca por lista de palabras**.
+  - **Imperativo mixto + `vos`/`ti` + `vos`/`contigo` → PR
+    [#12133](https://github.com/languagetool-org/languagetool/pull/12133)**,
+    rulegroup nuevo `MEZCLA_TUTEO_VOSEO`, en la categoría `GRAMMAR` **a
+    propósito**: `VOSEO` vive en `LANGUAGE_VARIANTS` (`type="locale-violation"`),
+    que es justo la que un rioplatense apaga. La regla de imperativos matchea
+    por postag con exclusión de lecturas de sustantivo/preposición/adjetivo/
+    adverbio/determinante/pronombre/indicativo/subjuntivo, y con eso `para`,
+    `mira`, `toma` y `ven` — los cuatro falsos positivos de la calibración
+    vieja — quedan afuera solos.
+  - **Y acá el corpus dijo otra cosa que la vez pasada: hay 1 hit real.**
+    `—Apretá… al distribuidor para que entregue; si no, sácale el trabajo.`
+    Voseo y tuteo en la misma oración, mismo hablante: el error que la regla
+    promete. El scan de las 783.918 palabras da **exactamente ese hit y nada
+    más**. O sea que el enfoque por postag encuentra lo que la lista de
+    palabras no veía, y sin ruido.
+  - **`dar` y `ser` hay que excluirlos**: su imperativo es idéntico en los dos
+    paradigmas (`dale`, `sé`), así que la primera versión marcaba
+    `Tomá esto y dale una de estas` con **sugerencia vacía**. Eso es el mismo
+    error de fondo que `estás`/`vas`, pero del lado del verbo irregular.
+  - **`vos` + `tú` en la misma oración: descartada, no se manda.** No pasa el
+    filtro del criterio de más arriba. En fantasía el `vos` reverencial
+    (`Vos, mi señor`) es deliberado y convive con un `tú` para otro personaje
+    en la misma oración, y cuando además hay verbo voseante el caso ya lo
+    cubren las reglas de `tú`/`vos` del grupo de concordancia.
+
+  **Ronda de review del PR #12133** (CodeRabbit, 2026-08-21). Un solo hallazgo,
+  y era **medio válido**: con `skip="-1"` la regla de imperativos cruzaba un
+  `tú` explícito, que marca **cambio de interlocutor** — dos personas, cada una
+  en su paradigma. `Vení conmigo y tú cállate.` marcaba y no debía. Arreglado
+  con `<exception scope="next">tú</exception>` (barrera de skip, la forma que
+  documenta LT para esto). **Pero el ejemplo que proponía el bot no reproducía
+  nada**: `Vos vení conmigo y tú vete con Ana.` da 0 matches con o sin la
+  barrera, porque `vete` no matchea la regla nunca (lo tapan las exclusiones de
+  postag). Se reemplazó por uno que sí la ejercita. Moraleja que vale para
+  cualquier review, humana o de bot: **el hallazgo se reproduce antes de
+  aceptarlo, y el ejemplo se verifica aparte del diagnóstico** — acá el
+  diagnóstico era bueno y el ejemplo malo.
+
+  Herramienta y patches: `scripts/scan-regla-lt.mjs`, `docs/lt-patches/`.
+
   **Ojo con la calibración — la primera versión dio 11 hits y eran TODOS
   falsos positivos**, por dos errores que conviene no repetir:
   - `estás`, `vas`, `ves` **no son formas de voseo exclusivas**: son idénticas
@@ -509,6 +569,49 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   faltan `atrás mío` y `adelante tuyo`** — justo las dos más rioplatenses. Es
   agregar tres palabras a la lista de una regla que ya existe: el aporte
   upstream más barato que encontramos.
+
+  **PR mandado: [languagetool#12131](https://github.com/languagetool-org/languagetool/pull/12131)**
+  (2026-08-21). Fork `T4toh/languagetool`,
+  clone en `~/Repos/Personal/languagetool`, rama `es-adverbio-lugar-atras-adelante`,
+  patch versionado en `docs/lt-patches/0001-es-DETRAS_PX-adverbio-lugar.patch`.
+  Resultó **una sola línea**: las 5 sub-reglas del grupo no listan los adverbios,
+  usan la entidad `adverbio_lugar` de `resource/es/entities.ent:20`
+  (`detrás|delante|debajo|encima|cerca`), y esa entidad **no se usa en ninguna
+  otra regla** (verificado, 5 usos, todos en `DETRAS_PX`). Quedó
+  `detrás|atrás|delante|adelante|debajo|abajo|encima|arriba|cerca` — se sumaron
+  `arriba` y `abajo` además de los dos anotados, misma familia y mismo riesgo.
+  Más un `<example>` por adverbio nuevo.
+  **Verificado**: `mvn -pl languagetool-language-modules/es -am -Dtest=SpanishPatternRuleTest test`
+  pasa (1.670 reglas, 0 fallas — valida el XSD y los examples), y con la entidad
+  parcheada en el container los 4 positivos marcan con la sugerencia correcta
+  (`atrás mío` → `atrás de mí`) y 6 negativos de riesgo no marcan
+  (`Siguió adelante con el plan`, `De arriba abajo`, `Se echó para atrás`).
+  **Falsos positivos sobre la obra real: cero.** El scan del corpus entero
+  (578 capítulos, 783.918 palabras) pasa de **2 hits a 11**, y los 9 nuevos son
+  todos la construcción de verdad, todos en diálogo (`Tengo un gil atrás mío`,
+  `terminó arriba tuyo`). Herramienta reusable para la próxima regla:
+  `scripts/scan-regla-lt.mjs <RULE_ID> [corpus] [idioma]`, que activa una sola
+  regla vía `enabledOnly` y lista los hits con contexto.
+  El container quedó **revertido** a upstream — el comando para re-aplicar el
+  parche está en `docs/lt-patches/README.md`.
+
+- **Bug de LT 6.8 encontrado de rebote: `500` esporádico en `es-AR`**
+  (2026-08-21). Escaneando el corpus, 2 de 578 capítulos devuelven
+  `HTTP 500` y el capítulo entero se queda **sin chequear**. No es el corpus ni
+  la regla: es un `NullPointerException` adentro del desambiguador de LT,
+  `DisambiguationPatternRuleReplacer.keepByDisambig` → `PatternRuleMatcher.match`,
+  reportado como `Error analyzing sentence: ... with rule VerbAdjective_antipattern:5`.
+  Es **flaky**: la misma oración aislada devuelve `200`, y con `language=es`
+  (sin variante) tampoco explota — huele a thread-safety en el pipeline del
+  server, no a un patrón puntual. Dos cosas que salen de esto: (a) para aportar
+  upstream hay que reproducirlo determinísticamente (pegarle concurrente al
+  mismo texto), (b) del lado nuestro el aviso es pobre: `check()`
+  guarda el mensaje en `grammar.lastError` y `editor.html:377` lo pinta como
+  indicador crudo en el footer (`LanguageTool 500 Internal Server Error: …`),
+  o sea jargon de HTTP en un lugar fácil de no ver, mientras el capítulo queda
+  **entero sin marcas** porque el `check` tira. Merece el trato accionable del
+  CLAUDE.md: decir que el chequeo de *este* capítulo falló y ofrecer reintentar,
+  en vez de tirar el status HTTP a la barra de estado.
 
 - **Filtro de marcas consciente de diálogo — MEDIDO Y DESCARTADO**
   (2026-08-20). La idea era prometedora: tWriter sabe qué párrafo es diálogo

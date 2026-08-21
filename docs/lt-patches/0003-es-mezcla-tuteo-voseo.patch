@@ -1,0 +1,154 @@
+From de1dfea1d5c28e47b081f58fc45e1ad1483598b4 Mon Sep 17 00:00:00 2001
+From: Tatoh <tatukis@gmail.com>
+Date: Fri, 21 Aug 2026 10:16:13 -0300
+Subject: [PATCH 1/2] [es] add MEZCLA_TUTEO_VOSEO: mixing tuteo and voseo in
+ one sentence
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Voseo and tuteo are both correct, but mixing them inside a single sentence
+is not: one sentence has one speaker addressing one person. Nothing in the
+Spanish rules covers that today — the VOSEO group flags voseo forms as such
+(and gets turned off in River Plate countries), and the pronoun/verb agreement
+rules only look at pronoun + verb pairs.
+
+Three rules, all intra-sentence:
+
+- «vos» … «ti» → suggests «vos» (Vos sabés que esto es para ti.)
+- «vos» … «contigo» → suggests «con vos» (Vos sabés que quiero ir contigo.)
+- voseo imperative … tuteo imperative → suggests the voseo form
+  (Vení y cállate un rato. → callate)
+
+The imperative rule matches by POS tag, not by a word list, and excludes
+tokens that also read as noun/preposition/adjective/adverb/determiner/pronoun
+or as indicative/subjunctive. That is what keeps «para», «mira», «toma» and
+«ven» out (Mirá, para el auto acá. / Dale esto para que se despierte. are not
+flagged). Forms of «dar» and «ser» are excluded too, because their imperative
+is the same in both paradigms (da/dale, sé).
+
+SpanishPatternRuleTest passes (1673 rules). Over a 783,918-word es-AR fiction
+corpus the group produces a single match, and it is a real error:
+«Apretá… al distribuidor para que entregue; si no, sácale el trabajo.»
+---
+ .../org/languagetool/rules/es/grammar.xml     | 51 +++++++++++++++++++
+ 1 file changed, 51 insertions(+)
+
+diff --git a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
+index 72dba10..19b301d 100644
+--- a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
++++ b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
+@@ -20119,6 +20119,57 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+             <message>Use la forma apocopada <suggestion><match no="1" regexp_match="o$" regexp_replace=""/></suggestion> en vez de '<match no="1"/>' o ponga una coma después: <suggestion><match no="1"/>,</suggestion>.</message>
+             <example correction="buen|bueno,">¡Qué <marker>bueno</marker> muchacho!</example>
+         </rule>-->
++        <rulegroup id="MEZCLA_TUTEO_VOSEO" name="Mezcla de tuteo y voseo en la misma oración">
++            <url>https://www.rae.es/dpd/voseo</url>
++            <rule>
++                <!-- vos ... ti -->
++                <pattern>
++                    <token skip="-1">vos</token>
++                    <marker>
++                        <token>ti</token>
++                    </marker>
++                </pattern>
++                <message>Con «vos» la forma tónica es «vos», no «ti».</message>
++                <suggestion>vos</suggestion>
++                <example correction="vos">Vos sabés que esto es para <marker>ti</marker>.</example>
++                <example>Vos sabés que esto es para vos.</example>
++                <example>Tú sabes que esto es para ti.</example>
++            </rule>
++            <rule>
++                <!-- vos ... contigo -->
++                <pattern>
++                    <token skip="-1">vos</token>
++                    <marker>
++                        <token>contigo</token>
++                    </marker>
++                </pattern>
++                <message>Con «vos» la forma tónica es «con vos», no «contigo».</message>
++                <suggestion>con vos</suggestion>
++                <example correction="con vos">Vos sabés que quiero ir <marker>contigo</marker>.</example>
++                <example>Vos sabés que quiero ir con vos.</example>
++                <example>Tú sabes que quiero ir contigo.</example>
++            </rule>
++            <rule>
++                <!-- imperativo voseante ... imperativo tuteante -->
++                <pattern>
++                    <token postag="V.M02V0.*" postag_regexp="yes" skip="-1"><exception postag="N.*|SP.*|A.*|RG|LOC_ADV|D.*|P.*" postag_regexp="yes"/></token>
++                    <marker>
++                        <!-- dar y ser tienen el mismo imperativo en tuteo y en voseo: da(le), sé -->
++                        <token postag="V.M02S0.*" postag_regexp="yes"><exception postag="N.*|SP.*|A.*|RG|LOC_ADV|D.*|P.*|V.I.*|V.S.*" postag_regexp="yes"/><exception inflected="yes" regexp="yes">dar|ser</exception></token>
++                    </marker>
++                </pattern>
++                <message>Si el imperativo anterior es voseante, este también debería serlo.</message>
++                <suggestion suppress_misspelled="yes"><match no="2" postag_regexp="yes" postag="(V.M02)S0(.*)" postag_replace="$1V0$2"/></suggestion>
++                <example correction="callate">Vení y <marker>cállate</marker> un rato.</example>
++                <example correction="decime">Escuchame y <marker>dime</marker> la verdad.</example>
++                <example>Vení y callate un rato.</example>
++                <example>Ven y cállate un rato.</example>
++                <example>Mirá, para el auto acá.</example>
++                <example>Dale esto para que se despierte.</example>
++                <example>Tomá esto y dale una de estas.</example>
++                <example>Vení y sé bueno con ella.</example>
++            </rule>
++        </rulegroup>
+     </category>
+     <category id="AGREEMENT_NOUNS" name="Concordancia en grupos nominales" type="inconsistency">
+         <rulegroup id="PRIMERO_PRIMER" name="primero ministro -> primer ministro">
+-- 
+2.50.1 (Apple Git-155)
+
+
+From 2adaa4482c3e00b53132d6b5f9160c7b3f0c8178 Mon Sep 17 00:00:00 2001
+From: Tatoh <tatukis@gmail.com>
+Date: Fri, 21 Aug 2026 10:31:11 -0300
+Subject: [PATCH 2/2] =?UTF-8?q?[es]=20MEZCLA=5FTUTEO=5FVOSEO:=20don't=20cr?=
+ =?UTF-8?q?oss=20an=20explicit=20=C2=ABt=C3=BA=C2=BB=20when=20skipping?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Review feedback: with skip="-1" the imperative rule could match across an
+explicit «tú», which marks a switch of addressee — «Vení conmigo y tú
+cállate.» is two people, each addressed in their own paradigm, and it was
+being flagged. Added <exception scope="next">tú</exception> as a barrier plus
+a correct example.
+
+The sentence proposed in the review («Vos vení conmigo y tú vete con Ana.»)
+does not exercise this: «vete» never matches the rule (it is excluded by the
+POS exceptions), so it gets no match with or without the barrier. Used a verb
+that does match instead.
+
+SpanishPatternRuleTest passes (1673 rules). The four positives and the single
+real corpus match are unchanged; the addressee-switch sentences now give no
+match.
+---
+ .../src/main/resources/org/languagetool/rules/es/grammar.xml  | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
+index 19b301d..d1a1899 100644
+--- a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
++++ b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
+@@ -20152,7 +20152,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+             <rule>
+                 <!-- imperativo voseante ... imperativo tuteante -->
+                 <pattern>
+-                    <token postag="V.M02V0.*" postag_regexp="yes" skip="-1"><exception postag="N.*|SP.*|A.*|RG|LOC_ADV|D.*|P.*" postag_regexp="yes"/></token>
++                    <!-- «tú» explícito entre los dos imperativos = cambio de interlocutor -->
++                    <token postag="V.M02V0.*" postag_regexp="yes" skip="-1"><exception postag="N.*|SP.*|A.*|RG|LOC_ADV|D.*|P.*" postag_regexp="yes"/><exception scope="next">tú</exception></token>
+                     <marker>
+                         <!-- dar y ser tienen el mismo imperativo en tuteo y en voseo: da(le), sé -->
+                         <token postag="V.M02S0.*" postag_regexp="yes"><exception postag="N.*|SP.*|A.*|RG|LOC_ADV|D.*|P.*|V.I.*|V.S.*" postag_regexp="yes"/><exception inflected="yes" regexp="yes">dar|ser</exception></token>
+@@ -20166,6 +20167,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+                 <example>Ven y cállate un rato.</example>
+                 <example>Mirá, para el auto acá.</example>
+                 <example>Dale esto para que se despierte.</example>
++                <example>Vos vení conmigo y tú cállate un rato.</example>
+                 <example>Tomá esto y dale una de estas.</example>
+                 <example>Vení y sé bueno con ella.</example>
+             </rule>
+-- 
+2.50.1 (Apple Git-155)
+
