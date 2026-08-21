@@ -386,17 +386,168 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   en sílabas en el export. Nada que ver con el corrector, pero sale del mismo
   repo y es acotado. Cruza con el item de tipografía del EPUB.
 
-- **Escribir reglas propias de LT en XML** — el camino más realista si algún
-  día se encara el español en serio, y **no requiere construir un motor**. Las
-  296 reglas de español son patrones XML en
-  `/LanguageTool/org/languagetool/rules/es/grammar.xml`, y está verificado que
-  es un **archivo suelto en el filesystem del container, NO adentro de un
-  jar** — o sea que un bind-mount lo puede sobrescribir sin recompilar.
-  **Pendiente de spike**: confirmar que el server levanta el override montado
-  (que el archivo exista y sea montable no prueba que lo lea desde ahí).
-  Alternativa sin container en el medio: sumar reglas al validador que ya
-  existe (`converter.ts` + `rules-dedicated.ts` + `validator.ts`), que es el
-  precedente probado del repo para reglas del español.
+- [x] **Escribir reglas propias de LT en XML — SPIKE CERRADO, FUNCIONA**
+  (2026-08-20). Era "el camino más realista si algún día se encara el español
+  en serio", y resultó ser **el único que cumple todas las restricciones del
+  autor**: open source, sin API, sin pagar, sin mantener un build ajeno, y le
+  vuelve por el motor que ya corre.
+
+  **Verificado de punta a punta**, no supuesto: se insertó una regla propia en
+  `org/languagetool/rules/es/grammar.xml`, se reinició el server y **disparó**,
+  con span correcto, sugerencia y capitalización preservada:
+
+  ```xml
+  <rulegroup id="TWRITER_TU_VOSEO" name="«tú» con verbo voseante">
+      <rule>
+          <pattern>
+              <token regexp="yes" case_sensitive="no">tú</token>
+              <token regexp="yes">sos|tenés|sabés|querés|podés|hacés|decís|venís|vas|estás|sentís|vivís</token>
+          </pattern>
+          <message>Con «tú» el verbo va en tuteo. Si el personaje vosea, escribí <suggestion>vos \2</suggestion>.</message>
+          <short>Mezcla de tuteo y voseo</short>
+          <example correction="vos tenés"><marker>Tú tenés</marker> que venir.</example>
+          <example>Vos tenés que venir.</example>
+      </rule>
+  </rulegroup>
+  ```
+
+  Resultado medido: `Tú tenés que venir.` → marca `Tú tenés`, sugiere
+  `Vos tenés`. `Y tú sabés por qué.` → marca `tú sabés`, sugiere `vos sabés`
+  (el backreference `\2` y la caja se resuelven solos). Y **cero falsos
+  positivos**: `Vos tenés que venir.` y `Tú tienes que venir.` no marcan nada.
+
+  **Cómo llegan las reglas al motor — no hay mecanismo aditivo.** Se revisó
+  `HTTPServer --help`: la única opción parecida es `rulesFile`, que es
+  **configuración** de reglas (activar/desactivar), no reglas nuevas. Así que
+  el camino es **parchear `grammar.xml`**, que es un archivo suelto de 2,1 MB
+  en el filesystem (no está dentro de un jar), tanto en el container como en
+  una distribución local. Consecuencia: el parche hay que re-mergearlo en cada
+  upgrade de LT — pero es `git apply` de un patch chico contra un archivo de
+  texto, dos veces al año, no comparable con mantener un build de Maven.
+  Conviene guardar el patch versionado en este repo.
+
+  **El camino durable es aportar upstream**: una regla mergeada en LT viaja con
+  el motor y no necesita parche nunca más. Ver el item de "Aportar upstream" —
+  LT es el repo que **sí** nos vuelve, porque es el motor que corremos.
+
+- **Dónde falla realmente el español de LT** (medido el 2026-08-20, contra
+  6.6). El conteo de reglas engañaba: los errores **clásicos** del español
+  están todos cubiertos. Verificado que LT marca `Hubieron muchos problemas`
+  (`ID_HUBO_HUBIERON`), `Vamos haber que pasa` (`HABER_AVER`), `Me di cuenta
+  que` (`QUEISMO`), `sepa mas que ella` (`MAS`), `Detrás mío` (`DETRAS_PX`).
+  No hay que escribir esas.
+
+  Los agujeros reales son **rioplatenses y de documento**:
+  - **`tú` + verbo voseante no se marca.** LT sí marca el cruce inverso —
+    `Vos tienes razón` da `AGREEMENT_PRONOUNSUBJECT_VERB` — pero `Tú tenés que
+    venir` daba **0 matches** antes de la regla de arriba. En prosa rioplatense
+    el cruce inverso es el error que de verdad aparece.
+  - **Consistencia de voseo a nivel documento: LT no puede, por diseño.**
+    `Ven acá y dime la verdad.` es correcto como oración aislada y LT no marca
+    nada — pero si el resto del capítulo es voseo, es una inconsistencia de voz
+    del personaje. LT trabaja **por oración**; esto es una propiedad del
+    documento. Va en TS, al lado de `detector.ts` (que es document-scoped por
+    la misma razón). Es exactamente el problema de dialecto del autor, y no lo
+    va a resolver nadie más.
+
+  **División que sale de esto**: reglas de oración → XML de LT, contribuidas
+  upstream. Chequeos de documento → TS propio. No compiten, se suman.
+
+- **Consistencia de voseo a nivel documento — DESCARTADO por el autor**
+  (2026-08-20), y con razón. La idea era marcar cuando un capítulo mezcla
+  voseo y tuteo. **No sirve: la mezcla entre personajes es caracterización
+  deliberada.** En las novelas cyberpunk los traductores del mundo le dan voz
+  neutra y formal a los hispanohablantes salvo que hablen en español, así que
+  un japonés habla neutro contra un argentino que vosea y putea cada dos
+  palabras. En fantasía, un personaje de otro lado habla distinto justamente
+  para marcar la diferencia, porque nadie va a leer diálogos en cuatro
+  idiomas. Una regla de documento marcaría eso en cada escena.
+
+  **El criterio que salió de esto, y que vale para cualquier regla futura:
+  solo marcar lo que NUNCA puede ser una decisión deliberada.** Dentro de una
+  oración hay un solo hablante, así que mezclar ahí es un desliz — y es donde
+  el autor no chequea porque está en proceso creativo. Entre personajes es
+  estilo. Toda regla nueva tiene que pasar ese filtro antes de escribirse.
+
+- **Las reglas rioplatenses propias: escritas, probadas y CON CERO HITS en la
+  obra real** (2026-08-20). Aplicando el criterio de arriba se escribieron
+  tres reglas intra-oración más la de `tú` + voseo, todas verificadas contra
+  LT corriendo: `TWRITER_TU_VOSEO`, `TWRITER_IMPERATIVO_MIXTO`
+  (imperativo voseante + tuteante en la misma oración),
+  `TWRITER_VOS_TONICO_TI` (`vos` con `ti`/`contigo`) y
+  `TWRITER_VOS_TU_MISMA_ORACION`. 6/6 positivos sintéticos, 7/7 negativos.
+
+  **Resultado sobre 260 capítulos y 384.109 palabras reales: 0 hits.**
+  El autor no comete esos errores. Las reglas son correctas; el problema que
+  resuelven no existe en esta obra. Pueden valer como aporte upstream para
+  otros escritores rioplatenses, no para este repo.
+
+  **Ojo con la calibración — la primera versión dio 11 hits y eran TODOS
+  falsos positivos**, por dos errores que conviene no repetir:
+  - `estás`, `vas`, `ves` **no son formas de voseo exclusivas**: son idénticas
+    en tuteo (`tú estás` es correcto). Marcaban diálogo bien escrito.
+  - `para`, `mira`, `toma`, `deja`, `ven` están en la lista de imperativos
+    tuteantes pero son **preposición / sustantivo / tercera persona** casi
+    siempre. `Dale esto para que se despierte` disparaba por el `para`.
+
+  Toda lista de formas verbales para una regla de voseo tiene que contener
+  **solo formas inequívocas**, y hay que correrla sobre el corpus entero antes
+  de creerle.
+
+- **Coloquialismos: el corpus dice que no hay nada que arreglar**
+  (2026-08-20). El autor propuso `atrás mío` vs `detrás de mí` como ejemplo de
+  lo que se le escapa. Medido sobre los 260 capítulos: la familia entera
+  (`atrás/arriba/cerca/abajo/encima… + mío/tuyo/suyo/nuestro`) aparece **12
+  veces**, y **11 están en diálogo** — `¿Me caí arriba tuyo?`, `quiero estar
+  cerca tuyo`, `Tengo un gil atrás mío` — donde son correctas, porque así
+  habla la gente. La única en narración era un falso positivo del regex
+  (`que fuera suya`: subjuntivo de *ser*, no el adverbio). **Cero errores
+  reales.**
+
+  De paso, un hueco chico y contribuible: la regla `DETRAS_PX` de LT cubre
+  `detrás mío`, `encima suyo`, `cerca mío` y `delante nuestro`, pero **le
+  faltan `atrás mío` y `adelante tuyo`** — justo las dos más rioplatenses. Es
+  agregar tres palabras a la lista de una regla que ya existe: el aporte
+  upstream más barato que encontramos.
+
+- **Filtro de marcas consciente de diálogo — MEDIDO Y DESCARTADO**
+  (2026-08-20). La idea era prometedora: tWriter sabe qué párrafo es diálogo
+  (el validador RAE ya parsea esa estructura) y LT no, así que podría suprimir
+  las categorías legítimamente coloquiales dentro de diálogo. Medido sobre 60
+  capítulos (56.676 palabras de diálogo, 41.556 de narración):
+
+  | | diálogo | narración |
+  |---|---|---|
+  | marcas totales | 2.076 (36,6/1.000) | 881 (21,2/1.000) |
+  | Posible error ortográfico | 2.020 | 854 |
+  | Diacríticos (tilde) | 23 | 3 |
+  | Puntuación | 5 | 0 |
+  | Confusiones | 3 | 3 |
+
+  El 70% de las marcas cae en diálogo, pero **el 97% de todas son del
+  corrector ortográfico, y un typo en diálogo sigue siendo un typo**: no se
+  puede suprimir. Las categorías donde el filtro ayudaría suman ~30 marcas en
+  98.000 palabras. No paga.
+
+- **CONCLUSIÓN de la jornada del 2026-08-20 sobre gramática.** Se agotaron los
+  caminos y todos miden cerca de cero **para esta obra**:
+  - LT encontró **3 typos reales en 53.633 palabras**; de sus 1.667 reglas de
+    español dispararon 21, varias con falsos positivos sobre nombres propios.
+  - Reglas rioplatenses propias: **0 hits en 384.109 palabras**.
+  - Coloquialismos: **0 errores reales** en 260 capítulos.
+  - Filtro por diálogo: ~30 marcas de 2.957.
+  - Cambiar de motor: no existe alternativa para español.
+  - Sidecar / bundle: resuelve la entrega, no la calidad, y con costo alto.
+  - LLM: descartado por el autor — quiere open source, y además planchan el
+    diálogo y confunden habla coloquial con prosa mal escrita.
+
+  **El subsistema de gramática está terminado.** No le falta trabajo: le falta
+  problema. El autor escribe limpio y el 97% de lo que LT marca son nombres
+  inventados, que el diccionario per-saga ya resuelve. Lo que **sí** tuvo
+  señal medida este día fue el **detector de repeticiones** (0,8 hits por
+  1.000 palabras en español después de calibrar, verificado a mano por el
+  autor). Cualquier esfuerzo futuro rinde más ahí o en otra parte de la app,
+  no en gramática.
 
 - **Fuentes normativas del español: no hay corpus libre.** La *Nueva gramática
   de la lengua española*, la *Ortografía* y el DPD son de la RAE, con
@@ -704,13 +855,60 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
     evaluadas y descartadas".
   - **Semántica / estilo por LLM** — es lo único que de verdad supera a LT
     en prosa literaria española (ve registro, repetición, ritmo, cosas que
-    ningún motor de reglas alcanza). **Descartado por ahora, decisión
-    explícita del autor**: levantar un Ollama es demasiada carga operativa
-    para el usuario final. Si algún día entra, entra **embebido** (modelo
-    chico bundleado o llama.cpp linkeado), nunca como "instalate esto
-    aparte". Ojo con dos cosas cuando se retome: no devuelve offsets
-    estables — hay que mapear por diff en vez de por `offset`+`length` — y
-    va como feature aparte, jamás reemplazando el inline.
+    ningún motor de reglas alcanza).
+
+    > ⚠️ **CORRECCIÓN del 2026-08-20.** Este item decía *"Descartado por
+    > ahora, decisión explícita del autor"* y **eso era una tergiversación**.
+    > El autor nunca lo rechazó: dijo que *capaz* levantar un Ollama era igual
+    > de complicado que hacerle correr una imagen al usuario — una duda de
+    > viabilidad sobre **una** implementación, no un rechazo de la idea. Queda
+    > **abierto y es el candidato más fuerte** para lo que el autor identifica
+    > como su molestia real: que el inglés de LT (6.098 reglas) es muy
+    > superior al español (1.667), y ningún motor de reglas va a cerrar esa
+    > brecha porque nadie escribió esas reglas. Un modelo no las necesita.
+
+    **La duda original era sobre Ollama, y ese no es el único camino.** Vía
+    API con la clave del autor, `secrets.rs` ya resuelve la parte difícil
+    (keyring del OS, fallback `0600`, y el secreto **nunca cruza el bridge
+    JS→Rust** — se carga server-side al armar el POST, exactamente como el
+    apiKey de LT Premium). Rust no tiene SDK oficial de Anthropic, así que es
+    HTTP directo con `reqwest`, que ya es dependencia y es como `grammar.rs`
+    le pega a LT hoy: **cero dependencias nuevas**.
+
+    **Costo medido, no estimado** (2026-08-20). Corpus real contado del HTML:
+    **783.918 palabras en 578 capítulos** (Milky Way 399.720, Meridian 2.0
+    225.255, Buenos Aires 2077 143.395, Vieja República 15.548). Con
+    `claude-opus-5` a US$5/1M in + US$25/1M out, estimando ~1,5 tokens por
+    palabra en español y una salida acotada al 15% del input (solo hallazgos,
+    no reescritura):
+
+    | | palabras | normal | Batch API (−50%) |
+    |---|---|---|---|
+    | capítulo promedio | 1.356 | **US$ 0,02** | US$ 0,01 |
+    | saga más grande (Milky Way) | 399.720 | US$ 5,25 | US$ 2,62 |
+    | **toda la obra** | **783.918** | **US$ 10,29** | **US$ 5,14** |
+
+    Dos centavos por capítulo. Diez dólares por todo lo que el autor escribió
+    en su vida. Con prompt caching sobre el system prompt + contexto de saga
+    baja más, y la Batch API lo parte al medio para el caso "revisame el libro
+    entero de noche".
+
+    **Lo que hay que resolver, en orden de dificultad:**
+    1. **Offsets.** El modelo no devuelve `offset`+`length` confiables. Hay
+       que pedirle **structured outputs** (`output_config.format`) con el
+       fragmento citado textual, y localizarlo en el doc del lado nuestro —
+       el mismo problema que ya resolvió `resolve_matched_words` en
+       `search.rs` para los snippets de tantivy, y `matchedTerms` para el
+       jump. Hay precedente en el repo.
+    2. **Privacidad.** Es prosa inédita saliendo a un servicio de terceros.
+       Decisión del autor, no técnica. Vale saber que la API de Anthropic no
+       entrena sobre datos de API por default y que existe zero-data-retention.
+    3. **No determinismo.** Dos corridas pueden diferir. Va como acción
+       explícita ("Revisar capítulo"), **nunca** reemplazando las marcas
+       inline de LT ni corriendo en cada tecla.
+    4. Params actuales: `thinking: {type:"adaptive"}` y
+       `output_config: {effort}` — `budget_tokens` está removido y devuelve
+       400 en Opus 5. Sin prefill de assistant (también 400).
 - **Capacidades de LanguageTool que hoy NO usamos** (relevadas contra el
   swagger oficial + probadas contra el container local, LT 6.8 OSS):
   - [x] `level=picky` en `/v2/check` — **implementado**: toggle "Modo exigente
