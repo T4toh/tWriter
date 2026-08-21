@@ -186,12 +186,17 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!this.canEdit()) return false;
     return this.meta().idioma === 'en';
   });
-  protected readonly canCheckGrammar = computed(() => {
+  /** El capítulo es chequeable por idioma y edición — independiente de que LT
+   *  esté vivo. Sirve para mostrar el botón en estado "caído" en vez de
+   *  esconderlo, que dejaba al autor sin explicación ni remedio. */
+  protected readonly grammarApplies = computed(() => {
     if (!this.canEdit()) return false;
-    if (!this.grammar.available()) return false;
     const lang = this.meta().idioma;
     return lang === 'es' || lang === 'en' || lang === null || lang === undefined;
   });
+  protected readonly canCheckGrammar = computed(
+    () => this.grammarApplies() && this.grammar.available(),
+  );
   protected readonly grammarChecking = this.grammar.checking;
   protected readonly grammarError = this.grammar.lastError;
   protected readonly grammarMatches = signal<GrammarMatchPos[]>([]);
@@ -1101,6 +1106,11 @@ export class Editor implements AfterViewInit, OnDestroy {
     } catch {
       // grammar.lastError ya tiene el mensaje
     }
+  }
+
+  /** El error de gramática del footer es accionable: abre el modal de config. */
+  protected openGrammarConfig(): void {
+    this.grammar.pedirConfig();
   }
 
   protected toggleAutoGrammar(): void {

@@ -56,6 +56,21 @@ export class PaneSplitService {
 
   beginDrag(node: DraggingNode): void {
     this.draggingNode.set(node);
+    // Backstop del `dragend` del tree: ese handler vive en el nodo arrastrado,
+    // así que si Angular re-renderiza el árbol durante el drag (refresh, pintar
+    // la nota activa, expandir una carpeta) el elemento se destruye con su
+    // listener y el evento nunca llega — el hint "Soltar acá para abrir en
+    // split" queda pintado para siempre. El listener en `window` sobrevive esa
+    // churn. `dragend` dispara también al cancelar con Escape o al soltar fuera
+    // de la ventana.
+    //
+    // Ojo: NO escuchar `drop` acá. En captura sobre `window` correría ANTES del
+    // `onCenterDrop` del shell, que lee `draggingNode()` para saber qué abrir.
+    const cerrar = (): void => {
+      window.removeEventListener('dragend', cerrar, true);
+      this.endDrag();
+    };
+    window.addEventListener('dragend', cerrar, true);
   }
 
   endDrag(): void {
