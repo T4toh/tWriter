@@ -22,6 +22,7 @@ import { MarkdownReaderService } from '../core/markdown-reader-service';
 import { RaeAuditService } from '../core/rae-audit-service';
 import { QuotesFixService } from '../core/quotes-fix-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
+import { NavigationService } from '../core/navigation-service';
 import { NoteService, NoteTarget } from '../core/note-service';
 import { ProjectService } from '../core/project-service';
 import { DictionaryService } from '../core/dictionary-service';
@@ -32,7 +33,13 @@ import { ThemesService } from '../core/themes-service';
 import { ToastService } from '../core/toast-service';
 import { FontEntry, ThemeMeta, TreeNode } from '../core/types';
 import { ModalService } from './modal-service';
+import {
+  NOTE_TEMPLATES,
+  NoteTemplateId,
+  renderNoteTemplate,
+} from './note-templates';
 import { CtxMenuEntry } from './context-menu-service';
+import { notasDelLibro } from '../tree/notas-del-libro';
 
 /**
  * Acciones compartidas sobre nodos del árbol (saga / libro / sección / capítulo)
@@ -43,6 +50,7 @@ import { CtxMenuEntry } from './context-menu-service';
 @Injectable({ providedIn: 'root' })
 export class NodeActionsService {
   private project = inject(ProjectService);
+  private nav = inject(NavigationService);
   private chapter = inject(ChapterService);
   private note = inject(NoteService);
   private settings = inject(SettingsService);
@@ -727,19 +735,99 @@ export class NodeActionsService {
   }
 
   async createNoteIn(parentDir: string): Promise<void> {
-    const name = await this.modal.prompt({
+    const res = await this.modal.selectPrompt({
       title: 'Nueva nota',
-      message: 'Sin extensión, .md se prepende automático.',
-      placeholder: 'nombre',
-      validate: (v) => {
-        const t = v.trim();
+      message: `Se crea en: ${this.relToRoot(parentDir)}`,
+      selectLabel: 'Plantilla',
+      selectOptions: NOTE_TEMPLATES.map((t) => ({ value: t.id, label: t.label })),
+      selectDefault: 'vacia',
+      inputLabel: 'Nombre (sin extensión, .md se agrega solo)',
+      inputPlaceholder: 'nombre',
+      okLabel: 'Crear',
+      validate: ({ value }) => {
+        const t = value.trim();
         if (!t) return 'Nombre vacío';
         if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
         return null;
       },
     });
-    if (!name?.trim()) return;
-    await this.note.createNote(parentDir, name.trim());
+    if (!res?.value.trim()) return;
+    const nombre = res.value.trim();
+    // El título del markdown es el nombre sin la extensión que el usuario
+    // pueda haber tipeado — el backend hace lo mismo para el `# <name>`.
+    const titulo = nombre.replace(/\.(md|markdown)$/i, '');
+    const body = renderNoteTemplate(res.selected as NoteTemplateId, titulo);
+    // Sin esto, con el pane de notas colapsado la nota nueva se crea invisible.
+    this.settings.setNotesPaneCollapsed(false);
+    const creado = await this.note.createNote(parentDir, nombre, body);
+    if (!creado) return;
+    // Y sin esto la nota puede nacer en una rama que la tab activa no muestra.
+    // `createNote` ya recargó el árbol, así que se pregunta directo si la nota
+    // nueva entra en la lista del libro; si no, se cambia a "Todas".
+    const nl = notasDelLibro(this.project.tree(), this.contextoLibro());
+    const enLaLista =
+      !!nl && [...nl.libro, ...nl.saga].some((x) => x.path === creado);
+    this.settings.setNotasTab(enLaLista ? 'libro' : 'todas');
+  }
+
+  /** Destino del botón `+` del pane Notas: la carpeta de la nota abierta, o la
+   *  carpeta de notas que se está navegando, o `<root>/Notas` como último
+   *  recurso. Un capítulo/libro/saga NO cuenta como destino — ahí la nota iría
+   *  a parar entre los capítulos; para eso está el "Nueva nota…" del menú
+   *  contextual, que sabe el scope. Devuelve null si no hay root elegido. */
+  notesQuickTarget(): string | null {
+    const root = this.settings.root();
+    if (!root) return null;
+    // Escribiendo, el destino natural es la carpeta de notas del libro abierto
+    // (`Notas/Meridian/3 - Secreto`): es donde viven las fichas de personaje de
+    // esa época. Vale aunque la carpeta no exista todavía — el backend la crea.
+    if (this.settings.notasTab() === 'libro') {
+      const nl = notasDelLibro(this.project.tree(), this.contextoLibro());
+      const carpeta = nl?.carpetaLibroPath ?? nl?.carpetaSagaPath;
+      if (carpeta) return carpeta;
+    }
+    const candidato = this.note.active()?.path ?? this.nav.browsingPath();
+    if (candidato) {
+      const node = findNodeByPath(this.project.tree(), candidato);
+      // Carpetas (`notas/`, libres) reciben la nota adentro; una nota, al lado.
+      if (node && (node.kind === 'notes' || node.kind === 'folder')) return candidato;
+      if (node?.kind === 'note') {
+        const parent = candidato.replace(/[/\\][^/\\]+$/, '');
+        if (parent && parent !== candidato) return parent;
+      }
+    }
+    return `${root}/Notas`;
+  }
+
+  /** Mismo criterio que el panel de notas: capítulo abierto → último capítulo
+   *  → lo que se esté navegando. Ver `tree.ts::contextoLibro`. */
+  private contextoLibro(): string | null {
+    return (
+      this.chapter.active()?.path ??
+      this.nav.ultimoCapitulo() ??
+      this.nav.browsingPath()
+    );
+  }
+
+  /** Botón `+` del header "Notas". */
+  async createNoteQuick(): Promise<void> {
+    const target = this.notesQuickTarget();
+    if (!target) {
+      this.toast.error('Elegí una carpeta de novelas primero');
+      return;
+    }
+    await this.createNoteIn(target);
+  }
+
+  /** Path relativo al root para mostrarlo en modales. Devuelve el absoluto si
+   *  el path cae fuera del root (no debería pasar). */
+  private relToRoot(path: string): string {
+    const root = this.settings.root();
+    if (root && path.startsWith(root)) {
+      const rel = path.slice(root.length).replace(/^[/\\]/, '');
+      return rel || '.';
+    }
+    return path;
   }
 
   async createFolderIn(parentDir: string): Promise<void> {

@@ -146,12 +146,19 @@ export class NoteService {
 
   // ──────── Operaciones globales ────────
 
-  /** Crea `<parentDir>/<name>.md` (creando `notas/` si hace falta) y abre la nota. */
-  async createNote(parentDir: string, name: string): Promise<string | null> {
+  /** Crea `<parentDir>/<name>.md` (creando `notas/` si hace falta) y abre la nota.
+   *  `body` = markdown inicial de una plantilla; si es null el backend escribe
+   *  `# <name>` solo (ver `shared/note-templates.ts`). */
+  async createNote(
+    parentDir: string,
+    name: string,
+    body: string | null = null,
+  ): Promise<string | null> {
     try {
       const result = await invoke<{ path: string }>('create_note', {
         parentDir,
         name,
+        body,
       });
       this.debug.info('note', `Nota creada: ${result.path}`);
       await this.project.loadTree();

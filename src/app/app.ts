@@ -48,6 +48,7 @@ import { ModalHost } from './shared/modal-host';
 import { ModalService } from './shared/modal-service';
 import { ContextMenuHost } from './shared/context-menu-host';
 import { ContextMenuService } from './shared/context-menu-service';
+import { NodeActionsService } from './shared/node-actions-service';
 import { TreeNode } from './core/types';
 import { atajo } from './shared/atajo';
 import {
@@ -113,6 +114,7 @@ export class App {
   private updater = inject(UpdaterService);
   private modal = inject(ModalService);
   private ctxMenu = inject(ContextMenuService);
+  private nodeActions = inject(NodeActionsService);
   private toast = inject(ToastService);
 
   protected readonly dragOverCenter = signal<boolean>(false);
@@ -612,6 +614,12 @@ export class App {
 
   protected toggleNotesPane(): void {
     this.settings.setNotesPaneCollapsed(!this.settings.notesPaneCollapsed());
+  }
+
+  /** Botón `+` del header del panel: crea la nota donde el usuario está
+   *  parado, sin obligarlo a ir al menú contextual del árbol de arriba. */
+  protected createNoteQuick(): void {
+    void this.nodeActions.createNoteQuick();
   }
 
   /** Arranca el drag del divisor. Arrastrar hacia arriba agranda el panel de

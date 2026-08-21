@@ -1,4 +1,26 @@
-@if (root()) {
+@if (variant() === 'notes') {
+  <div class="notas-tabs">
+    <button
+      type="button"
+      class="nt-tab"
+      [class.active]="notasTab() === 'libro'"
+      (click)="setNotasTab('libro')"
+      title="Notas del libro que estás escribiendo"
+    >
+      Este libro
+    </button>
+    <button
+      type="button"
+      class="nt-tab"
+      [class.active]="notasTab() === 'todas'"
+      (click)="setNotasTab('todas')"
+      title="Todas las notas, en árbol"
+    >
+      Todas
+    </button>
+  </div>
+}
+@if (root() && !notasLibroActiva()) {
   <div class="tree-toolbar">
     <button type="button" class="tt-btn" (click)="collapseAll()" title="Colapsar todo">
       <svg lucideChevronsUp [size]="14"></svg>
@@ -13,52 +35,96 @@
     }
   </div>
 }
-<div class="tree-area" (contextmenu)="onEmptyContext($event)">
-  @if (loading()) {
-    <p class="status">Cargando…</p>
-  }
-  @if (error(); as err) {
-    <p class="status error">{{ err }}</p>
-  }
-  @if (!root() && !loading() && !error()) {
-    <p class="status">Elegí una carpeta arriba.</p>
-  }
-  @if (root(); as r) {
-    @if (variant() === 'main') {
-      <ng-container *ngTemplateOutlet="themesSectionTpl" />
-      <ng-container *ngTemplateOutlet="rootFontsSectionTpl" />
-    }
-    <div
-      cdkDropList
-      [id]="dropListId(r.path, 'saga')"
-      [cdkDropListData]="{ parentPath: r.path, childKind: 'saga' }"
-      [cdkDropListConnectedTo]="dropListIds().saga"
-      (cdkDropListDropped)="onDropList($event)"
-    >
-      @for (child of childrenOfKind(r, 'saga'); track child.path) {
-        <div cdkDrag [cdkDragData]="child" [cdkDragDisabled]="!isDraggable(child)">
-          <ng-container
-            *ngTemplateOutlet="nodeTpl; context: { $implicit: child, depth: 0 }"
-          />
-        </div>
-      }
-    </div>
-    @for (child of childrenOfOtherKinds(r, 'saga'); track child.path) {
-      <ng-container
-        *ngTemplateOutlet="nodeTpl; context: { $implicit: child, depth: 0 }"
-      />
-    }
-    @if (r.children.length === 0) {
-      @if (variant() === 'notes') {
-        <p class="status">Sin notas todavía.</p>
-      } @else {
+@if (notasLibroActiva()) {
+  <div class="tree-area notas-libro" (contextmenu)="onEmptyContext($event)">
+    @if (notasLibro(); as nl) {
+      @if (nl.libro.length === 0 && nl.saga.length === 0) {
         <p class="status">
-          Sin sagas todavía. Click derecho aquí para crear una.
+          {{ nl.sagaNombre }} no tiene notas todavía. Creá una con el +.
         </p>
       }
+      @for (n of nl.libro; track n.path) {
+        <ng-container *ngTemplateOutlet="notaRowTpl; context: { $implicit: n }" />
+      }
+      @if (nl.saga.length > 0) {
+        <p class="notas-sep">{{ nl.sagaNombre }}</p>
+        @for (n of nl.saga; track n.path) {
+          <ng-container *ngTemplateOutlet="notaRowTpl; context: { $implicit: n }" />
+        }
+      }
+    } @else {
+      <p class="status">
+        Abrí un capítulo y acá aparecen las notas de ese libro. Mientras, mirá
+        &laquo;Todas&raquo;.
+      </p>
     }
-  }
-</div>
+  </div>
+} @else {
+  <div class="tree-area" (contextmenu)="onEmptyContext($event)">
+    @if (loading()) {
+      <p class="status">Cargando…</p>
+    }
+    @if (error(); as err) {
+      <p class="status error">{{ err }}</p>
+    }
+    @if (!root() && !loading() && !error()) {
+      <p class="status">Elegí una carpeta arriba.</p>
+    }
+    @if (root(); as r) {
+      @if (variant() === 'main') {
+        <ng-container *ngTemplateOutlet="themesSectionTpl" />
+        <ng-container *ngTemplateOutlet="rootFontsSectionTpl" />
+      }
+      <div
+        cdkDropList
+        [id]="dropListId(r.path, 'saga')"
+        [cdkDropListData]="{ parentPath: r.path, childKind: 'saga' }"
+        [cdkDropListConnectedTo]="dropListIds().saga"
+        (cdkDropListDropped)="onDropList($event)"
+      >
+        @for (child of childrenOfKind(r, 'saga'); track child.path) {
+          <div cdkDrag [cdkDragData]="child" [cdkDragDisabled]="!isDraggable(child)">
+            <ng-container
+              *ngTemplateOutlet="nodeTpl; context: { $implicit: child, depth: 0 }"
+            />
+          </div>
+        }
+      </div>
+      @for (child of childrenOfOtherKinds(r, 'saga'); track child.path) {
+        <ng-container
+          *ngTemplateOutlet="nodeTpl; context: { $implicit: child, depth: 0 }"
+        />
+      }
+      @if (r.children.length === 0) {
+        @if (variant() === 'notes') {
+          <p class="status">Sin notas todavía.</p>
+        } @else {
+          <p class="status">
+            Sin sagas todavía. Click derecho aquí para crear una.
+          </p>
+        }
+      }
+    }
+  </div>
+}
+
+<ng-template #notaRowTpl let-n>
+  <button
+    type="button"
+    class="row note nota-libro-row"
+    [class.active]="n.path === activePath()"
+    [title]="n.path + ' — doble click o Shift+click para editar'"
+    (click)="select(n.node, $event)"
+    (dblclick)="openNoteInEditor(n.node)"
+    (contextmenu)="onContextMenu($event, n.node)"
+  >
+    <span class="icon">
+      <svg lucideFilePen [size]="14"></svg>
+    </span>
+    <span class="name">{{ n.etiqueta }}</span>
+  </button>
+</ng-template>
+
 
 <ng-template #nodeTpl let-node let-depth="depth">
   @if (node.kind === 'chapter') {

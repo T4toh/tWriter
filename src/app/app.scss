@@ -116,26 +116,40 @@
   }
 }
 
+/* Fila del header: el toggle ocupa todo el ancho y el `+` queda a la derecha.
+ * Son dos botones hermanos, no uno anidado en el otro (HTML inválido). */
 .notes-pane-header {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
   width: 100%;
+  padding: 0 6px 0 0;
+}
+
+.notes-pane-toggle,
+.notes-pane-new {
   border: none;
   background: transparent;
   color: var(--fg-muted);
   font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 6px 10px;
   cursor: pointer;
 
   &:hover {
     color: var(--fg);
   }
+}
+
+.notes-pane-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 6px 10px;
 
   .chevron {
     display: flex;
@@ -145,6 +159,19 @@
   .notes-pane-title {
     flex: 1;
     text-align: left;
+  }
+}
+
+.notes-pane-new {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+
+  &:hover {
+    background: var(--border);
   }
 }
 
