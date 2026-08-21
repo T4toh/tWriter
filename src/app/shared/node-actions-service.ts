@@ -22,6 +22,7 @@ import { MarkdownReaderService } from '../core/markdown-reader-service';
 import { RaeAuditService } from '../core/rae-audit-service';
 import { QuotesFixService } from '../core/quotes-fix-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
+import { NavigationService } from '../core/navigation-service';
 import { NoteService, NoteTarget } from '../core/note-service';
 import { ProjectService } from '../core/project-service';
 import { DictionaryService } from '../core/dictionary-service';
@@ -48,6 +49,7 @@ import { CtxMenuEntry } from './context-menu-service';
 @Injectable({ providedIn: 'root' })
 export class NodeActionsService {
   private project = inject(ProjectService);
+  private nav = inject(NavigationService);
   private chapter = inject(ChapterService);
   private note = inject(NoteService);
   private settings = inject(SettingsService);
@@ -754,7 +756,40 @@ export class NodeActionsService {
     // pueda haber tipeado — el backend hace lo mismo para el `# <name>`.
     const titulo = nombre.replace(/\.(md|markdown)$/i, '');
     const body = renderNoteTemplate(res.selected as NoteTemplateId, titulo);
+    // Sin esto, con el pane de notas colapsado la nota nueva se crea invisible.
+    this.settings.setNotesPaneCollapsed(false);
     await this.note.createNote(parentDir, nombre, body);
+  }
+
+  /** Destino del botón `+` del pane Notas: la carpeta de la nota abierta, o la
+   *  carpeta de notas que se está navegando, o `<root>/Notas` como último
+   *  recurso. Un capítulo/libro/saga NO cuenta como destino — ahí la nota iría
+   *  a parar entre los capítulos; para eso está el "Nueva nota…" del menú
+   *  contextual, que sabe el scope. Devuelve null si no hay root elegido. */
+  notesQuickTarget(): string | null {
+    const root = this.settings.root();
+    if (!root) return null;
+    const candidato = this.note.active()?.path ?? this.nav.browsingPath();
+    if (candidato) {
+      const node = findNodeByPath(this.project.tree(), candidato);
+      // Carpetas (`notas/`, libres) reciben la nota adentro; una nota, al lado.
+      if (node && (node.kind === 'notes' || node.kind === 'folder')) return candidato;
+      if (node?.kind === 'note') {
+        const parent = candidato.replace(/[/\\][^/\\]+$/, '');
+        if (parent && parent !== candidato) return parent;
+      }
+    }
+    return `${root}/Notas`;
+  }
+
+  /** Botón `+` del header "Notas". */
+  async createNoteQuick(): Promise<void> {
+    const target = this.notesQuickTarget();
+    if (!target) {
+      this.toast.error('Elegí una carpeta de novelas primero');
+      return;
+    }
+    await this.createNoteIn(target);
   }
 
   /** Path relativo al root para mostrarlo en modales. Devuelve el absoluto si

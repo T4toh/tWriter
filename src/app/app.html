@@ -80,22 +80,32 @@
             title="Arrastrar para redimensionar"
           ></div>
         }
-        <button
-          type="button"
-          class="notes-pane-header"
-          (click)="toggleNotesPane()"
-          [title]="settings.notesPaneCollapsed() ? 'Mostrar notas' : 'Ocultar notas'"
-        >
-          <span class="chevron">
-            @if (settings.notesPaneCollapsed()) {
-              <svg lucideChevronRight [size]="12"></svg>
-            } @else {
-              <svg lucideChevronDown [size]="12"></svg>
-            }
-          </span>
-          <svg lucideNotebook [size]="14"></svg>
-          <span class="notes-pane-title">Notas</span>
-        </button>
+        <div class="notes-pane-header">
+          <button
+            type="button"
+            class="notes-pane-toggle"
+            (click)="toggleNotesPane()"
+            [title]="settings.notesPaneCollapsed() ? 'Mostrar notas' : 'Ocultar notas'"
+          >
+            <span class="chevron">
+              @if (settings.notesPaneCollapsed()) {
+                <svg lucideChevronRight [size]="12"></svg>
+              } @else {
+                <svg lucideChevronDown [size]="12"></svg>
+              }
+            </span>
+            <svg lucideNotebook [size]="14"></svg>
+            <span class="notes-pane-title">Notas</span>
+          </button>
+          <button
+            type="button"
+            class="notes-pane-new"
+            (click)="createNoteQuick()"
+            title="Nueva nota…"
+          >
+            <svg lucidePlus [size]="14"></svg>
+          </button>
+        </div>
         @if (!settings.notesPaneCollapsed()) {
           <app-tree class="tree-notes" variant="notes" />
         }

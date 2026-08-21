@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, input, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { invoke } from '@tauri-apps/api/core';
@@ -83,6 +83,7 @@ export class Tree implements OnDestroy {
   private actions = inject(NodeActionsService);
   private debug = inject(DebugService);
   private paneSplit = inject(PaneSplitService);
+  private host = inject(ElementRef<HTMLElement>);
 
   /** Cache de fuentes per-scope (back-compat: el modal de novela todavía lee saga/book/fonts). */
   private readonly fontsLoaded = signal<Set<string>>(new Set());
@@ -199,6 +200,20 @@ export class Tree implements OnDestroy {
       if (extrasDirs.size > 0) this.extrasDirsExpanded.set(new Set(extrasDirs));
       const exports = this.settings.treeExportsExpanded();
       if (exports.size > 0) this.exportsExpanded.set(new Set(exports));
+    });
+    // Scrollear a la fila activa. El expandido ya lo resuelve `ancestorPaths`,
+    // pero sin esto la fila puede quedar fuera del viewport — típico al crear
+    // una nota nueva en el panel de notas, que es bajito. `block: 'nearest'`
+    // no mueve nada si ya se ve. El setTimeout espera a que el @if/@for del
+    // template haya pintado la fila que recién se expandió.
+    effect(() => {
+      const cur = this.activePath();
+      this.root();
+      if (!cur) return;
+      setTimeout(() => {
+        const el = this.host.nativeElement.querySelector('.row.active');
+        el?.scrollIntoView({ block: 'nearest' });
+      }, 0);
     });
   }
 
