@@ -1211,7 +1211,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   16/16 libros resuelven, ningún null. Vale repetir la técnica: el fixture
   escrito a mano miente sobre las formas que produce `fs.rs`.
   **Verificado a mano por el autor el 2026-08-21.**
-- [ ] **Crear notas sin perder de vista la nota nueva**
+- [x] **Crear notas sin perder de vista la nota nueva**
   (`feat/notas-plantillas-y-creacion`): la queja era "la creás arriba y te
   aparece abajo" — el "Nueva nota…" vive en el menú del árbol de capítulos y el
   resultado cae en el panel Notas, que puede estar colapsado o con la fila
@@ -1230,7 +1230,11 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   el árbol principal perdiera de vista el capítulo abierto. Botón `+` en el
   header "Notas" que crea donde estás parado (carpeta de la nota abierta →
   carpeta navegada → `<root>/Notas`; un capítulo no cuenta como destino).
-  Pendiente: verificación manual del autor con la app levantada.
+  **Verificado a mano por el autor el 2026-08-21.** Sobre las plantillas dejó
+  dicho que no le aportan nada — las probó y le resultan lo mismo que crear la
+  nota vacía —, pero quedan porque el default del selector es `Vacía` y no
+  imponen nada. No invertir más en esa dirección (fichas con campos,
+  frontmatter, plantillas configurables) sin que él lo pida.
 - [x] **Doble árbol para notas** (`feat/notes-second-tree-no-focus-loss`):
   panel secundario colapsable + redimensionable abajo del principal, dedicado
   a notas. El `Tree` ahora toma un input `variant` (`main`/`notes`) y deriva un
