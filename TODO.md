@@ -1211,26 +1211,22 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   filesystem quede ordenado`). Verificado el 2026-08-21: los tres call sites de
   `createDirectory` pasan `true` (`app.ts:656`,
   `node-actions-service.ts:515` y `:540`), no queda ninguno en `false`.
-  Renombrar a mano dejó el árbol coherente hoy, pero **no queda sano solo** —
-  la próxima saga que se cree por la app vuelve a salir sin prefijo. Los dos
-  call sites de "Nueva saga / novela" pasan `numbered: false`:
-  - `src/app/app.ts:646` → `createDirectory(root, name, false)`
-  - `src/app/shared/node-actions-service.ts:530` → ídem
+  **De dónde venía**: los dos call sites de "Nueva saga / novela" pasaban
+  `numbered: false`, mientras libros y secciones pasaban `true` y
+  `create_book_impl` numeraba **siempre**. Ahí nació el desparejo: `Milky Way` y
+  `Vieja República` salieron por la app sin prefijo, `1 - Meridian 2.0` y
+  `2 - Buenos Aires 2077` los numeró el autor a mano. Renombrar a mano dejaba el
+  árbol coherente pero no sano: la saga siguiente volvía a salir sin número.
 
-  Mientras que libros y secciones pasan `true` (`node-actions-service.ts:507`,
-  `landing.ts:209`) y `create_book_impl` numera **siempre**. Ahí nació el
-  desparejo: `Milky Way` y `Vieja República` salieron por la app, `1 - Meridian
-  2.0` y `2 - Buenos Aires 2077` los numeró el autor a mano.
-
-  **Fix: `false` → `true` en esos dos lugares.** Toda la maquinaria ya está:
-  `next_dir_num` (`create.rs:398`) toma el máximo prefijo + 1 y las carpetas
-  sin número (`fonts`, `themes`, `Notas`) aportan 0, así que la próxima saga
-  sale `5 - Nombre`; y `displayName` (`tree.ts:663`) ya esconde el prefijo
-  **solo para `kind === 'saga'`**, o sea que la UI no cambia en nada.
-  Contrapartida asumida: reordenar una saga pasa a ser un rename, con el
-  costo de estado local huérfano del item de arriba — pero eso ya es cierto
-  hoy para libros y secciones, así que es consistente con el diseño existente
-  y no un problema nuevo.
+  **El fix fue `false` → `true` en esos dos lugares**, sin nada más: la
+  maquinaria ya estaba. `next_dir_num` (`create.rs:398`) toma el máximo prefijo
+  + 1 y las carpetas sin número (`fonts`, `themes`, `Notas`) aportan 0, así que
+  la próxima saga sale `5 - Nombre`; y `displayName` (`tree.ts:663`) ya esconde
+  el prefijo **solo para `kind === 'saga'`**, o sea que la UI no cambió en nada.
+  Contrapartida asumida: reordenar una saga pasa a ser un rename, con el costo
+  de estado local huérfano del item de arriba — pero eso ya era cierto para
+  libros y secciones, así que es consistente con el diseño existente y no un
+  problema nuevo.
 
 - [x] **Bug — cartel de split colgado** (`fix/lt-config-modal-y-split-hint`,
   verificado a mano por el autor el 2026-08-21: se apaga al soltar afuera, al
@@ -1241,12 +1237,26 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   vive**: en el elemento arrastrado. Si Angular re-renderiza el árbol durante
   el drag (refresh, pintar la nota activa, expandir una carpeta), ese elemento
   se destruye con su listener y el `dragend` nunca llega, así que
-  `paneSplit.draggingNode()` queda seteado y el hint no se apaga nunca. Fix:
-  `beginDrag()` registra el backstop en `window` (capture), que sobrevive la
-  churn del DOM y cubre también cancelar con Escape o soltar fuera de la
-  ventana. **Ojo con "arreglarlo" sumando `drop` a ese listener**: en captura
-  sobre `window` correría ANTES del `onCenterDrop` del shell, que lee
-  `draggingNode()` para saber qué abrir — rompería el split entero.
+  `paneSplit.draggingNode()` queda seteado y el hint no se apaga nunca.
+
+  **Un listener en `window` NO alcanza** — lo marcó CodeRabbit en la review y
+  tenía razón. `dragend` se despacha en el nodo origen: si sigue conectado, el
+  event path incluye a los ancestros y `window` lo ve; si el framework lo
+  **desconectó**, el path de un nodo suelto es el nodo y nada más, así que
+  `window` no se entera (y Firefox históricamente no despacha nada en ese
+  caso). O sea que el listener en `window` arregla "el listener murió con el
+  elemento" pero no "el elemento murió", que es justo el caso del bug. Fix real
+  en `core/drag-cleanup.ts` (puro, 21 aserciones en
+  `scripts/run-drag-cleanup-smoke.mjs`): dos caminos independientes, `dragend`
+  para el caso rápido y un **watchdog de `dragover`** para el resto. Mientras un
+  drag está vivo el navegador despacha `dragover` cada ~350 ms; si dejan de
+  llegar por 1200 ms, terminó — y eso no depende de que el nodo exista. Cubre
+  además Escape y soltar fuera de la ventana.
+
+  **Ojo con "mejorarlo" sumando `drop` a ese listener**: en captura sobre
+  `window` correría ANTES del `onCenterDrop` del shell, que lee
+  `draggingNode()` para saber qué abrir — rompería el split entero. Hay una
+  aserción del smoke runner clavando que `drop` no se escucha.
 - [x] **Panel de notas con tabs: "Este libro" / "Todas"**
   (`feat/notas-plantillas-y-creacion`): escribiendo (no editando) el laburo era
   encontrar la ficha del personaje. Las fichas están duplicadas por libro **a

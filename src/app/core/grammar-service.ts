@@ -99,7 +99,7 @@ export class GrammarService {
    * único que tiene el `ViewChild` del modal, así que el pedido viaja por acá
    * en vez de que cada superficie que chequea gramática conozca el shell.
    */
-  readonly configRequest = signal<number>(0);
+  readonly pedidoDeConfig = signal<number>(0);
   /** Ya se auto-abrió el modal por esta caída. Se rearma cuando LT responde. */
   private avisoAbierto = false;
   readonly mode = this.settings.grammarMode;
@@ -131,7 +131,7 @@ export class GrammarService {
 
   /** Pide abrir el modal de configuración de LanguageTool. */
   pedirConfig(): void {
-    this.configRequest.update((n) => n + 1);
+    this.pedidoDeConfig.update((n) => n + 1);
   }
 
   async ping(): Promise<boolean> {

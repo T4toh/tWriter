@@ -215,7 +215,7 @@ export class App {
     // runtime, botón de arranque, modo/URL). Antes fallaba silencioso con un
     // string en el footer.
     effect(() => {
-      if (this.grammar.configRequest() === 0) return;
+      if (this.grammar.pedidoDeConfig() === 0) return;
       this.openGrammarSettings();
     });
     // Mutex per-pane: cuando se abre un capítulo en un pane, la nota del MISMO pane se cierra.
