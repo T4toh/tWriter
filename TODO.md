@@ -6,7 +6,14 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 - Más variantes de divisor de escena (más allá del `* * *`).
 - Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
-- Buscar más alternativas para la gramática.
+- [x] Buscar más alternativas para la gramática. **Relevado el 2026-08-20**:
+  no hay motor alternativo para español (Harper es solo inglés, nlprule está
+  muerto desde 2021, portar el XML de LT a Rust es el pozo que mató a
+  nlprule). La conclusión no fue cambiar de motor sino **embeberlo**: LT como
+  sidecar recortado, 174 MB, arranque en 1,07 s, Docker afuera. Ver la sección
+  "Gramática, ortografía y tesauro" — items "LT embebido como sidecar",
+  "Qué da LT realmente sobre la prosa del autor" y "Alternativas de motor
+  evaluadas y descartadas".
 - **Marcador huérfano post jump-to-term**: el highlight naranja de
   `requestHighlight` (search → click resultado) o de la selección nativa
   del jump queda pegado sobre el carácter (típicamente un em-dash) aún
@@ -170,15 +177,40 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 > [`sbosio/rla-es`](https://github.com/sbosio/rla-es) clonado, no supuesto.
 > Punto de partida: el español de LT es flaco y queríamos saber cuánto y por qué.
 >
-> **El número que resume todo**, contado dentro del container:
+> ⚠️ **CORREGIDO el 2026-08-20 (segunda vuelta).** La tabla original de esta
+> cabecera decía "es: 296 reglas / en: 1.772" y **estaba mal por un error de
+> método**: se contó con `grep -c "<rule "`, que cuenta **líneas** y solo
+> matchea `<rule` seguido de atributos. Las reglas anidadas dentro de un
+> `<rulegroup>` se escriben `<rule>` pelado y heredan el `id` del grupo — el
+> grep no las ve, y son la mayoría. Conteo real por **ocurrencias**, contra
+> los jars `language-es`/`language-en` 6.6 de Maven Central:
 >
-> | | `grammar.xml` | reglas `<rule>` | pares en `confusion_sets.txt` |
-> |---|---|---|---|
-> | en | 142.323 líneas | **1.772** | **782** |
-> | es | 36.419 líneas | **296** | **5** |
+> | | `grammar.xml` | `style.xml` | **total reglas** | rulegroups |
+> |---|---|---|---|---|
+> | en | **5.551** | 547 | **6.098** | 1.041 |
+> | es | **1.636** | 31 | **1.667** | 282 |
 >
-> Seis veces menos reglas y 156 veces menos pares de confusión. El motor es el
-> mismo — lo que falta son las reglas escritas.
+> El español de LT **no son 296 reglas, son 1.667**. La brecha real es 3,7×,
+> no 6×. El motor es el mismo; lo que falta son reglas escritas, pero muchas
+> menos de las que creíamos.
+>
+> **Segunda corrección: hay DOS archivos de "confusión" y se confundieron.**
+> - `resource/es/confusion_sets.txt` — **5 pares**, lo consume la rule de
+>   n-gramas (`SpanishConfusionProbabilityRule`), necesita el modelo de 3,1 GB.
+>   El conteo viejo de 5 vs 782 era correcto **para este archivo**.
+> - `rules/es/confusion_pairs.txt` — **1.036 pares**, formato
+>   `forma;forma_con_tilde;POSTAG` (`acido;ácido;AQ0MS0`), lo consume
+>   `ConfusionCheckFilter` con el POS tagger y **NO necesita n-gramas**:
+>   funciona hoy tal cual. Se usa en 57 reglas de `grammar.xml`.
+>   **`en/` no tiene este archivo** — el inglés resuelve confundibles solo por
+>   n-gramas, que no corremos. O sea que en nuestro setup el español tiene
+>   **mejor** cobertura de tildes/confundibles que el inglés, al revés de lo
+>   que decía este relevamiento.
+>
+> **Pero ojo — lo importante viene abajo.** Las reglas existen y no disparan:
+> ver el item "Qué da LT realmente sobre la prosa del autor", que las midió
+> contra `/home/tatoh/novelas` y encontró que de las 1.667 reglas de español
+> dispararon **21**, y de las 6.098 de inglés dispararon **3**.
 
 - [x] **Detector de repeticiones cercanas** (es + en). El agujero más claro que
   encontramos, y no es del español: LT detecta **solo duplicados literales
@@ -422,6 +454,203 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
     ortografía offline de abajo sigue en pie, pero por **disponibilidad**
     (seguir marcando typos con LT caído), nunca por precisión.
 
+- **Qué da LT realmente sobre la prosa del autor** (medido el 2026-08-20,
+  segunda vuelta). Es **el** número que faltaba: el relevamiento contaba
+  reglas en el jar, no marcas sobre texto real. Muestra: 20 capítulos en
+  español (**29.794 palabras**) + 20 en inglés (**23.839 palabras**),
+  aleatorios con seed fija sobre `/home/tatoh/novelas`, contra LT 6.6 recortado
+  (ver item del sidecar).
+
+  | | ES default | ES picky | EN default | EN picky |
+  |---|---|---|---|---|
+  | matches totales | 962 | 977 | 578 | 601 |
+  | **ortografía** (`MORFOLOGIK_*`) | **927 (96%)** | 927 | **575 (99,5%)** | 575 |
+  | **todo lo demás** | **35** | 50 | **3** | 26 |
+  | reglas distintas que dispararon | 22 | 27 | **4** | 16 |
+
+  **De las 1.667 reglas de español dispararon 21. De las 6.098 de inglés, 3.**
+  Las 21 del español:
+  ```
+  AGREEMENT_DET_NOUN 7 · MI_TILDE 4 · UPPERCASE_SENTENCE_START 3
+  PRONOMBRE_SIN_VERBO 2 · COMMA_ADVERB 2 · ES_UNPAIRED_BRACKETS 2
+  AGREEMENT_ADJ_NOUN · AGREEMENT_POSTPONED_ADJ · AGREEMENT_DET_GN
+  AGREEMENT_DET_ADJ · AGREEMENT_DET_NOUN_EXCEPTIONS · LES_LAS
+  COMMA_PERO · ANO · SE · DE_TILDE · EL_TILDE · ES_INITIAL_QUESTION_MARK
+  SPANISH_WORD_REPEAT_RULE · ESPACIO_DESPUES_DE_PUNTO · ES_COMPOUNDS_KUNG_FU
+  ```
+  Y varias de esas son **falsos positivos sobre nombres propios inventados**:
+  `AGREEMENT_DET_NOUN` marcando `La Jedi`, `los Tecas`, `Caballeros Esmeralda`.
+
+  **Typos reales encontrados: 3 en 53.633 palabras** (`est`, `órtense` en
+  español; `startport` por `starport` en inglés). Todo el resto de las 1.502
+  marcas ortográficas son nombres propios inventados (`Yiri` 174, `Aedan` 72,
+  `Bastien` 63, `Chispi` 61…), términos de worldbuilding (`arcanismo`,
+  `holocron`, `biokinetic`, `holotool`, `starport`), lunfardo (`laburo`,
+  `telo`, `gil`, `garcha`, `banquito`, `bionafta`, `shoppings`, `ventiluz`) y
+  diálogo en francés dentro de Meridian (`Bonjour`, `Désolé`, `Oui`,
+  `Précisément`, `je/ne/sais/pas`, `être`).
+
+  **Y acá está el punto que reordena todo: eso NO es ruido, es la feature.**
+  El diccionario per-saga (`<saga>/diccionario.txt`) existe justamente porque
+  el diccionario del autor antes se quedaba en la PC donde escribía. Vive en
+  el repo `Novelas/` con `merge=union` en `.gitattributes`, así que ahora
+  viaja con las novelas. Medida su cobertura sobre la misma muestra
+  (comparación case-insensitive, que es como filtra
+  `saga-context-service.ts:25`):
+
+  | | tapado por el diccionario | ruido efectivo en la app |
+  |---|---|---|
+  | ES | 606 de 927 (**65%**) | 321 hits = **10,8 / 1.000 palabras** |
+  | EN | 537 de 575 (**93%**) | 38 hits = **1,6 / 1.000 palabras** |
+
+  La asimetría no es del idioma: `Milky Way` tiene diccionario (265 entradas)
+  y `1 - Meridian 2.0` también (161), pero **`2 - Buenos Aires 2077` y
+  `Vieja República` no tienen ninguno**, y dos de las tres sagas de la muestra
+  española son esas. Con diccionario, el mecanismo llega al 93%.
+
+  **Hueco real encontrado** (chico pero cierto): el speller multipalabra de LT
+  (`SpanishMultitokenSpeller` / `MultitokenSpellerFilter`, 17 reglas) devuelve
+  matches de **frase**, no de palabra — se vieron `Alara sintió` y
+  `Mes amies`. El filtro de `TYPOS` en `editor.ts` compara la palabra suelta
+  contra el diccionario, así que estos no se pueden silenciar agregando una
+  entrada. Son 2 hits en 30k palabras; anotado, no urgente.
+
+  **Pérdida histórica de diccionario encontrada auditando esto** (2026-08-20).
+  La saga `Buenos Aires 2077` tenía el campo legacy `diccionario` en
+  `saga.json` con 2 palabras (`motoquero`, `Serafima`) y **se perdieron el
+  2026-05-12** en el commit `16dc1c39` del repo `novelas`. El diff lo muestra
+  claro: en la misma escritura cambiaron `dropcap`, `mostrar_numero_parte` y
+  un override de tema — o sea un guardado de config por `set_saga_config` —
+  y el array `diccionario` desapareció en ese round-trip. Causa: esa versión
+  de `set_saga_config` serializaba la `SagaConfig` que venía del frontend sin
+  preservar el campo, y el frontend no lo mandaba.
+  **Ya está arreglado y no puede volver a pasar**: la migración a
+  `diccionario.txt` entró el 2026-06-25 (`6aa9686` + `2cebf48`), seis semanas
+  después de la pérdida, y hoy tanto `set_saga_config` como
+  `get_saga_dictionary` absorben el campo legacy al `.txt` antes de escribir
+  (`saga_config.rs:117-130` y `:205-220`). Verificado que las dos sagas que sí
+  llegaron a migrar no perdieron nada: Meridian 142→161 palabras, Milky Way
+  198→265, **0 perdidas en ambas**. `Vieja República` nunca tuvo diccionario
+  (el autor escribió poco ahí).
+  **Pendiente trivial**: restaurar esas 2 palabras al
+  `2 - Buenos Aires 2077/diccionario.txt`, que hoy no existe.
+
+  **Idea que sale de esto**: el diálogo en otro idioma (francés en Meridian)
+  es una categoría distinta de un nombre propio — meter 15 palabras francesas
+  al diccionario de la saga tapa el síntoma pero pierde el chequeo real de
+  esas frases. Si algún día molesta, lo correcto es marcar el span como
+  "otro idioma" y saltearlo, no engordar el diccionario.
+
+- **LT embebido como sidecar — MEDIDO Y VIABLE** (2026-08-20). El relevamiento
+  original listaba como alternativas offline `zspell` / Harper / LLM y **nunca
+  consideró bundlear LT mismo**, que es la opción que cumple mejor el criterio
+  del autor ("embebido o de fondo, no 'instalate un runtime'") porque el
+  runtime viaja adentro. Probado de punta a punta en Linux x64 con LT 6.6
+  standalone + `jlink`:
+
+  | | |
+  |---|---|
+  | LT 6.6 completo (desempaquetado) | 391 MB |
+  | **LT recortado a es+en** | **117 MB** |
+  | **JRE `jlink` (19 módulos)** | **57 MB** |
+  | **Total del sidecar** | **174 MB** |
+  | Arranque en frío → server listo | **1,07 s** |
+  | Primer check es-AR (carga reglas) | 1,2 s |
+  | Checks siguientes | **27 ms** |
+  | RSS | 661 MB con heap default (acotable con `-Xmx`) |
+
+  Verificado que chequea de verdad en `es-AR` y `en-US` con el JRE mínimo, no
+  solo que arranca. Los 19 módulos: `java.base,java.desktop,java.logging,
+  java.management,java.naming,java.net.http,java.prefs,java.rmi,java.scripting,
+  java.security.jgss,java.sql,java.transaction.xa,java.xml,java.xml.crypto,
+  jdk.crypto.ec,jdk.unsupported,jdk.httpserver,java.instrument,jdk.zipfs`.
+
+  **Tres trampas del recorte, para quien lo implemente:**
+  1. **No se pueden borrar los `.class` de los otros idiomas.**
+     `Languages.getAllLanguages()` los instancia **todos** al arrancar y
+     explota con `NoClassDefFoundError: ArabicHunspellSpellerRule`. Borrar
+     solo los **datos**: el reparto es 2,6 MB de clases contra 219 MB de
+     datos, así que no se pierde nada. Trimear
+     `META-INF/org/languagetool/language-module.properties` **no alcanza**.
+  2. **Hay que restaurar `common_words.txt` de los 27 idiomas** (2,6 MB): el
+     `LanguageIdentifier` los lee eager al construirse.
+  3. **`grpc-netty-shaded`, `mybatis` y `lettuce` no se pueden borrar** aunque
+     no se use nada premium — el arranque los toca
+     (`NoClassDefFoundError: org/apache/ibatis/...`). Quedan ~21 MB de
+     recorte posible ahí si alguien se pone; no vale la pena.
+
+  Con eso `tauri.conf.json` lo trata igual que pandoc (`externalBin` por
+  target). **Consecuencia querida (decisión del autor): si LT va adentro,
+  Docker sale** — se borran las ~700 líneas de detección multi-runtime
+  (Docker/Podman/Apple), pull, start y remedies de `grammar.rs`. No tiene
+  sentido mantener dos caminos al mismo motor. **Se conserva un input de
+  "URL de servidor LT"** en el modal, que si está seteado gana sobre el
+  sidecar: cubre LT Premium y a quien ya tenga una imagen con n-gramas de
+  inglés, sin una línea de lógica de containers.
+  Pendiente si se encara: el sidecar es **por target** (`linux-x64`,
+  `darwin-arm64`, `darwin-x64`, `win-x64`), así que 174 MB × N — conviene
+  generarlo en CI y no commitearlo.
+
+- **Alternativas de motor evaluadas y descartadas** (2026-08-20, para no
+  volver a discutirlo):
+  - **Harper** (`harper-core`, Automattic) — v2.4.0 jun-2026, activo, 10k
+    stars, ~200 linters en Rust. **Sigue siendo solo inglés**, y el README
+    dice explícitamente que primero hacen "truly amazing" el inglés antes de
+    diversificar. Pero el clavo no es el idioma: son ~200 linters contra las
+    6.098 reglas de LT en inglés, y **sobre la prosa real del autor LT tiró 3
+    matches no ortográficos en 24k palabras** — no hay nada que Harper venga a
+    reemplazar. Su único argumento era "así no shipeamos Java", y el español
+    obliga a la JVM igual, así que sumarlo deja **dos motores para ahorrar
+    cero**. Descartado.
+  - **nlprule** — port en Rust de las reglas XML de LT, con soporte es/en/de.
+    Suena ideal y es trampa: **última release 0.6.4 de abril 2021**, binarios
+    derivados de **LT 5.2**, abandonado hace cinco años, y **sin corrector
+    ortográfico** (solo reglas, no trae el FSA Morfologik). Cambiar un motor
+    vivo por uno muerto y encima perder los typos. Descartado.
+  - **Portar/forkear LT a Rust nosotros** — medido qué tan portable es
+    `es/grammar.xml`: `postag_regexp` 3.085 usos, `regexp="yes"` 5.980,
+    `<antipattern>` 2.086, `<exception>` 1.145, `<match>` 782 (síntesis de la
+    corrección), `inflected=` 768, `skip=` 500, `<unify>` 109 (concordancia,
+    lo más difícil), y **175 reglas con `<filter class=...>` que es Java y no
+    es portable como dato**. Más `disambiguation.xml` (336 KB) para resolver
+    que `bajo` es prep/adj/verbo/sustantivo. Ese es exactamente el pozo que
+    nlprule cavó: ~15k líneas de Rust más un pipeline de build en Python, un
+    año de una persona, y murió. Forkear el Java es peor: seguís shipeando la
+    JVM y encima mantenés un fork de 6.098 reglas ajenas. Descartado.
+  - **Lo que SÍ vale cherry-pickear son los datos, no el motor.**
+    `rules/es/confusion_pairs.txt` son 1.036 líneas de texto plano y leerlas
+    desde Rust con un lookup de POS es un fin de semana. Ídem `replace.txt`,
+    `compounds.txt`, `hyphenated_words.txt`. Es el patrón que ya usa el
+    tesauro: **intérprete MIT + datos LGPL shipeados sin modificar y con su
+    licencia al lado** (LT es LGPL 2.1, igual que `th_es_v2.dat`).
+
+- **Recomendación que sale de las dos mediciones** (2026-08-20). La pregunta
+  real no es "qué motor es mejor" sino **si 174 MB + un proceso JVM + 661 MB
+  de RAM valen ~11 marcas de concordancia cada 30.000 palabras** — porque eso
+  es lo único que LT aporta y no se puede rehacer barato. Lo demás que
+  dispara son tildes diacríticas (`MI_TILDE`, `EL_TILDE`, `DE_TILDE`, `SE`),
+  puntuación, comillas sin cerrar y mayúscula tras punto: **todo escribible
+  en TS sin POS tagger**, al lado de `validator.ts` y `detector.ts`.
+  Camino propuesto, en ese orden y reversible:
+  1. **Shipear el sidecar** — ya está medido y probado, arranca en 1 s, y
+     habilita borrar las ~700 líneas de Docker **hoy**. 174 MB una vez.
+  2. **Escribir las reglas de tildes diacríticas y puntuación en TS** — son
+     las que disparan de verdad y no necesitan morfología.
+  3. **Apagar `EN_REPEATEDWORDS_*` y `PROFANITY*` con `disabledRules`** si se
+     prende `picky`: en la muestra inglesa `picky` sumó 10 hits de
+     `EN_REPEATEDWORDS_*` (que **pisan el detector de repeticiones propio**) y
+     7 de `PROFANITY*` (diálogo de ficción). Confirma con datos el item de
+     `disabledRules` de más abajo.
+  4. **Revisar en 6 meses**: si la lista de reglas que disparan sigue siendo
+     esas 21, tirar LT, quedarse con hunspell (`zspell`) + las reglas propias,
+     y bajar 174 MB. La decisión queda abierta y mantenerla abierta no cuesta.
+
+  Scripts y datos de las dos mediciones: `medir.py` / `medir2.py`,
+  `res-*.json`, `tok-*.json` en el scratchpad de la sesión (no se commitean).
+  **Ojo con reproducirlas**: extraer el texto plano del HTML tiene que tratar
+  `<br>` como salto de línea — sin eso aparecen 29 `ESPACIO_DESPUES_DE_PUNTO`
+  falsos por párrafos pegados, que en el repo real son **1**.
+
 - **Wizard de revisión de errores** (paralelo al chequeo inline, a pedido del
   autor): botón al lado de `Auto` / `LT` en la barra de arriba que abre un
   popup y camina los matches del capítulo **uno por uno** — mostrar contexto,
@@ -441,6 +670,17 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   runtime"). El criterio: si hay que explicarle al usuario cómo levantar un
   daemon, ya perdimos — vale para él mismo, que tiene todo para correr un
   Ollama y aun así lo considera demasiado. Ordenado por cuán realista es:
+
+  > **Actualizado el 2026-08-20 (segunda vuelta).** Esta lista se escribió sin
+  > considerar la opción que gana: **bundlear LT mismo como sidecar** (ver el
+  > item "LT embebido como sidecar — MEDIDO Y VIABLE"). 174 MB, arranca en
+  > 1,07 s, cero setup del usuario, y es el mismo motor que ya usamos. Harper
+  > queda **descartado** con datos, no por el idioma (ver "Alternativas de
+  > motor evaluadas y descartadas"). `zspell`/`hunspell` sigue en pie pero
+  > cambió de rol: ya no es "la red por si LT se cae" — con LT embebido no se
+  > cae — sino la pieza que quedaría **si en 6 meses se decide tirar LT** y
+  > bajar los 174 MB, apoyada en las reglas propias en TS.
+
   - **`zspell` (Rust puro) o `hunspell-rs` + diccionarios de LibreOffice**
     (`es_AR` de la RLA, `en_US`/`en_GB`). Ortografía **solamente**, cero
     gramática, pero se linkea en `src-tauri` y funciona offline y sin
@@ -456,6 +696,12 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
     English". El español no existe ni de cerca. Sumarlo hoy significa dos
     motores distintos según el idioma del capítulo — decidir si esa
     complejidad vale por la mitad inglesa, o esperar.
+    **DESCARTADO el 2026-08-20**, y no por el idioma: son ~200 linters contra
+    6.098 reglas de LT en inglés, y sobre la prosa real del autor LT dio 3
+    matches no ortográficos en 24k palabras — no hay nada que reemplazar. El
+    argumento arquitectónico ("así no shipeamos Java") se cae porque el
+    español obliga a la JVM igual. Detalle en "Alternativas de motor
+    evaluadas y descartadas".
   - **Semántica / estilo por LLM** — es lo único que de verdad supera a LT
     en prosa literaria española (ve registro, repetición, ritmo, cosas que
     ningún motor de reglas alcanza). **Descartado por ahora, decisión
@@ -557,6 +803,66 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   completa nombres propios inventados, que es el caso real.
 
 ## Tree / Importer
+
+- **Renombrar una carpeta fuera de la app deja estado local huérfano.**
+  Encontrado el 2026-08-20 numerando las sagas a mano (`Milky Way` →
+  `3 - Milky Way`, `Vieja República` → `4 - Vieja República`). El rename por
+  git es limpio para el contenido — 1.256 renames, 0 cambios de contenido —
+  pero **dos archivos locales quedan apuntando a los paths viejos**, y ninguno
+  viaja por git porque `.twriter/` está gitignoreado:
+  - `.twriter/stats.json` está **keyeado por path relativo**
+    (`Milky Way/1 - Deployment/4 - Work/3.html`). En el rename quedaron 294 de
+    533 claves huérfanas → se pierden palabras y última-edición de esos
+    capítulos. Hay que reescribir el prefijo de las claves.
+  - `.twriter/search-index` indexa por path → hay que borrarlo para que
+    reindexe.
+  - `settings.json` (`app_config_dir`) guarda **paths absolutos** en
+    `treeExpanded` (115 entradas) y `lastSession.chapterPath`. Si el capítulo
+    abierto estaba en la saga renombrada, la sesión no se restaura.
+
+  **Esto va contra el principio del CLAUDE.md** ("el remedio se da adentro de
+  la app"): la app puede detectar el problema y no lo hace. Al abrir el root
+  ya camina el árbol, así que tiene todo para notar que una clave de
+  `stats.json` no corresponde a ningún archivo en disco. Arreglo propuesto,
+  de menor a mayor:
+  1. **Barato y suficiente**: al cargar `stats.json`, descartar las claves
+     cuyo archivo no existe. Se pierde el histórico de esos capítulos pero
+     el archivo no crece con basura para siempre. Una línea de filtro.
+  2. **Lo correcto**: detectar el rename. Git ya sabe que fue un rename
+     (`R100`); `git.rs` puede pedirle a libgit2 los renames entre HEAD y el
+     commit anterior y remapear las claves de `stats.json` en consecuencia.
+     Cubre también el caso de que el rename lo haya hecho la otra PC y llegue
+     por pull — que es el caso que más duele, porque ahí el autor no hizo nada
+     y las estadísticas se evaporan igual.
+  3. Purgar de `treeExpanded` los paths que ya no existen (hoy hay 16
+     huérfanos acumulados de reorganizaciones viejas, inocuos pero sucios).
+
+  **Nota para quien lo toque en Mac**: el fix del typo `Notas/Buenos AIres
+  2077` → `Notas/Buenos Aires 2077` es un rename **solo de caja**, y APFS es
+  case-insensitive por default. Git puede no aplicarlo en el checkout; hay
+  que verificar y hacer el `git mv` a mano si quedó con el nombre viejo.
+
+- **CAUSA RAÍZ del filesystem desparejo: "Nueva saga" crea sin número.**
+  Renombrar a mano dejó el árbol coherente hoy, pero **no queda sano solo** —
+  la próxima saga que se cree por la app vuelve a salir sin prefijo. Los dos
+  call sites de "Nueva saga / novela" pasan `numbered: false`:
+  - `src/app/app.ts:646` → `createDirectory(root, name, false)`
+  - `src/app/shared/node-actions-service.ts:530` → ídem
+
+  Mientras que libros y secciones pasan `true` (`node-actions-service.ts:507`,
+  `landing.ts:209`) y `create_book_impl` numera **siempre**. Ahí nació el
+  desparejo: `Milky Way` y `Vieja República` salieron por la app, `1 - Meridian
+  2.0` y `2 - Buenos Aires 2077` los numeró el autor a mano.
+
+  **Fix: `false` → `true` en esos dos lugares.** Toda la maquinaria ya está:
+  `next_dir_num` (`create.rs:398`) toma el máximo prefijo + 1 y las carpetas
+  sin número (`fonts`, `themes`, `Notas`) aportan 0, así que la próxima saga
+  sale `5 - Nombre`; y `displayName` (`tree.ts:663`) ya esconde el prefijo
+  **solo para `kind === 'saga'`**, o sea que la UI no cambia en nada.
+  Contrapartida asumida: reordenar una saga pasa a ser un rename, con el
+  costo de estado local huérfano del item de arriba — pero eso ya es cierto
+  hoy para libros y secciones, así que es consistente con el diseño existente
+  y no un problema nuevo.
 
 - **Bug — cartel de split colgado**: el overlay "Soltar acá para abrir en
   split" queda pintado después de soltar el drop. Ver captura. El handler

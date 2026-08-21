@@ -643,7 +643,9 @@ export class App {
       validate: (v) => (v.trim() ? null : 'Ingresá un nombre'),
     });
     if (!name?.trim()) return;
-    await this.chapter.createDirectory(root, name.trim(), false);
+    // Numerada: el prefijo "N - " es lo que ordena el filesystem, que se
+    // maneja también a mano por git. `displayName` lo esconde en el árbol.
+    await this.chapter.createDirectory(root, name.trim(), true);
   }
 }
 
