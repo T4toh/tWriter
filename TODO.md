@@ -1177,8 +1177,8 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   El panel de notas ahora tiene dos tabs adentro (el árbol principal no se
   toca). `Este libro` es una lista plana, sin expandir nada, con las notas de
   `Notas/<saga>/<libro>/` más el `notas/` que el libro tenga en el árbol de
-  novelas, y abajo separadas las notas de saga (`Personajes`,
-  `Lugares › Cantaria`). `Todas` es el árbol de siempre. El vínculo saga ↔
+  novelas, y abajo separadas las `.md` sueltas de la saga (`Personajes`,
+  `Idiomas`, `Detalles`). `Todas` es el árbol de siempre. El vínculo saga ↔
   carpeta de notas se **adivina** (`calzaSaga`): se le saca el prefijo numérico
   al nombre de la saga y se busca en el root o un nivel abajo una carpeta que
   calce exacto o por prefijo — así `1 - Meridian 2.0` encuentra `Notas/Meridian`
