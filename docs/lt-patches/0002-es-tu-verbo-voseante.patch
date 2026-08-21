@@ -1,0 +1,52 @@
+From 7afb055944732fcf8dcc865c0b672152673c4a69 Mon Sep 17 00:00:00 2001
+From: Tatoh <tatukis@gmail.com>
+Date: Fri, 21 Aug 2026 10:09:01 -0300
+Subject: [PATCH] =?UTF-8?q?[es]=20AGREEMENT=5FPRONOUNSUBJECT=5FVERB:=20fla?=
+ =?UTF-8?q?g=20=C2=ABt=C3=BA=C2=BB=20with=20a=20voseo=20verb=20form?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The rule for «tú» matches verb forms tagged V.[^M].[13].. or V.[^M].2P., so
+person-2 voseo forms (number V, e.g. tenés = VMIP2V0) fall through the
+alternation and «Tú tenés que venir.» gets no match, while the mirror case
+(«Vos tienes razón.») is already flagged by the rules for «vos» in the same
+group.
+
+Mixing «tú» with a voseo verb form is an error in every variant, so this only
+adds 2[PV] to the existing alternation. Ambiguous forms that are identical in
+tuteo (estás, vas) are already tagged V...2S. and stay excluded by the
+existing exception, and imperatives keep being excluded by the existing
+antipattern («Tú marchá.»).
+
+SpanishPatternRuleTest passes (1670 rules). Checked against a local server:
+Tú tenés → tienes, Tú sos → eres, Tú querés → quieres, Tú sabés → sabes; no
+match for Tú tienes / Tú estás / Tú vas / Tú marchá / Tú siéntate / Vos tenés.
+No new matches over a 783k-word es-AR fiction corpus (no false positives).
+---
+ .../src/main/resources/org/languagetool/rules/es/grammar.xml  | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
+index 72dba10..15f7796 100644
+--- a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
++++ b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
+@@ -24942,12 +24942,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+                     <token>tú<exception postag="SP.*|CC|LOC_PREP" postag_regexp="yes" scope="previous"/></token>
+                     <token postag="RG|LOC_ADV" postag_regexp="yes" min="0" max="3"><exception postag="C.*" postag_regexp="yes"/></token>
+                     <marker>
+-                        <token postag="V.[^M].[13]..|V.[^M].2P." postag_regexp="yes"><exception postag="V...2S.|AQ.*|RG|LOC_ADV" postag_regexp="yes"/></token>
++                        <token postag="V.[^M].[13]..|V.[^M].2[PV]." postag_regexp="yes"><exception postag="V...2S.|AQ.*|RG|LOC_ADV" postag_regexp="yes"/></token>
+                     </marker>
+                 </pattern>
+                 <message>Posible falta de concordancia entre «\1» y «\3».</message>
+                 <suggestion><match no="3" postag="(V.[^M].).*" postag_regexp="yes" postag_replace="$12S."/></suggestion>
+                 <example correction="vengas|vienes">Tú <marker>vengo</marker></example>
++                <example correction="tienes">Tú <marker>tenés</marker> que venir.</example>
++                <example correction="eres">Tú <marker>sos</marker> el que se queja.</example>
+                 <!-- TODO: it should suggest: estéis 
+                 <example correction="estés">Que tu familia y tú <marker>estén</marker>.</example>-->
+                 <example>Tú vienes</example>
+-- 
+2.50.1 (Apple Git-155)
+

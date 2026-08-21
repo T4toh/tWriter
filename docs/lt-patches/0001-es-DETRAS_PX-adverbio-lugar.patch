@@ -1,0 +1,77 @@
+From 30f84acaf269c6a1ba54d803a473c16b52bf8ded Mon Sep 17 00:00:00 2001
+From: Tatoh <tatukis@gmail.com>
+Date: Fri, 21 Aug 2026 09:56:03 -0300
+Subject: [PATCH] =?UTF-8?q?[es]=20DETRAS=5FPX:=20add=20atr=C3=A1s,=20adela?=
+ =?UTF-8?q?nte,=20arriba,=20abajo=20to=20adverbio=5Flugar?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The DETRAS_PX rule group flags the colloquial "adverb of place + possessive"
+construction (detrás mío) and suggests the standard form (detrás de mí), but
+the adverbio_lugar entity only listed detrás, delante, debajo, encima and
+cerca. The four missing adverbs are very frequent in River Plate Spanish
+(atrás mío, adelante tuyo, arriba nuestro, abajo suyo).
+
+The entity is only used by this rule group, so no other rule is affected.
+Added one example per new adverb. SpanishPatternRuleTest passes (1670 rules).
+
+Measured on a 783k-word corpus of Spanish (es-AR) fiction: 2 matches before,
+11 after, no false positives.
+---
+ .../main/resources/org/languagetool/resource/es/entities.ent  | 2 +-
+ .../src/main/resources/org/languagetool/rules/es/grammar.xml  | 4 ++++
+ 2 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/languagetool-language-modules/es/src/main/resources/org/languagetool/resource/es/entities.ent b/languagetool-language-modules/es/src/main/resources/org/languagetool/resource/es/entities.ent
+index a2400d0..a538517 100644
+--- a/languagetool-language-modules/es/src/main/resources/org/languagetool/resource/es/entities.ent
++++ b/languagetool-language-modules/es/src/main/resources/org/languagetool/resource/es/entities.ent
+@@ -17,7 +17,7 @@
+ <!ENTITY sometlds "com|de|net|edu|uk|org|info|nl|eu|cn|biz|at|ch|fr|tv|to|fm|es|it|gov|mil|mx|pt|dev|us|sg|me|io|app|shop|club|games|in|co|cloud|no|se|dk|ie|cc|tk|ai|au|nz|za|cm|ng|tw|jp|kg|ag|site|int|my|ir|pk|mobi|asia|hk|mz|xyz|design|ventures|services|cat|ly|name|world|online|consulting|digital|be|is|sex|web|lab|local|bio|live|ngo">
+ <!ENTITY exceptions_unidadestiempo_adj "siguiente|próximo|futuro|venidero|anterior|pasado|precedente|subsiguiente|previo|último|primero">
+ <!ENTITY apostrophe "['’´`]">
+-<!ENTITY adverbio_lugar "detr&#225;s|delante|debajo|encima|cerca">
++<!ENTITY adverbio_lugar "detr&#225;s|atr&#225;s|delante|adelante|debajo|abajo|encima|arriba|cerca">
+ <!ENTITY pronombre_personal_atono_POS "PP3..A.*|PP[123]C[SP][0D]00|P0[123].*">
+ <!ENTITY pronombre_personal_atono "me|te|se|nos|os|le|les|lo|los|la|las">
+ <!ENTITY pronombre_personal_no_articulo "me|te|se|nos|os|le|les|lo"> <!--|los-->
+diff --git a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
+index 72dba10..c4c35f2 100644
+--- a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
++++ b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
+@@ -19561,6 +19561,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+                 <message>Es preferible usar otra expresión.</message>
+                 <suggestion>\1 de <match no="2" postag="PX(\d).S0S0" postag_regexp="yes" postag_replace="PP$1CSO00">mí</match></suggestion>
+                 <example correction="detrás de mí">Venían <marker>detrás mío</marker>.</example>
++                <example correction="atrás de mí">Venían <marker>atrás mío</marker>.</example>
+                 <example>Tengo a los niños encima de mí.</example>
+             </rule>
+             <rule>
+@@ -19571,6 +19572,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+                 <message>Es preferible usar otra expresión.</message>
+                 <suggestion>\1 de <match no="2" postag="PX(\d).S0S0" postag_regexp="yes" postag_replace="PP$1CSO00">ti</match></suggestion>
+                 <example correction="detrás de ti">Venían <marker>detrás tuyo</marker>.</example>
++                <example correction="adelante de ti">Iba <marker>adelante tuyo</marker>.</example>
+                 <example>Tienes a los niños encima de ti.</example>
+             </rule>
+             <rule>
+@@ -19582,6 +19584,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+                 <suggestion>\1 de nosotros</suggestion>
+                 <suggestion>\1 de nosotras</suggestion>
+                 <example correction="detrás de nosotros|detrás de nosotras">Venían <marker>detrás nuestro</marker>.</example>
++                <example correction="arriba de nosotros|arriba de nosotras">Vivían <marker>arriba nuestro</marker>.</example>
+                 <example>Tenemos a los niños encima de nosotros.</example>
+             </rule>
+             <rule>
+@@ -19609,6 +19612,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+                 <suggestion>\1 de usted</suggestion>
+                 <suggestion>\1 de ustedes</suggestion>
+                 <example correction="detrás de él|detrás de ella|detrás de ello|detrás de ellos|detrás de ellas|detrás de usted|detrás de ustedes">Venían <marker>detrás suya</marker>.</example>
++                <example correction="abajo de él|abajo de ella|abajo de ello|abajo de ellos|abajo de ellas|abajo de usted|abajo de ustedes">Vivían <marker>abajo suyo</marker>.</example>
+                 <example>Tienen a los niños encima de ellos.</example>
+             </rule>
+         </rulegroup>
+-- 
+2.50.1 (Apple Git-155)
+
