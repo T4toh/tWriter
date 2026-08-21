@@ -1169,6 +1169,68 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   split" queda pintado después de soltar el drop. Ver captura. El handler
   de `drop` / `dragend` no está limpiando el estado del hint. Asegurar que
   se resetee también en `dragleave` fuera de la ventana y al soltar.
+- [x] **Panel de notas con tabs: "Este libro" / "Todas"**
+  (`feat/notas-plantillas-y-creacion`): escribiendo (no editando) el laburo era
+  encontrar la ficha del personaje. Las fichas están duplicadas por libro **a
+  propósito** — son acumulativas y muestran al personaje por época, hay cuatro
+  `Aedan.md` — así que el trabajo no era navegar sino acertar cuál de las cuatro.
+  El panel de notas ahora tiene dos tabs adentro (el árbol principal no se
+  toca). `Este libro` es una lista plana, sin expandir nada, con las notas de
+  `Notas/<saga>/<libro>/` más el `notas/` que el libro tenga en el árbol de
+  novelas, y abajo separadas las notas de saga (`Personajes`,
+  `Lugares › Cantaria`). `Todas` es el árbol de siempre. El vínculo saga ↔
+  carpeta de notas se **adivina** (`calzaSaga`): se le saca el prefijo numérico
+  al nombre de la saga y se busca en el root o un nivel abajo una carpeta que
+  calce exacto o por prefijo — así `1 - Meridian 2.0` encuentra `Notas/Meridian`
+  y las otras tres sagas calzan exacto. Cero configuración; si algún día no
+  adivina, ahí se suma el campo en `saga.json`. Todo en `tree/notas-del-libro.ts`
+  (puro, 28 aserciones en `scripts/run-notas-del-libro-smoke.mjs`). Ojo con el
+  contexto: abrir una nota en el centro **cierra el capítulo**, así que el libro
+  no puede leerse de `chapter.active()` solo — `ChapterService.openInPane`
+  registra `nav.ultimoCapitulo` y de ahí sale el contexto cuando no hay capítulo
+  abierto. El `+` del panel, con la tab `Este libro` activa, crea en la carpeta
+  del libro (aunque no exista todavía: `create_note` hace `create_dir_all`), que
+  es donde va una ficha nueva. Al crear, si la nota no entra en la lista del
+  libro se salta a `Todas` sola, para no volver al problema de la nota
+  invisible.
+
+  Dos bugs que aparecieron recién contra los datos reales, no contra el fixture:
+  (1) el **nodo raíz del árbol viene con `kind: 'saga'`** (se llama como la
+  carpeta root), así que buscar la saga con `find` agarraba la raíz y
+  `notasDelLibro` devolvía `null` para **todos** los capítulos — la tab mostraba
+  el cartel de "abrí un capítulo" con un capítulo abierto. Ahora se toma la saga
+  más profunda de la cadena y se descarta la raíz; el fixture del smoke runner
+  arma la raíz como `saga` para que no vuelva a taparse. (2) aplanar las
+  carpetas temáticas de la saga daba **95 filas** en Meridian (`Lugares ›
+  Viridis › Brickwell`…), peor que el árbol que la lista venía a evitar: la
+  sección de saga quedó en sus `.md` sueltas (`Personajes`, `Idiomas`,
+  `Detalles`…) y las carpetas temáticas viven solo en `Todas`.
+
+  Para depurar esto sirvió volcar el árbol real con el builder de Rust
+  (`get_tree`) a JSON y correr la función pura contra ese volcado desde node —
+  16/16 libros resuelven, ningún null. Vale repetir la técnica: el fixture
+  escrito a mano miente sobre las formas que produce `fs.rs`.
+  **Verificado a mano por el autor el 2026-08-21.**
+- [ ] **Crear notas sin perder de vista la nota nueva**
+  (`feat/notas-plantillas-y-creacion`): la queja era "la creás arriba y te
+  aparece abajo" — el "Nueva nota…" vive en el menú del árbol de capítulos y el
+  resultado cae en el panel Notas, que puede estar colapsado o con la fila
+  fuera del viewport. Cuatro piezas: (1) `createNoteIn` pasó de `modal.prompt`
+  a `modal.selectPrompt` (el mismo modal que ya usaba "Crear tema desde
+  plantilla") con selector de **plantilla** y el destino relativo al root
+  impreso en el mensaje; (2) plantillas en `shared/note-templates.ts` — `Vacía`,
+  `Personaje` (`## Raza`/`## Características`/`## Objetos`/`## Magia`) y `Mundo`
+  (`## General`/`## Lugares`/`## Personajes`), copiadas de las notas que el
+  autor ya escribe a mano en `Novelas/Notas/Meridian/<libro>/`, con smoke runner
+  propio; las listas sueltas siguen sin plantilla porque son texto libre;
+  (3) `create_note` toma un `body: Option<String>` — si viene la plantilla se
+  escribe eso en vez del `# <name>`, una sola escritura y un solo commit;
+  (4) el panel Notas se descolapsa al crear y `tree.ts` scrollea a `.row.active`
+  (`block: 'nearest'`) cuando cambia el path activo, lo que además arregla que
+  el árbol principal perdiera de vista el capítulo abierto. Botón `+` en el
+  header "Notas" que crea donde estás parado (carpeta de la nota abierta →
+  carpeta navegada → `<root>/Notas`; un capítulo no cuenta como destino).
+  Pendiente: verificación manual del autor con la app levantada.
 - [x] **Doble árbol para notas** (`feat/notes-second-tree-no-focus-loss`):
   panel secundario colapsable + redimensionable abajo del principal, dedicado
   a notas. El `Tree` ahora toma un input `variant` (`main`/`notes`) y deriva un

@@ -14,7 +14,7 @@ import { FontsService } from '../core/fonts-service';
 import { NavigationService } from '../core/navigation-service';
 import { PaneSplitService } from '../core/pane-split-service';
 import { ProjectService } from '../core/project-service';
-import { SettingsService } from '../core/settings-service';
+import { NotasTab, SettingsService } from '../core/settings-service';
 import { ThemesService } from '../core/themes-service';
 import { ToastService } from '../core/toast-service';
 import { FontEntry, ThemeMeta, TreeNode } from '../core/types';
@@ -22,6 +22,7 @@ import { ModalService } from '../shared/modal-service';
 import { ContextMenuService } from '../shared/context-menu-service';
 import { NodeActionsService } from '../shared/node-actions-service';
 import { formatAbsoluteTime, formatRelativeTime } from '../core/relative-time';
+import { NotasDelLibro, notasDelLibro } from './notas-del-libro';
 import {
   LucideBookMarked,
   LucideChevronDown,
@@ -111,6 +112,27 @@ export class Tree implements OnDestroy {
     if (!t) return null;
     return this.variant() === 'notes' ? pruneToNotes(t) : pruneToChapters(t);
   });
+  /** Tab activa del panel de notas (solo aplica a la variante 'notes'). */
+  protected readonly notasTab = this.settings.notasTab;
+  /** Notas del libro que se está escribiendo. null si no se puede resolver la
+   *  saga (o la saga no tiene carpeta de notas). Se calcula sobre el árbol
+   *  completo, no el podado: necesita ver capítulos y libros para ubicarse. */
+  protected readonly notasLibro = computed<NotasDelLibro | null>(() =>
+    notasDelLibro(this.project.tree(), this.contextoLibro()),
+  );
+  /** Path que fija el libro del panel de notas: el capítulo abierto, o el
+   *  último que estuvo abierto (abrir una nota en el centro cierra el
+   *  capítulo), o lo que se esté navegando. */
+  private readonly contextoLibro = computed(
+    () =>
+      this.chapter.active()?.path ??
+      this.nav.ultimoCapitulo() ??
+      this.browsingPath(),
+  );
+  /** ¿Hay que pintar la lista plana en vez del árbol? */
+  protected readonly notasLibroActiva = computed(
+    () => this.variant() === 'notes' && this.notasTab() === 'libro',
+  );
   protected readonly loading = this.project.loading;
   protected readonly error = this.project.error;
   protected readonly activePath = computed(
@@ -738,6 +760,10 @@ export class Tree implements OnDestroy {
     this.exportsExpanded.set(new Set());
     this.settings.setTreeExtrasExpanded(new Set());
     this.settings.setTreeExportsExpanded(new Set());
+  }
+
+  protected setNotasTab(tab: NotasTab): void {
+    this.settings.setNotasTab(tab);
   }
 
   protected expandAll(): void {

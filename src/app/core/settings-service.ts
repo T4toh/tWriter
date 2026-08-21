@@ -83,6 +83,8 @@ export interface LastSession {
   pmPos: number;
 }
 
+export type NotasTab = 'libro' | 'todas';
+
 interface Settings {
   root: string | null;
   editorWidth?: EditorWidth;
@@ -119,6 +121,9 @@ interface Settings {
   notesPaneCollapsed?: boolean;
   /** Alto en px del panel de notas abierto. */
   notesPaneHeight?: number;
+  /** Tab activa del panel de notas: 'libro' (notas del libro que se está
+   *  escribiendo) o 'todas' (el árbol completo). */
+  notasTab?: NotasTab;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -169,6 +174,9 @@ export class SettingsService {
   readonly notesPaneCollapsed = signal<boolean>(false);
   /** Alto en px del panel de notas cuando está abierto. */
   readonly notesPaneHeight = signal<number>(NOTES_PANE_HEIGHT_DEFAULT);
+  /** Tab activa del panel de notas. Default 'libro': escribiendo, lo que se
+   *  necesita es la ficha del libro abierto, no el árbol entero. */
+  readonly notasTab = signal<NotasTab>('libro');
   readonly focusMode = signal<boolean>(false);
   readonly loaded = signal<boolean>(false);
   /** Timer del persist debounced (cursor moves). */
@@ -218,6 +226,7 @@ export class SettingsService {
       );
       this.notesPaneCollapsed.set(s.notesPaneCollapsed ?? false);
       this.notesPaneHeight.set(clampNotesHeight(s.notesPaneHeight ?? NOTES_PANE_HEIGHT_DEFAULT));
+      this.notasTab.set(s.notasTab === 'todas' ? 'todas' : 'libro');
     } catch {
       this.root.set(null);
     } finally {
@@ -262,6 +271,12 @@ export class SettingsService {
 
   setTreeNotesExpanded(paths: Set<string>): void {
     this.treeNotesExpanded.set(new Set(paths));
+    void this.persist();
+  }
+
+  setNotasTab(tab: NotasTab): void {
+    if (tab === this.notasTab()) return;
+    this.notasTab.set(tab);
     void this.persist();
   }
 
@@ -447,6 +462,7 @@ export class SettingsService {
       treeNotesExpanded: notesExp.length ? notesExp : undefined,
       notesPaneCollapsed: this.notesPaneCollapsed() || undefined,
       notesPaneHeight: this.notesPaneHeight(),
+      notasTab: this.notasTab(),
     };
     await invoke('set_settings', { settings });
   }

@@ -4,6 +4,7 @@ import { detectLang } from '../dialogos/detect';
 import { DebugService } from './debug-service';
 import { ExportsService } from './exports-service';
 import { GitService } from './git-service';
+import { NavigationService } from './navigation-service';
 import { ProjectService } from './project-service';
 import { ToastService } from './toast-service';
 import { ChapterMeta, EMPTY_META, PullPathChange, TreeNode } from './types';
@@ -49,6 +50,7 @@ function makeChapterPane(): ChapterPane {
 @Injectable({ providedIn: 'root' })
 export class ChapterService {
   private project = inject(ProjectService);
+  private nav = inject(NavigationService);
   private debug = inject(DebugService);
   private git = inject(GitService);
   private toast = inject(ToastService);
@@ -99,6 +101,10 @@ export class ChapterService {
 
   async openInPane(node: TreeNode, paneId: PaneId): Promise<void> {
     if (node.kind !== 'chapter') return;
+    // Contexto de libro para el panel de notas. Se setea acá y no en un effect
+    // sobre `active()` porque abrir una nota en el centro cierra el capítulo, y
+    // el panel tiene que seguir mostrando las notas del libro que se escribe.
+    if (paneId === 0) this.nav.setUltimoCapitulo(node.path);
     const pane = this.panes[paneId];
     await this.flushPendingInPane(paneId);
     pane.error.set(null);

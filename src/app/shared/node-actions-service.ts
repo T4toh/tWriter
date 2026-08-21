@@ -39,6 +39,7 @@ import {
   renderNoteTemplate,
 } from './note-templates';
 import { CtxMenuEntry } from './context-menu-service';
+import { notasDelLibro } from '../tree/notas-del-libro';
 
 /**
  * Acciones compartidas sobre nodos del árbol (saga / libro / sección / capítulo)
@@ -758,7 +759,15 @@ export class NodeActionsService {
     const body = renderNoteTemplate(res.selected as NoteTemplateId, titulo);
     // Sin esto, con el pane de notas colapsado la nota nueva se crea invisible.
     this.settings.setNotesPaneCollapsed(false);
-    await this.note.createNote(parentDir, nombre, body);
+    const creado = await this.note.createNote(parentDir, nombre, body);
+    if (!creado) return;
+    // Y sin esto la nota puede nacer en una rama que la tab activa no muestra.
+    // `createNote` ya recargó el árbol, así que se pregunta directo si la nota
+    // nueva entra en la lista del libro; si no, se cambia a "Todas".
+    const nl = notasDelLibro(this.project.tree(), this.contextoLibro());
+    const enLaLista =
+      !!nl && [...nl.libro, ...nl.saga].some((x) => x.path === creado);
+    this.settings.setNotasTab(enLaLista ? 'libro' : 'todas');
   }
 
   /** Destino del botón `+` del pane Notas: la carpeta de la nota abierta, o la
@@ -769,6 +778,14 @@ export class NodeActionsService {
   notesQuickTarget(): string | null {
     const root = this.settings.root();
     if (!root) return null;
+    // Escribiendo, el destino natural es la carpeta de notas del libro abierto
+    // (`Notas/Meridian/3 - Secreto`): es donde viven las fichas de personaje de
+    // esa época. Vale aunque la carpeta no exista todavía — el backend la crea.
+    if (this.settings.notasTab() === 'libro') {
+      const nl = notasDelLibro(this.project.tree(), this.contextoLibro());
+      const carpeta = nl?.carpetaLibroPath ?? nl?.carpetaSagaPath;
+      if (carpeta) return carpeta;
+    }
     const candidato = this.note.active()?.path ?? this.nav.browsingPath();
     if (candidato) {
       const node = findNodeByPath(this.project.tree(), candidato);
@@ -780,6 +797,16 @@ export class NodeActionsService {
       }
     }
     return `${root}/Notas`;
+  }
+
+  /** Mismo criterio que el panel de notas: capítulo abierto → último capítulo
+   *  → lo que se esté navegando. Ver `tree.ts::contextoLibro`. */
+  private contextoLibro(): string | null {
+    return (
+      this.chapter.active()?.path ??
+      this.nav.ultimoCapitulo() ??
+      this.nav.browsingPath()
+    );
   }
 
   /** Botón `+` del header "Notas". */

@@ -238,6 +238,11 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub notes_pane_height: Option<u32>,
+    /// Tab activa del panel de notas: "libro" (notas del libro que se está
+    /// escribiendo) o "todas" (el árbol completo). Sin esto serde lo dropea en
+    /// el round-trip y el panel vuelve al default en cada boot.
+    #[serde(default, rename = "notasTab", skip_serializing_if = "Option::is_none")]
+    pub notas_tab: Option<String>,
     /// Runtime de containers donde la app vio el container de LanguageTool
     /// ("docker" | "podman" | "apple"). Lo descubre y lo escribe el backend
     /// (`grammar.rs`); el frontend NO lo conoce ni lo manda. Ver
