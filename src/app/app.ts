@@ -210,6 +210,14 @@ export class App {
       if (e && e !== this.lastNoteErr) this.debug.error('note', e);
       this.lastNoteErr = e;
     });
+    // El chequeo de gramática falló y el ping confirmó que LT no responde:
+    // abrir el modal de config, que es donde está el remedio (estado del
+    // runtime, botón de arranque, modo/URL). Antes fallaba silencioso con un
+    // string en el footer.
+    effect(() => {
+      if (this.grammar.pedidoDeConfig() === 0) return;
+      this.openGrammarSettings();
+    });
     // Mutex per-pane: cuando se abre un capítulo en un pane, la nota del MISMO pane se cierra.
     effect(() => {
       if (this.chapter.panes[0].active()) this.note.closeInPane(0);

@@ -5,7 +5,35 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 ## Editor / UX
 
 - Más variantes de divisor de escena (más allá del `* * *`).
-- Auto-abrir modal de configuración de LanguageTool cuando el chequeo tira error (hoy falla silencioso o solo loggea).
+- [x] **Auto-abrir modal de configuración de LanguageTool cuando el chequeo
+  tira error** (`fix/lt-config-modal-y-split-hint`, verificado a mano por el
+  autor el 2026-08-21). Antes el error moría en un
+  `<span class="indicator error">` del footer, que no se puede clickear. Ahora
+  `GrammarService` expone `configRequest` (contador) + `pedirConfig()`, y
+  `app.ts` — el único que tiene el `ViewChild` del modal — lo abre desde un
+  effect; así ninguna superficie que chequee gramática necesita conocer el
+  shell. El disparo automático va en el `catch` de `check()`, o sea una sola
+  vez para todos los callers, y **solo si el ping que ya se hacía ahí confirma
+  que LT no responde**: un `500` esporádico de LT 6.8 en `es-AR` (ver el item
+  del bug más abajo) no es problema de configuración y no justifica
+  interrumpir. Una vez por caída — `avisoAbierto` se rearma cuando `ping()`
+  vuelve a dar ok, así que no spamea el modal mientras el autor escribe con LT
+  caído. Además el indicador del footer pasó a ser `<button>`
+  (`.indicator-btn`) que abre el mismo modal a mano.
+
+  **El agujero real apareció al levantar la app, y no era el que decía este
+  item.** Con LT caído el `catch` de `check()` no se ejecuta nunca: el editor
+  gateaba todo con `canCheckGrammar()`, que incluía `grammar.available()`, así
+  que sin LT no se dispara ningún check — y de paso **el botón LT
+  desaparecía de la toolbar**, sin explicación ni remedio, justo lo que la
+  convención "el remedio se da adentro de la app" del CLAUDE.md prohíbe. El
+  `catch` solo cubre "LT se murió con un request en vuelo", que es una ventana
+  angosta. Fix: partir el computed en `grammarApplies()` (idioma + editable, sin
+  disponibilidad) y `canCheckGrammar() = grammarApplies() && available()`. La
+  toolbar rendea sobre el primero: si LT no responde, el botón queda **visible
+  en gris** (`.lt-down`, grayscale + opacity 0.45) y clickearlo abre la config.
+  El botón `AUTO` sí se esconde — togglear auto-check con LT caído no hace
+  nada.
 - [x] Buscar más alternativas para la gramática. **Relevado el 2026-08-20**:
   no hay motor alternativo para español (Harper es solo inglés, nlprule está
   muerto desde 2021, portar el XML de LT a Rust es el pozo que mató a
@@ -18,9 +46,33 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   `requestHighlight` (search → click resultado) o de la selección nativa
   del jump queda pegado sobre el carácter (típicamente un em-dash) aún
   después de mover el cursor. Repro: search → click hit → click en otra
-  parte del párrafo → el highlight persiste. La limpieza por mouseup /
-  keydown se está escapando para algún path (chapter editor, no notes
-  reader). Revisar el cleanup en `editor.ts` que monta el `TreeWalker`.
+  parte del párrafo → el highlight persiste.
+
+  **Relevado el 2026-08-21 y la premisa de arriba estaba mal**: no existe
+  ninguna limpieza por `mouseup`/`keydown` que se esté escapando — en
+  `editor.ts` no hay un solo listener de esos (los únicos `HostListener` de
+  teclado son los de `Ctrl/⌘+Shift+Y`). Hay **dos** naranjas distintos y hay
+  que decidir cuál es el que molesta antes de tocar código:
+  1. La **decoración PM `.search-hit`** (`search-highlight-extension.ts`,
+     estilo en `editor.scss:633`), que el effect de `editor.ts:675` pinta
+     desde `search.highlightTerms()`. Ese computed depende de
+     `search.open()` + `search.query()`, así que la marca **es viva a
+     propósito** mientras el panel de búsqueda esté abierto: clickear en otra
+     parte del párrafo no la borra ni debería. Si esto es lo que se ve, no es
+     un bug de cleanup — es la decisión de "resaltar todas las ocurrencias
+     mientras buscás", y el cambio sería de diseño.
+  2. La **selección nativa** de `highlightFirstMatch`
+     (`core/search-highlight.ts`), que sí se va al clickear. Sobre un em-dash
+     entra por el camino de `rae-audit-panel.ts:83`, que pasa como término el
+     `slice` crudo de la violación (muchas veces arranca con la raya).
+
+  **Falta para poder arreglarlo**: saber si el panel de búsqueda estaba abierto
+  o cerrado cuando la marca quedó pegada. Con el panel abierto es (1) y es
+  diseño; con el panel cerrado es (2) y ahí sí hay bug. Preguntado al autor el
+  2026-08-21: **no se acuerda**, la captura es vieja. Así que este item queda
+  esperando que vuelva a pasar — cuando pase, anotar el estado del panel y con
+  eso alcanza para cerrarlo. No arrancar a tocar `editor.ts` sin ese dato: los
+  dos naranjas se pintan por caminos distintos y el fix de uno no toca al otro.
 - **Bug — cursor fantasma**: queda una barra de cursor pintada en un
   punto del editor (típicamente arriba a la izquierda, fuera del flujo de
   texto) además del caret real donde se está escribiendo. Ver captura.
@@ -795,7 +847,17 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   esas frases. Si algún día molesta, lo correcto es marcar el span como
   "otro idioma" y saltearlo, no engordar el diccionario.
 
-- **LT embebido como sidecar — MEDIDO Y VIABLE** (2026-08-20). El relevamiento
+- **LT embebido como sidecar — DESCARTADO por el autor (2026-08-21).** Medido y
+  viable, sí, pero el costo de mantenerlo es el que mata: el sidecar no se
+  puede armar sin **bajar el código de LT, Maven y toda su cadena de build** en
+  CI, por cada uno de los cuatro targets, y después mantener ese pipeline vivo
+  contra cada release de LT. Eso es más superficie que las ~700 líneas de
+  Docker que iba a borrar. Lo intentado quedó en la rama
+  `archivo/lt-sidecar-NO-MERGEAR` (no mergear, es referencia). Docker se queda.
+  Lo que sigue son las mediciones, que valen igual si algún día LT publica un
+  bundle armado.
+
+  El relevamiento
   original listaba como alternativas offline `zspell` / Harper / LLM y **nunca
   consideró bundlear LT mismo**, que es la opción que cumple mejor el criterio
   del autor ("embebido o de fondo, no 'instalate un runtime'") porque el
@@ -886,8 +948,9 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   puntuación, comillas sin cerrar y mayúscula tras punto: **todo escribible
   en TS sin POS tagger**, al lado de `validator.ts` y `detector.ts`.
   Camino propuesto, en ese orden y reversible:
-  1. **Shipear el sidecar** — ya está medido y probado, arranca en 1 s, y
-     habilita borrar las ~700 líneas de Docker **hoy**. 174 MB una vez.
+  1. ~~**Shipear el sidecar**~~ — **descartado el 2026-08-21**: no se puede
+     buildear sin bajar el código de LT + Maven en CI por target. Ver el item
+     "LT embebido como sidecar" más arriba.
   2. **Escribir las reglas de tildes diacríticas y puntuación en TS** — son
      las que disparan de verdad y no necesitan morfología.
   3. **Apagar `EN_REPEATEDWORDS_*` y `PROFANITY*` con `disabledRules`** si se
@@ -1143,32 +1206,57 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   case-insensitive por default. Git puede no aplicarlo en el checkout; hay
   que verificar y hacer el `git mv` a mano si quedó con el nombre viejo.
 
-- **CAUSA RAÍZ del filesystem desparejo: "Nueva saga" crea sin número.**
-  Renombrar a mano dejó el árbol coherente hoy, pero **no queda sano solo** —
-  la próxima saga que se cree por la app vuelve a salir sin prefijo. Los dos
-  call sites de "Nueva saga / novela" pasan `numbered: false`:
-  - `src/app/app.ts:646` → `createDirectory(root, name, false)`
-  - `src/app/shared/node-actions-service.ts:530` → ídem
+- [x] **CAUSA RAÍZ del filesystem desparejo: "Nueva saga" crea sin número.**
+  **Arreglado** en `7a5267f` (`fix(tree): crear sagas numeradas para que el
+  filesystem quede ordenado`). Verificado el 2026-08-21: los tres call sites de
+  `createDirectory` pasan `true` (`app.ts:656`,
+  `node-actions-service.ts:515` y `:540`), no queda ninguno en `false`.
+  **De dónde venía**: los dos call sites de "Nueva saga / novela" pasaban
+  `numbered: false`, mientras libros y secciones pasaban `true` y
+  `create_book_impl` numeraba **siempre**. Ahí nació el desparejo: `Milky Way` y
+  `Vieja República` salieron por la app sin prefijo, `1 - Meridian 2.0` y
+  `2 - Buenos Aires 2077` los numeró el autor a mano. Renombrar a mano dejaba el
+  árbol coherente pero no sano: la saga siguiente volvía a salir sin número.
 
-  Mientras que libros y secciones pasan `true` (`node-actions-service.ts:507`,
-  `landing.ts:209`) y `create_book_impl` numera **siempre**. Ahí nació el
-  desparejo: `Milky Way` y `Vieja República` salieron por la app, `1 - Meridian
-  2.0` y `2 - Buenos Aires 2077` los numeró el autor a mano.
+  **El fix fue `false` → `true` en esos dos lugares**, sin nada más: la
+  maquinaria ya estaba. `next_dir_num` (`create.rs:398`) toma el máximo prefijo
+  + 1 y las carpetas sin número (`fonts`, `themes`, `Notas`) aportan 0, así que
+  la próxima saga sale `5 - Nombre`; y `displayName` (`tree.ts:663`) ya esconde
+  el prefijo **solo para `kind === 'saga'`**, o sea que la UI no cambió en nada.
+  Contrapartida asumida: reordenar una saga pasa a ser un rename, con el costo
+  de estado local huérfano del item de arriba — pero eso ya era cierto para
+  libros y secciones, así que es consistente con el diseño existente y no un
+  problema nuevo.
 
-  **Fix: `false` → `true` en esos dos lugares.** Toda la maquinaria ya está:
-  `next_dir_num` (`create.rs:398`) toma el máximo prefijo + 1 y las carpetas
-  sin número (`fonts`, `themes`, `Notas`) aportan 0, así que la próxima saga
-  sale `5 - Nombre`; y `displayName` (`tree.ts:663`) ya esconde el prefijo
-  **solo para `kind === 'saga'`**, o sea que la UI no cambia en nada.
-  Contrapartida asumida: reordenar una saga pasa a ser un rename, con el
-  costo de estado local huérfano del item de arriba — pero eso ya es cierto
-  hoy para libros y secciones, así que es consistente con el diseño existente
-  y no un problema nuevo.
+- [x] **Bug — cartel de split colgado** (`fix/lt-config-modal-y-split-hint`,
+  verificado a mano por el autor el 2026-08-21: se apaga al soltar afuera, al
+  soltar sobre el árbol y al cancelar con Escape, y el split sigue abriendo
+  normal al soltar en el centro). El overlay "Soltar acá para abrir en split" quedaba pintado después de
+  soltar. La causa no era que faltara el handler — `tree.html` ya tenía
+  `(dragend)="onNodeDragEnd()"` en los dos nodos arrastrables — sino **dónde
+  vive**: en el elemento arrastrado. Si Angular re-renderiza el árbol durante
+  el drag (refresh, pintar la nota activa, expandir una carpeta), ese elemento
+  se destruye con su listener y el `dragend` nunca llega, así que
+  `paneSplit.draggingNode()` queda seteado y el hint no se apaga nunca.
 
-- **Bug — cartel de split colgado**: el overlay "Soltar acá para abrir en
-  split" queda pintado después de soltar el drop. Ver captura. El handler
-  de `drop` / `dragend` no está limpiando el estado del hint. Asegurar que
-  se resetee también en `dragleave` fuera de la ventana y al soltar.
+  **Un listener en `window` NO alcanza** — lo marcó CodeRabbit en la review y
+  tenía razón. `dragend` se despacha en el nodo origen: si sigue conectado, el
+  event path incluye a los ancestros y `window` lo ve; si el framework lo
+  **desconectó**, el path de un nodo suelto es el nodo y nada más, así que
+  `window` no se entera (y Firefox históricamente no despacha nada en ese
+  caso). O sea que el listener en `window` arregla "el listener murió con el
+  elemento" pero no "el elemento murió", que es justo el caso del bug. Fix real
+  en `core/drag-cleanup.ts` (puro, 21 aserciones en
+  `scripts/run-drag-cleanup-smoke.mjs`): dos caminos independientes, `dragend`
+  para el caso rápido y un **watchdog de `dragover`** para el resto. Mientras un
+  drag está vivo el navegador despacha `dragover` cada ~350 ms; si dejan de
+  llegar por 1200 ms, terminó — y eso no depende de que el nodo exista. Cubre
+  además Escape y soltar fuera de la ventana.
+
+  **Ojo con "mejorarlo" sumando `drop` a ese listener**: en captura sobre
+  `window` correría ANTES del `onCenterDrop` del shell, que lee
+  `draggingNode()` para saber qué abrir — rompería el split entero. Hay una
+  aserción del smoke runner clavando que `drop` no se escucha.
 - [x] **Panel de notas con tabs: "Este libro" / "Todas"**
   (`feat/notas-plantillas-y-creacion`): escribiendo (no editando) el laburo era
   encontrar la ficha del personaje. Las fichas están duplicadas por libro **a

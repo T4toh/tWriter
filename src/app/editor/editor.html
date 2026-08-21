@@ -159,19 +159,30 @@
       </button>
     }
 
-    @if (canCheckGrammar()) {
+    @if (grammarApplies()) {
       <span class="sep"></span>
-      <button
-        type="button"
-        class="tb-btn lt-btn"
-        [class.checking]="grammarChecking()"
-        (click)="checkGrammar(true)"
-        [disabled]="grammarChecking()"
-        title="Revisar gramática y ortografía (LanguageTool)"
-      >
-        <img src="assets/LT.svg" alt="LT" />
-      </button>
-      @if (canAutoGrammar()) {
+      @if (canCheckGrammar()) {
+        <button
+          type="button"
+          class="tb-btn lt-btn"
+          [class.checking]="grammarChecking()"
+          (click)="checkGrammar(true)"
+          [disabled]="grammarChecking()"
+          title="Revisar gramática y ortografía (LanguageTool)"
+        >
+          <img src="assets/LT.svg" alt="LT" />
+        </button>
+      } @else {
+        <button
+          type="button"
+          class="tb-btn lt-btn lt-down"
+          (click)="openGrammarConfig()"
+          title="LanguageTool no responde — abrir la configuración"
+        >
+          <img src="assets/LT.svg" alt="LT" />
+        </button>
+      }
+      @if (canCheckGrammar() && canAutoGrammar()) {
         <button
           type="button"
           class="tb-btn tb-text"
@@ -375,7 +386,12 @@
       <span class="indicator error">{{ err }}</span>
     }
     @if (grammarError(); as err) {
-      <span class="indicator error">{{ err }}</span>
+      <button
+        type="button"
+        class="indicator error indicator-btn"
+        title="Configurar LanguageTool"
+        (click)="openGrammarConfig()"
+      >{{ err }}</button>
     }
     @if (settings.focusMode()) {
       <span class="indicator focus-hint">modo focus — F11 para salir</span>

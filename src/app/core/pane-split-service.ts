@@ -1,6 +1,7 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { ChapterService } from './chapter-service';
 import { NoteService } from './note-service';
+import { armarCierreDeDrag } from './drag-cleanup';
 import { TreeNode } from './types';
 
 export interface DraggingNode {
@@ -17,6 +18,8 @@ export class PaneSplitService {
   readonly orientation = signal<'horizontal' | 'vertical'>('horizontal');
   /** Set por el tree mientras arrastra un nodo. App shell observa para mostrar drop zone. */
   readonly draggingNode = signal<DraggingNode | null>(null);
+  /** Desarma el cierre del drag en curso. Null cuando no hay drag. */
+  private desarmarCierre: (() => void) | null = null;
 
   /** True si el pane 1 tiene chapter o note activos. */
   readonly hasSecondaryContent = computed(
@@ -55,10 +58,27 @@ export class PaneSplitService {
   }
 
   beginDrag(node: DraggingNode): void {
+    // Un drag nuevo sin que el anterior cerrara: desarmar el viejo primero para
+    // no acumular listeners ni watchdogs.
+    this.desarmarCierre?.();
     this.draggingNode.set(node);
+    // El `(dragend)` del tree vive en el nodo arrastrado, así que si Angular
+    // re-renderiza el árbol a mitad del drag el elemento se destruye con su
+    // listener y el hint "Soltar acá para abrir en split" queda pintado para
+    // siempre. `armarCierreDeDrag` cubre eso por dos caminos que no dependen de
+    // que el nodo siga vivo — ver el comentario de `drag-cleanup.ts`.
+    this.desarmarCierre = armarCierreDeDrag(window, () => this.endDrag(), {
+      set: (cb, ms) => setTimeout(cb, ms),
+      clear: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+    });
   }
 
   endDrag(): void {
+    // Primero soltar la referencia: `desarmar` es idempotente, pero así este
+    // método sigue siendo seguro de llamar desde el propio cierre.
+    const desarmar = this.desarmarCierre;
+    this.desarmarCierre = null;
+    desarmar?.();
     this.draggingNode.set(null);
   }
 }

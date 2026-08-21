@@ -513,6 +513,17 @@
     color: var(--accent);
     font-style: italic;
   }
+  /* El error de gramática es un botón: abre el modal de config. */
+  &.indicator-btn {
+    border: 0;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+
+    &:hover {
+      filter: brightness(1.15);
+    }
+  }
 }
 
 /* ─── Toolbar LanguageTool button ─── */
@@ -536,6 +547,13 @@
     img {
       animation: lt-img-pulse 0.8s ease-in-out infinite;
     }
+  }
+
+  /* LT no responde: el botón queda visible pero apagado, y clickearlo abre la
+     configuración — antes desaparecía sin decir nada. */
+  &.lt-down img {
+    filter: grayscale(1);
+    opacity: 0.45;
   }
 }
 

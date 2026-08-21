@@ -94,6 +94,14 @@ export class GrammarService {
   readonly available = signal<boolean>(false);
   readonly checking = signal<boolean>(false);
   readonly lastError = signal<string | null>(null);
+  /**
+   * Contador de pedidos de "abrí el modal de config de LT". `app.ts` es el
+   * único que tiene el `ViewChild` del modal, así que el pedido viaja por acá
+   * en vez de que cada superficie que chequea gramática conozca el shell.
+   */
+  readonly pedidoDeConfig = signal<number>(0);
+  /** Ya se auto-abrió el modal por esta caída. Se rearma cuando LT responde. */
+  private avisoAbierto = false;
   readonly mode = this.settings.grammarMode;
   readonly customUrl = this.settings.grammarCustomUrl;
   readonly ltUsername = this.settings.grammarLtUsername;
@@ -121,10 +129,16 @@ export class GrammarService {
     };
   }
 
+  /** Pide abrir el modal de configuración de LanguageTool. */
+  pedirConfig(): void {
+    this.pedidoDeConfig.update((n) => n + 1);
+  }
+
   async ping(): Promise<boolean> {
     try {
       const ok = await invoke<boolean>('check_grammar_available', { cfg: this.buildCfg() });
       this.available.set(ok);
+      if (ok) this.avisoAbierto = false;
       if (!ok) this.debug.warn('grammar', `ping LanguageTool falló (modo ${this.mode()})`);
       return ok;
     } catch (e) {
@@ -155,7 +169,16 @@ export class GrammarService {
       // Recalibración inmediata: si LT acaba de caerse, el próximo
       // scheduleGrammarRecheck del editor verá `available=false` y no spamea
       // requests muertos hasta que el polling de recovery lo levante.
-      void this.ping();
+      //
+      // El modal de config se abre solo si el ping confirma que LT NO responde
+      // — un 500 esporádico (LT 6.8 los tira en es-AR) no es un problema de
+      // configuración y no justifica interrumpir al autor. Una sola vez por
+      // caída: `avisoAbierto` se rearma cuando LT vuelve.
+      void this.ping().then((ok) => {
+        if (ok || this.avisoAbierto) return;
+        this.avisoAbierto = true;
+        this.pedirConfig();
+      });
       throw new Error(msg);
     } finally {
       this.checking.set(false);
