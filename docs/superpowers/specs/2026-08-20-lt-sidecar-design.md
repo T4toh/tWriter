@@ -25,7 +25,7 @@ Se evaluaron tres caminos:
 | | Instalador | Red | Notarización macOS |
 |---|---|---|---|
 | **A1** `resources` bundleado | +174 MB por target | cero | **riesgo no medido** |
-| **A2** descarga a `app_data_dir` | igual que hoy | 128 MB una vez | **la esquiva** |
+| **A2** descarga a `app_data_dir` | igual que hoy | 129 MB una vez | **la esquiva** |
 | A3 híbrido | mixto | mixto | igual que A1 |
 
 **Se eligió A2.** Razones, en orden de peso:
@@ -47,7 +47,7 @@ Se evaluaron tres caminos:
    bundling es `resources` (el tesauro, 14 MB).
 4. El repo no engorda y CI no arrastra 174 MB × 4 targets.
 
-Costo asumido: una descarga de **128 MB** la primera vez que se usa gramática.
+Costo asumido: una descarga de **129 MB** la primera vez que se usa gramática.
 Sigue siendo menos que los ~300 MB de imagen de hoy, y sin pedir Docker.
 
 Cumple el criterio del autor ("embebido o de fondo, nunca 'instalate un
@@ -74,7 +74,7 @@ Todo contra LT 6.6 recortado a es+en, con el JRE de `jlink`, en Linux x64.
 | LT recortado a es+en | 117 MB |
 | JRE `jlink` (19 módulos) | 57 MB |
 | **Bundle sin comprimir** | **174 MB** |
-| **Bundle `tar.gz`** | **128 MB** |
+| **Bundle `.zip`** | **129 MB** |
 | Arranque en frío → server listo | 1,07 s |
 | Primer check es-AR (carga reglas) | 1,2 s |
 | Checks siguientes (texto corto) | 27 ms |
@@ -82,18 +82,39 @@ Todo contra LT 6.6 recortado a es+en, con el JRE de `jlink`, en Linux x64.
 | RSS con heap default | 661 MB |
 | **RSS con `-Xmx256m`** | **538 MB, cero OOM** |
 
-`tar.zst` da 127 MB — 1 MB menos que gzip, porque los jars ya vienen
-comprimidos. No vale sumar la dependencia: **gzip**.
+**Formato: `.zip`, no `tar.gz`.** Los tres pesan prácticamente lo mismo porque
+los jars ya vienen comprimidos (`tar.gz` 128 MB, `zip` 129 MB, `tar.zst`
+127 MB), así que el criterio es la dependencia: **el crate `zip` ya está en
+`Cargo.toml`** (lo usa el builder de EPUB), mientras que `tar.gz` pediría `tar`
++ `flate2` y `zstd` uno más. 1 MB no paga dos dependencias nuevas.
+
+Verificado que el zip preserva el bit de ejecución en `external_attr`
+(`jre-min/bin/java` queda `0o755`). Igual, después de extraer se hace `chmod`
+explícito sobre el binario de `java`: son tres líneas y no depende de que
+`ZipArchive::extract` restaure permisos en toda plataforma.
 
 `-Xmx256m` se probó contra el peor caso real: un chunk de 20 KB, que es donde
 `split_chunks` (`grammar.rs:830`) corta. Mismo resultado (154 matches) y misma
 latencia que con 512m, sin OOM. Se elige **256m**.
 
-> **Caveat de versión**: estas mediciones son contra **LT 6.6**, que es lo que
-> sirve `LanguageTool-stable.zip` hoy (release de 2025-03-28). El `TODO.md` dice
-> que el container del autor corre **6.8** (tag de 2026-05-05). Los conteos de
-> reglas y de matches pueden diferir algo entre las dos. No se asume que sean
-> equivalentes.
+### Dependencias
+
+Único agregado: **`sha2`** (RustCrypto) para verificar el hash. Y hay que
+habilitar la feature **`stream`** de `reqwest` — que ya está en `Cargo.toml` —
+para poder emitir progreso por bytes durante la descarga; sin eso solo se puede
+emitir un latido cada N segundos como hace hoy el pull de Docker.
+
+Aplica la regla de la organización sobre supply chain: verificar que la versión
+de `sha2` que se fije tenga **más de 7 días** y que sea el crate real de
+RustCrypto antes de sumarla.
+
+> **Caveat de versión**: estas mediciones son contra **LT 6.6**, el último que
+> se publicó como zip. El bundle real se va a compilar del tag **v6.8**, que es
+> el que corre el container del autor — o sea que el sidecar queda **igualado**
+> con su setup actual, no dos versiones atrás. Pero los números de arriba
+> (tamaños, RSS, latencias) hay que **re-medirlos después del primer build de
+> 6.8**: dos versiones de diferencia pueden mover el peso y los conteos de
+> reglas. Nada de esto cambia el diseño, solo las cifras.
 
 ## Diseño
 
@@ -103,14 +124,49 @@ Encodea el procedimiento ya verificado a mano. Corre en CI, **no en build
 time**, y su salida **no se commitea** — mismo criterio que
 `scripts/podar-tesauro-en.mjs`.
 
-1. Baja `LanguageTool-stable.zip` (241 MB) y registra qué versión trae adentro.
-2. Borra los **datos** de los idiomas que no son `en`/`es`, **conservando los
+> ⚠️ **LanguageTool dejó de publicar zips después de 6.6.** Verificado el
+> 2026-08-20: el directorio de descargas termina en `LanguageTool-6.6.zip` y
+> `LanguageTool-stable.zip` tiene `last-modified: 2025-03-27`, o sea que **es
+> 6.6**. Las versiones v6.7 (2025-10-10) y v6.8 (2026-05-05) existen **solo
+> como tags de código fuente**; el repo de LT no tiene GitHub Releases (la API
+> `/releases` devuelve `[]`, y la página de un tag muestra el tarball
+> autogenerado de fuentes, no una distribución compilada).
+> `meyayl/docker-languagetool` lo dice explícito: *"Built directly from
+> LanguageTool repository tags since official release ZIPs were discontinued
+> after v6.6"*. Eso explica por qué el container del autor está en 6.8 y el
+> zip da 6.6.
+>
+> **Consecuencia: el bundle se compila del tag, no se baja.** Bajar el zip
+> dejaría el sidecar clavado en 6.6 para siempre, porque 6.9 tampoco va a
+> tener zip.
+
+1. `git clone --depth 1 --branch v<version>` del repo de LanguageTool.
+2. `./build.sh languagetool-standalone clean package -DskipTests`, que
+   corre `mvn --projects languagetool-standalone --also-make`. El assembly
+   (`languagetool-standalone/src/main/assembly/zip.xml`) declara los formatos
+   `zip` **y `dir`** con `finalName = LanguageTool-${project.version}`, así que
+   la salida queda en
+   `languagetool-standalone/target/LanguageTool-<version>/` — el mismo layout
+   que traía el zip, sin necesidad de descomprimir.
+3. Borra los **datos** de los idiomas que no son `en`/`es`, **conservando los
    `.class`**.
-3. Restaura `common_words.txt` de todos los idiomas (2,6 MB).
-4. Borra los `*-pos-dict.jar` ajenos y `lucene-gosen-ipadic`, `hanlp`,
+4. Restaura `common_words.txt` de todos los idiomas (2,6 MB).
+5. Borra los `*-pos-dict.jar` ajenos y `lucene-gosen-ipadic`, `hanlp`,
    `languagetool-ga-dicts`, `morfologik-ukrainian-lt`, `morfologik-crh-lt`.
-5. `jlink` con los 19 módulos → JRE.
-6. `tar czf` + `sha256sum`.
+6. `jlink` con los 19 módulos → JRE.
+7. Empaqueta a `.zip` y calcula el `sha256`.
+
+Requisitos del build: **JDK 17+** (LT lo exige, y `jlink` necesita un JDK
+completo, no un JRE) y **Maven**. Los dos vienen en `ubuntu-24.04` de GitHub
+Actions. El build de `--also-make` arrastra core + todos los módulos de idioma,
+así que tarda bastante — irrelevante para un workflow manual que corre dos
+veces al año.
+
+**La poda degrada bien ante cambios de versión**: es data-driven (regex sobre
+el path + una lista de jars a borrar), así que si 6.9 suma un idioma nuevo sus
+datos se borran solos, y si suma un jar grande desconocido simplemente queda
+adentro — el bundle pesa más pero **funciona**. Nunca rompe por una versión
+nueva.
 
 **Tres trampas verificadas, con su causa** (si alguien las "optimiza", vuelve a
 romper):
@@ -141,7 +197,7 @@ Assets en un release tag propio, **`lt-sidecar-v<n>`**, separado de los releases
 de la app: el bundle cambia cuando cambia LT (dos veces al año), no cuando
 cambia tWriter.
 
-Nombre del asset: `lt-sidecar-<lt_version>-<rust_target>.tar.gz`.
+Nombre del asset: `lt-sidecar-<lt_version>-<rust_target>.zip`.
 
 **Las URLs versionadas del zip de LT dan 404** — solo existe
 `LanguageTool-stable.zip`, así que la *entrada* no se puede pinnear por URL. No
@@ -268,7 +324,7 @@ valida corriéndolo en CI.
 3. Cerrar la app → verificar con `pgrep` que **no queda un java colgado**.
 4. Levantar algo en 8081 a mano y abrir la app → que elija otro puerto y no
    rompa.
-5. Corromper el `.tar.gz` a propósito → que aborte con mensaje claro y no deje
+5. Corromper el `.zip` a propósito → que aborte con mensaje claro y no deje
    basura en `app_data_dir`.
 6. Con el container de Docker corriendo Y el sidecar instalado → que gane el
    sidecar; con una URL manual seteada → que gane la URL.
@@ -277,7 +333,7 @@ valida corriéndolo en CI.
 
 | Riesgo | Mitigación |
 |---|---|
-| El bundle de 128 MB falla a mitad de descarga | Verificación de sha256 + borrar el parcial. Reintento manual desde el modal, no automático. |
+| El bundle de 129 MB falla a mitad de descarga | Verificación de sha256 + borrar el parcial. Reintento manual desde el modal, no automático. |
 | Java colgado si la app crashea sin cerrar bien | Al arrancar, buscar un proceso previo del sidecar por puerto y adoptarlo o matarlo antes de levantar otro. |
 | LT 6.8 se comporta distinto de 6.6 | Las mediciones dicen 6.6; no se asume equivalencia. Al bundlear la versión que sirva `stable.zip`, comparar contra el container antes de dar por bueno. |
 | macOS: Gatekeeper con binarios bajados | Los archivos escritos por la app vía reqwest no reciben el xattr `com.apple.quarantine` como los de un browser, así que en principio no aplica — **pero hay que verificarlo** en la vuelta de macOS, no asumirlo. |
