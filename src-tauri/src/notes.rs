@@ -60,10 +60,15 @@ pub fn write_note(path: String, content: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Crea `<parent_dir>/<name>.md` con un `# <name>` inicial. Si `parent_dir`
-/// es una carpeta `notas/` que no existe todavía, la crea.
+/// Crea `<parent_dir>/<name>.md`. Si `body` viene (plantilla renderizada en
+/// el front), se escribe tal cual; si no, un `# <name>` inicial. Si
+/// `parent_dir` es una carpeta `notas/` que no existe todavía, la crea.
 #[tauri::command]
-pub fn create_note(parent_dir: String, name: String) -> Result<CreateNoteResult, String> {
+pub fn create_note(
+    parent_dir: String,
+    name: String,
+    body: Option<String>,
+) -> Result<CreateNoteResult, String> {
     let parent = PathBuf::from(&parent_dir);
     let trimmed = name.trim();
     if trimmed.is_empty() {
@@ -100,7 +105,10 @@ pub fn create_note(parent_dir: String, name: String) -> Result<CreateNoteResult,
         .and_then(|s| s.to_str())
         .unwrap_or(trimmed)
         .to_string();
-    let body = format!("# {}\n\n", title);
+    let mut body = body.unwrap_or_else(|| format!("# {}\n\n", title));
+    if !body.ends_with('\n') {
+        body.push('\n');
+    }
     fs::write(&target, body).map_err(|e| {
         tracing::error!(target: "note", path = %target.display(), error = %e, "create_note: write falló");
         e.to_string()
@@ -188,11 +196,27 @@ mod tests {
     fn create_note_makes_dir() {
         let dir = tmp_dir("create");
         let sub = dir.join("notas");
-        let res = create_note(sub.to_string_lossy().into_owned(), "intro".into()).unwrap();
+        let res = create_note(sub.to_string_lossy().into_owned(), "intro".into(), None).unwrap();
         assert!(PathBuf::from(&res.path).is_file());
         assert!(res.path.ends_with("intro.md"));
         let body = fs::read_to_string(&res.path).unwrap();
         assert!(body.contains("# intro"));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn create_note_con_body_escribe_la_plantilla() {
+        let dir = tmp_dir("create-body");
+        let res = create_note(
+            dir.to_string_lossy().into_owned(),
+            "Aedan".into(),
+            Some("## Raza\n- \n## Objetos\n- ".into()),
+        )
+        .unwrap();
+        let body = fs::read_to_string(&res.path).unwrap();
+        assert!(body.starts_with("## Raza"), "body: {body:?}");
+        assert!(!body.contains("# Aedan"), "no debe prependear título: {body:?}");
+        assert!(body.ends_with('\n'), "debe cerrar con newline: {body:?}");
         fs::remove_dir_all(&dir).ok();
     }
 

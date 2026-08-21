@@ -32,6 +32,11 @@ import { ThemesService } from '../core/themes-service';
 import { ToastService } from '../core/toast-service';
 import { FontEntry, ThemeMeta, TreeNode } from '../core/types';
 import { ModalService } from './modal-service';
+import {
+  NOTE_TEMPLATES,
+  NoteTemplateId,
+  renderNoteTemplate,
+} from './note-templates';
 import { CtxMenuEntry } from './context-menu-service';
 
 /**
@@ -727,19 +732,40 @@ export class NodeActionsService {
   }
 
   async createNoteIn(parentDir: string): Promise<void> {
-    const name = await this.modal.prompt({
+    const res = await this.modal.selectPrompt({
       title: 'Nueva nota',
-      message: 'Sin extensión, .md se prepende automático.',
-      placeholder: 'nombre',
-      validate: (v) => {
-        const t = v.trim();
+      message: `Se crea en: ${this.relToRoot(parentDir)}`,
+      selectLabel: 'Plantilla',
+      selectOptions: NOTE_TEMPLATES.map((t) => ({ value: t.id, label: t.label })),
+      selectDefault: 'vacia',
+      inputLabel: 'Nombre (sin extensión, .md se agrega solo)',
+      inputPlaceholder: 'nombre',
+      okLabel: 'Crear',
+      validate: ({ value }) => {
+        const t = value.trim();
         if (!t) return 'Nombre vacío';
         if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
         return null;
       },
     });
-    if (!name?.trim()) return;
-    await this.note.createNote(parentDir, name.trim());
+    if (!res?.value.trim()) return;
+    const nombre = res.value.trim();
+    // El título del markdown es el nombre sin la extensión que el usuario
+    // pueda haber tipeado — el backend hace lo mismo para el `# <name>`.
+    const titulo = nombre.replace(/\.(md|markdown)$/i, '');
+    const body = renderNoteTemplate(res.selected as NoteTemplateId, titulo);
+    await this.note.createNote(parentDir, nombre, body);
+  }
+
+  /** Path relativo al root para mostrarlo en modales. Devuelve el absoluto si
+   *  el path cae fuera del root (no debería pasar). */
+  private relToRoot(path: string): string {
+    const root = this.settings.root();
+    if (root && path.startsWith(root)) {
+      const rel = path.slice(root.length).replace(/^[/\\]/, '');
+      return rel || '.';
+    }
+    return path;
   }
 
   async createFolderIn(parentDir: string): Promise<void> {
