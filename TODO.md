@@ -1427,8 +1427,8 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   input de nombre no compartía alto ni tipografía con `app-select`.
   Queda anotado para cuando entre el drag: el `track $index` de las dos listas
   del template hay que revisarlo ahí, que es cuando reordenar puede perder el
-  foco. Y la normalización de las 114 notas existentes sigue pendiente, con su
-  propio spec — ahora con la ventaja de que los formatos ya pasaron por uso real.
+  foco. La normalización de las 114 notas existentes **ya se hizo** (2026-08-31),
+  con los formatos que salieron de este form.
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
