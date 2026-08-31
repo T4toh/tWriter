@@ -52,8 +52,7 @@
       flex: 1;
     }
 
-    input,
-    select {
+    input {
       background: var(--input-bg, #161616);
       color: inherit;
       border: 1px solid var(--border, #333);

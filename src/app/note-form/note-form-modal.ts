@@ -1,13 +1,14 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, HostListener, computed, inject, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { BloqueTipo } from '../shared/note-blocks';
 import { NoteFormService } from '../core/note-form-service';
 import { SettingsService } from '../core/settings-service';
 import { ModalService } from '../shared/modal-service';
+import { Select, SelectOption } from '../shared/select';
 
 @Component({
   selector: 'app-note-form-modal',
-  imports: [FormsModule],
+  imports: [FormsModule, Select],
   templateUrl: './note-form-modal.html',
   styleUrl: './note-form-modal.scss',
 })
@@ -16,16 +17,28 @@ export class NoteFormModal {
   private settings = inject(SettingsService);
   private modal = inject(ModalService);
 
+  private readonly plantillaSelect = viewChild<Select>('plantillaSelect');
+
   protected readonly editing = this.svc.editing;
   protected readonly creando = this.svc.creando;
   protected readonly plantillas = this.svc.plantillas;
+
+  protected readonly plantillaOptions = computed<SelectOption[]>(() =>
+    this.plantillas().map((t) => ({
+      value: t.id,
+      label: t.origen === 'archivo' ? `${t.label} · propia` : t.label,
+    })),
+  );
 
   protected readonly destino = computed(() => {
     const s = this.editing();
     const root = this.settings.root();
     if (!s) return '';
-    if (!root) return s.parentDir;
-    return s.parentDir.startsWith(root) ? s.parentDir.slice(root.length + 1) : s.parentDir;
+    if (root && s.parentDir.startsWith(root)) {
+      const rel = s.parentDir.slice(root.length).replace(/^[/\\]/, '');
+      return rel || '.';
+    }
+    return s.parentDir;
   });
 
   protected readonly puedeCrear = computed(() => {
@@ -35,8 +48,27 @@ export class NoteFormModal {
     return n.length > 0 && !n.includes('/') && !n.includes('\\');
   });
 
-  protected close(): void {
+  /** Backdrop, "Cancelar" y Escape pasan por acá: si hay algo escrito que se
+   *  perdería, pide confirmación antes de tirarlo. */
+  protected async close(): Promise<void> {
+    if (
+      this.svc.tieneContenido() &&
+      !(await this.modal.confirm({
+        title: 'Descartar nota',
+        message: 'Se pierde lo que escribiste en los bloques. ¿Cerrar igual?',
+        okLabel: 'Descartar',
+        danger: true,
+      }))
+    ) {
+      return;
+    }
     this.svc.close();
+  }
+
+  @HostListener('document:keydown.escape')
+  protected onEscape(): void {
+    if (!this.editing()) return;
+    void this.close();
   }
 
   protected onNombre(v: string): void {
@@ -44,6 +76,7 @@ export class NoteFormModal {
   }
 
   protected async onPlantilla(id: string): Promise<void> {
+    const s = this.editing();
     if (this.svc.tieneContenido()) {
       const ok = await this.modal.confirm({
         title: 'Cambiar de plantilla',
@@ -51,7 +84,14 @@ export class NoteFormModal {
         okLabel: 'Cambiar',
         danger: true,
       });
-      if (!ok) return;
+      if (!ok) {
+        // El combo ya se movió de forma optimista (Select.pick actualiza su
+        // propio signal antes de este await); como `s.plantillaId` no
+        // cambió, Angular no vuelve a llamar `writeValue` solo, hay que
+        // forzarlo para que el combo no quede mintiendo.
+        if (s) this.plantillaSelect()?.writeValue(s.plantillaId);
+        return;
+      }
     }
     this.svc.aplicarPlantilla(id);
   }

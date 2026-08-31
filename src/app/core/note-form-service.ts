@@ -29,6 +29,14 @@ interface NoteTemplateFile {
   markdown: string;
 }
 
+/** Título de la nota sin la extensión: si el autor tipea "Elfos.md" como
+ *  nombre, el H1 no debe cargar la extensión. Mismo replace que hacía el
+ *  código viejo y que el fallback de `create_note` en Rust sigue haciendo
+ *  con `file_stem`. */
+function sinExtension(v: string): string {
+  return v.replace(/\.(md|markdown)$/i, '');
+}
+
 @Injectable({ providedIn: 'root' })
 export class NoteFormService {
   private note = inject(NoteService);
@@ -102,9 +110,10 @@ export class NoteFormService {
     if (!s) return;
     const anterior = s.nombre.trim();
     // El H1 sigue al nombre mientras el autor no lo haya escrito a mano.
+    const titulo = sinExtension(v.trim());
     const bloques = s.bloques.map((b) =>
       b.tipo === 'h1' && (b.texto.trim() === '' || b.texto.trim() === anterior)
-        ? { ...b, texto: v }
+        ? { ...b, texto: titulo }
         : b,
     );
     this.editing.set({ ...s, nombre: v, bloques });
@@ -117,19 +126,24 @@ export class NoteFormService {
     if (!tpl) return;
     const bloques = bloquesDePlantilla(tpl);
     const h1 = bloques.find((b) => b.tipo === 'h1');
-    if (h1) h1.texto = s.nombre;
+    if (h1) h1.texto = sinExtension(s.nombre.trim());
     this.editing.set({ ...s, plantillaId: id, bloques });
   }
 
-  /** true si hay algo escrito que se perdería al cambiar de plantilla. */
+  /** true si hay algo que se perdería al cambiar de plantilla o cerrar: no
+   *  solo prosa/items, también títulos editados a mano y bloques agregados o
+   *  borrados. Comparar contra el estado "recién aplicado" de la plantilla
+   *  actual (mismo H1 que llenaría `aplicarPlantilla`) cubre todo eso con
+   *  menos código que enumerar caso por caso. */
   tieneContenido(): boolean {
     const s = this.editing();
     if (!s) return false;
-    return s.bloques.some(
-      (b) =>
-        (b.tipo === 'parrafo' && b.texto.trim() !== '') ||
-        (b.tipo === 'lista' && b.items.some((i) => i.trim() !== '')),
-    );
+    const tpl = this.plantillas().find((t) => t.id === s.plantillaId);
+    if (!tpl) return true; // no hay con qué comparar: más seguro asumir que sí hay algo
+    const base = bloquesDePlantilla(tpl);
+    const h1 = base.find((b) => b.tipo === 'h1');
+    if (h1) h1.texto = sinExtension(s.nombre.trim());
+    return JSON.stringify(base) !== JSON.stringify(s.bloques);
   }
 
   patchBloque(i: number, patch: Partial<Bloque>): void {
@@ -168,7 +182,10 @@ export class NoteFormService {
     return s ? bloquesAMarkdown(s.bloques) : '';
   }
 
-  /** Crea la nota. Devuelve el path o null si falló (el toast ya lo dijo). */
+  /** Crea la nota. Devuelve el path o null si falló, avisando por toast con
+   *  el motivo real (p.ej. "ya existe: <path>"): `NoteService.createNote` se
+   *  traga el error en `panes[0].error` y ese footer queda detrás del
+   *  backdrop del modal, invisible para el autor. */
   async crear(): Promise<string | null> {
     const s = this.editing();
     if (!s) return null;
@@ -184,6 +201,8 @@ export class NoteFormService {
       if (creado) {
         this.editing.set(null);
         this.resolve(creado);
+      } else {
+        this.toast.error(this.note.error() ?? 'No se pudo crear la nota.');
       }
       return creado;
     } finally {

@@ -9,11 +9,12 @@
     <div class="nf-config">
       <label class="nf-field">
         <span>Plantilla</span>
-        <select [ngModel]="s.plantillaId" (ngModelChange)="onPlantilla($event)">
-          @for (t of plantillas(); track t.id) {
-            <option [value]="t.id">{{ t.label }}@if (t.origen === 'archivo') { · propia }</option>
-          }
-        </select>
+        <app-select
+          #plantillaSelect
+          [ngModel]="s.plantillaId"
+          (ngModelChange)="onPlantilla($event)"
+          [options]="plantillaOptions()"
+        />
       </label>
       <label class="nf-field">
         <span>Nombre</span>
