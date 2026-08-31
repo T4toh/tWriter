@@ -82,6 +82,11 @@ Reglas del parser, en orden:
 - Cualquier otra línea no vacía → `parrafo`; las consecutivas se unen con `\n` en un solo
   bloque (así los `\` de salto duro de `Lugares/*.md` sobreviven al round-trip).
 - Línea vacía = separador; no genera bloque.
+- **Un heading sin nada abajo genera un `parrafo` vacío detrás.** Es la regla que hace que
+  una sección de prosa sobreviva el round-trip: en un `.md` vacío, `## Descripción` seguido
+  de nada y `## Objetos` seguido de `-` se distinguen solo por el bullet, así que "nada
+  abajo" tiene que significar párrafo. Sin esto, guardar `Conjuro` como plantilla y volver a
+  cargarla deja `Descripción` sin campo de texto.
 
 El renderer es la inversa, con una línea en blanco entre bloques. Dos modos:
 
