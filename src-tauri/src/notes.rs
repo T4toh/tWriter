@@ -169,8 +169,10 @@ pub fn create_folder(parent_dir: String, name: String) -> Result<String, String>
     Ok(target.to_string_lossy().into_owned())
 }
 
-/// Carpeta de plantillas del autor. Está en `SKIP_DIRS` de `fs.rs`, así que no
-/// aparece en el árbol; sí se commitea con el resto del repo de novelas.
+/// Carpeta de plantillas del autor. Hay dos `SKIP_DIRS` independientes en el
+/// repo — la de `fs.rs` (árbol) y la de `search.rs` (índice de búsqueda) — y
+/// esta carpeta está sumada a las dos: no aparece en el árbol ni se indexa en
+/// tantivy. Sí se commitea con el resto del repo de novelas.
 const TEMPLATES_DIR_NAME: &str = "Plantillas";
 
 #[derive(Serialize, Debug)]
