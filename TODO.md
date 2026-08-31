@@ -1412,6 +1412,13 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Antes de codear: confirmar con el autor qué campos lleva cada plantilla nueva
   (`Conjuro` sobre todo), porque adivinarlos es exactamente el error que llevó a
   que las tres actuales no sirvieran.
+  **Estado**: implementado en `feat/form-de-notas-con-plantillas` — spec en
+  `docs/superpowers/specs/2026-08-31-form-de-notas-con-plantillas-design.md`,
+  plan en `docs/superpowers/plans/2026-08-31-form-de-notas-con-plantillas.md`.
+  Bloques editables (título/subtítulo/lista/párrafo) con ↑/↓, 6 plantillas de
+  fábrica sacadas del corpus real, plantillas propias en `<root>/Plantillas/*.md`
+  (la del autor le gana a la de fábrica con el mismo nombre). El drag de bloques
+  queda como pulido posterior. **Falta la verificación manual del autor.**
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
