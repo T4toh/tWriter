@@ -99,4 +99,30 @@ export class NoteFormModal {
   protected async crear(): Promise<void> {
     await this.svc.crear();
   }
+
+  protected async guardarPlantilla(): Promise<void> {
+    const nombre = await this.modal.prompt({
+      title: 'Guardar plantilla',
+      message: 'Se guarda en Plantillas/ del repo de novelas, sin el contenido que escribiste.',
+      placeholder: 'Ej: Nave',
+      okLabel: 'Guardar',
+      validate: (v) => {
+        const t = v.trim();
+        if (!t) return 'Nombre vacío';
+        if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
+        return null;
+      },
+    });
+    if (!nombre?.trim()) return;
+    const limpio = nombre.trim();
+    const resultado = await this.svc.guardarPlantilla(limpio, false);
+    if (resultado !== 'conflicto') return;
+    const pisar = await this.modal.confirm({
+      title: 'Ya existe',
+      message: `Plantillas/${limpio}.md ya existe. ¿La sobrescribo?`,
+      okLabel: 'Sobrescribir',
+      danger: true,
+    });
+    if (pisar) await this.svc.guardarPlantilla(limpio, true);
+  }
 }

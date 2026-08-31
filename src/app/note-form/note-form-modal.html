@@ -81,6 +81,7 @@
         <button type="button" (click)="add('parrafo')">+ Párrafo</button>
       </div>
       <div class="nf-actions">
+        <button type="button" (click)="guardarPlantilla()">Guardar plantilla…</button>
         <button type="button" (click)="close()">Cancelar</button>
         <button type="button" class="nf-primary" [disabled]="!puedeCrear()" (click)="crear()">
           {{ creando() ? 'Creando…' : 'Crear' }}
