@@ -67,13 +67,23 @@ export class NoteFormService {
   open(parentDir: string): Promise<string | null> {
     if (this.editing() !== null) return Promise.resolve(null);
     const inicial = NOTE_TEMPLATES[0];
-    this.editing.set({
+    const estado: NoteFormState = {
       parentDir,
       nombre: '',
       plantillaId: inicial.id,
       bloques: bloquesDePlantilla(inicial),
+    };
+    this.editing.set(estado);
+    // La plantilla de fábrica se aplica ya mismo para no dejar el form en
+    // blanco mientras llega la lista de `Plantillas/`. Si el autor tiene una
+    // propia con el mismo id (p.ej. `Vacía.md`), re-aplicarla al volver hace
+    // que el combo y el form terminen de acuerdo. La comparación por
+    // identidad (`this.editing() === estado`) es el chequeo exacto de "el
+    // autor no tocó nada mientras tanto": cualquier edición reemplaza el
+    // objeto entero.
+    void this.recargarPlantillas().then(() => {
+      if (this.editing() === estado) this.aplicarPlantilla(estado.plantillaId);
     });
-    void this.recargarPlantillas();
     return new Promise<string | null>((resolve) => {
       this.resolver = resolve;
     });

@@ -205,10 +205,16 @@ pub fn list_note_templates(root: String) -> Result<Vec<NoteTemplateFile>, String
         if nombre.is_empty() {
             continue;
         }
-        let markdown = fs::read_to_string(&path).map_err(|e| {
-            tracing::error!(target: "note", path = %path.display(), error = %e, "list_note_templates: read falló");
-            e.to_string()
-        })?;
+        // Un solo archivo ilegible (placeholder de iCloud/Dropbox sin
+        // descargar, permisos) no puede tirar abajo la lista entera de
+        // plantillas propias: se lo salta con un warning, no un error.
+        let markdown = match fs::read_to_string(&path) {
+            Ok(m) => m,
+            Err(e) => {
+                tracing::warn!(target: "note", path = %path.display(), error = %e, "list_note_templates: no pude leer, se ignora");
+                continue;
+            }
+        };
         out.push(NoteTemplateFile {
             nombre: nombre.to_string(),
             path: path.to_string_lossy().into_owned(),
@@ -392,6 +398,27 @@ mod tests {
         assert!(err.contains("ya existe"), "{}", err);
         let path = save_note_template(root, "Nave".into(), "## Dos\n".into(), true).unwrap();
         assert!(fs::read_to_string(&path).unwrap().contains("Dos"));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn list_note_templates_ignora_archivo_ilegible() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tmp_dir("tpl-ilegible");
+        let plantillas = dir.join("Plantillas");
+        fs::create_dir_all(&plantillas).unwrap();
+        fs::write(plantillas.join("Buena.md"), "## Ok\n").unwrap();
+        let mala = plantillas.join("Mala.md");
+        fs::write(&mala, "## Nope\n").unwrap();
+        fs::set_permissions(&mala, fs::Permissions::from_mode(0o000)).unwrap();
+        let out = list_note_templates(dir.to_string_lossy().into_owned());
+        // Restaurar permisos antes de cualquier assert que pueda cortar el test,
+        // para no dejar basura ilegible en el tmpdir.
+        let _ = fs::set_permissions(&mala, fs::Permissions::from_mode(0o644));
+        let out = out.expect("un archivo ilegible no debe abortar la lista entera");
+        let nombres: Vec<&str> = out.iter().map(|t| t.nombre.as_str()).collect();
+        assert_eq!(nombres, vec!["Buena"], "debe ignorar Mala.md y seguir con el resto");
         fs::remove_dir_all(&dir).ok();
     }
 
