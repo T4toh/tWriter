@@ -5,6 +5,7 @@ import {
   BloqueTipo,
   bloqueVacio,
   bloquesAMarkdown,
+  markdownABloques,
 } from '../shared/note-blocks';
 import {
   NOTE_TEMPLATES,
@@ -97,6 +98,12 @@ export class NoteFormService {
     }
     try {
       const list = await invoke<NoteTemplateFile[]>('list_note_templates', { root });
+      const ignoradas = list.filter((a) => markdownABloques(a.markdown).length === 0);
+      if (ignoradas.length > 0) {
+        this.toast.info(
+          `Se ignoraron plantillas vacías en Plantillas/: ${ignoradas.map((a) => a.nombre).join(', ')}`,
+        );
+      }
       this.archivos.set(list);
     } catch (err) {
       // No es fatal: las de fábrica alcanzan para crear la nota.
@@ -219,7 +226,14 @@ export class NoteFormService {
     const s = this.editing();
     const root = this.settings.root();
     if (!s || !root) return 'error';
-    const markdown = bloquesAMarkdown(s.bloques, { plantilla: true });
+    // El h1 autorrellenado con el nombre de la nota no debe hornearse en la
+    // plantilla guardada: "Bola de Fuego" no puede terminar como # fijo en
+    // Plantillas/<X>.md.
+    const nombreNota = s.nombre.trim();
+    const bloquesSinNombre = s.bloques.map((b) =>
+      b.tipo === 'h1' && b.texto.trim() === nombreNota ? { ...b, texto: '' } : b,
+    );
+    const markdown = bloquesAMarkdown(bloquesSinNombre, { plantilla: true });
     if (!markdown) {
       this.toast.error('La plantilla quedaría vacía: agregá al menos un bloque.');
       return 'error';

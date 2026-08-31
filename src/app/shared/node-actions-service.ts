@@ -732,10 +732,12 @@ export class NodeActionsService {
   }
 
   async createNoteIn(parentDir: string): Promise<void> {
-    // Sin esto, con el pane de notas colapsado la nota nueva se crea invisible.
-    this.settings.setNotesPaneCollapsed(false);
     const creado = await this.noteForm.open(parentDir);
     if (!creado) return;
+    // Sin esto, con el pane de notas colapsado la nota nueva se crea invisible.
+    // Va después del `if`: si el autor cancela el modal, el pane no se
+    // descolapsa solo.
+    this.settings.setNotesPaneCollapsed(false);
     // Y sin esto la nota puede nacer en una rama que la tab activa no muestra.
     const nl = notasDelLibro(this.project.tree(), this.contextoLibro());
     const enLaLista =
