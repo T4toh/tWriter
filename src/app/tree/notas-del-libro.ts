@@ -202,7 +202,11 @@ export function carpetasDeNotas(root: TreeNode | null, rootPath: string): Carpet
 /** `<root>/Notas/Meridian` → `Notas/Meridian`. Devuelve el path entero si no
  *  cuelga del root, y `.` si es el root mismo. */
 export function relativoAlRoot(path: string, rootPath: string): string {
-  if (!rootPath || !path.startsWith(rootPath)) return path;
-  const rel = path.slice(rootPath.length).replace(/^[/\\]/, '');
-  return rel || '.';
+  if (!rootPath || path === rootPath) return path === rootPath ? '.' : path;
+  // `startsWith` pelado no alcanza: con root `/novelas`, un `/novelas-viejo/x`
+  // matchea y devolvería `-viejo/x`. El separador es el que marca el límite.
+  const conBarra = rootPath.replace(/[/\\]$/, '');
+  const siguiente = path.charAt(conBarra.length);
+  if (!path.startsWith(conBarra) || (siguiente !== '/' && siguiente !== '\\')) return path;
+  return path.slice(conBarra.length + 1) || '.';
 }

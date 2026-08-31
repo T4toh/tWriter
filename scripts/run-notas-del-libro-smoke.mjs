@@ -220,6 +220,19 @@ check(
     'un path fuera del root queda entero',
     relativoAlRoot('/otro/lado/Notas', R) === '/otro/lado/Notas',
   );
+  // Regresión: `startsWith` pelado hacía que una carpeta hermana con prefijo
+  // común (`/novelas-viejo`) devolviera `-viejo/Notas/x`.
+  check(
+    'una hermana con prefijo comun NO se considera dentro del root',
+    relativoAlRoot(`${R}-viejo/Notas/x`, R) === `${R}-viejo/Notas/x`,
+    relativoAlRoot(`${R}-viejo/Notas/x`, R),
+  );
+  check(
+    'el root con barra final tambien pela bien',
+    relativoAlRoot(`${R}/Notas/x`, `${R}/`) === 'Notas/x',
+    relativoAlRoot(`${R}/Notas/x`, `${R}/`),
+  );
+  check('root vacio deja el path entero', relativoAlRoot(`${R}/Notas`, '') === `${R}/Notas`);
 }
 
 rmSync(outDir, { recursive: true, force: true });

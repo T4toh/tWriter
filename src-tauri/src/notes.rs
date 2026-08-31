@@ -239,6 +239,26 @@ pub fn save_note_template(
     if trimmed.contains('/') || trimmed.contains('\\') {
         return Err("nombre no puede contener separadores de path".to_string());
     }
+    // Si el autor tipeó la extensión, se pela antes de agregarla: sin esto
+    // `Nave.md` termina en `Nave.md.md` y `list_note_templates` la muestra como
+    // "Nave.md". Mismo criterio que `create_note`.
+    let tipeado = PathBuf::from(trimmed);
+    let trae_ext_md = tipeado
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("md") || e.eq_ignore_ascii_case("markdown"))
+        .unwrap_or(false);
+    let stem = if trae_ext_md {
+        tipeado.file_stem().and_then(|s| s.to_str()).unwrap_or(trimmed)
+    } else {
+        trimmed
+    };
+    // `.md` a secas no tiene extensión para `Path` (es un archivo oculto), así
+    // que caería como stem literal y dejaría `.md.md`. Una plantilla oculta no
+    // tiene sentido: se rechaza el punto inicial y de paso queda cubierto.
+    if stem.is_empty() || stem.starts_with('.') {
+        return Err("el nombre no puede estar vacío ni empezar con punto".to_string());
+    }
     // No se pasa por `write_note`: exige que la carpeta padre exista, y la
     // primera plantilla es justamente la que la crea.
     let dir = templates_dir(&root);
@@ -246,7 +266,7 @@ pub fn save_note_template(
         tracing::error!(target: "note", path = %dir.display(), error = %e, "save_note_template: no pude crear la carpeta");
         e.to_string()
     })?;
-    let target = dir.join(format!("{}.md", trimmed));
+    let target = dir.join(format!("{}.md", stem));
     if target.exists() && !overwrite {
         return Err(format!("ya existe: {}", target.display()));
     }
@@ -419,6 +439,29 @@ mod tests {
         let out = out.expect("un archivo ilegible no debe abortar la lista entera");
         let nombres: Vec<&str> = out.iter().map(|t| t.nombre.as_str()).collect();
         assert_eq!(nombres, vec!["Buena"], "debe ignorar Mala.md y seguir con el resto");
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn save_note_template_pela_la_extension_tipeada() {
+        let dir = tmp_dir("tpl-ext");
+        let root = dir.to_string_lossy().into_owned();
+        // Tipear "Nave.md" no debe dejar "Nave.md.md" en disco.
+        let path = save_note_template(root.clone(), "Nave.md".into(), "## Tripulación\n-".into(), false)
+            .unwrap();
+        assert!(path.ends_with("Nave.md"), "{}", path);
+        assert!(!path.ends_with("Nave.md.md"), "{}", path);
+        // Y el nombre que ve el frontend queda sin extensión duplicada.
+        let out = list_note_templates(root.clone()).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].nombre, "Nave");
+        // Case-insensitive y .markdown, igual que create_note.
+        save_note_template(root.clone(), "Arma.MARKDOWN".into(), "## Daño\n".into(), false).unwrap();
+        let out = list_note_templates(root.clone()).unwrap();
+        let nombres: Vec<&str> = out.iter().map(|t| t.nombre.as_str()).collect();
+        assert_eq!(nombres, vec!["Arma", "Nave"]);
+        // Un nombre que es solo la extensión no deja un archivo `.md` pelado.
+        assert!(save_note_template(root, ".md".into(), "## x\n".into(), false).is_err());
         fs::remove_dir_all(&dir).ok();
     }
 

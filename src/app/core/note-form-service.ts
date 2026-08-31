@@ -252,7 +252,10 @@ export class NoteFormService {
     // El h1 autorrellenado con el nombre de la nota no debe hornearse en la
     // plantilla guardada: "Bola de Fuego" no puede terminar como # fijo en
     // Plantillas/<X>.md.
-    const nombreNota = s.nombre.trim();
+    // Contra el nombre SIN extensión: es lo que `setNombre` escribió en el h1,
+    // así que comparar contra el crudo dejaría "# Elfos" horneado en la
+    // plantilla cuando el autor tipeó "Elfos.md".
+    const nombreNota = sinExtension(s.nombre.trim());
     const bloquesSinNombre = s.bloques.map((b) =>
       b.tipo === 'h1' && b.texto.trim() === nombreNota ? { ...b, texto: '' } : b,
     );
