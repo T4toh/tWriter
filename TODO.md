@@ -1389,7 +1389,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   doble-click ahora (`browseFolder`) flushea ediciones pendientes, cierra el
   archivo del pane primario y navega la galería `app-landing` a esa carpeta.
   Excluye el árbol de notas (la galería navega el árbol principal).
-- **El creador de notas es inútil como está — hacerlo un form de verdad**
+- [x] **El creador de notas es inútil como está — hacerlo un form de verdad**
   (pedido del autor, 2026-08-31). **Esto revierte a propósito el "no invertir
   más en esa dirección (fichas con campos, frontmatter, plantillas
   configurables) sin que él lo pida" del item de plantillas de arriba: lo
@@ -1418,7 +1418,17 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Bloques editables (título/subtítulo/lista/párrafo) con ↑/↓, 6 plantillas de
   fábrica sacadas del corpus real, plantillas propias en `<root>/Plantillas/*.md`
   (la del autor le gana a la de fábrica con el mismo nombre). El drag de bloques
-  queda como pulido posterior. **Falta la verificación manual del autor.**
+  queda como pulido posterior.
+  **Verificado a mano por el autor el 2026-08-31** (PR #81), con dos cosas que
+  salieron de esa prueba y se arreglaron en el momento: el destino quedaba fijo
+  al abrir el modal —equivocarse de carpeta obligaba a cancelar y empezar de
+  nuevo—, así que ahora hay un selector "Se crea en" con las carpetas del árbol
+  que pueden alojar una nota; y la fila de configuración no alineaba porque el
+  input de nombre no compartía alto ni tipografía con `app-select`.
+  Queda anotado para cuando entre el drag: el `track $index` de las dos listas
+  del template hay que revisarlo ahí, que es cuando reordenar puede perder el
+  foco. Y la normalización de las 114 notas existentes sigue pendiente, con su
+  propio spec — ahora con la ventaja de que los formatos ya pasaron por uso real.
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
