@@ -29,16 +29,13 @@
     font-size: 1.05rem;
   }
 
-  .nf-path {
-    margin: 0.35rem 0 0;
-    font-size: 0.8rem;
-    opacity: 0.7;
-  }
 }
 
 .nf-config {
   display: flex;
-  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem 1rem;
   padding: 0.9rem 1.25rem;
   border-bottom: 1px solid var(--border, #333);
 
@@ -47,19 +44,29 @@
     flex-direction: column;
     gap: 0.25rem;
     font-size: 0.8rem;
+    min-width: 0;
 
     &:last-child {
       flex: 1;
     }
 
+    // Mismo alto y tipografía que `app-select` (select.scss: 8px 10px / 14px),
+    // sino el input queda más chico y desalineado al lado del combo.
     input {
       background: var(--input-bg, #161616);
       color: inherit;
       border: 1px solid var(--border, #333);
       border-radius: 4px;
-      padding: 0.35rem 0.5rem;
-      font: inherit;
+      padding: 8px 10px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.2;
     }
+  }
+
+  /** El destino se lleva la fila entera: los paths son largos. */
+  .nf-field-ancho {
+    flex: 1 0 100%;
   }
 }
 

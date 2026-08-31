@@ -3,10 +3,17 @@
   <div class="nf-modal" (click)="$event.stopPropagation()">
     <header class="nf-header">
       <h2>Nueva nota</h2>
-      <p class="nf-path">Se crea en: {{ destino() }}</p>
     </header>
 
     <div class="nf-config">
+      <label class="nf-field nf-field-ancho">
+        <span>Se crea en</span>
+        <app-select
+          [ngModel]="s.parentDir"
+          (ngModelChange)="onDestino($event)"
+          [options]="destinoOptions()"
+        />
+      </label>
       <label class="nf-field">
         <span>Plantilla</span>
         <app-select

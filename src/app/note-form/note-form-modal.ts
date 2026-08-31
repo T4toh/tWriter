@@ -4,7 +4,9 @@ import { BloqueTipo } from '../shared/note-blocks';
 import { NoteFormService } from '../core/note-form-service';
 import { SettingsService } from '../core/settings-service';
 import { ModalService } from '../shared/modal-service';
+import { ProjectService } from '../core/project-service';
 import { Select, SelectOption } from '../shared/select';
+import { carpetasDeNotas, relativoAlRoot } from '../tree/notas-del-libro';
 
 @Component({
   selector: 'app-note-form-modal',
@@ -16,6 +18,7 @@ export class NoteFormModal {
   private svc = inject(NoteFormService);
   private settings = inject(SettingsService);
   private modal = inject(ModalService);
+  private project = inject(ProjectService);
 
   private readonly plantillaSelect = viewChild<Select>('plantillaSelect');
 
@@ -32,14 +35,27 @@ export class NoteFormModal {
 
   protected readonly destino = computed(() => {
     const s = this.editing();
-    const root = this.settings.root();
     if (!s) return '';
-    if (root && s.parentDir.startsWith(root)) {
-      const rel = s.parentDir.slice(root.length).replace(/^[/\\]/, '');
-      return rel || '.';
-    }
-    return s.parentDir;
+    return relativoAlRoot(s.parentDir, this.settings.root() ?? '');
   });
+
+  /** Carpetas del árbol que pueden alojar la nota. Si la que se abrió no está
+   *  en el árbol todavía (una `notas/` de libro que el backend crea recién al
+   *  guardar), se suma igual para que el selector no la pierda. */
+  protected readonly destinoOptions = computed<SelectOption[]>(() => {
+    const s = this.editing();
+    const root = this.settings.root() ?? '';
+    const carpetas = carpetasDeNotas(this.project.tree(), root);
+    if (s && !carpetas.some((c) => c.path === s.parentDir)) {
+      carpetas.push({ path: s.parentDir, etiqueta: relativoAlRoot(s.parentDir, root) });
+      carpetas.sort((a, b) => a.etiqueta.localeCompare(b.etiqueta, 'es'));
+    }
+    return carpetas.map((c) => ({ value: c.path, label: c.etiqueta }));
+  });
+
+  protected onDestino(path: string): void {
+    this.svc.setParentDir(path);
+  }
 
   protected readonly puedeCrear = computed(() => {
     const s = this.editing();

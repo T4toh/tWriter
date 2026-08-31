@@ -36,7 +36,7 @@ if (r.status !== 0) {
 }
 
 const mod = await import(pathToFileURL(join(outDir, 'tree/notas-del-libro.js')).href);
-const { notasDelLibro, calzaSaga, sinPrefijoNumerico } = mod;
+const { notasDelLibro, calzaSaga, sinPrefijoNumerico, carpetasDeNotas, relativoAlRoot } = mod;
 
 let passed = 0;
 let failed = 0;
@@ -187,6 +187,39 @@ check(
   // Arrancando desde una nota abierta en vez de un capítulo.
   const res = notasDelLibro(tree, `${R}/1 - Meridian 2.0/3 - Secreto/notas/Arreglos.md`);
   check('desde una nota del árbol de novelas también resuelve', res?.libroNombre === '3 - Secreto', res?.libroNombre);
+}
+
+{
+  // Selector de destino del form de creación: todas las carpetas que pueden
+  // alojar una nota, etiquetadas con su path relativo al root.
+  const carpetas = carpetasDeNotas(tree, R);
+  check('encuentra carpetas de notas', carpetas.length > 0, carpetas.length);
+  check(
+    'ninguna etiqueta arranca con el root',
+    carpetas.every((c) => !c.etiqueta.startsWith(R)),
+    JSON.stringify(carpetas.slice(0, 3)),
+  );
+  check(
+    'vienen ordenadas por etiqueta',
+    carpetas.map((c) => c.etiqueta).join('|') ===
+      [...carpetas.map((c) => c.etiqueta)].sort((a, b) => a.localeCompare(b, 'es')).join('|'),
+    JSON.stringify(carpetas.map((c) => c.etiqueta)),
+  );
+  check(
+    'solo carpetas: ni capítulos ni notas sueltas',
+    carpetas.every((c) => !c.path.endsWith('.md') && !c.path.endsWith('.html')),
+    JSON.stringify(carpetas.map((c) => c.path)),
+  );
+  check('árbol nulo → lista vacía', carpetasDeNotas(null, R).length === 0);
+}
+
+{
+  check('relativoAlRoot pela el root', relativoAlRoot(`${R}/Notas/Meridian`, R) === 'Notas/Meridian');
+  check('el root mismo es "."', relativoAlRoot(R, R) === '.');
+  check(
+    'un path fuera del root queda entero',
+    relativoAlRoot('/otro/lado/Notas', R) === '/otro/lado/Notas',
+  );
 }
 
 rmSync(outDir, { recursive: true, force: true });

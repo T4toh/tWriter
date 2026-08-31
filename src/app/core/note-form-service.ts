@@ -122,6 +122,14 @@ export class NoteFormService {
     }
   }
 
+  /** Cambia la carpeta destino sin cerrar el form. Sin esto, abrir el modal
+   *  parado en el lugar equivocado obliga a cancelar y empezar de nuevo. */
+  setParentDir(path: string): void {
+    const s = this.editing();
+    if (!s || !path) return;
+    this.editing.set({ ...s, parentDir: path });
+  }
+
   setNombre(v: string): void {
     const s = this.editing();
     if (!s) return;
