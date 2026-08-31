@@ -169,6 +169,91 @@ pub fn create_folder(parent_dir: String, name: String) -> Result<String, String>
     Ok(target.to_string_lossy().into_owned())
 }
 
+/// Carpeta de plantillas del autor. Está en `SKIP_DIRS` de `fs.rs`, así que no
+/// aparece en el árbol; sí se commitea con el resto del repo de novelas.
+const TEMPLATES_DIR_NAME: &str = "Plantillas";
+
+#[derive(Serialize, Debug)]
+pub struct NoteTemplateFile {
+    pub nombre: String,
+    pub path: String,
+    pub markdown: String,
+}
+
+fn templates_dir(root: &str) -> PathBuf {
+    PathBuf::from(root).join(TEMPLATES_DIR_NAME)
+}
+
+#[tauri::command]
+pub fn list_note_templates(root: String) -> Result<Vec<NoteTemplateFile>, String> {
+    let dir = templates_dir(&root);
+    if !dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut out: Vec<NoteTemplateFile> = Vec::new();
+    for entry in fs::read_dir(&dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if !path.is_file() || !is_note_path(&path) {
+            continue;
+        }
+        let Some(nombre) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if nombre.is_empty() {
+            continue;
+        }
+        let markdown = fs::read_to_string(&path).map_err(|e| {
+            tracing::error!(target: "note", path = %path.display(), error = %e, "list_note_templates: read falló");
+            e.to_string()
+        })?;
+        out.push(NoteTemplateFile {
+            nombre: nombre.to_string(),
+            path: path.to_string_lossy().into_owned(),
+            markdown,
+        });
+    }
+    out.sort_by(|a, b| a.nombre.to_lowercase().cmp(&b.nombre.to_lowercase()));
+    Ok(out)
+}
+
+#[tauri::command]
+pub fn save_note_template(
+    root: String,
+    nombre: String,
+    markdown: String,
+    overwrite: bool,
+) -> Result<String, String> {
+    let trimmed = nombre.trim();
+    if trimmed.is_empty() {
+        return Err("nombre vacío".to_string());
+    }
+    if trimmed.contains('/') || trimmed.contains('\\') {
+        return Err("nombre no puede contener separadores de path".to_string());
+    }
+    // No se pasa por `write_note`: exige que la carpeta padre exista, y la
+    // primera plantilla es justamente la que la crea.
+    let dir = templates_dir(&root);
+    fs::create_dir_all(&dir).map_err(|e| {
+        tracing::error!(target: "note", path = %dir.display(), error = %e, "save_note_template: no pude crear la carpeta");
+        e.to_string()
+    })?;
+    let target = dir.join(format!("{}.md", trimmed));
+    if target.exists() && !overwrite {
+        return Err(format!("ya existe: {}", target.display()));
+    }
+    let mut markdown = markdown;
+    if !markdown.ends_with('\n') {
+        markdown.push('\n');
+    }
+    fs::write(&target, markdown).map_err(|e| {
+        tracing::error!(target: "note", path = %target.display(), error = %e, "save_note_template: write falló");
+        e.to_string()
+    })?;
+    tracing::info!(target: "note", path = %target.display(), "plantilla guardada");
+    Ok(target.to_string_lossy().into_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -252,6 +337,69 @@ mod tests {
         create_folder(dir.to_string_lossy().into_owned(), "Worldbuilding".into()).unwrap();
         let res = create_folder(dir.to_string_lossy().into_owned(), "Worldbuilding".into());
         assert!(res.is_err());
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn list_note_templates_sin_carpeta_es_lista_vacia() {
+        let dir = tmp_dir("tpl-vacio");
+        let out = list_note_templates(dir.to_string_lossy().into_owned()).unwrap();
+        assert!(out.is_empty());
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn list_note_templates_ordena_e_ignora_lo_que_no_es_md() {
+        let dir = tmp_dir("tpl-list");
+        let plantillas = dir.join("Plantillas");
+        fs::create_dir_all(plantillas.join("subdir")).unwrap();
+        fs::write(plantillas.join("Nave.md"), "## Tripulación\n-\n").unwrap();
+        fs::write(plantillas.join("Arma.md"), "## Daño\n").unwrap();
+        fs::write(plantillas.join("notas.txt"), "no soy plantilla").unwrap();
+        let out = list_note_templates(dir.to_string_lossy().into_owned()).unwrap();
+        let nombres: Vec<&str> = out.iter().map(|t| t.nombre.as_str()).collect();
+        assert_eq!(nombres, vec!["Arma", "Nave"]);
+        assert!(out[1].markdown.contains("Tripulación"));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn save_note_template_crea_la_carpeta_la_primera_vez() {
+        let dir = tmp_dir("tpl-save");
+        let path = save_note_template(
+            dir.to_string_lossy().into_owned(),
+            "Nave".into(),
+            "## Tripulación\n-".into(),
+            false,
+        )
+        .unwrap();
+        assert!(PathBuf::from(&path).is_file());
+        assert!(path.ends_with("Nave.md"));
+        let body = fs::read_to_string(&path).unwrap();
+        assert!(body.ends_with('\n'), "siempre termina en newline: {:?}", body);
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn save_note_template_no_pisa_sin_overwrite() {
+        let dir = tmp_dir("tpl-overwrite");
+        let root = dir.to_string_lossy().into_owned();
+        save_note_template(root.clone(), "Nave".into(), "## Uno\n".into(), false).unwrap();
+        let err = save_note_template(root.clone(), "Nave".into(), "## Dos\n".into(), false)
+            .unwrap_err();
+        assert!(err.contains("ya existe"), "{}", err);
+        let path = save_note_template(root, "Nave".into(), "## Dos\n".into(), true).unwrap();
+        assert!(fs::read_to_string(&path).unwrap().contains("Dos"));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn save_note_template_rechaza_nombres_con_separadores() {
+        let dir = tmp_dir("tpl-nombre");
+        let root = dir.to_string_lossy().into_owned();
+        assert!(save_note_template(root.clone(), "  ".into(), "## x\n".into(), false).is_err());
+        assert!(save_note_template(root.clone(), "a/b".into(), "## x\n".into(), false).is_err());
+        assert!(save_note_template(root, "a\\b".into(), "## x\n".into(), false).is_err());
         fs::remove_dir_all(&dir).ok();
     }
 }

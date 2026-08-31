@@ -57,7 +57,10 @@ use image::read_image;
 use import::{delete_chapter_file, delete_directory, import_chapter};
 use import_notes::{joplin_import_apply, joplin_scan};
 use import_wizard::{import_wizard_apply, scan_import_source};
-use notes::{create_folder, create_note, delete_note, read_note, write_note};
+use notes::{
+    create_folder, create_note, delete_note, list_note_templates, read_note, save_note_template,
+    write_note,
+};
 use reorder::{move_node, relocate_node};
 use search::{search_apply_path_change, search_query, search_reindex};
 use secrets::{lt_api_key_save, lt_api_key_status};
@@ -145,6 +148,8 @@ pub fn run() {
             write_note,
             create_note,
             create_folder,
+            list_note_templates,
+            save_note_template,
             delete_note,
             move_node,
             relocate_node,

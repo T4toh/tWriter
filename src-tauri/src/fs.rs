@@ -47,6 +47,7 @@ const SKIP_DIRS: &[&str] = &[
     "extras",
     "fonts",
     "themes",
+    "Plantillas",
     ".twriter",
 ];
 const CHAPTER_EXTS: &[&str] = &["html", "odt", "docx"];
