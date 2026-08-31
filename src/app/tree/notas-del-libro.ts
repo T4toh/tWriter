@@ -172,3 +172,41 @@ export function notasDelLibro(
       carpetaLibro?.path ?? (libro ? `${carpetaSaga.path}/${libro.name}` : null),
   };
 }
+
+/** Una carpeta donde se puede crear una nota, para el selector de destino del
+ *  form de creación. */
+export interface CarpetaDeNotas {
+  path: string;
+  /** Path relativo al root, que es como el autor ubica la carpeta. */
+  etiqueta: string;
+}
+
+/** Todas las carpetas del árbol que pueden alojar una nota: las `notas/` de
+ *  saga/libro y las carpetas libres (las que no tienen capítulos). Sin esto el
+ *  destino queda fijo al abrir el modal y equivocarse obliga a cerrar y volver
+ *  a empezar. Ordenadas por su etiqueta, que es el path relativo al root. */
+export function carpetasDeNotas(root: TreeNode | null, rootPath: string): CarpetaDeNotas[] {
+  if (!root) return [];
+  const out: CarpetaDeNotas[] = [];
+  const visitar = (node: TreeNode): void => {
+    if (node.kind === 'notes' || node.kind === 'folder') {
+      out.push({ path: node.path, etiqueta: relativoAlRoot(node.path, rootPath) });
+    }
+    for (const hijo of node.children) visitar(hijo);
+  };
+  visitar(root);
+  out.sort((a, b) => a.etiqueta.localeCompare(b.etiqueta, 'es'));
+  return out;
+}
+
+/** `<root>/Notas/Meridian` → `Notas/Meridian`. Devuelve el path entero si no
+ *  cuelga del root, y `.` si es el root mismo. */
+export function relativoAlRoot(path: string, rootPath: string): string {
+  if (!rootPath || path === rootPath) return path === rootPath ? '.' : path;
+  // `startsWith` pelado no alcanza: con root `/novelas`, un `/novelas-viejo/x`
+  // matchea y devolvería `-viejo/x`. El separador es el que marca el límite.
+  const conBarra = rootPath.replace(/[/\\]$/, '');
+  const siguiente = path.charAt(conBarra.length);
+  if (!path.startsWith(conBarra) || (siguiente !== '/' && siguiente !== '\\')) return path;
+  return path.slice(conBarra.length + 1) || '.';
+}

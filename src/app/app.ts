@@ -29,6 +29,7 @@ import { BookConfigModal } from './book-config/book-config-modal';
 import { SagaConfigModal } from './saga-config/saga-config-modal';
 import { DictionaryModal } from './dictionary/dictionary-modal';
 import { SplitChapterModal } from './split-chapter/split-chapter-modal';
+import { NoteFormModal } from './note-form/note-form-modal';
 import { ThemeEditorModal } from './theme-editor/theme-editor-modal';
 import { ImageViewer } from './image-viewer/image-viewer';
 import { FontPreview } from './font-preview/font-preview';
@@ -77,7 +78,7 @@ import {
   selector: 'app-root',
   imports: [
     Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, DictionaryModal, SplitChapterModal,
-    ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, ToastContainer,
+    NoteFormModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, ToastContainer,
     GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, AboutModal, Spinner, ModalHost, ContextMenuHost,
     LucideArrowDownToLine, LucideArrowUpDown, LucideBug, LucideChevronDown, LucideChevronRight,
     LucideCircleQuestionMark, LucideDownload, LucideDynamicIcon, LucideFolder, LucideMoveHorizontal,

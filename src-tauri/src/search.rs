@@ -663,6 +663,7 @@ const SKIP_DIRS: &[&str] = &[
     "extras",
     "fonts",
     "themes",
+    "Plantillas",
     ".twriter",
 ];
 const CHAPTER_EXTS: &[&str] = &["html"];
@@ -1469,5 +1470,23 @@ mod tests {
         );
         let v = read_index_version(&idx_dir);
         assert_eq!(v, Some(INDEX_VERSION));
+    }
+
+    #[test]
+    fn collect_indexable_skips_plantillas() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("Plantillas")).unwrap();
+        std::fs::write(root.join("Plantillas").join("Nave.md"), "## Tripulación\n").unwrap();
+        std::fs::write(root.join("worldbuilding.md"), "los duendes son criaturas").unwrap();
+        let out = collect_indexable(root);
+        assert!(
+            out.iter().all(|(p, _)| !p.to_string_lossy().contains("Plantillas")),
+            "no debería indexar Plantillas/: {out:?}"
+        );
+        assert!(
+            out.iter().any(|(p, _)| p.ends_with("worldbuilding.md")),
+            "debería seguir indexando notas sueltas: {out:?}"
+        );
     }
 }

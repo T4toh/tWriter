@@ -1,0 +1,100 @@
+@if (editing(); as s) {
+  <div class="nf-backdrop" (click)="close()"></div>
+  <div class="nf-modal" (click)="$event.stopPropagation()">
+    <header class="nf-header">
+      <h2>Nueva nota</h2>
+    </header>
+
+    <div class="nf-config">
+      <label class="nf-field nf-field-ancho">
+        <span>Se crea en</span>
+        <app-select
+          [ngModel]="s.parentDir"
+          (ngModelChange)="onDestino($event)"
+          [options]="destinoOptions()"
+        />
+      </label>
+      <label class="nf-field">
+        <span>Plantilla</span>
+        <app-select
+          #plantillaSelect
+          [ngModel]="s.plantillaId"
+          (ngModelChange)="onPlantilla($event)"
+          [options]="plantillaOptions()"
+        />
+      </label>
+      <label class="nf-field">
+        <span>Nombre</span>
+        <input
+          type="text"
+          [ngModel]="s.nombre"
+          (ngModelChange)="onNombre($event)"
+          placeholder="Sin extensión, .md se agrega solo"
+        />
+      </label>
+    </div>
+
+    <div class="nf-bloques">
+      @for (b of s.bloques; track $index; let i = $index) {
+        <div class="nf-bloque" [class.nf-parrafo]="b.tipo === 'parrafo'">
+          <div class="nf-bloque-head">
+            <span class="nf-tipo">{{ b.tipo === 'h1' ? 'Título' : b.tipo === 'h2' ? 'Subtítulo' : b.tipo === 'lista' ? 'Lista' : 'Párrafo' }}</span>
+            @if (b.tipo === 'h1' || b.tipo === 'h2') {
+              <input
+                class="nf-titulo"
+                type="text"
+                [ngModel]="b.texto"
+                (ngModelChange)="onTitulo(i, $event)"
+                placeholder="Nombre de la sección"
+              />
+            }
+            <button type="button" title="Subir" (click)="mover(i, -1)">↑</button>
+            <button type="button" title="Bajar" (click)="mover(i, 1)">↓</button>
+            <button type="button" class="nf-quitar" title="Quitar bloque" (click)="quitar(i)">✕</button>
+          </div>
+
+          @if (b.tipo === 'parrafo') {
+            <textarea
+              rows="3"
+              [ngModel]="b.texto"
+              (ngModelChange)="onParrafo(i, $event)"
+              placeholder="Prosa de la sección"
+            ></textarea>
+          }
+
+          @if (b.tipo === 'lista') {
+            <ul class="nf-items">
+              @for (item of b.items; track $index; let j = $index) {
+                <li>
+                  <input
+                    type="text"
+                    [ngModel]="item"
+                    (ngModelChange)="onItem(i, j, $event)"
+                    placeholder="Item"
+                  />
+                  <button type="button" title="Quitar item" (click)="quitarItem(i, j)">✕</button>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
+    </div>
+
+    <footer class="nf-footer">
+      <div class="nf-add">
+        <button type="button" (click)="add('h1')">+ Título</button>
+        <button type="button" (click)="add('h2')">+ Subtítulo</button>
+        <button type="button" (click)="add('lista')">+ Lista</button>
+        <button type="button" (click)="add('parrafo')">+ Párrafo</button>
+      </div>
+      <div class="nf-actions">
+        <button type="button" (click)="guardarPlantilla()">Guardar plantilla…</button>
+        <button type="button" (click)="close()">Cancelar</button>
+        <button type="button" class="nf-primary" [disabled]="!puedeCrear()" (click)="crear()">
+          {{ creando() ? 'Creando…' : 'Crear' }}
+        </button>
+      </div>
+    </footer>
+  </div>
+}

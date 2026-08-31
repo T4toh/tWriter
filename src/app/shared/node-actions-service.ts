@@ -33,11 +33,7 @@ import { ThemesService } from '../core/themes-service';
 import { ToastService } from '../core/toast-service';
 import { FontEntry, ThemeMeta, TreeNode } from '../core/types';
 import { ModalService } from './modal-service';
-import {
-  NOTE_TEMPLATES,
-  NoteTemplateId,
-  renderNoteTemplate,
-} from './note-templates';
+import { NoteFormService } from '../core/note-form-service';
 import { CtxMenuEntry } from './context-menu-service';
 import { notasDelLibro } from '../tree/notas-del-libro';
 
@@ -68,6 +64,7 @@ export class NodeActionsService {
   private modal = inject(ModalService);
   private dialogs = inject(NativeDialogsService);
   private splitSvc = inject(SplitChapterService);
+  private noteForm = inject(NoteFormService);
 
   // ───── Builders ─────
 
@@ -735,35 +732,13 @@ export class NodeActionsService {
   }
 
   async createNoteIn(parentDir: string): Promise<void> {
-    const res = await this.modal.selectPrompt({
-      title: 'Nueva nota',
-      message: `Se crea en: ${this.relToRoot(parentDir)}`,
-      selectLabel: 'Plantilla',
-      selectOptions: NOTE_TEMPLATES.map((t) => ({ value: t.id, label: t.label })),
-      selectDefault: 'vacia',
-      inputLabel: 'Nombre (sin extensión, .md se agrega solo)',
-      inputPlaceholder: 'nombre',
-      okLabel: 'Crear',
-      validate: ({ value }) => {
-        const t = value.trim();
-        if (!t) return 'Nombre vacío';
-        if (t.includes('/') || t.includes('\\')) return 'Sin barras / o \\';
-        return null;
-      },
-    });
-    if (!res?.value.trim()) return;
-    const nombre = res.value.trim();
-    // El título del markdown es el nombre sin la extensión que el usuario
-    // pueda haber tipeado — el backend hace lo mismo para el `# <name>`.
-    const titulo = nombre.replace(/\.(md|markdown)$/i, '');
-    const body = renderNoteTemplate(res.selected as NoteTemplateId, titulo);
-    // Sin esto, con el pane de notas colapsado la nota nueva se crea invisible.
-    this.settings.setNotesPaneCollapsed(false);
-    const creado = await this.note.createNote(parentDir, nombre, body);
+    const creado = await this.noteForm.open(parentDir);
     if (!creado) return;
+    // Sin esto, con el pane de notas colapsado la nota nueva se crea invisible.
+    // Va después del `if`: si el autor cancela el modal, el pane no se
+    // descolapsa solo.
+    this.settings.setNotesPaneCollapsed(false);
     // Y sin esto la nota puede nacer en una rama que la tab activa no muestra.
-    // `createNote` ya recargó el árbol, así que se pregunta directo si la nota
-    // nueva entra en la lista del libro; si no, se cambia a "Todas".
     const nl = notasDelLibro(this.project.tree(), this.contextoLibro());
     const enLaLista =
       !!nl && [...nl.libro, ...nl.saga].some((x) => x.path === creado);
@@ -817,17 +792,6 @@ export class NodeActionsService {
       return;
     }
     await this.createNoteIn(target);
-  }
-
-  /** Path relativo al root para mostrarlo en modales. Devuelve el absoluto si
-   *  el path cae fuera del root (no debería pasar). */
-  private relToRoot(path: string): string {
-    const root = this.settings.root();
-    if (root && path.startsWith(root)) {
-      const rel = path.slice(root.length).replace(/^[/\\]/, '');
-      return rel || '.';
-    }
-    return path;
   }
 
   async createFolderIn(parentDir: string): Promise<void> {
