@@ -52,8 +52,11 @@ export class NoteFormService {
   /** Abre el form para crear una nota en `parentDir` y resuelve cuando el autor
    *  crea o cancela. Recarga las plantillas del autor cada vez: pudo haber
    *  editado un `.md` de `Plantillas/` a mano o llegado uno por git desde la
-   *  otra PC. */
+   *  otra PC. Si ya hay un form abierto, no lo pisa (mismo guard que
+   *  `ModalService.openModal`): resuelve `null` de una para no perder el
+   *  resolver de la edición en curso. */
   open(parentDir: string): Promise<string | null> {
+    if (this.editing() !== null) return Promise.resolve(null);
     const inicial = NOTE_TEMPLATES[0];
     this.editing.set({
       parentDir,
@@ -170,6 +173,9 @@ export class NoteFormService {
     const s = this.editing();
     if (!s) return null;
     const nombre = s.nombre.trim();
+    // Invariante interna, no un fallo silencioso: el botón Crear del modal
+    // está deshabilitado con nombre vacío, así que este `return` nunca lo ve
+    // el autor en uso normal.
     if (!nombre) return null;
     this.creando.set(true);
     try {
@@ -185,15 +191,19 @@ export class NoteFormService {
     }
   }
 
-  /** Guarda la estructura actual (sin contenido) como plantilla del autor. */
-  async guardarPlantilla(nombre: string, overwrite: boolean): Promise<boolean> {
+  /** Guarda la estructura actual (sin contenido) como plantilla del autor.
+   *  `'ok'` = guardada. `'conflicto'` = ya existe un archivo con ese nombre y
+   *  `overwrite` era false — no tira toast, el componente ofrece sobrescribir.
+   *  `'error'` = cualquier otro fallo (permisos, disco, etc.) — ese sí tira
+   *  toast con la causa, porque no tiene nada que ver con un nombre repetido. */
+  async guardarPlantilla(nombre: string, overwrite: boolean): Promise<'ok' | 'conflicto' | 'error'> {
     const s = this.editing();
     const root = this.settings.root();
-    if (!s || !root) return false;
+    if (!s || !root) return 'error';
     const markdown = bloquesAMarkdown(s.bloques, { plantilla: true });
     if (!markdown) {
       this.toast.error('La plantilla quedaría vacía: agregá al menos un bloque.');
-      return false;
+      return 'error';
     }
     try {
       await invoke<string>('save_note_template', {
@@ -204,12 +214,12 @@ export class NoteFormService {
       });
       await this.recargarPlantillas();
       this.toast.info(`Plantilla "${nombre}" guardada en Plantillas/`);
-      return true;
+      return 'ok';
     } catch (err) {
       const msg = String(err);
-      if (msg.includes('ya existe')) return false; // el componente ofrece sobrescribir
+      if (msg.includes('ya existe')) return 'conflicto';
       this.toast.error(`No pude guardar la plantilla: ${msg}`);
-      return false;
+      return 'error';
     }
   }
 }
