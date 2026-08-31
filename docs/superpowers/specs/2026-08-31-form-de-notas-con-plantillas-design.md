@@ -200,7 +200,10 @@ lado de `<app-split-chapter-modal />`, línea 338), abierto por un service con u
   puede escribir otra cosa sin salir del form.
 - Reorden con ↑/↓, no drag. `cdkDropList` hoy solo vive en `tree.ts`; el drag suma código,
   IDs de dropList y problemas de foco por una ganancia estética.
-  <!-- ponytail: reorden con botones; drag si mover bloques resulta molesto en uso real. -->
+  **El drag queda acordado como pulido posterior** (autor, 2026-08-31): primero que el form
+  funcione, después `cdkDropList` + `moveItemInArray` sobre el mismo array de bloques, que
+  es todo lo que hace falta — el modelo no cambia.
+  <!-- ponytail: reorden con botones; el drag es pulido acordado, no un rediseño. -->
 - Cambiar de plantilla con bloques ya llenos **pide confirmación** (`modal.confirm`, que ya
   existe) antes de descartar lo escrito.
 - "Guardar plantilla…" pide nombre (`modal.prompt`) y guarda `bloquesAMarkdown(bloques,
