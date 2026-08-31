@@ -125,6 +125,28 @@ console.log('bloquesAMarkdown — modo plantilla');
   check('round-trip estable en la segunda vuelta', tipos(back2) === tipos(back), `${tipos(back2)} vs ${tipos(back)}`);
 }
 
+console.log('round-trip — párrafos adyacentes');
+{
+  const md1 = '## Descripción\n\nUno.\n\nDos.\n';
+  const bs1 = markdownABloques(md1);
+  check('parsea dos párrafos', tipos(bs1) === 'h2,parrafo,parrafo', tipos(bs1));
+  const md2 = bloquesAMarkdown(bs1);
+  const bs2 = markdownABloques(md2);
+  check('round-trip preserva dos párrafos', tipos(bs2) === tipos(bs1), `${tipos(bs2)} vs ${tipos(bs1)}`);
+  check('round-trip preserva el contenido', bs2[1].texto === 'Uno.' && bs2[2].texto === 'Dos.', JSON.stringify(bs2.slice(1)));
+}
+
+console.log('round-trip — listas adyacentes');
+{
+  const md1 = '- a\n\n- b\n';
+  const bs1 = markdownABloques(md1);
+  check('parsea dos listas', tipos(bs1) === 'lista,lista', tipos(bs1));
+  const md2 = bloquesAMarkdown(bs1);
+  const bs2 = markdownABloques(md2);
+  check('round-trip preserva dos listas', tipos(bs2) === tipos(bs1), `${tipos(bs2)} vs ${tipos(bs1)}`);
+  check('round-trip preserva items', bs2[0].items[0] === 'a' && bs2[1].items[0] === 'b', JSON.stringify(bs2));
+}
+
 console.log('bloqueVacio');
 {
   const l = bloqueVacio('lista');

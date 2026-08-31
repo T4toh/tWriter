@@ -104,6 +104,8 @@ function conParrafosImplicitos(bloques: readonly Bloque[]): Bloque[] {
 export function bloquesAMarkdown(bloques: readonly Bloque[], opts: RenderOpts = {}): string {
   const plantilla = opts.plantilla === true;
   const renderizado: string[] = [];
+  let ultimoTipo: BloqueTipo | null = null;
+
   for (let i = 0; i < bloques.length; i++) {
     const b = bloques[i];
     let s: string | null = null;
@@ -111,7 +113,7 @@ export function bloquesAMarkdown(bloques: readonly Bloque[], opts: RenderOpts = 
       const texto = b.texto.trim();
       if (texto === '' && !plantilla) continue;
       // En modo nota, salta headings sin contenido después
-      if (!plantilla && allFollowingAreEmpty(bloques, i + 1)) continue;
+      if (!plantilla && restoVacio(bloques, i + 1)) continue;
       s = `${b.tipo === 'h1' ? '#' : '##'} ${texto}`.trimEnd();
     } else if (b.tipo === 'lista') {
       if (!plantilla) {
@@ -129,17 +131,18 @@ export function bloquesAMarkdown(bloques: readonly Bloque[], opts: RenderOpts = 
       s = texto;
     }
     if (s !== null) {
-      // Agrega línea en blanco antes de headings (salvo el primero)
-      if (renderizado.length > 0 && (b.tipo === 'h1' || b.tipo === 'h2')) {
+      // Agrega línea en blanco: antes de headings o entre bloques del mismo tipo (parrafo/lista)
+      if (renderizado.length > 0 && (b.tipo === 'h1' || b.tipo === 'h2' || ultimoTipo === b.tipo)) {
         renderizado.push('');
       }
       renderizado.push(s);
+      ultimoTipo = b.tipo;
     }
   }
   return renderizado.length === 0 ? '' : `${renderizado.join('\n')}\n`;
 }
 
-function allFollowingAreEmpty(bloques: readonly Bloque[], start: number): boolean {
+function restoVacio(bloques: readonly Bloque[], start: number): boolean {
   for (let i = start; i < bloques.length; i++) {
     const b = bloques[i];
     if (b.tipo === 'h1' || b.tipo === 'h2') return true; // Siguiente heading: sección vacía
