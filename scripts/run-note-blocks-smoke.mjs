@@ -61,6 +61,16 @@ console.log('markdownABloques — headings');
   const bs = markdownABloques('### Muy anidado\n');
   check('###+ colapsa a h2', tipos(bs) === 'h2,parrafo', tipos(bs));
 }
+{
+  const bs = markdownABloques('# \n');
+  check('heading con título vacío da h1 (no párrafo con "#")', tipos(bs) === 'h1,parrafo', tipos(bs));
+  check('el h1 vacío tiene texto ""', bs[0].texto === '', JSON.stringify(bs[0]));
+}
+{
+  const bs = markdownABloques('# \n\n## \n');
+  check('h1 y h2 con título vacío en la misma nota', tipos(bs) === 'h1,h2,parrafo', tipos(bs));
+  check('ambos títulos vacíos', bs[0].texto === '' && bs[1].texto === '', JSON.stringify(bs));
+}
 
 console.log('markdownABloques — párrafo implícito');
 {

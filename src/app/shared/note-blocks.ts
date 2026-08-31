@@ -22,7 +22,7 @@ export interface RenderOpts {
   plantilla?: boolean;
 }
 
-const HEADING = /^(#{1,6})\s+(.*)$/;
+const HEADING = /^(#{1,6})(?:\s+(.*))?$/;
 /** Exige espacio (o nada) después del marcador, para que `---` y `-Hola` no sean bullets. */
 const BULLET = /^\s*[-*+](?:\s+(.*))?$/;
 
@@ -53,7 +53,7 @@ export function markdownABloques(md: string): Bloque[] {
       cerrar();
       // ponytail: el modelo tiene dos niveles; ###+ colapsa a h2. Sumar 'h3' si
       // aparece una nota con jerarquía de tres niveles que importe.
-      out.push({ tipo: h[1].length === 1 ? 'h1' : 'h2', texto: h[2].trim(), items: [] });
+      out.push({ tipo: h[1].length === 1 ? 'h1' : 'h2', texto: (h[2] ?? '').trim(), items: [] });
       continue;
     }
     const b = BULLET.exec(linea);
