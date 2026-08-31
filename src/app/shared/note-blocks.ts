@@ -113,7 +113,7 @@ export function bloquesAMarkdown(bloques: readonly Bloque[], opts: RenderOpts = 
       const texto = b.texto.trim();
       if (texto === '' && !plantilla) continue;
       // En modo nota, salta headings sin contenido después
-      if (!plantilla && restoVacio(bloques, i + 1)) continue;
+      if (!plantilla && restoVacio(bloques, i + 1, b.tipo)) continue;
       s = `${b.tipo === 'h1' ? '#' : '##'} ${texto}`.trimEnd();
     } else if (b.tipo === 'lista') {
       if (!plantilla) {
@@ -142,10 +142,19 @@ export function bloquesAMarkdown(bloques: readonly Bloque[], opts: RenderOpts = 
   return renderizado.length === 0 ? '' : `${renderizado.join('\n')}\n`;
 }
 
-function restoVacio(bloques: readonly Bloque[], start: number): boolean {
+/** `nivel` es el tipo del heading que se está evaluando (`b.tipo` en el
+ *  llamador). Un `h1` es "sección" hasta el próximo `h1`: sus `h2` son
+ *  subsecciones, así que atravesarlos sin cortar es necesario para que
+ *  `# Título` no se pierda solo porque abajo hay un `## Subtítulo` con
+ *  contenido (F1). Un `h2`, en cambio, sigue cortando ante cualquier heading. */
+function restoVacio(bloques: readonly Bloque[], start: number, nivel: BloqueTipo): boolean {
   for (let i = start; i < bloques.length; i++) {
     const b = bloques[i];
-    if (b.tipo === 'h1' || b.tipo === 'h2') return true; // Siguiente heading: sección vacía
+    if (b.tipo === 'h1') return true; // el próximo h1 siempre cierra la sección
+    if (b.tipo === 'h2') {
+      if (nivel === 'h1') continue; // un h1 sigue vigente a través de sus h2
+      return true;
+    }
     if (b.tipo === 'lista') {
       const hasContent = b.items.some((item) => item.trim() !== '');
       if (hasContent) return false;

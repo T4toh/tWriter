@@ -122,6 +122,43 @@ console.log('bloquesAMarkdown — modo nota');
   check('sin bloques con contenido → string vacío', bloquesAMarkdown([{ tipo: 'parrafo', texto: '', items: [] }]) === '');
 }
 
+console.log('bloquesAMarkdown — modo nota, h1 con h2 debajo (F1)');
+{
+  // catálogo: h1 (nombre) + h2 (entrada) + prosa. El h1 no puede perderse
+  // solo porque el siguiente bloque es un h2 con contenido.
+  const bs = [
+    { tipo: 'h1', texto: 'Monstruos', items: [] },
+    { tipo: 'h2', texto: 'Oso de las tormentas', items: [] },
+    { tipo: 'parrafo', texto: 'Vive en la montaña.', items: [] },
+  ];
+  const md = bloquesAMarkdown(bs);
+  check('el h1 sobrevive con un h2 con contenido debajo', md.startsWith('# Monstruos'), JSON.stringify(md));
+  check('el h2 y el parrafo quedan', md.includes('## Oso de las tormentas') && md.includes('Vive en la montaña.'), JSON.stringify(md));
+}
+{
+  // h1 + h2 vacío + nada: sigue siendo "todo vacío", se descarta entero.
+  const bs = [
+    { tipo: 'h1', texto: 'Título', items: [] },
+    { tipo: 'h2', texto: 'Sección', items: [] },
+    { tipo: 'parrafo', texto: '', items: [] },
+  ];
+  const md = bloquesAMarkdown(bs);
+  check('h1 + h2 vacío sigue descartándose entero', md === '', JSON.stringify(md));
+}
+{
+  // h1 vacío, h2 con contenido, otro h1 con contenido: cada uno se evalúa bien.
+  const bs = [
+    { tipo: 'h1', texto: 'T1', items: [] },
+    { tipo: 'h2', texto: 'A', items: [] },
+    { tipo: 'parrafo', texto: 'contenido de A', items: [] },
+    { tipo: 'h1', texto: 'T2', items: [] },
+    { tipo: 'parrafo', texto: '', items: [] },
+  ];
+  const md = bloquesAMarkdown(bs);
+  check('T1 sobrevive (tiene contenido antes del próximo h1)', md.includes('# T1'), JSON.stringify(md));
+  check('T2 se descarta (nada antes del fin)', !md.includes('T2'), JSON.stringify(md));
+}
+
 console.log('bloquesAMarkdown — modo plantilla');
 {
   const bs = markdownABloques('## Descripción\n\n## Atajos\n- ¡Fuego!\n');
