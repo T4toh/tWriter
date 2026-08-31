@@ -125,7 +125,12 @@ export class NoteFormService {
   setNombre(v: string): void {
     const s = this.editing();
     if (!s) return;
-    const anterior = s.nombre.trim();
+    // Comparar contra lo mismo que quedó escrito en el h1 la vez anterior
+    // (sin extensión): si acá se comparara contra el nombre crudo, tipear
+    // "Elfos.md" completo hace que el h1 pase a "Elfos" mientras `nombre`
+    // sigue en "Elfos.md" — la próxima tecla ya no matchea ninguna de las
+    // dos condiciones de abajo y el h1 queda congelado para siempre.
+    const anterior = sinExtension(s.nombre.trim());
     // El H1 sigue al nombre mientras el autor no lo haya escrito a mano.
     const titulo = sinExtension(v.trim());
     const bloques = s.bloques.map((b) =>
