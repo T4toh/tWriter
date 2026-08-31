@@ -1139,6 +1139,50 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
     Confirma la decisión ya tomada en la sección de Búsqueda: el
     diccionario per-saga (`<saga>/diccionario.txt`) es el camino.
 
+- **Agregar un verbo al diccionario y que entren todas sus conjugaciones**
+  (pedido del autor, 2026-08-31). Hoy `<saga>/diccionario.txt` es una lista
+  plana de formas exactas: el filtro de `editor.ts:638` compara
+  `word.toLowerCase()` contra el `Set`, así que agregar `teletransportar` no
+  silencia `teletransportó`, `teletransportaba`, `teletransportándose` ni las
+  otras ~60 formas — hay que tipearlas una por una. Es el caso de todo verbo
+  inventado del worldbuilding.
+  Dos caminos, hay que elegir uno:
+  1. **Conjugador propio** (puro TS en `src/app/dictionary/`, con smoke runner
+     tipo `run-rae-smoke.mjs`): al agregar una palabra que termine en
+     `-ar/-er/-ir`, ofrecer "agregar también las conjugaciones" y escribir las
+     formas regulares (indicativo, subjuntivo, imperativo **con voseo**,
+     participio, gerundio) + enclíticos (`-se`, `-lo`, `-le`, `-me`) al
+     `diccionario.txt`. Las formas quedan visibles y editables a mano, y el
+     `merge=union` del `.gitattributes` las sincroniza sola. Irregulares: no
+     modelarlos — el 100% de los verbos inventados que aparecen (`teletransportar`)
+     son regulares; si alguno no lo es, se corrige la línea a mano.
+  2. **Prefijo/wildcard en el filtro** (`teletransport*` como entrada): diez
+     líneas en vez de un conjugador, archivo chico. Contra: el wildcard silencia
+     también typos reales que empiecen igual, y el diccionario deja de ser una
+     lista de palabras legible.
+  Nota aparte: el diccionario es per-saga y no per-idioma, así que un conjugador
+  de español no ayuda a las sagas en inglés (donde igual el problema es chico:
+  `-s/-ed/-ing`).
+- **Detectar mayúsculas rancias en las palabras propias del autor** (pedido del
+  autor, 2026-08-31): `AEdan` por `Aedan`, `YIRIel` por `Yiriel`. Hoy **nada**
+  las marca, y la causa está identificada: el filtro de TYPOS de `editor.ts:638`
+  compara en minúsculas (`dict.has(word.toLowerCase())`), o sea que una vez que
+  `aedan` está en el diccionario, **cualquier** variante de mayúsculas de esa
+  palabra queda silenciada. LT tampoco ayuda: `MORFOLOGIK_*` es justamente lo que
+  ese filtro se come.
+  Fix barato, sin motor nuevo: el diccionario ya guarda la forma canónica, así
+  que alcanza con marcar toda palabra del texto cuyo `toLowerCase()` matchee una
+  entrada del diccionario pero cuya grafía exacta **no** sea la de la entrada.
+  Función pura; la comparación ya existe del otro lado —
+  `detectProblematic` en `dictionary/word-validator.ts` ya reporta
+  "Duplicada (variante de mayúsculas)" **dentro** del archivo; acá es el mismo
+  criterio pero texto vs. diccionario. Reusar, no escribir de cero.
+  Excepciones que no son error y no hay que marcar: la palabra en ALL-CAPS
+  (grito: `—¡AEDAN!`) y el arranque de oración cuando la entrada es minúscula.
+  Dónde mostrarlo: sumarlo a la pasada del panel de auditoría RAE
+  (`rae-audit-panel.ts`), que ya recorre el capítulo y lista violaciones con
+  jump-to-term, en vez de inventar un panel nuevo.
+
 ## Búsqueda
 
 - [x] **Mejorar la búsqueda — exacta por default + toggle ≈ (fuzzy/acentos)**
@@ -1345,6 +1389,29 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   doble-click ahora (`browseFolder`) flushea ediciones pendientes, cierra el
   archivo del pane primario y navega la galería `app-landing` a esa carpeta.
   Excluye el árbol de notas (la galería navega el árbol principal).
+- **El creador de notas es inútil como está — hacerlo un form de verdad**
+  (pedido del autor, 2026-08-31). **Esto revierte a propósito el "no invertir
+  más en esa dirección (fichas con campos, frontmatter, plantillas
+  configurables) sin que él lo pida" del item de plantillas de arriba: lo
+  pidió.** Hoy `createNoteIn` (`shared/node-actions-service.ts:737`) es un
+  `modal.selectPrompt` con un solo input (nombre) y tres plantillas
+  (`Vacía`/`Personaje`/`Mundo`) que solo insertan headings `##` vacíos — por eso
+  da lo mismo que crear la nota vacía y tipear a mano.
+  Lo que se pide: un **form** que cree "más o menos todo" desde ahí, con más
+  plantillas prehechas — `Conjuro`, `Personaje`, `Lista`, y las que salgan de
+  mirar `Novelas/Notas/` (no inventarlas: copiar la forma de las que el autor ya
+  escribe, igual que se hizo con `Personaje` y `Mundo`).
+  Piezas: (1) crecer `NOTE_TEMPLATES` en `shared/note-templates.ts` — sigue
+  siendo data pura y ya tiene su `run-note-templates-smoke.mjs`, agregar
+  plantilla no debería costar más que una entrada en el array; (2) que cada
+  sección de la plantilla pueda ser un **campo del modal** (`Raza:`, `Escuela:`,
+  `Coste:`) y no solo un heading vacío, así la nota nace con contenido en vez de
+  con un esqueleto; eso pide un modal con campos dinámicos — el
+  `modal.selectPrompt` actual tiene un input fijo. Mantener `Vacía` como default
+  y no imponer nada a las listas sueltas, que siguen siendo texto libre.
+  Antes de codear: confirmar con el autor qué campos lleva cada plantilla nueva
+  (`Conjuro` sobre todo), porque adivinarlos es exactamente el error que llevó a
+  que las tres actuales no sirvieran.
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
