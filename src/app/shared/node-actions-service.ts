@@ -33,11 +33,8 @@ import { ThemesService } from '../core/themes-service';
 import { ToastService } from '../core/toast-service';
 import { FontEntry, ThemeMeta, TreeNode } from '../core/types';
 import { ModalService } from './modal-service';
-import {
-  NOTE_TEMPLATES,
-  NoteTemplateId,
-  renderNoteTemplate,
-} from './note-templates';
+import { NOTE_TEMPLATES, bloquesDePlantilla } from './note-templates';
+import { bloquesAMarkdown } from './note-blocks';
 import { CtxMenuEntry } from './context-menu-service';
 import { notasDelLibro } from '../tree/notas-del-libro';
 
@@ -756,7 +753,11 @@ export class NodeActionsService {
     // El título del markdown es el nombre sin la extensión que el usuario
     // pueda haber tipeado — el backend hace lo mismo para el `# <name>`.
     const titulo = nombre.replace(/\.(md|markdown)$/i, '');
-    const body = renderNoteTemplate(res.selected as NoteTemplateId, titulo);
+    const tpl = NOTE_TEMPLATES.find((t) => t.id === res.selected);
+    const bloques = tpl ? bloquesDePlantilla(tpl) : [];
+    const h1 = bloques.find((b) => b.tipo === 'h1');
+    if (h1) h1.texto = titulo;
+    const body = bloquesAMarkdown(bloques) || null;
     // Sin esto, con el pane de notas colapsado la nota nueva se crea invisible.
     this.settings.setNotesPaneCollapsed(false);
     const creado = await this.note.createNote(parentDir, nombre, body);
