@@ -123,6 +123,14 @@ console.log('combinarPlantillas');
   const out = combinarPlantillas(NOTE_TEMPLATES, [{ nombre: 'Rota', markdown: '   \n' }]);
   check('una plantilla que no parsea a nada se descarta', !out.some((t) => t.label === 'Rota'), JSON.stringify(out.map((t) => t.label)));
 }
+{
+  const out = combinarPlantillas(NOTE_TEMPLATES, [{ nombre: 'Mundo', markdown: '## Otra\n' }]);
+  check(
+    'Mundo.md pisa la plantilla "mundo" por id, aunque el label sea "Mundo (estado del libro)"',
+    out.length === 6 && out.filter((t) => t.label === 'Mundo').length === 1 && out.find((t) => t.label === 'Mundo').origen === 'archivo',
+    JSON.stringify(out.map((t) => `${t.id}:${t.label}:${t.origen}`)),
+  );
+}
 
 console.log('');
 console.log(`${passed} ok, ${failed} fail`);

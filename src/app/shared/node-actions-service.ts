@@ -757,7 +757,7 @@ export class NodeActionsService {
     const bloques = tpl ? bloquesDePlantilla(tpl) : [];
     const h1 = bloques.find((b) => b.tipo === 'h1');
     if (h1) h1.texto = titulo;
-    const body = bloquesAMarkdown(bloques) || null;
+    const body = bloquesAMarkdown(bloques, { plantilla: true }) || null;
     // Sin esto, con el pane de notas colapsado la nota nueva se crea invisible.
     this.settings.setNotesPaneCollapsed(false);
     const creado = await this.note.createNote(parentDir, nombre, body);

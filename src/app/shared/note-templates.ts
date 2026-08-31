@@ -58,10 +58,13 @@ export function bloquesDePlantilla(tpl: NoteTemplate): Bloque[] {
 }
 
 /** Junta las de fábrica con los `.md` de `<root>/Plantillas/`. El archivo del
- *  autor le gana a la de fábrica con el mismo nombre (comparación
- *  case-insensitive), así puede pisar una plantilla shipeada sin esperar un
- *  release. Las que no existen de fábrica se suman al final, alfabéticas. Una
- *  plantilla que no parsea a ningún bloque se descarta. */
+ *  autor le gana a la de fábrica con el mismo nombre — comparación
+ *  case-insensitive contra el `id` o el `label` de la de fábrica, porque el
+ *  nombre natural del archivo (`Mundo.md`) suele ser el `id` corto y no el
+ *  `label` completo (`Mundo (estado del libro)`) — así puede pisar una
+ *  plantilla shipeada sin esperar un release. Las que no existen de fábrica
+ *  se suman al final, alfabéticas. Una plantilla que no parsea a ningún
+ *  bloque se descarta. */
 export function combinarPlantillas(
   fabrica: readonly NoteTemplate[],
   archivos: readonly { nombre: string; markdown: string }[],
@@ -71,9 +74,10 @@ export function combinarPlantillas(
   for (const a of utiles) porNombre.set(a.nombre.toLowerCase(), a);
 
   const out: NoteTemplate[] = fabrica.map((t) => {
-    const propia = porNombre.get(t.label.toLowerCase());
+    const clave = porNombre.has(t.id.toLowerCase()) ? t.id.toLowerCase() : t.label.toLowerCase();
+    const propia = porNombre.get(clave);
     if (!propia) return t;
-    porNombre.delete(t.label.toLowerCase());
+    porNombre.delete(clave);
     return { id: t.id, label: propia.nombre, markdown: propia.markdown, origen: 'archivo' };
   });
 
