@@ -1541,6 +1541,31 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   índice con `class="toc-editorial"`. De yapa, las imágenes ahora se
   reescalan antes de embeberse (crate `image`): la tapa iba a resolución de
   imprenta adentro del EPUB. **Pendiente de verificación manual del autor.**
+- **Blurb y sinopsis por libro** (pedido del autor, 2026-09-01). Dos textos
+  distintos y con usos distintos: el **blurb** es el gancho de contratapa, dos o
+  tres líneas que venden; la **sinopsis** es el resumen largo, el que va en la
+  ficha de la tienda. Hoy no existe ninguno de los dos. Campos nuevos en
+  `book.json`, bilingües como el resto de las páginas editoriales. Dónde
+  aparecen, por orden de utilidad: en la lista de "Otros libros" del back matter
+  (el blurb, debajo del título — quedó explícitamente fuera del alcance de la
+  spec del back matter justamente porque no había campo), en la contratapa
+  generada, y en la tarjeta del libro del landing. La sinopsis probablemente no
+  vaya al EPUB, pero es lo que el autor copia y pega al publicar, así que tener
+  dónde escribirla y de dónde copiarla ya justifica el campo.
+
+- **Sacar el autor del libro: hoy vive en tres lugares** (pedido del autor,
+  2026-09-01). Después del back matter, el nombre del autor está en `book.json`
+  (`autor`), en `saga.json` (`autor`) y en `autor.json` (`nombre`), que es el
+  perfil global que agregó `autor.rs`. Tres fuentes para un dato que en un repo
+  de novelas es uno solo: el que escribe. La resolución debería ser
+  `autor.json` primero y los otros dos como override heredado, igual que ya
+  funciona la bio. Ojo con el orden de trabajo: `epub.rs` usa `cfg.autor` en
+  cuatro lugares (portadilla, copyright, metadata OPF, y un fallback que lo
+  completa desde la saga en `epub.rs:1794`), así que primero va la resolución
+  con fallback y recién después se limpian los `book.json` en disco —
+  al revés, los libros salen sin autor en el EPUB. Los 21 `book.json` de
+  `~/novelas` tienen el campo cargado, así que la migración toca todos.
+
 - [x] **Las rutas de imagen se guardan absolutas y no sobreviven el cambio de PC**
   (encontrado el 2026-09-01 verificando el mazo de tapas: en esta Mac los 4
   libros de Meridian 2.0 mostraban placeholder). `book-config-modal.ts:216`
