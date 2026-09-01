@@ -699,31 +699,64 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         });
     }
 
-    // 5a-bis) Sobre el autor (si hay bio). Va después del último capítulo /
-    // epílogo y antes de la contratapa.
-    if cfg
+    // 5a-bis) Sobre el autor. La bio, la foto, la web y el QR salen de
+    // autor.json en la raíz; el book.json puede pisar bio y foto.
+    let perfil = crate::autor::leer(&root_dir);
+    let bio_libro = cfg
         .sobre_el_autor
         .as_deref()
         .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .is_some()
-    {
-        let photo_filename: Option<String> = if let Some(rel) = &cfg.foto_autor {
-            embed_image(&book_dir, rel, "author", &mut zip, opts)?.map(|(name, mime)| {
-                items.push(Item {
-                    id: "author-image".into(),
-                    href: name.clone(),
-                    media_type: mime,
-                    spine_order: None,
-                    properties: None,
-                });
-                name
+        .filter(|s| !s.is_empty());
+    let bio = bio_libro.or_else(|| perfil.bio_en(cfg.idioma.as_deref().unwrap_or("es")));
+    if let Some(bio) = bio {
+        // Foto: la del libro gana; si no, la del perfil global.
+        let foto_origen = cfg
+            .foto_autor
+            .as_deref()
+            .map(|rel| {
+                let p = std::path::Path::new(rel);
+                if p.is_absolute() { p.to_path_buf() } else { book_dir.join(p) }
             })
-        } else {
-            None
+            .filter(|p| p.is_file())
+            .or_else(|| crate::book_config::resolver_imagen(&root_dir, perfil.foto.as_deref()));
+
+        let foto_filename = match foto_origen {
+            Some(origen) => embebido_reescalado(
+                &origen,
+                "author",
+                600,
+                false,
+                &mut zip,
+                opts,
+                &mut items,
+                "author-image",
+            )?,
+            None => None,
         };
+
+        let qr_filename = match crate::book_config::resolver_imagen(&root_dir, perfil.qr.as_deref())
+        {
+            Some(origen) => embebido_reescalado(
+                &origen,
+                "author-qr",
+                600,
+                true,
+                &mut zip,
+                opts,
+                &mut items,
+                "author-qr-image",
+            )?,
+            None => None,
+        };
+
         spine_idx += 1;
-        let xhtml = build_about_author_xhtml(&cfg, photo_filename.as_deref());
+        let xhtml = build_about_author_xhtml(
+            &cfg,
+            bio,
+            foto_filename.as_deref(),
+            perfil.web.as_deref(),
+            qr_filename.as_deref(),
+        );
         zip.start_file("OEBPS/8_about_author.xhtml", opts).map_err(|e| e.to_string())?;
         zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
         items.push(Item {
@@ -1232,40 +1265,64 @@ fn build_dedication_xhtml(text: &str) -> String {
     xhtml_shell("Dedicatoria", &body, "es", "dedication-body")
 }
 
-fn build_about_author_xhtml(cfg: &BookConfig, photo_filename: Option<&str>) -> String {
+/// Página "Sobre el autor". Todas las piezas son opcionales salvo la bio,
+/// que es lo que decide si la página existe (lo resuelve el llamador).
+fn build_about_author_xhtml(
+    cfg: &BookConfig,
+    bio: &str,
+    foto: Option<&str>,
+    web: Option<&str>,
+    qr: Option<&str>,
+) -> String {
     let lang = cfg.idioma.as_deref().unwrap_or("es");
-    let heading = if lang == "en" {
-        "About the author"
-    } else {
-        "Sobre el autor"
-    };
-    let bio = cfg.sobre_el_autor.as_deref().unwrap_or("");
-    let bio_paragraphs: String = bio
+    let is_en = lang == "en";
+    let heading = if is_en { "About the Author" } else { "Sobre el autor" };
+
+    let img = foto
+        .map(|f| format!(r#"<img class="about-author-photo" src="{}" alt=""/>"#, xml_escape(f)))
+        .unwrap_or_default();
+
+    let parrafos: String = bio
         .lines()
-        .map(|l| l.trim())
+        .map(str::trim)
         .filter(|l| !l.is_empty())
-        .map(|l| format!("<p>{}</p>", xml_escape(l)))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let photo_html = match photo_filename {
-        Some(name) => format!(
-            r#"<img class="about-author-photo" src="{}" alt="{}"/>"#,
-            xml_escape(name),
-            xml_escape(cfg.autor.as_deref().unwrap_or(""))
-        ),
-        None => String::new(),
+        .map(|l| format!("<p>{}</p>\n", xml_escape(l)))
+        .collect();
+
+    // El QR solo tiene sentido si hay a dónde apuntar. La URL va igual como
+    // texto: el que lee en el celular no puede escanear su propia pantalla.
+    let enlace = match web {
+        Some(w) if !w.trim().is_empty() => {
+            let qr_html = qr
+                .map(|q| {
+                    format!(
+                        r#"<a href="{}"><img class="autor-qr" src="{}" alt=""/></a>"#,
+                        xml_escape(w),
+                        xml_escape(q)
+                    )
+                })
+                .unwrap_or_default();
+            format!(
+                "<div class=\"autor-web\">{}<p class=\"autor-web-url\"><a href=\"{}\">{}</a></p></div>\n",
+                qr_html,
+                xml_escape(w),
+                xml_escape(w.trim_start_matches("https://").trim_start_matches("http://"))
+            )
+        }
+        _ => String::new(),
     };
+
     let body = format!(
         r#"<div class="about-author">
 <h1 class="about-author-title">{}</h1>
 {}
 <div class="about-author-bio">
-{}
-</div>
-</div>"#,
+{}</div>
+{}</div>"#,
         xml_escape(heading),
-        photo_html,
-        bio_paragraphs,
+        img,
+        parrafos,
+        enlace
     );
     xhtml_shell(heading, &body, lang, "about-author-body")
 }
@@ -2333,10 +2390,15 @@ mod tests {
             titulo: "Test".into(),
             autor: Some("Ignacio".into()),
             idioma: Some("es".into()),
-            sobre_el_autor: Some("Nací en Cipolletti.\nVivo escribiendo.".into()),
             ..Default::default()
         };
-        let xhtml = build_about_author_xhtml(&cfg, Some("author.jpg"));
+        let xhtml = build_about_author_xhtml(
+            &cfg,
+            "Nací en Cipolletti.\nVivo escribiendo.",
+            Some("author.jpg"),
+            None,
+            None,
+        );
         assert!(xhtml.contains("<body class=\"about-author-body\">"));
         assert!(xhtml.contains("<h1 class=\"about-author-title\">Sobre el autor</h1>"));
         assert!(xhtml.contains("<img class=\"about-author-photo\" src=\"author.jpg\""));
@@ -2349,13 +2411,83 @@ mod tests {
         let cfg = BookConfig {
             titulo: "Test".into(),
             idioma: Some("en".into()),
-            sobre_el_autor: Some("Bio.".into()),
             ..Default::default()
         };
-        let xhtml = build_about_author_xhtml(&cfg, None);
-        assert!(xhtml.contains("About the author"));
+        let xhtml = build_about_author_xhtml(&cfg, "Bio.", None, None, None);
+        assert!(xhtml.contains("About the Author"));
         // Sin photo: no aparece <img>.
         assert!(!xhtml.contains("<img"));
+    }
+
+    #[test]
+    fn about_author_usa_la_bio_del_autor_json_cuando_el_libro_no_tiene() {
+        let (root, book) = repo_con_publicados();
+        std::fs::write(
+            root.join("autor.json"),
+            r#"{"nombre":"Tatoh","bio":{"es":"Escribe de noche."},"web":"https://tatoh.ar"}"#,
+        )
+        .unwrap();
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let page =
+            String::from_utf8(entries.get("OEBPS/8_about_author.xhtml").unwrap().clone()).unwrap();
+        assert!(page.contains("Escribe de noche."));
+        assert!(page.contains("https://tatoh.ar"));
+    }
+
+    #[test]
+    fn about_author_el_libro_pisa_la_bio_global() {
+        let (root, book) = repo_con_publicados();
+        std::fs::write(root.join("autor.json"), r#"{"bio":{"es":"La global."}}"#).unwrap();
+        std::fs::write(
+            book.join("book.json"),
+            r#"{"titulo":"Actual","sobre_el_autor":"La del libro."}"#,
+        )
+        .unwrap();
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let page =
+            String::from_utf8(entries.get("OEBPS/8_about_author.xhtml").unwrap().clone()).unwrap();
+        assert!(page.contains("La del libro."));
+        assert!(!page.contains("La global."));
+    }
+
+    #[test]
+    fn about_author_embebe_el_qr_como_png() {
+        let (root, book) = repo_con_publicados();
+        std::fs::write(
+            root.join("autor.json"),
+            r#"{"bio":{"es":"x"},"web":"https://tatoh.ar","qr":"qr.png"}"#,
+        )
+        .unwrap();
+        let qr = ::image::RgbImage::from_pixel(1200, 1200, ::image::Rgb([0, 0, 0]));
+        ::image::DynamicImage::ImageRgb8(qr).save(root.join("qr.png")).unwrap();
+
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let bytes = entries.get("OEBPS/author-qr.png").expect("no se embebió el QR");
+        assert_eq!(&bytes[1..4], b"PNG", "el QR tiene que quedar PNG");
+        let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
+        assert!(opf.contains("image/png"));
+        let page =
+            String::from_utf8(entries.get("OEBPS/8_about_author.xhtml").unwrap().clone()).unwrap();
+        assert!(page.contains("class=\"autor-qr\""));
+    }
+
+    #[test]
+    fn about_author_sin_web_no_muestra_ni_texto_ni_qr() {
+        let cfg = BookConfig { titulo: "X".into(), ..Default::default() };
+        let xhtml = build_about_author_xhtml(&cfg, "bio", None, None, Some("author-qr.png"));
+        assert!(!xhtml.contains("autor-qr"));
+        assert!(!xhtml.contains("autor-web"));
+    }
+
+    #[test]
+    fn about_author_con_web_y_sin_qr_muestra_solo_el_texto() {
+        let cfg = BookConfig { titulo: "X".into(), ..Default::default() };
+        let xhtml = build_about_author_xhtml(&cfg, "bio", None, Some("https://tatoh.ar"), None);
+        assert!(xhtml.contains("https://tatoh.ar"));
+        assert!(!xhtml.contains("autor-qr"));
     }
 
     #[test]

@@ -183,6 +183,10 @@ h1.about-author-title {
   max-width: 28em;
 }
 
+.autor-web { margin-top: 1.6em; text-align: right; }
+img.autor-qr { width: 150px; max-width: 40%; }
+p.autor-web-url { margin: 0.3em 0 0 0; font-size: 0.9em; }
+
 /* Otros libros: nada de flexbox ni grid — los lectores viejos los ignoran
    y el resultado queda peor que el apilado simple con float. */
 .otros-libros h2 { margin-top: 1.6em; text-align: center; }
