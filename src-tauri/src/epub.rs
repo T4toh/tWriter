@@ -660,7 +660,12 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     // libro está publicado si su book.json tiene `link`.
     let catalogo = crate::catalogo::escanear(&root_dir, &book_dir);
     if !catalogo.misma_saga.is_empty() || !catalogo.otros.is_empty() {
-        let mut tapas: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        // Indexado por posición y no por `link`: dos libros publicados pueden
+        // compartir el mismo link (ej: placeholder mientras no existe la
+        // página del libro), y un HashMap<link, _> haría que el segundo pise
+        // la miniatura del primero.
+        let total = catalogo.misma_saga.len() + catalogo.otros.len();
+        let mut tapas: Vec<Option<String>> = vec![None; total];
         for (idx, libro) in catalogo
             .misma_saga
             .iter()
@@ -690,7 +695,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             else {
                 continue;
             };
-            tapas.insert(libro.link.clone(), dest);
+            tapas[idx] = Some(dest);
         }
 
         spine_idx += 1;
@@ -1345,25 +1350,27 @@ fn build_about_author_xhtml(
 }
 
 /// Página "Otros libros": los publicados de la misma saga y los del resto.
-/// `tapas` mapea el link de cada libro al nombre del archivo de su
-/// miniatura ya embebida en el EPUB; un libro sin entrada va sin imagen.
+/// `tapas` trae, en el mismo orden que `misma_saga.chain(otros)`, el nombre
+/// del archivo de la miniatura de cada libro ya embebida en el EPUB (`None`
+/// si no tiene). Indexado por posición y no por `link`: dos libros con el
+/// mismo `link` (placeholder mientras no existe su página) no deben colisionar.
 fn build_otros_libros_xhtml(
     cfg: &BookConfig,
     cat: &crate::catalogo::Catalogo,
-    tapas: &std::collections::HashMap<String, String>,
+    tapas: &[Option<String>],
 ) -> String {
     let lang = cfg.idioma.as_deref().unwrap_or("es");
     let is_en = lang == "en";
     let heading = if is_en { "Also by the Author" } else { "Otros libros" };
 
-    let bloque = |titulo: &str, libros: &[crate::catalogo::LibroPublicado]| -> String {
+    let bloque = |titulo: &str, libros: &[crate::catalogo::LibroPublicado], offset: usize| -> String {
         if libros.is_empty() {
             return String::new();
         }
         let mut s = format!("<h2>{}</h2>\n<ul class=\"libro-list\">\n", xml_escape(titulo));
-        for l in libros {
+        for (i, l) in libros.iter().enumerate() {
             s.push_str("<li class=\"libro\">");
-            if let Some(archivo) = tapas.get(&l.link) {
+            if let Some(Some(archivo)) = tapas.get(offset + i) {
                 s.push_str(&format!(
                     r#"<a href="{}"><img class="libro-tapa" src="{}" alt=""/></a>"#,
                     xml_escape(&l.link),
@@ -1399,8 +1406,8 @@ fn build_otros_libros_xhtml(
     let body = format!(
         "<div class=\"otros-libros\">\n<h1>{}</h1>\n{}{}</div>",
         xml_escape(heading),
-        bloque(&titulo_saga, &cat.misma_saga),
-        bloque(titulo_otros, &cat.otros),
+        bloque(&titulo_saga, &cat.misma_saga, 0),
+        bloque(titulo_otros, &cat.otros, cat.misma_saga.len()),
     );
     xhtml_shell(heading, &body, lang, "otros-libros-body")
 }
@@ -2723,7 +2730,7 @@ mod tests {
             saga_actual: Some("Meridian".into()),
         };
         let cfg = BookConfig { titulo: "X".into(), ..Default::default() };
-        let xhtml = build_otros_libros_xhtml(&cfg, &cat, &std::collections::HashMap::new());
+        let xhtml = build_otros_libros_xhtml(&cfg, &cat, &[]);
         assert!(!xhtml.contains("Más de Meridian"));
         assert!(xhtml.contains("Otros libros del autor"));
     }
@@ -2746,7 +2753,7 @@ mod tests {
             idioma: Some("en".into()),
             ..Default::default()
         };
-        let xhtml = build_otros_libros_xhtml(&cfg, &cat, &std::collections::HashMap::new());
+        let xhtml = build_otros_libros_xhtml(&cfg, &cat, &[]);
         assert!(xhtml.contains("More from Milky Way"));
         assert!(xhtml.contains("<h1>Also by the Author</h1>"));
     }
@@ -2816,6 +2823,65 @@ mod tests {
             filename,
             opf
         );
+    }
+
+    #[test]
+    fn otros_libros_con_link_repetido_no_pisa_la_miniatura_del_otro() {
+        // Dos libros publicados pueden compartir el mismo link (el checklist
+        // de la spec dice de usar una URL placeholder para los dos "por
+        // ahora"). Con un HashMap<link, dest> el segundo insert pisaba al
+        // primero: un libro terminaba mostrando la tapa del otro.
+        let (_root, book) = repo_con_publicados();
+        let hermano = book.parent().unwrap().join("2 - Hermano");
+        let ajeno = book
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("2 - Buenos Aires")
+            .join("1 - Luces");
+        let link_compartido = "https://www.amazon.com/dp/B0G3JTSR43";
+        std::fs::write(
+            hermano.join("book.json"),
+            format!(
+                r#"{{"titulo":"Hermano","link":"{}","tapa":"cover.png","numero_en_serie":2}}"#,
+                link_compartido
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            ajeno.join("book.json"),
+            format!(r#"{{"titulo":"Luces","link":"{}","tapa":"cover.png"}}"#, link_compartido),
+        )
+        .unwrap();
+        let roja = ::image::RgbImage::from_pixel(10, 10, ::image::Rgb([200, 0, 0]));
+        ::image::DynamicImage::ImageRgb8(roja).save(hermano.join("cover.png")).unwrap();
+        let azul = ::image::RgbImage::from_pixel(10, 10, ::image::Rgb([0, 0, 200]));
+        ::image::DynamicImage::ImageRgb8(azul).save(ajeno.join("cover.png")).unwrap();
+
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let page = String::from_utf8(entries.get("OEBPS/7_otros_libros.xhtml").unwrap().clone()).unwrap();
+
+        let li_hermano = page.split("<li class=\"libro\">").find(|li| li.contains("Hermano")).unwrap();
+        let li_luces = page.split("<li class=\"libro\">").find(|li| li.contains("Luces")).unwrap();
+        let src_de = |li: &str| -> String {
+            let start = li.find("src=\"").expect("sin miniatura") + 5;
+            let end = li[start..].find('"').unwrap();
+            li[start..start + end].to_string()
+        };
+        let src_hermano = src_de(li_hermano);
+        let src_luces = src_de(li_luces);
+        assert_ne!(
+            src_hermano, src_luces,
+            "las dos miniaturas resolvieron al mismo archivo embebido"
+        );
+        let px = |src: &str| -> [u8; 3] {
+            let bytes = entries.get(&format!("OEBPS/{}", src)).unwrap();
+            ::image::load_from_memory(bytes).unwrap().to_rgb8().get_pixel(0, 0).0
+        };
+        assert_eq!(px(&src_hermano), [200, 0, 0], "Hermano no muestra su propia tapa");
+        assert_eq!(px(&src_luces), [0, 0, 200], "Luces no muestra su propia tapa");
     }
 
     #[test]
