@@ -1,6 +1,13 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { existsCaseInsensitive, validateWord } from '../dictionary/word-validator';
+import {
+  DictLookup,
+  IdiomaFlexion,
+  idiomaFlexionDe,
+  makeDictLookup,
+  stripInflection,
+} from '../dictionary/derived-forms';
 import { ChapterService } from './chapter-service';
 
 export interface SagaConfig {
@@ -28,6 +35,14 @@ export class SagaContextService {
    *  `dictionary` (Set en minúscula) sirve para filtrar; para SUGERIR hace
    *  falta la forma original, que es la que se le ofrece al autor. */
   readonly dictionaryWords = this.dictWords.asReadonly();
+  /** Índice para el pelado de flexión. Se rearma cuando cambia el diccionario. */
+  private readonly lookup = computed<DictLookup>(() => makeDictLookup(this.dictWords()));
+  /** Idioma de la saga reducido a las dos familias de reglas de flexión.
+   *  Tolera variantes tipo `es-AR`. Null si la saga no declara idioma: en ese
+   *  caso no se pela nada y el filtro se comporta como antes. */
+  readonly idiomaFlexion = computed<IdiomaFlexion | null>(() =>
+    idiomaFlexionDe(this.config()?.idioma),
+  );
   readonly varianteEs = computed<string | null>(() => {
     const v = this.config()?.variante_es;
     return v && v.trim() ? v : null;
@@ -97,7 +112,10 @@ export class SagaContextService {
   }
 
   isInDictionary(word: string): boolean {
-    return this.dictionary().has(word.toLowerCase());
+    if (this.dictionary().has(word.toLowerCase())) return true;
+    const idioma = this.idiomaFlexion();
+    if (!idioma) return false;
+    return stripInflection(word, idioma, this.lookup()) !== null;
   }
 
   async setVariante(base: 'es' | 'en', code: string | null): Promise<void> {
@@ -124,10 +142,42 @@ export class SagaContextService {
     const next = [...existing, result.value];
     try {
       await invoke('set_saga_dictionary', { sagaPath: path, words: next });
-      this.dictWords.set(next);
+      // Solo instalar la lista si seguimos en la misma saga: si el autor cambió
+      // de saga mientras el invoke estaba en vuelo, `next` es de la saga
+      // anterior y una escritura posterior la persistiría sobre la nueva.
+      if (this.sagaPath() === path) this.dictWords.set(next);
       return { ok: true };
     } catch (err) {
       return { ok: false, reason: String(err) };
+    }
+  }
+
+  /** Agrega varias palabras en una sola escritura. Descarta en silencio las
+   *  inválidas y las que ya están — el panel de formas derivadas ya las muestra
+   *  como "ya está", así que no hay nada que reportar. */
+  async addManyToDictionary(
+    words: readonly string[],
+  ): Promise<{ ok: boolean; added: number; reason?: string }> {
+    const path = this.sagaPath();
+    if (!path) return { ok: false, added: 0, reason: 'No hay saga activa' };
+    const next = [...this.dictWords()];
+    let added = 0;
+    for (const raw of words) {
+      const result = validateWord(raw);
+      if (!result.ok) continue;
+      if (existsCaseInsensitive(next, result.value)) continue;
+      next.push(result.value);
+      added += 1;
+    }
+    if (added === 0) return { ok: true, added: 0 };
+    try {
+      await invoke('set_saga_dictionary', { sagaPath: path, words: next });
+      // Misma guarda que `addToDictionary`: la lista es de `path`, no de la
+      // saga que esté activa cuando el invoke termine.
+      if (this.sagaPath() === path) this.dictWords.set(next);
+      return { ok: true, added };
+    } catch (err) {
+      return { ok: false, added: 0, reason: String(err) };
     }
   }
 

@@ -51,14 +51,25 @@ export function validateWord(raw: string): ValidationResult {
   return { ok: true, value: sanitized, sanitized: sanitized !== raw };
 }
 
+// ORDEN, no identidad. `sensitivity: 'base'` ignora mayúsculas Y tildes, que es
+// lo correcto para el orden alfabético del español, y lo incorrecto para decidir
+// si una palabra ya está.
 const COLLATOR = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 
 export function compareWords(a: string, b: string): number {
   return COLLATOR.compare(a, b);
 }
 
+/** IDENTIDAD: minúsculas sí, tildes no. Tiene que coincidir con la pertenencia
+ *  real del diccionario (`SagaContextService.dictionary()`, un Set de
+ *  `toLowerCase()`), que sí distingue tildes. Con el collator base,
+ *  `teletransporto` ≡ `teletransportó` y `bardea` ≡ `bardeá`: el generador emite
+ *  esos pares mínimos a propósito, así que el segundo de cada par se descartaba
+ *  en silencio y al reabrir el panel aparecía como «ya está», sin forma de
+ *  agregarlo nunca. */
 export function existsCaseInsensitive(list: readonly string[], word: string): boolean {
-  return list.some((w) => COLLATOR.compare(w, word) === 0);
+  const objetivo = word.toLowerCase();
+  return list.some((w) => w.toLowerCase() === objetivo);
 }
 
 export function sortWords(list: readonly string[]): string[] {

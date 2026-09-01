@@ -61,6 +61,16 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
                 + diccionario
               </button>
             }
+            @if (canAddToDict() && canDeriveForms()) {
+              <button
+                type="button"
+                class="dict-btn"
+                (click)="addToDictWithForms.emit()"
+                title="Agregar la palabra y sus formas derivadas"
+              >
+                + formas…
+              </button>
+            }
           </div>
           <a
             class="lt-attrib"
@@ -83,6 +93,8 @@ export class GrammarPopover {
   apply = output<string>();
   dismiss = output<void>();
   addToDict = output<void>();
+  canDeriveForms = input<boolean>(false);
+  addToDictWithForms = output<void>();
   suggestions = computed(() => {
     const room = Math.max(0, 5 - this.dictSuggestions().length);
     return (this.match()?.replacements ?? []).slice(0, room);

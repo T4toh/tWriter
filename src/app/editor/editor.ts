@@ -98,6 +98,8 @@ import {
 import { RepeticionesPopover } from './repeticiones-popover';
 import { palabraEn } from './palabra-en';
 import { atajo } from '../shared/atajo';
+import { DerivedFormsPanel } from '../dictionary/derived-forms-panel';
+import { inferLemma } from '../dictionary/derived-forms';
 
 interface ToolbarState {
   bold: boolean;
@@ -135,7 +137,7 @@ interface ObjetivoTesauro {
   selector: 'app-editor',
   imports: [
     Landing, GrammarPopover, RaePopover, RepeticionesPopover, Select, FormsModule,
-    LucideCircleAlert, LucideDynamicIcon, Spinner,
+    LucideCircleAlert, LucideDynamicIcon, Spinner, DerivedFormsPanel,
   ],
   templateUrl: './editor.html',
   styleUrl: './editor.scss',
@@ -201,6 +203,19 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly grammarError = this.grammar.lastError;
   protected readonly grammarMatches = signal<GrammarMatchPos[]>([]);
   protected readonly grammarPopover = signal<{ match: GrammarMatch; anchor: AnchorBox; from: number; to: number; dictSuggestions: string[] } | null>(null);
+  /** Palabra para la que está abierto el panel de formas derivadas, o null. */
+  protected readonly formasPara = signal<string | null>(null);
+  protected readonly idiomaFlexion = this.sagaCtx.idiomaFlexion;
+
+  /** El popover ofrece "+ formas…" solo si hay un lema que inferir. En inglés
+   *  `inferLemma` devuelve [] y el botón no aparece. */
+  protected readonly popoverPuedeDerivar = computed<boolean>(() => {
+    const popover = this.grammarPopover();
+    const idioma = this.idiomaFlexion();
+    if (!popover || !idioma || !this.tiptap) return false;
+    const word = this.tiptap.state.doc.textBetween(popover.from, popover.to, ' ').trim();
+    return word.length > 0 && inferLemma(word, idioma).length > 0;
+  });
   protected readonly raeViolations = signal<RaeViolationPos[]>([]);
   protected readonly raePopover = signal<{ violation: RaeViolationPos; anchor: AnchorBox } | null>(null);
   protected readonly raeAuto = computed(() => {
@@ -627,7 +642,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     // palabra nueva), filtramos los TYPOS actuales contra el dict nuevo
     // sin volver a pegarle a LanguageTool.
     effect(() => {
-      const dict = this.sagaCtx.dictionary();
+      // Touch del diccionario para que el effect corra cuando cambia. El
+      // filtrado va por `isInDictionary`, que además de la grafía exacta pela
+      // flexión (enclíticos, plural) — la misma guarda que usa `checkGrammar`.
+      this.sagaCtx.dictionaryWords();
       if (!this.viewReady() || !this.tiptap) return;
       const current = untracked(() => this.grammarMatches());
       if (current.length === 0) return;
@@ -635,7 +653,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       const filtered = current.filter((m) => {
         if (m.category !== 'TYPOS') return true;
         const word = editor.state.doc.textBetween(m.from, m.to, ' ').trim();
-        return !dict.has(word.toLowerCase());
+        return !this.sagaCtx.isInDictionary(word);
       });
       if (filtered.length !== current.length) {
         this.grammarMatches.set(filtered);
@@ -1196,6 +1214,33 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   protected closeGrammarPopover(): void {
     this.grammarPopover.set(null);
+  }
+
+  protected abrirFormasDerivadas(): void {
+    const popover = this.grammarPopover();
+    if (!popover || !this.tiptap) return;
+    const word = this.tiptap.state.doc.textBetween(popover.from, popover.to, ' ').trim();
+    if (!word) return;
+    this.formasPara.set(word);
+    this.grammarPopover.set(null);
+  }
+
+  protected cerrarFormasDerivadas(): void {
+    this.formasPara.set(null);
+  }
+
+  protected async agregarFormasDerivadas(formas: string[]): Promise<void> {
+    const result = await this.sagaCtx.addManyToDictionary(formas);
+    if (!result.ok) {
+      this.toast.error(result.reason ?? 'No se pudieron agregar las formas');
+      return;
+    }
+    this.toast.success(
+      result.added === 1 ? '1 forma agregada' : `${result.added} formas agregadas`,
+    );
+    this.formasPara.set(null);
+    // No hace falta re-filtrar a mano: `addManyToDictionary` actualiza
+    // `dictWords`, y el effect de re-filtrado en vivo lo toma solo.
   }
 
   private applyDecorations(matches: GrammarMatchPos[]): void {

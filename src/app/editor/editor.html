@@ -415,10 +415,24 @@
     [match]="gp.match"
     [anchor]="gp.anchor"
     [dictSuggestions]="gp.dictSuggestions"
+    [canDeriveForms]="popoverPuedeDerivar()"
     (apply)="applyGrammarReplacement($event)"
     (dismiss)="dismissGrammarMatch()"
     (addToDict)="addCurrentToDictionary()"
+    (addToDictWithForms)="abrirFormasDerivadas()"
   />
+}
+
+@if (formasPara(); as palabra) {
+  @if (idiomaFlexion(); as idioma) {
+    <app-derived-forms-panel
+      [palabra]="palabra"
+      [idioma]="idioma"
+      [existentes]="sagaCtx.dictionaryWords()"
+      (agregar)="agregarFormasDerivadas($event)"
+      (cerrar)="cerrarFormasDerivadas()"
+    />
+  }
 }
 
 @if (raePopover(); as rp) {
