@@ -43,7 +43,7 @@ export class AutorModal {
     const bio = { ...(cur.bio ?? {}) };
     if (valor.trim()) bio[idioma] = valor;
     else delete bio[idioma];
-    this.config.set({ ...cur, bio: Object.keys(bio).length ? bio : null });
+    this.config.set({ ...cur, bio });
   }
 
   protected async pickFoto(): Promise<void> {

@@ -5,6 +5,7 @@ import { ChapterService } from '../core/chapter-service';
 import { NavigationService } from '../core/navigation-service';
 import { ProjectService } from '../core/project-service';
 import { SagaConfigService } from '../core/saga-config-service';
+import { SettingsService } from '../core/settings-service';
 import { TreeNode } from '../core/types';
 import { ModalService } from '../shared/modal-service';
 import { ContextMenuService } from '../shared/context-menu-service';
@@ -28,6 +29,7 @@ interface Crumb {
 })
 export class Landing {
   private project = inject(ProjectService);
+  private settings = inject(SettingsService);
   private autorSvc = inject(AutorService);
   private chapter = inject(ChapterService);
   private nav = inject(NavigationService);
@@ -38,6 +40,7 @@ export class Landing {
   private actions = inject(NodeActionsService);
 
   protected readonly browsing = this.nav.browsingPath;
+  protected readonly root = this.settings.root;
   protected readonly creating = signal<boolean>(false);
 
   protected readonly currentNode = computed<TreeNode | null>(() => {
