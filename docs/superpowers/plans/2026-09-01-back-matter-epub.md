@@ -2481,7 +2481,8 @@ git commit -m "docs(todo): back matter del EPUB implementado, falta verificació
 Esto **no** lo hace el agente. Pasarle al autor la lista:
 
 1. Abrir el modal "Autor" desde la vista raíz y cargar nombre, bio en español, web `https://tatoh.ar` y el QR.
-2. En *La Caballera Esmeralda*, cargar el link `https://www.amazon.com/dp/B0G3JTSR43`.
+2. En *La Caballera Esmeralda*, cargar el link
+   `https://tatoh.ar/libros/la-caballera-esmeralda`.
 3. Exportar *Más que un trabajo* (misma saga) y *Ojos en el Abismo* (otra saga).
 4. Abrir los dos en Thorium: que el bloque de saga aparezca solo donde corresponde, que las miniaturas se vean, que el link abra, y que el QR escanee desde el celular.
 5. Chequear el índice: copyright, dedicatoria, otros libros y sobre el autor, atenuados y separados de los capítulos.

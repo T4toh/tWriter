@@ -333,8 +333,10 @@ No hay runner de tests para el frontend, así que los dos modales se validan con
 `pnpm build` más verificación a mano. El ítem del TODO no se marca hasta que el
 autor lo pruebe:
 
-1. Cargar el link de *La Caballera Esmeralda* (`https://www.amazon.com/dp/B0G3JTSR43`
-   por ahora, `tatoh.ar/libros/...` cuando exista la vista).
+1. Cargar el link de *La Caballera Esmeralda*:
+   `https://tatoh.ar/libros/la-caballera-esmeralda`. Es la URL definitiva — la
+   página del autor ya existe, así que el EPUB que se exporte ahora sigue
+   sirviendo aunque mañana se sumen tiendas.
 2. Llenar `autor.json` desde el modal nuevo.
 3. Exportar *Ojos en el Abismo* y *Más que un trabajo*.
 4. Abrir los dos en Thorium: que el link funcione, que la tapa se vea, que
