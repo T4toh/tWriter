@@ -627,7 +627,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     // palabra nueva), filtramos los TYPOS actuales contra el dict nuevo
     // sin volver a pegarle a LanguageTool.
     effect(() => {
-      const dict = this.sagaCtx.dictionary();
+      // Touch del diccionario para que el effect corra cuando cambia. El
+      // filtrado va por `isInDictionary`, que además de la grafía exacta pela
+      // flexión (enclíticos, plural) — la misma guarda que usa `checkGrammar`.
+      this.sagaCtx.dictionaryWords();
       if (!this.viewReady() || !this.tiptap) return;
       const current = untracked(() => this.grammarMatches());
       if (current.length === 0) return;
@@ -635,7 +638,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       const filtered = current.filter((m) => {
         if (m.category !== 'TYPOS') return true;
         const word = editor.state.doc.textBetween(m.from, m.to, ' ').trim();
-        return !dict.has(word.toLowerCase());
+        return !this.sagaCtx.isInDictionary(word);
       });
       if (filtered.length !== current.length) {
         this.grammarMatches.set(filtered);
