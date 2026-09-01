@@ -48,6 +48,14 @@ export class BookCard {
 
   protected readonly author = computed(() => this.config()?.autor ?? null);
 
+  // Mismo criterio que la galería (landing.ts::items): las notas no son
+  // contenido del libro.
+  protected readonly itemCount = computed(
+    () =>
+      this.node().children.filter((c) => c.kind !== 'note' && c.kind !== 'notes')
+        .length,
+  );
+
   protected readonly isConfigured = computed(() => {
     const cfg = this.config();
     return !!(cfg && cfg.titulo && cfg.autor);

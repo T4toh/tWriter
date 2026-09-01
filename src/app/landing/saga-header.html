@@ -1,7 +1,15 @@
 <div class="saga-header">
   <div class="cover-slot" [class.borrowed]="coverFromBook()">
-    @if (coverDataUrl(); as url) {
-      <img [src]="url" [alt]="displayName()" />
+    @if (covers().length) {
+      @for (url of covers(); track $index; let i = $index) {
+        <img
+          class="deck-card"
+          [attr.data-pos]="i"
+          [style.zIndex]="covers().length - i"
+          [src]="url"
+          [alt]="i === 0 ? displayName() : ''"
+        />
+      }
       @if (coverFromBook()) {
         <span class="borrowed-tag" title="Tapa heredada del primer libro">heredada</span>
       }

@@ -1486,6 +1486,35 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
+- [x] **La vista de la saga muestra una tapa sola — que se vea que hay varios libros**
+  (pedido del autor, 2026-09-01). En `landing/saga-header.html` el `.cover-slot`
+  pinta **una** imagen: la tapa propia de la saga, o —si no tiene— la del primer
+  libro con el tag "heredada" (`coverFromBook`). El contador de al lado dice
+  "4 libros" pero visualmente parece una novela suelta. La `saga-card` de la
+  galería sí apila hasta `MAX_THUMBS = 6` en fila, así que la inconsistencia
+  está solo en el header.
+  **Hecho en `feat/saga-header-deck-de-tapas`, verificado a mano por el autor el
+  2026-09-01**: mazo de hasta 3 tapas (`MAX_DECK`), las de atrás con `translateY`
+  + rotación alternada + `brightness` bajando; el tag "heredada" quedó igual —
+  solo aparece cuando el frente es prestado, que es la condición que ya tenía.
+  De paso, dos contadores que decían un kind pero contaban todos los hijos:
+  `saga-header.ts` "N libros" ahora filtra `kind === 'book'` (sumaba la carpeta
+  `notas` y los `.md` sueltos) y `book-card.ts::itemCount` excluye `note`/`notes`,
+  mismo criterio que `landing.ts::items`.
+- **El "N cap." de la tarjeta de libro miente cuando el libro está partido**
+  (visto el 2026-09-01 arreglando los contadores del mazo de tapas). `book-card`
+  cuenta hijos directos (`itemCount()`, hoy ya sin notas), pero `fs.rs::
+  list_sections_or_chapters` devuelve **`Section` por cada carpeta de parte** y
+  solo mete `chapter` para los `.html` sueltos en la raíz del libro. O sea: un
+  libro con 3 partes de 8 capítulos cada una dice "3 cap." en vez de 24, y uno
+  mixto (partes + capítulos sueltos) suma peras con manzanas.
+  Fix barato: si algún hijo es `section`, contar los nietos `chapter`
+  (`children.flatMap(c => c.kind === 'section' ? c.children : [c])` filtrando
+  `chapter`) en vez de los hijos directos. Ojo con dos cosas: las secciones con
+  `excluded: true` vienen con `children: []` desde Rust y además no van al EPUB,
+  así que no deberían sumar; y si el conteo real termina siendo caro o confuso,
+  la alternativa perezosa es cambiar el label a "N partes" cuando los hijos son
+  secciones — menos útil, pero honesto.
 
 ## EPUB
 
