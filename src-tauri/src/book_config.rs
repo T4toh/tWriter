@@ -5,7 +5,11 @@ use std::path::{Path, PathBuf};
 
 use crate::theme::ThemeRef;
 
-const COVER_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp"];
+// Sin "webp"/"gif" a propósito: `image` se compila con `features = ["png", "jpeg"]`
+// nomás (Cargo.toml), así que `embebido_reescalado` no puede decodificarlas — ver
+// findings-finales.md, Important 4. Ofrecerlas acá sería prometer un formato que
+// el decoder no sabe abrir.
+const COVER_EXTS: &[&str] = &["jpg", "jpeg", "png"];
 
 /// Busca `cover.<ext>` en `dir`. Devuelve el nombre relativo (ej: "cover.jpg") si existe.
 pub fn find_cover_in(dir: &Path) -> Option<String> {
@@ -419,6 +423,20 @@ mod tests {
         assert!(adopt_image(libro.path(), &pdf, "cover").is_err());
         assert!(adopt_image(libro.path(), &ok, "../escape").is_err());
         assert!(adopt_image(libro.path(), &afuera.path().join("no-existe.png"), "cover").is_err());
+    }
+
+    #[test]
+    fn rechaza_webp_porque_el_decoder_no_lo_sabe_abrir() {
+        // `image` se compila sin la feature `webp` (Cargo.toml): adoptar un
+        // .webp dejaría un archivo que `embebido_reescalado` nunca puede
+        // decodificar al exportar. Ver findings-finales.md, Important 4.
+        let libro = TempDir::new().unwrap();
+        let afuera = TempDir::new().unwrap();
+        let webp = afuera.path().join("tapa.webp");
+        fs::write(&webp, b"RIFF....WEBP").unwrap();
+
+        let err = adopt_image(libro.path(), &webp, "cover").unwrap_err();
+        assert!(err.contains("formato no soportado"), "err: {}", err);
     }
 
     #[test]

@@ -61,7 +61,7 @@ export class AutorModal {
     if (!root) return;
     const elegido = await this.dialogs.pickSingleFile({
       title: titulo,
-      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg'] }],
       defaultPath: root,
     });
     if (!elegido) return;

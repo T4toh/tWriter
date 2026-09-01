@@ -247,7 +247,7 @@ export class BookConfigModal {
   protected async pickCover(): Promise<void> {
     const result = await this.dialogs.pickSingleFile({
       title: 'Seleccionar tapa',
-      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg'] }],
       defaultPath: this.bookPath() ?? undefined,
     });
     if (!result) return;
@@ -260,7 +260,7 @@ export class BookConfigModal {
   protected async pickBackCover(): Promise<void> {
     const result = await this.dialogs.pickSingleFile({
       title: 'Seleccionar contratapa',
-      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg'] }],
       defaultPath: this.bookPath() ?? undefined,
     });
     if (!result) return;
@@ -273,7 +273,7 @@ export class BookConfigModal {
   protected async pickAuthorPhoto(): Promise<void> {
     const result = await this.dialogs.pickSingleFile({
       title: 'Seleccionar foto del autor',
-      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg'] }],
       defaultPath: this.bookPath() ?? undefined,
     });
     if (!result) return;

@@ -188,7 +188,7 @@ export class SagaConfigModal {
   protected async pickCover(): Promise<void> {
     const result = await this.dialogs.pickSingleFile({
       title: 'Seleccionar tapa de saga',
-      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg'] }],
       defaultPath: this.sagaPath() ?? undefined,
     });
     if (!result) return;
