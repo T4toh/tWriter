@@ -34,7 +34,7 @@ if (r.status !== 0) {
 }
 
 const mod = await import(pathToFileURL(join(outDir, 'derived-forms.js')).href);
-const { makeDictLookup, stripInflection, generateForms } = mod;
+const { makeDictLookup, stripInflection, generateForms, inferLemma } = mod;
 
 let passed = 0;
 let failed = 0;
@@ -155,6 +155,60 @@ console.log('generateForms — adjetivos e inglés');
   check('en inglés no se genera nada, ni verbos ni género',
     generateForms('bardear', 'verbo', 'en').length === 0 &&
     generateForms('chobbo', 'adjetivo', 'en').length === 0);
+}
+
+console.log('inferLemma');
+{
+  const primero = (w, i) => {
+    const c = inferLemma(w, i)[0];
+    return c ? `${c.lema}/${c.categoria}` : 'null';
+  };
+  for (const [word, esperado] of [
+    ['teletransportó', 'teletransportar/verbo'],
+    ['bardean', 'bardear/verbo'],
+    ['casteando', 'castear/verbo'],
+    ['teletransportaste', 'teletransportar/verbo'],
+    ['teletransportaba', 'teletransportar/verbo'],
+    ['bardeado', 'bardear/verbo'],
+    ['comiendo', 'comer/verbo'],
+  ]) {
+    check(`${word} → ${esperado}`, primero(word, 'es') === esperado, primero(word, 'es'));
+  }
+
+  check('-iendo ofrece -er y -ir como dos candidatos',
+    inferLemma('comiendo', 'es').map((c) => c.lema).join(',') === 'comer,comir',
+    JSON.stringify(inferLemma('comiendo', 'es')));
+
+  check('las formas en -a dan adjetivo primero y el verbo reconstruido segundo',
+    inferLemma('castea', 'es').map((c) => `${c.lema}/${c.categoria}`).join(',') ===
+      'castea/adjetivo,castear/verbo',
+    JSON.stringify(inferLemma('castea', 'es')));
+  check('teletransporta reconstruye teletransportar',
+    inferLemma('teletransporta', 'es').some((c) => c.lema === 'teletransportar' && c.categoria === 'verbo'),
+    JSON.stringify(inferLemma('teletransporta', 'es')));
+  check('las formas en -o reconstruyen el infinitivo en -ar',
+    inferLemma('teletransporto', 'es').some((c) => c.lema === 'teletransportar'),
+    JSON.stringify(inferLemma('teletransporto', 'es')));
+  check('telequinético propone adjetivo primero',
+    inferLemma('telequinético', 'es')[0].categoria === 'adjetivo',
+    JSON.stringify(inferLemma('telequinético', 'es')));
+
+  check('la stop-list corta los sustantivos en -ción',
+    inferLemma('teletransportación', 'es').length === 0,
+    JSON.stringify(inferLemma('teletransportación', 'es')));
+  check('la stop-list corta -miento y -dad',
+    inferLemma('arcanismiento', 'es').length === 0 && inferLemma('oscuridad', 'es').length === 0);
+  check('en inglés no infiere nada', inferLemma('chobbos', 'en').length === 0);
+  check('un nombre propio corto no se confunde con un verbo',
+    inferLemma('Aedan', 'es').length === 0, JSON.stringify(inferLemma('Aedan', 'es')));
+  check('una palabra sin sufijo reconocible no da candidatos',
+    inferLemma('Arcaneum', 'es').length === 0, JSON.stringify(inferLemma('Arcaneum', 'es')));
+  // Limitación conocida y aceptada: un nombre largo terminado en -en/-an sí
+  // propone verbo. No hay señal para distinguirlo sin un etiquetador
+  // morfológico, y para eso está el botón Cancelar del preview.
+  check('LIMITACIÓN: Bastien propone bastier, y se cancela a mano',
+    inferLemma('Bastien', 'es')[0].lema === 'bastier',
+    JSON.stringify(inferLemma('Bastien', 'es')));
 }
 
 console.log('');

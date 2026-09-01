@@ -200,3 +200,92 @@ function preteritoPrimeraAr(raiz: string): string {
 function dedupe(formas: readonly string[]): string[] {
   return [...new Set(formas)];
 }
+
+export interface LemmaCandidate {
+  lema: string;
+  categoria: Categoria;
+}
+
+/** Sustantivos que terminan parecido a una forma verbal. Sin esta lista
+ *  `teletransportación` — que está en el diccionario de Meridian — se ofrecería
+ *  como verbo. */
+const STOP_SUSTANTIVOS: readonly string[] = [
+  'ciones', 'ción', 'siones', 'sión', 'mientos', 'miento', 'dades', 'dad',
+];
+
+interface ReglaSufijo {
+  sufijo: string;
+  terminaciones: readonly string[];
+}
+
+/** Ordenadas de sufijo más largo a más corto: la primera que matchea gana.
+ *  `-a` y `-o` no están acá — caen al fallback de adjetivo, que además
+ *  reconstruye el verbo como segundo candidato. */
+const REGLAS: readonly ReglaSufijo[] = [
+  { sufijo: 'ábamos', terminaciones: ['ar'] },
+  { sufijo: 'ieron', terminaciones: ['er', 'ir'] },
+  { sufijo: 'iendo', terminaciones: ['er', 'ir'] },
+  { sufijo: 'ando', terminaciones: ['ar'] },
+  { sufijo: 'aban', terminaciones: ['ar'] },
+  { sufijo: 'aste', terminaciones: ['ar'] },
+  { sufijo: 'aron', terminaciones: ['ar'] },
+  { sufijo: 'amos', terminaciones: ['ar'] },
+  { sufijo: 'iste', terminaciones: ['er', 'ir'] },
+  { sufijo: 'ado', terminaciones: ['ar'] },
+  { sufijo: 'ada', terminaciones: ['ar'] },
+  { sufijo: 'ido', terminaciones: ['er', 'ir'] },
+  { sufijo: 'ida', terminaciones: ['er', 'ir'] },
+  { sufijo: 'aba', terminaciones: ['ar'] },
+  { sufijo: 'ían', terminaciones: ['er', 'ir'] },
+  { sufijo: 'ía', terminaciones: ['er', 'ir'] },
+  { sufijo: 'ás', terminaciones: ['ar'] },
+  { sufijo: 'és', terminaciones: ['er'] },
+  { sufijo: 'ís', terminaciones: ['ir'] },
+  { sufijo: 'ió', terminaciones: ['er', 'ir'] },
+  { sufijo: 'an', terminaciones: ['ar'] },
+  { sufijo: 'en', terminaciones: ['er', 'ir'] },
+  { sufijo: 'ó', terminaciones: ['ar'] },
+  { sufijo: 'é', terminaciones: ['ar'] },
+  { sufijo: 'á', terminaciones: ['ar'] },
+  { sufijo: 'í', terminaciones: ['ir'] },
+];
+
+const MIN_RAIZ = 3;
+/** Los sufijos de una o dos letras (`-an`, `-en`, `-ó`) matchean cualquier cosa,
+ *  incluidos nombres propios, así que piden una raíz más larga para aceptarse. */
+const MIN_RAIZ_SUFIJO_CORTO = 4;
+
+/** Candidatos de lema + categoría inferidos desde una forma marcada. */
+export function inferLemma(word: string, idioma: IdiomaFlexion): LemmaCandidate[] {
+  if (idioma !== 'es') return [];
+  const w = word.trim().toLowerCase();
+  if (w.length < MIN_RAIZ + 1) return [];
+  if (STOP_SUSTANTIVOS.some((s) => w.endsWith(s))) return [];
+
+  for (const regla of REGLAS) {
+    if (!w.endsWith(regla.sufijo)) continue;
+    const raiz = w.slice(0, -regla.sufijo.length);
+    // Sin el piso más alto para sufijos cortos, `Aedan` matchea `-an` con raíz
+    // `aed` y propone el verbo `aedar`. Los sufijos largos (`-iendo`, `-aste`)
+    // ya discriminan solos y se conforman con una raíz de 3 (`comiendo`→`comer`).
+    if (raiz.length < (regla.sufijo.length <= 2 ? MIN_RAIZ_SUFIJO_CORTO : MIN_RAIZ)) continue;
+    return regla.terminaciones.map((t) => ({ lema: raiz + t, categoria: 'verbo' as const }));
+  }
+
+  // `-a` y `-o` son ambiguos: `telequinético` es adjetivo, `teletransporta` y
+  // `teletransporto` son verbo. Se devuelven los dos, adjetivo primero porque
+  // es lo más frecuente con esa terminación en el corpus.
+  if (w.endsWith('a')) {
+    return [
+      { lema: w, categoria: 'adjetivo' },
+      { lema: w + 'r', categoria: 'verbo' },
+    ];
+  }
+  if (w.endsWith('o')) {
+    return [
+      { lema: w, categoria: 'adjetivo' },
+      { lema: w.slice(0, -1) + 'ar', categoria: 'verbo' },
+    ];
+  }
+  return [];
+}
