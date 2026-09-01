@@ -2566,8 +2566,48 @@ mod tests {
             .expect("no se embebió la miniatura");
         let bytes = entries.get(miniatura).unwrap();
         assert!(bytes.len() < 100 * 1024, "la miniatura pesa {} bytes", bytes.len());
+        // El peso solo no discrimina: un PNG de color plano de 2000x3000 ya
+        // pesa poco sin reescalar. Lo que prueba que hubo reescalado es el
+        // ancho decodificado.
+        let decoded = ::image::load_from_memory(bytes).unwrap();
+        assert_eq!(decoded.width(), 400, "esperaba 400px de ancho reescalado");
         let page = String::from_utf8(entries.get("OEBPS/7_otros_libros.xhtml").unwrap().clone()).unwrap();
         assert!(page.contains("class=\"libro-tapa\""));
+    }
+
+    #[test]
+    fn otros_libros_no_recomprime_una_tapa_que_ya_entra() {
+        let (_root, book) = repo_con_publicados();
+        // Tapa ya chica: entra sin reescalar. Ejercita la rama "ya entra"
+        // de embebido_reescalado, que es la razón de ser del sniff — si el
+        // sniff mintiera acá, el OPF declararía image/jpeg sobre bytes PNG.
+        let hermano = book.parent().unwrap().join("2 - Hermano");
+        let chica = ::image::RgbImage::from_pixel(200, 300, ::image::Rgb([10, 20, 30]));
+        ::image::DynamicImage::ImageRgb8(chica)
+            .save(hermano.join("cover.png"))
+            .unwrap();
+        std::fs::write(
+            hermano.join("book.json"),
+            r#"{"titulo":"Hermano","link":"https://tatoh.ar/libros/hermano","tapa":"cover.png","numero_en_serie":2}"#,
+        )
+        .unwrap();
+
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let miniatura = entries
+            .keys()
+            .find(|k| k.starts_with("OEBPS/cat-"))
+            .expect("no se embebió la miniatura");
+        assert!(miniatura.ends_with(".png"), "esperaba .png, salió {}", miniatura);
+        let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
+        let filename = miniatura.trim_start_matches("OEBPS/");
+        let media_attr = format!(r#"href="{}" media-type="image/png""#, filename);
+        assert!(
+            opf.contains(&media_attr),
+            "el manifest no declara image/png para {}: {}",
+            filename,
+            opf
+        );
     }
 
     #[test]
