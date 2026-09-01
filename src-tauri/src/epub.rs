@@ -2926,6 +2926,34 @@ mod tests {
         assert!(!toc.contains("Índice</h1>"));
     }
 
+
+    #[test]
+    fn el_indice_en_ingles_usa_las_etiquetas_en_ingles_en_las_cuatro_editoriales() {
+        // Cubre las ramas `if is_en` de Dedication / Also by the Author /
+        // About the Author, que `el_indice_en_ingles_usa_las_etiquetas_en_ingles`
+        // no ejercita (su fixture no tiene dedicatoria, catálogo ni autor.json).
+        let (root, book) = repo_con_publicados();
+        std::fs::write(root.join("autor.json"), r#"{"bio":{"en":"x"}}"#).unwrap();
+        std::fs::write(
+            book.join("book.json"),
+            r#"{"titulo":"Actual","idioma":"en","dedicatoria":"For you"}"#,
+        )
+        .unwrap();
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let toc = String::from_utf8(entries.get("OEBPS/toc.xhtml").unwrap().clone()).unwrap();
+
+        for etiqueta in ["Dedication", "Also by the Author", "About the Author"] {
+            assert!(toc.contains(etiqueta), "falta {} en el índice en inglés", etiqueta);
+        }
+        // Discrimina que no se cuelen las etiquetas en español (un bug que
+        // emitiera las dos, o que ignorara `is_en`, pasaría si solo
+        // chequeáramos presencia de las inglesas).
+        for etiqueta in ["Dedicatoria", "Otros libros", "Sobre el autor"] {
+            assert!(!toc.contains(etiqueta), "se coló {} en el índice en inglés", etiqueta);
+        }
+    }
+
     fn tempdir() -> std::path::PathBuf {
         let mut p = std::env::temp_dir();
         let suffix: u128 = std::time::SystemTime::now()
