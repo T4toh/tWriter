@@ -24,7 +24,10 @@ export class AutorModal {
   constructor() {
     effect(() => {
       if (!this.editing()) return;
-      void this.svc.load().then((cfg) => this.config.set(cfg));
+      void this.svc
+        .load()
+        .then((cfg) => this.config.set(cfg))
+        .catch((e) => this.error.set(String(e)));
     });
   }
 

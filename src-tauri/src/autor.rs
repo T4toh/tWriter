@@ -29,8 +29,10 @@ pub struct AutorConfig {
 }
 
 /// Bases de nombre que se buscan en disco cuando el campo está vacío o
-/// apunta a un archivo que ya no está. Mismo criterio que usa
-/// `book_config::find_author_photo_in` para la foto per-libro.
+/// apunta a un archivo que ya no está. Mismo criterio (buscar ambas
+/// convenciones es/en) que usa `book_config::find_author_photo_in` para la
+/// foto per-libro, aunque el orden de prioridad está invertido — no importa,
+/// son directorios distintos y no compiten entre sí.
 const FOTO_STEMS: &[&str] = &["autor", "author"];
 const QR_STEMS: &[&str] = &["qr"];
 

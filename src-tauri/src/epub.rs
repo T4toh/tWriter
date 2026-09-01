@@ -18,7 +18,6 @@ pub struct ExportResult {
     pub chapters: u32,
     /// Problemas que no abortaron el export pero que el autor tiene que ver
     /// (tapas que faltan, imágenes que no se pudieron procesar).
-    #[serde(default)]
     pub avisos: Vec<String>,
 }
 
@@ -423,7 +422,9 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             &mut avisos,
         )? {
             // `embebido_reescalado` no sabe de `properties`; se la ponemos acá.
-            if let Some(it) = items.iter_mut().find(|i| i.id == "cover-image") {
+            // `last_mut` alcanza: acaba de pushear justo ese item, es el
+            // primero de la lista (la tapa va antes que cualquier otro item).
+            if let Some(it) = items.last_mut() {
                 it.properties = Some("cover-image".into());
             }
             spine_idx += 1;
@@ -656,7 +657,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         toc_entries.push(entry);
     }
 
-    // 5a) Otros libros del autor. El catálogo sale de escanear el root: un
+    // 5c) Otros libros del autor. El catálogo sale de escanear el root: un
     // libro está publicado si su book.json tiene `link`.
     let catalogo = crate::catalogo::escanear(&root_dir, &book_dir);
     if !catalogo.misma_saga.is_empty() || !catalogo.otros.is_empty() {
@@ -1106,6 +1107,13 @@ fn embebido_reescalado(
             return Ok(None);
         }
     };
+    // Sniff por firma y no por `nitido`: tanto `reescalar_png_nitido` como
+    // `reescalar_jpeg` devuelven los bytes originales sin tocar cuando la
+    // imagen ya entra en `ancho_max` (rama "ya entra"), así que una tapa PNG
+    // chica sale PNG aunque nitido sea false. Inferir JPEG por descarte
+    // cuando no es PNG es válido únicamente porque `image` se compila con
+    // `features = ["png", "jpeg"]` nomás (Cargo.toml): no hay un tercer
+    // formato de salida posible.
     let es_png = procesada.len() >= 4 && &procesada[1..4] == b"PNG";
     let (dest, mime) = if es_png {
         (format!("{}.png", stem), "image/png")
@@ -1293,8 +1301,15 @@ fn build_about_author_xhtml(
     let is_en = lang == "en";
     let heading = if is_en { "About the Author" } else { "Sobre el autor" };
 
+    let autor_alt = cfg.autor.as_deref().unwrap_or("").trim();
     let img = foto
-        .map(|f| format!(r#"<img class="about-author-photo" src="{}" alt=""/>"#, xml_escape(f)))
+        .map(|f| {
+            format!(
+                r#"<img class="about-author-photo" src="{}" alt="{}"/>"#,
+                xml_escape(f),
+                xml_escape(autor_alt)
+            )
+        })
         .unwrap_or_default();
 
     let parrafos: String = bio
@@ -1365,9 +1380,10 @@ fn build_otros_libros_xhtml(
             s.push_str("<li class=\"libro\">");
             if let Some(Some(archivo)) = tapas.get(offset + i) {
                 s.push_str(&format!(
-                    r#"<a href="{}"><img class="libro-tapa" src="{}" alt=""/></a>"#,
+                    r#"<a href="{}"><img class="libro-tapa" src="{}" alt="{}"/></a>"#,
                     xml_escape(&l.link),
-                    xml_escape(archivo)
+                    xml_escape(archivo),
+                    xml_escape(&l.titulo)
                 ));
             }
             s.push_str(&format!(
@@ -2548,6 +2564,13 @@ mod tests {
         let page =
             String::from_utf8(entries.get("OEBPS/8_about_author.xhtml").unwrap().clone()).unwrap();
         assert!(page.contains("class=\"autor-qr\""));
+        // El href del QR tiene que ser la web, no el src de la imagen: un
+        // swap de argumentos en el format! sería invisible sin esto.
+        assert!(
+            page.contains(r#"<a href="https://tatoh.ar"><img class="autor-qr""#),
+            "page: {}",
+            page
+        );
     }
 
     #[test]
