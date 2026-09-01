@@ -1542,16 +1542,32 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   reescalan antes de embeberse (crate `image`): la tapa iba a resolución de
   imprenta adentro del EPUB. **Pendiente de verificación manual del autor.**
 - **Blurb y sinopsis por libro** (pedido del autor, 2026-09-01). Dos textos
-  distintos y con usos distintos: el **blurb** es el gancho de contratapa, dos o
-  tres líneas que venden; la **sinopsis** es el resumen largo, el que va en la
-  ficha de la tienda. Hoy no existe ninguno de los dos. Campos nuevos en
-  `book.json`, bilingües como el resto de las páginas editoriales. Dónde
-  aparecen, por orden de utilidad: en la lista de "Otros libros" del back matter
-  (el blurb, debajo del título — quedó explícitamente fuera del alcance de la
-  spec del back matter justamente porque no había campo), en la contratapa
-  generada, y en la tarjeta del libro del landing. La sinopsis probablemente no
-  vaya al EPUB, pero es lo que el autor copia y pega al publicar, así que tener
-  dónde escribirla y de dónde copiarla ya justifica el campo.
+  distintos y con usos distintos: el **blurb** es el gancho de contratapa; la
+  **sinopsis** es el resumen largo, el que va en la ficha de la tienda. Hoy no
+  existe ninguno de los dos.
+
+  **Formato, medido sobre el blurb real de La Caballera Esmeralda** (no
+  supuesto): son **tres párrafos cortos separados por línea en blanco**, ~50
+  palabras en total, texto plano sin cursivas ni nada inline. El ritmo vive en
+  los cortes — el último párrafo es de dos oraciones y pega justamente porque
+  está solo. O sea que el campo **tiene que preservar los saltos de párrafo**;
+  colapsarlos a un string de una línea arruina el texto.
+
+  Eso ya tiene convención en el repo y no hace falta inventar nada: `sobre_el_autor`
+  guarda texto plano y `build_about_author_xhtml` convierte cada línea no vacía
+  en un `<p>`. El blurb usa la misma, y el textarea del modal se comporta igual
+  que el de la bio.
+
+  Dónde aparece, por orden de utilidad: la contratapa generada, la tarjeta del
+  libro en el landing, y la lista de "Otros libros" del back matter — pero ahí
+  **tres párrafos son demasiado**, así que o va solo el primero o no va ninguno;
+  decidirlo mirando la página armada, no de antemano. La sinopsis probablemente
+  no vaya al EPUB, pero es lo que el autor copia y pega al publicar, así que
+  tener dónde escribirla ya justifica el campo.
+
+  **Abierto**: si son bilingües. Milky Way está en inglés, así que si hay blurb
+  en los dos idiomas el campo es un mapa por idioma como `bio` de `autor.json`,
+  no un string suelto. Preguntar antes de implementar.
 
 - **Sacar el autor del libro: hoy vive en tres lugares** (pedido del autor,
   2026-09-01). Después del back matter, el nombre del autor está en `book.json`
