@@ -6,7 +6,9 @@ use uuid::Uuid;
 use zip::write::{SimpleFileOptions, ZipWriter};
 use zip::CompressionMethod;
 
-use crate::book_config::{find_back_cover_in, find_cover_in, image_field_unusable, BookConfig};
+use crate::book_config::{
+    find_back_cover_in, find_cover_in, image_field_unusable, resolver_imagen, BookConfig,
+};
 use crate::fs::is_excluded_dir;
 use crate::theme::{resolve_theme, FontEmbed, ResolvedTheme};
 
@@ -408,38 +410,32 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     // 1) Cover (si hay imagen). Reescalada: las tapas del repo son PNG de
     // imprenta de varios MB y KDP cobra delivery por MB. 1600 px de ancho es
     // lo que recomienda Amazon para la portada de un ebook.
-    if let Some(cover_rel) = &cfg.tapa {
-        let origen = {
-            let p = Path::new(cover_rel);
-            if p.is_absolute() { p.to_path_buf() } else { book_dir.join(p) }
-        };
-        if origen.is_file() {
-            if let Some(cover_filename) = embebido_reescalado(
-                &origen,
-                "cover",
-                1600,
-                false,
-                &mut zip,
-                opts,
-                &mut items,
-                "cover-image",
-            )? {
-                // `embebido_reescalado` no sabe de `properties`; se la ponemos acá.
-                if let Some(it) = items.iter_mut().find(|i| i.id == "cover-image") {
-                    it.properties = Some("cover-image".into());
-                }
-                spine_idx += 1;
-                let xhtml = build_cover_xhtml(&cover_filename);
-                zip.start_file("OEBPS/0_cover.xhtml", opts).map_err(|e| e.to_string())?;
-                zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
-                items.push(Item {
-                    id: "cover".into(),
-                    href: "0_cover.xhtml".into(),
-                    media_type: "application/xhtml+xml".into(),
-                    spine_order: Some(spine_idx),
-                    properties: None,
-                });
+    if let Some(origen) = resolver_imagen(&book_dir, cfg.tapa.as_deref()) {
+        if let Some(cover_filename) = embebido_reescalado(
+            &origen,
+            "cover",
+            1600,
+            false,
+            &mut zip,
+            opts,
+            &mut items,
+            "cover-image",
+        )? {
+            // `embebido_reescalado` no sabe de `properties`; se la ponemos acá.
+            if let Some(it) = items.iter_mut().find(|i| i.id == "cover-image") {
+                it.properties = Some("cover-image".into());
             }
+            spine_idx += 1;
+            let xhtml = build_cover_xhtml(&cover_filename);
+            zip.start_file("OEBPS/0_cover.xhtml", opts).map_err(|e| e.to_string())?;
+            zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
+            items.push(Item {
+                id: "cover".into(),
+                href: "0_cover.xhtml".into(),
+                media_type: "application/xhtml+xml".into(),
+                spine_order: Some(spine_idx),
+                properties: None,
+            });
         }
     }
 
@@ -790,34 +786,28 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
 
     // 5b) Back cover (si hay imagen). Reescalada por el mismo motivo que la
     // tapa: sale del mismo repo, a la misma resolución de imprenta.
-    if let Some(back_rel) = &cfg.contratapa {
-        let origen = {
-            let p = Path::new(back_rel);
-            if p.is_absolute() { p.to_path_buf() } else { book_dir.join(p) }
-        };
-        if origen.is_file() {
-            if let Some(bc_filename) = embebido_reescalado(
-                &origen,
-                "back-cover",
-                1600,
-                false,
-                &mut zip,
-                opts,
-                &mut items,
-                "back-cover-image",
-            )? {
-                spine_idx += 1;
-                let xhtml = build_back_cover_xhtml(&bc_filename);
-                zip.start_file("OEBPS/9_back_cover.xhtml", opts).map_err(|e| e.to_string())?;
-                zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
-                items.push(Item {
-                    id: "back-cover".into(),
-                    href: "9_back_cover.xhtml".into(),
-                    media_type: "application/xhtml+xml".into(),
-                    spine_order: Some(spine_idx),
-                    properties: None,
-                });
-            }
+    if let Some(origen) = resolver_imagen(&book_dir, cfg.contratapa.as_deref()) {
+        if let Some(bc_filename) = embebido_reescalado(
+            &origen,
+            "back-cover",
+            1600,
+            false,
+            &mut zip,
+            opts,
+            &mut items,
+            "back-cover-image",
+        )? {
+            spine_idx += 1;
+            let xhtml = build_back_cover_xhtml(&bc_filename);
+            zip.start_file("OEBPS/9_back_cover.xhtml", opts).map_err(|e| e.to_string())?;
+            zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
+            items.push(Item {
+                id: "back-cover".into(),
+                href: "9_back_cover.xhtml".into(),
+                media_type: "application/xhtml+xml".into(),
+                spine_order: Some(spine_idx),
+                properties: None,
+            });
         }
     }
 
@@ -2855,7 +2845,7 @@ mod tests {
         let img = ::image::load_from_memory(bytes).unwrap();
         assert_eq!(img.width(), 1600);
         let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
-        assert!(opf.contains("cover-image"));
+        assert!(opf.contains(r#"properties="cover-image""#));
         // El XHTML de la portada tiene que apuntar al nombre real del archivo.
         let cover_page = String::from_utf8(entries.get("OEBPS/0_cover.xhtml").unwrap().clone()).unwrap();
         assert!(cover_page.contains(nombre.trim_start_matches("OEBPS/")));
