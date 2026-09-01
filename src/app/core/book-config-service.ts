@@ -14,6 +14,11 @@ export interface BookConfig {
   contratapa?: string | null;
   copyright_anio?: number | null;
   derechos_reservados?: boolean | null;
+  /** URL pública del libro. Cargarla lo publica en el catálogo de los demás EPUB. */
+  link?: string | null;
+  obra_de_ficcion?: boolean | null;
+  nota_ia?: boolean | null;
+  textos_legales?: Record<string, string> | null;
   dedicatoria?: string | null;
   imprenta?: string | null;
   serie?: string | null;

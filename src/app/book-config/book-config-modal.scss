@@ -115,6 +115,7 @@
 
 input[type='text'],
 input[type='number'],
+input[type='url'],
 textarea,
 select {
   background: var(--bg-soft);
@@ -190,6 +191,48 @@ textarea {
   color: var(--fg-muted);
   font-size: 11px;
   line-height: 1.5;
+}
+
+.hint {
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.legal {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.8rem;
+
+  legend {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fg-muted);
+    padding: 0 0.4rem;
+  }
+
+  .inciso {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0;
+
+    textarea {
+      flex-basis: 100%;
+      font: inherit;
+    }
+  }
+
+  .link-btn {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 0.85em;
+    padding: 0;
+  }
 }
 
 .ghost-btn {

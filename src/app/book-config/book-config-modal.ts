@@ -15,6 +15,29 @@ import { ThemesService } from '../core/themes-service';
 import { Theme, ThemeRef } from '../core/types';
 import { Select, SelectOption } from '../shared/select';
 
+/** Espejo de `epub.rs::texto_inciso_default`. Si cambia allá, cambia acá:
+ *  el textarea precarga esto y solo se guarda lo que el autor edite. */
+const TEXTOS_LEGALES_DEFAULT: Record<string, { es: string; en: string }> = {
+  reserva: {
+    es: 'Todos los derechos reservados. Ninguna parte de esta publicación puede ser reproducida, almacenada ni transmitida en forma alguna por medio electrónico, mecánico, fotocopia, grabación u otros sin autorización escrita del autor.',
+    en: 'All rights reserved. No part of this publication may be reproduced, stored or transmitted in any form or by any means, electronic, mechanical, photocopying, recording or otherwise, without the prior written permission of the author.',
+  },
+  ficcion: {
+    es: 'Esta novela es enteramente una obra de ficción. Los nombres, personajes y eventos retratados son producto de la imaginación del autor. Cualquier parecido con personas reales, vivas o fallecidas, eventos o lugares es enteramente coincidencia.',
+    en: "This novel is entirely a work of fiction. The names, characters and incidents portrayed in it are the work of the author's imagination. Any resemblance to actual persons, living or dead, events or localities is entirely coincidental.",
+  },
+  ia: {
+    es: 'Las imágenes de esta obra fueron generadas con inteligencia artificial. El texto es obra exclusiva del autor.',
+    en: 'The images in this work were generated with artificial intelligence. The text is the sole work of the author.',
+  },
+};
+
+const INCISOS = [
+  { clave: 'reserva', label: 'Reserva de derechos' },
+  { clave: 'ficcion', label: 'Obra de ficción' },
+  { clave: 'ia', label: 'Uso de IA' },
+] as const;
+
 @Component({
   selector: 'app-book-config-modal',
   imports: [FormsModule, Select],
@@ -70,6 +93,10 @@ export class BookConfigModal {
     if (base?.heading_font) set.add(base.heading_font);
     return Array.from(set).sort();
   });
+
+  protected readonly incisos = INCISOS;
+  /** Claves de incisos con el textarea desplegado. */
+  protected readonly editandoTexto = signal<Set<string>>(new Set());
 
   protected readonly idiomaOptions: SelectOption[] = [
     { value: 'es', label: 'Español' },
@@ -189,6 +216,10 @@ export class BookConfigModal {
         contratapa: cfg.contratapa ?? '',
         copyright_anio: cfg.copyright_anio ?? new Date().getFullYear(),
         derechos_reservados: cfg.derechos_reservados ?? true,
+        link: cfg.link ?? '',
+        obra_de_ficcion: cfg.obra_de_ficcion ?? null,
+        nota_ia: cfg.nota_ia ?? null,
+        textos_legales: cfg.textos_legales ?? null,
         dedicatoria: cfg.dedicatoria ?? '',
         imprenta: cfg.imprenta ?? 'Independiente',
         serie: cfg.serie ?? '',
@@ -278,6 +309,61 @@ export class BookConfigModal {
     this.config.set({ ...cur, [key]: value });
   }
 
+  protected incisoActivo(clave: string): boolean {
+    const c = this.config();
+    if (!c) return false;
+    const reserva = c.derechos_reservados ?? true;
+    if (clave === 'reserva') return reserva;
+    if (clave === 'ficcion') return c.obra_de_ficcion ?? reserva;
+    return c.nota_ia ?? false;
+  }
+
+  protected setInciso(clave: string, activo: boolean): void {
+    const c = this.config();
+    if (!c) return;
+    if (clave === 'reserva') {
+      // Al apagar la reserva, el inciso de ficción tenía que quedar donde
+      // estaba: lo materializamos antes de que el default lo arrastre.
+      const ficcion = this.incisoActivo('ficcion');
+      this.config.set({ ...c, derechos_reservados: activo, obra_de_ficcion: ficcion });
+      return;
+    }
+    if (clave === 'ficcion') this.config.set({ ...c, obra_de_ficcion: activo });
+    else this.config.set({ ...c, nota_ia: activo });
+  }
+
+  protected textoInciso(clave: string): string {
+    const c = this.config();
+    const propio = c?.textos_legales?.[clave];
+    if (propio) return propio;
+    const idioma = c?.idioma === 'en' ? 'en' : 'es';
+    return TEXTOS_LEGALES_DEFAULT[clave][idioma];
+  }
+
+  protected setTextoInciso(clave: string, valor: string): void {
+    const c = this.config();
+    if (!c) return;
+    const idioma = c.idioma === 'en' ? 'en' : 'es';
+    const textos = { ...(c.textos_legales ?? {}) };
+    // Si volvió al default, no guardamos nada: el book.json queda limpio y
+    // el texto sigue el idioma del libro si mañana cambia.
+    if (valor.trim() === TEXTOS_LEGALES_DEFAULT[clave][idioma].trim()) delete textos[clave];
+    else textos[clave] = valor;
+    this.config.set({
+      ...c,
+      textos_legales: Object.keys(textos).length ? textos : null,
+    });
+  }
+
+  protected toggleEdicionTexto(clave: string): void {
+    this.editandoTexto.update((set) => {
+      const next = new Set(set);
+      if (next.has(clave)) next.delete(clave);
+      else next.add(clave);
+      return next;
+    });
+  }
+
   protected async save(): Promise<void> {
     const path = this.bookPath();
     const cfg = this.config();
@@ -296,6 +382,10 @@ export class BookConfigModal {
         contratapa: blank(cfg.contratapa),
         copyright_anio: cfg.copyright_anio || null,
         derechos_reservados: cfg.derechos_reservados ?? null,
+        link: blank(cfg.link),
+        obra_de_ficcion: cfg.obra_de_ficcion ?? null,
+        nota_ia: cfg.nota_ia ?? null,
+        textos_legales: cfg.textos_legales ?? null,
         dedicatoria: blank(cfg.dedicatoria),
         imprenta: blank(cfg.imprenta),
         serie: blank(cfg.serie),
