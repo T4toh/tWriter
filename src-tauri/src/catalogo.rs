@@ -227,6 +227,7 @@ mod tests {
         let root = tempdir();
         let s = saga(&root, "1 - Meridian");
         let actual = libro(&s, "1 - Uno", r#"{"titulo":"Uno","link":"https://x/1"}"#);
+        libro(&s, "2 - Dos", r#"{"titulo":"Dos","link":"https://x/2"}"#);
         fs::create_dir_all(s.join("extras")).unwrap();
         fs::create_dir_all(s.join("notas")).unwrap();
         // Carpetas del root que no son sagas.
@@ -235,7 +236,8 @@ mod tests {
         fs::write(root.join("README.md"), "x").unwrap();
 
         let cat = escanear(&root, &actual);
-        assert!(cat.misma_saga.is_empty());
+        assert_eq!(cat.misma_saga.len(), 1);
+        assert_eq!(cat.misma_saga[0].titulo, "Dos");
         assert!(cat.otros.is_empty());
     }
 
