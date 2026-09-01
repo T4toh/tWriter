@@ -2,18 +2,26 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LucideCheck, LucideX } from '@lucide/angular';
 import { DictionaryService } from '../core/dictionary-service';
+import { SagaContextService } from '../core/saga-context-service';
 import { ToastService } from '../core/toast-service';
+import { TreeNode } from '../core/types';
+import { DerivedFormsPanel } from './derived-forms-panel';
 import { validateWord } from './word-validator';
 
 @Component({
   selector: 'app-dictionary-modal',
-  imports: [FormsModule, LucideCheck, LucideX],
+  imports: [FormsModule, LucideCheck, LucideX, DerivedFormsPanel],
   templateUrl: './dictionary-modal.html',
   styleUrl: './dictionary-modal.scss',
 })
 export class DictionaryModal {
   private svc = inject(DictionaryService);
   private toast = inject(ToastService);
+  private sagaCtx = inject(SagaContextService);
+
+  /** Palabra para la que está abierto el panel de formas derivadas, o null. */
+  protected readonly formasPara = signal<string | null>(null);
+  protected readonly idiomaFlexion = this.sagaCtx.idiomaFlexion;
 
   protected readonly editing = this.svc.editing;
   protected readonly words = this.svc.words;
@@ -78,6 +86,36 @@ export class DictionaryModal {
       this.newWord.set('');
     } finally {
       this.adding.set(false);
+    }
+  }
+
+  protected abrirFormas(palabra: string): void {
+    this.formasPara.set(palabra);
+  }
+
+  protected cerrarFormas(): void {
+    this.formasPara.set(null);
+  }
+
+  protected async agregarFormas(formas: string[]): Promise<void> {
+    const result = await this.sagaCtx.addManyToDictionary(formas);
+    if (!result.ok) {
+      this.toast.error(result.reason ?? 'No se pudieron agregar las formas');
+      return;
+    }
+    this.toast.success(
+      result.added === 1 ? '1 forma agregada' : `${result.added} formas agregadas`,
+    );
+    this.formasPara.set(null);
+    const target = this.editing();
+    if (target) {
+      const nodo: TreeNode = {
+        name: target.nombre,
+        path: target.path,
+        kind: 'saga',
+        children: [],
+      };
+      await this.svc.openFor(nodo);
     }
   }
 

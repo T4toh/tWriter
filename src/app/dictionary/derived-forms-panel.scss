@@ -1,0 +1,159 @@
+.formas-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 60;
+}
+
+.formas-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 61;
+  width: min(28rem, 90vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-bg, #1e1e22);
+  color: var(--panel-fg, #e8e8ea);
+  border: 1px solid var(--panel-border, #3a3a40);
+  border-radius: 0.5rem;
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.5);
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--panel-border, #3a3a40);
+
+    h3 {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .cerrar {
+      background: none;
+      border: none;
+      color: inherit;
+      font-size: 1.25rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0 0.25rem;
+    }
+  }
+
+  footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--panel-border, #3a3a40);
+  }
+}
+
+.config {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+
+  .campo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+
+    > span {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      opacity: 0.7;
+    }
+
+    input[type='text'] {
+      padding: 0.4rem 0.5rem;
+      font: inherit;
+      color: inherit;
+      background: var(--input-bg, #141417);
+      border: 1px solid var(--panel-border, #3a3a40);
+      border-radius: 0.25rem;
+    }
+  }
+
+  .radios {
+    display: flex;
+    gap: 1rem;
+
+    label {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      cursor: pointer;
+    }
+  }
+}
+
+.formas {
+  list-style: none;
+  margin: 0;
+  padding: 0 1rem;
+  overflow-y: auto;
+  flex: 1;
+
+  li {
+    label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.2rem 0;
+      cursor: pointer;
+    }
+
+    &.ya-esta label {
+      cursor: default;
+      opacity: 0.55;
+    }
+  }
+
+  .forma {
+    font-family: var(--mono-font, ui-monospace, monospace);
+  }
+
+  .nota {
+    font-size: 0.7rem;
+    opacity: 0.7;
+  }
+}
+
+.vacio,
+.nota-plural {
+  margin: 0;
+  padding: 0.5rem 1rem 0.75rem;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.btn-cancelar,
+.btn-agregar {
+  padding: 0.4rem 0.9rem;
+  font: inherit;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  border: 1px solid var(--panel-border, #3a3a40);
+  background: transparent;
+  color: inherit;
+}
+
+.btn-agregar {
+  background: var(--accent, #4a7dff);
+  border-color: var(--accent, #4a7dff);
+  color: #fff;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}

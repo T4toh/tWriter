@@ -65,6 +65,16 @@
           >
             Agregar
           </button>
+          @if (idiomaFlexion() === 'es' && canAdd()) {
+            <button
+              type="button"
+              class="btn-add btn-formas"
+              (click)="abrirFormas(newWord().trim())"
+              title="Agregar también las formas derivadas"
+            >
+              + formas…
+            </button>
+          }
         </div>
         @if (newWordValidation(); as v) {
           @if (v.ok) {
@@ -161,4 +171,16 @@
       <button type="button" class="btn btn-secondary" (click)="close()">Cerrar</button>
     </footer>
   </div>
+}
+
+@if (formasPara(); as palabra) {
+  @if (idiomaFlexion(); as idioma) {
+    <app-derived-forms-panel
+      [palabra]="palabra"
+      [idioma]="idioma"
+      [existentes]="words()"
+      (agregar)="agregarFormas($event)"
+      (cerrar)="cerrarFormas()"
+    />
+  }
 }
