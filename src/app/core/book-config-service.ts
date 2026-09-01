@@ -35,7 +35,7 @@ export interface BookConfig {
   /** Bio plain-text para la página "Sobre el autor" del EPUB. */
   sobre_el_autor?: string | null;
   /** Path relativo o absoluto de la foto del autor. Auto-detect de
-   *  `<book>/author.{jpg,png,webp}` o `<book>/autor.{...}`. */
+   *  `<book>/author.{jpg,jpeg,png}` o `<book>/autor.{...}`. */
   foto_autor?: string | null;
 }
 
