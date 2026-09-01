@@ -88,34 +88,23 @@ pub fn set_autor_config(root: String, config: AutorConfig) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn tempdir() -> PathBuf {
-        let mut p = std::env::temp_dir();
-        let suffix: u128 = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        p.push(format!("twriter-autor-test-{}", suffix));
-        let _ = fs::remove_dir_all(&p);
-        fs::create_dir_all(&p).unwrap();
-        p
-    }
+    use tempfile::TempDir;
 
     #[test]
     fn sin_archivo_devuelve_config_vacia() {
-        let root = tempdir();
-        assert_eq!(leer(&root), AutorConfig::default());
+        let root = TempDir::new().unwrap();
+        assert_eq!(leer(root.path()), AutorConfig::default());
     }
 
     #[test]
     fn lee_el_archivo_cuando_existe() {
-        let root = tempdir();
+        let root = TempDir::new().unwrap();
         fs::write(
-            root.join("autor.json"),
+            root.path().join("autor.json"),
             r#"{"nombre":"Tatoh","bio":{"es":"hola"},"web":"https://tatoh.ar"}"#,
         )
         .unwrap();
-        let cfg = leer(&root);
+        let cfg = leer(root.path());
         assert_eq!(cfg.nombre.as_deref(), Some("Tatoh"));
         assert_eq!(cfg.web.as_deref(), Some("https://tatoh.ar"));
         assert_eq!(cfg.bio.get("es").map(String::as_str), Some("hola"));
@@ -147,31 +136,31 @@ mod tests {
 
     #[test]
     fn autodetecta_foto_y_qr_en_disco() {
-        let root = tempdir();
-        fs::write(root.join("autor.json"), r#"{"nombre":"Tatoh"}"#).unwrap();
-        fs::write(root.join("autor.jpg"), b"fake").unwrap();
-        fs::write(root.join("qr.png"), b"fake").unwrap();
-        let cfg = leer(&root);
+        let root = TempDir::new().unwrap();
+        fs::write(root.path().join("autor.json"), r#"{"nombre":"Tatoh"}"#).unwrap();
+        fs::write(root.path().join("autor.jpg"), b"fake").unwrap();
+        fs::write(root.path().join("qr.png"), b"fake").unwrap();
+        let cfg = leer(root.path());
         assert_eq!(cfg.foto.as_deref(), Some("autor.jpg"));
         assert_eq!(cfg.qr.as_deref(), Some("qr.png"));
     }
 
     #[test]
     fn no_autodetecta_si_el_campo_ya_apunta_a_un_archivo_que_existe() {
-        let root = tempdir();
-        fs::write(root.join("autor.json"), r#"{"qr":"mi-qr.png"}"#).unwrap();
-        fs::write(root.join("mi-qr.png"), b"fake").unwrap();
-        fs::write(root.join("qr.png"), b"fake").unwrap();
-        assert_eq!(leer(&root).qr.as_deref(), Some("mi-qr.png"));
+        let root = TempDir::new().unwrap();
+        fs::write(root.path().join("autor.json"), r#"{"qr":"mi-qr.png"}"#).unwrap();
+        fs::write(root.path().join("mi-qr.png"), b"fake").unwrap();
+        fs::write(root.path().join("qr.png"), b"fake").unwrap();
+        assert_eq!(leer(root.path()).qr.as_deref(), Some("mi-qr.png"));
     }
 
     #[test]
     fn round_trip_de_escritura() {
-        let root = tempdir();
+        let root = TempDir::new().unwrap();
         let mut cfg = AutorConfig::default();
         cfg.nombre = Some("Tatoh".into());
         cfg.bio.insert("es".into(), "hola".into());
-        escribir(&root, &cfg).unwrap();
-        assert_eq!(leer(&root), cfg);
+        escribir(root.path(), &cfg).unwrap();
+        assert_eq!(leer(root.path()), cfg);
     }
 }

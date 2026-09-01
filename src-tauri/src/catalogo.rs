@@ -118,20 +118,7 @@ fn canonicalizar(p: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Mismo patrón que el helper de `epub.rs`: tempdir a mano, sin depender
-    /// de que el test corra con `tempfile`.
-    fn tempdir() -> PathBuf {
-        let mut p = std::env::temp_dir();
-        let suffix: u128 = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        p.push(format!("twriter-catalogo-test-{}", suffix));
-        let _ = fs::remove_dir_all(&p);
-        fs::create_dir_all(&p).unwrap();
-        p
-    }
+    use tempfile::TempDir;
 
     fn saga(root: &Path, nombre: &str) -> PathBuf {
         let dir = root.join(nombre);
@@ -153,13 +140,14 @@ mod tests {
 
     #[test]
     fn descarta_los_libros_sin_link() {
-        let root = tempdir();
-        let s = saga(&root, "1 - Meridian");
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let s = saga(root, "1 - Meridian");
         let actual = libro(&s, "1 - Uno", r#"{"titulo":"Uno"}"#);
         libro(&s, "2 - Dos", r#"{"titulo":"Dos"}"#);
         libro(&s, "3 - Tres", r#"{"titulo":"Tres","link":"https://x/3"}"#);
 
-        let cat = escanear(&root, &actual);
+        let cat = escanear(root, &actual);
         assert_eq!(cat.misma_saga.len(), 1);
         assert_eq!(cat.misma_saga[0].titulo, "Tres");
         assert!(cat.otros.is_empty());
@@ -167,26 +155,28 @@ mod tests {
 
     #[test]
     fn excluye_el_libro_que_se_esta_exportando() {
-        let root = tempdir();
-        let s = saga(&root, "1 - Meridian");
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let s = saga(root, "1 - Meridian");
         let actual = libro(&s, "1 - Uno", r#"{"titulo":"Uno","link":"https://x/1"}"#);
         libro(&s, "2 - Dos", r#"{"titulo":"Dos","link":"https://x/2"}"#);
 
-        let cat = escanear(&root, &actual);
+        let cat = escanear(root, &actual);
         assert_eq!(cat.misma_saga.len(), 1);
         assert_eq!(cat.misma_saga[0].titulo, "Dos");
     }
 
     #[test]
     fn separa_misma_saga_de_otras_y_nombra_la_actual() {
-        let root = tempdir();
-        let s1 = saga(&root, "1 - Meridian");
-        let s2 = saga(&root, "2 - Buenos Aires");
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let s1 = saga(root, "1 - Meridian");
+        let s2 = saga(root, "2 - Buenos Aires");
         let actual = libro(&s1, "1 - Uno", r#"{"titulo":"Uno","link":"https://x/1"}"#);
         libro(&s1, "2 - Dos", r#"{"titulo":"Dos","link":"https://x/2"}"#);
         libro(&s2, "1 - Luces", r#"{"titulo":"Luces","link":"https://x/l"}"#);
 
-        let cat = escanear(&root, &actual);
+        let cat = escanear(root, &actual);
         assert_eq!(cat.saga_actual.as_deref(), Some("Meridian"));
         assert_eq!(cat.misma_saga.len(), 1);
         assert_eq!(cat.misma_saga[0].titulo, "Dos");
@@ -196,23 +186,25 @@ mod tests {
 
     #[test]
     fn ordena_por_numero_en_serie_y_cae_al_nombre_de_carpeta() {
-        let root = tempdir();
-        let s = saga(&root, "1 - Meridian");
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let s = saga(root, "1 - Meridian");
         let actual = libro(&s, "9 - Actual", r#"{"titulo":"Actual","link":"https://x/9"}"#);
         libro(&s, "3 - C", r#"{"titulo":"C","link":"https://x/c","numero_en_serie":3}"#);
         libro(&s, "1 - A", r#"{"titulo":"A","link":"https://x/a","numero_en_serie":1}"#);
         // Sin numero_en_serie: va al final, ordenado por carpeta.
         libro(&s, "2 - B", r#"{"titulo":"B","link":"https://x/b"}"#);
 
-        let cat = escanear(&root, &actual);
+        let cat = escanear(root, &actual);
         let titulos: Vec<&str> = cat.misma_saga.iter().map(|l| l.titulo.as_str()).collect();
         assert_eq!(titulos, vec!["A", "C", "B"]);
     }
 
     #[test]
     fn ignora_carpetas_sin_book_json() {
-        let root = tempdir();
-        let s = saga(&root, "1 - Meridian");
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let s = saga(root, "1 - Meridian");
         let actual = libro(&s, "1 - Uno", r#"{"titulo":"Uno","link":"https://x/1"}"#);
         libro(&s, "2 - Dos", r#"{"titulo":"Dos","link":"https://x/2"}"#);
         fs::create_dir_all(s.join("extras")).unwrap();
@@ -222,7 +214,7 @@ mod tests {
         fs::create_dir_all(root.join("themes")).unwrap();
         fs::write(root.join("README.md"), "x").unwrap();
 
-        let cat = escanear(&root, &actual);
+        let cat = escanear(root, &actual);
         assert_eq!(cat.misma_saga.len(), 1);
         assert_eq!(cat.misma_saga[0].titulo, "Dos");
         assert!(cat.otros.is_empty());
@@ -230,14 +222,15 @@ mod tests {
 
     #[test]
     fn resuelve_la_tapa_a_path_absoluto_y_la_omite_si_no_existe() {
-        let root = tempdir();
-        let s = saga(&root, "1 - Meridian");
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let s = saga(root, "1 - Meridian");
         let actual = libro(&s, "1 - Uno", r#"{"titulo":"Uno","link":"https://x/1"}"#);
         let con = libro(&s, "2 - Con", r#"{"titulo":"Con","link":"https://x/2","tapa":"cover.png"}"#);
         fs::write(con.join("cover.png"), b"fake").unwrap();
         libro(&s, "3 - Sin", r#"{"titulo":"Sin","link":"https://x/3","tapa":"cover.png"}"#);
 
-        let cat = escanear(&root, &actual);
+        let cat = escanear(root, &actual);
         let con_tapa = cat.misma_saga.iter().find(|l| l.titulo == "Con").unwrap();
         assert_eq!(con_tapa.tapa.as_deref(), Some(con.join("cover.png").as_path()));
         let sin_tapa = cat.misma_saga.iter().find(|l| l.titulo == "Sin").unwrap();
