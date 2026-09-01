@@ -1679,6 +1679,22 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   para que ningún round-trip pierda palabras. Verificado end-to-end con dos
   clones: `pull --rebase` resuelve la unión sin conflicto.
 
+- **Tests que colisionan entre sí en paralelo** (medido el 2026-09-01, no
+  supuesto). Cuatro módulos tienen su propio helper `tempdir()` a mano que
+  arma el nombre con `SystemTime::now().as_nanos()` y nada más: `git.rs:703`,
+  `theme.rs:912`, `epub.rs:3114` y `stats.rs:202`. Dos tests que arrancan en el
+  mismo nanosegundo se pisan el directorio, y `cargo test` en paralelo falla de
+  forma intermitente — visto en `git::tests::pull_rebase_sets_upstream_when_missing`.
+  Además cada corrida deja un directorio colgado en `/tmp` para siempre, porque
+  nadie limpia al final.
+  El arreglo es **borrar código, no agregarlo**: `tempfile` ya es
+  dev-dependency y ya lo usan cinco módulos. `tempfile::tempdir()` es a prueba
+  de colisiones por construcción (`O_EXCL` con reintento) y se borra sola al
+  dropear el guard. La rama `feat/epub-back-matter` ya convirtió las dos copias
+  que había agregado (`autor.rs`, `catalogo.rs`); quedan estas cuatro. Ojo al
+  convertir: hay que retener el `TempDir` mientras el test use paths adentro,
+  o se borra el directorio a mitad y el test falla peor que ahora.
+
 ## Observabilidad / Stats
 
 - Diff/historial visual via `git log`.
