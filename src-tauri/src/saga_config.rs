@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::book_config::find_cover_in;
+use crate::book_config::{find_cover_in, image_field_unusable};
 use crate::theme::ThemeRef;
 
 /// Archivo dedicado del diccionario per-saga. Una palabra por línea, ordenado.
@@ -100,7 +100,7 @@ pub fn get_saga_config(saga_path: String) -> Result<SagaConfig, String> {
             ..Default::default()
         }
     };
-    if cfg.tapa.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+    if image_field_unusable(&saga_dir, cfg.tapa.as_deref()) {
         if let Some(found) = find_cover_in(&saga_dir) {
             cfg.tapa = Some(found);
         }

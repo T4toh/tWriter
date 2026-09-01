@@ -22,6 +22,78 @@ pub fn find_author_photo_in(dir: &Path) -> Option<String> {
     find_named_image(dir, "author").or_else(|| find_named_image(dir, "autor"))
 }
 
+/// `true` si el field de imagen no sirve y conviene autodescubrir: está vacío,
+/// **o** apunta a un archivo que no está en esta máquina — el caso de los
+/// `book.json` viejos con un path absoluto de otra PC. Sin esto el EPUB se
+/// exportaba sin portada en silencio teniendo el `cover.png` al lado.
+pub fn image_field_unusable(dir: &Path, field: Option<&str>) -> bool {
+    match field.map(str::trim).filter(|s| !s.is_empty()) {
+        None => true,
+        Some(value) => {
+            let p = Path::new(value);
+            let full = if p.is_absolute() { p.to_path_buf() } else { dir.join(p) };
+            !full.is_file()
+        }
+    }
+}
+
+/// Stems canónicos de las imágenes que vive al lado de un `book.json`/`saga.json`.
+const IMAGE_STEMS: &[&str] = &["cover", "back-cover", "author"];
+
+/// Deja la imagen elegida **dentro** de la carpeta del libro/saga y devuelve el
+/// nombre relativo para guardar en el JSON. Si ya estaba adentro, no copia nada
+/// y solo devuelve la ruta relativa. Guardar el path absoluto que devuelve el
+/// file dialog no sirve: la imagen no viaja por git y el EPUB sale sin portada
+/// en la otra PC. Mismo criterio que la normalización del import wizard.
+pub fn adopt_image(dir: &Path, source: &Path, stem: &str) -> Result<String, String> {
+    if !IMAGE_STEMS.contains(&stem) {
+        return Err(format!("stem no permitido: {}", stem));
+    }
+    if !dir.is_dir() {
+        return Err(format!("no es carpeta: {}", dir.display()));
+    }
+    if !source.is_file() {
+        return Err(format!("la imagen no existe: {}", source.display()));
+    }
+    let ext = source
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+    if !COVER_EXTS.contains(&ext.as_str()) {
+        return Err(format!(
+            "formato no soportado: .{} (usar {})",
+            ext,
+            COVER_EXTS.join(", ")
+        ));
+    }
+    // Ya vive adentro: alcanza con guardarla relativa.
+    if let (Ok(canon_dir), Ok(canon_src)) = (dir.canonicalize(), source.canonicalize()) {
+        if let Ok(rel) = canon_src.strip_prefix(&canon_dir) {
+            return Ok(rel.to_string_lossy().replace('\\', "/"));
+        }
+    }
+    let dest_name = format!("{}.{}", stem, ext);
+    fs::copy(source, dir.join(&dest_name)).map_err(|e| format!("copiar imagen: {}", e))?;
+    // La elegida pasa a ser LA tapa: barrer las otras extensiones del mismo
+    // stem, o queda un `cover.png` viejo al lado del `cover.jpg` nuevo y
+    // `find_cover_in` puede levantar el equivocado.
+    for otra in COVER_EXTS.iter().filter(|e| **e != ext) {
+        let _ = fs::remove_file(dir.join(format!("{}.{}", stem, otra)));
+    }
+    Ok(dest_name)
+}
+
+/// Wrapper de `adopt_image` para los modales de config (libro y saga).
+#[tauri::command]
+pub fn adopt_config_image(
+    dir_path: String,
+    source_path: String,
+    stem: String,
+) -> Result<String, String> {
+    adopt_image(Path::new(&dir_path), Path::new(&source_path), &stem)
+}
+
 fn find_named_image(dir: &Path, stem: &str) -> Option<String> {
     for ext in COVER_EXTS {
         let candidate = dir.join(format!("{}.{}", stem, ext));
@@ -120,17 +192,17 @@ pub fn get_book_config(book_path: String) -> Result<BookConfig, String> {
             ..Default::default()
         }
     };
-    if cfg.tapa.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+    if image_field_unusable(&book_dir, cfg.tapa.as_deref()) {
         if let Some(found) = find_cover_in(&book_dir) {
             cfg.tapa = Some(found);
         }
     }
-    if cfg.contratapa.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+    if image_field_unusable(&book_dir, cfg.contratapa.as_deref()) {
         if let Some(found) = find_back_cover_in(&book_dir) {
             cfg.contratapa = Some(found);
         }
     }
-    if cfg.foto_autor.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+    if image_field_unusable(&book_dir, cfg.foto_autor.as_deref()) {
         if let Some(found) = find_author_photo_in(&book_dir) {
             cfg.foto_autor = Some(found);
         }
@@ -223,4 +295,102 @@ fn strip_numeric_prefix(s: &str) -> String {
     let rest = &trimmed[digits.len()..];
     rest.trim_start_matches(|c: char| c.is_whitespace() || c == '-')
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn png(path: &Path) {
+        fs::write(path, b"\x89PNG fake").unwrap();
+    }
+
+    #[test]
+    fn adopta_imagen_de_afuera_copiandola_con_el_nombre_canonico() {
+        let libro = TempDir::new().unwrap();
+        let afuera = TempDir::new().unwrap();
+        let src = afuera.path().join("Mi Tapa Rev3.png");
+        png(&src);
+
+        let rel = adopt_image(libro.path(), &src, "cover").unwrap();
+
+        assert_eq!(rel, "cover.png");
+        assert!(libro.path().join("cover.png").is_file());
+        assert_eq!(find_cover_in(libro.path()).as_deref(), Some("cover.png"));
+    }
+
+    #[test]
+    fn imagen_que_ya_vive_adentro_queda_relativa_sin_copiar() {
+        let libro = TempDir::new().unwrap();
+        let dentro = libro.path().join("extras");
+        fs::create_dir(&dentro).unwrap();
+        let src = dentro.join("tapa.png");
+        png(&src);
+
+        let rel = adopt_image(libro.path(), &src, "cover").unwrap();
+
+        assert_eq!(rel, "extras/tapa.png");
+        assert!(!libro.path().join("cover.png").exists(), "no debe copiar");
+    }
+
+    #[test]
+    fn reemplazar_la_tapa_sobreescribe_la_anterior() {
+        let libro = TempDir::new().unwrap();
+        let afuera = TempDir::new().unwrap();
+        fs::write(libro.path().join("cover.png"), b"vieja").unwrap();
+        let src = afuera.path().join("nueva.png");
+        fs::write(&src, b"nueva").unwrap();
+
+        let rel = adopt_image(libro.path(), &src, "cover").unwrap();
+
+        assert_eq!(rel, "cover.png");
+        assert_eq!(fs::read(libro.path().join("cover.png")).unwrap(), b"nueva");
+    }
+
+    #[test]
+    fn la_elegida_reemplaza_la_tapa_aunque_cambie_la_extension() {
+        let libro = TempDir::new().unwrap();
+        let afuera = TempDir::new().unwrap();
+        png(&libro.path().join("cover.png"));
+        let src = afuera.path().join("nueva.jpg");
+        fs::write(&src, b"jpeg nueva").unwrap();
+
+        let rel = adopt_image(libro.path(), &src, "cover").unwrap();
+
+        assert_eq!(rel, "cover.jpg");
+        assert!(!libro.path().join("cover.png").exists(), "la vieja se barre");
+        assert_eq!(find_cover_in(libro.path()).as_deref(), Some("cover.jpg"));
+    }
+
+    #[test]
+    fn autodescubre_cuando_el_path_esta_vacio_o_muerto() {
+        let libro = TempDir::new().unwrap();
+        png(&libro.path().join("cover.png"));
+
+        assert!(image_field_unusable(libro.path(), None));
+        assert!(image_field_unusable(libro.path(), Some("  ")));
+        // El caso real: absoluto de la PC vieja.
+        assert!(image_field_unusable(
+            libro.path(),
+            Some("/home/tatoh/Downloads/La Princesa V3.png")
+        ));
+        assert!(image_field_unusable(libro.path(), Some("no-esta.png")));
+        assert!(!image_field_unusable(libro.path(), Some("cover.png")));
+    }
+
+    #[test]
+    fn rechaza_formato_y_stem_invalidos() {
+        let libro = TempDir::new().unwrap();
+        let afuera = TempDir::new().unwrap();
+        let pdf = afuera.path().join("tapa.pdf");
+        fs::write(&pdf, b"pdf").unwrap();
+        let ok = afuera.path().join("tapa.png");
+        png(&ok);
+
+        assert!(adopt_image(libro.path(), &pdf, "cover").is_err());
+        assert!(adopt_image(libro.path(), &ok, "../escape").is_err());
+        assert!(adopt_image(libro.path(), &afuera.path().join("no-existe.png"), "cover").is_err());
+    }
 }

@@ -1486,6 +1486,34 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 - Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
+- [x] **La vista de la saga muestra una tapa sola — que se vea que hay varios libros**
+  (pedido del autor, 2026-09-01). En `landing/saga-header.html` el `.cover-slot`
+  pinta **una** imagen: la tapa propia de la saga, o —si no tiene— la del primer
+  libro con el tag "heredada" (`coverFromBook`). El contador de al lado dice
+  "4 libros" pero visualmente parece una novela suelta. La `saga-card` de la
+  galería sí apila hasta `MAX_THUMBS = 6` en fila, así que la inconsistencia
+  está solo en el header.
+  **Hecho en `feat/saga-header-deck-de-tapas`, verificado a mano por el autor el
+  2026-09-01**: mazo de hasta 3 tapas (`MAX_DECK`), las de atrás con `translateY`
+  + rotación alternada + `brightness` bajando; el tag "heredada" quedó igual —
+  solo aparece cuando el frente es prestado, que es la condición que ya tenía.
+  De paso, dos contadores que decían un kind pero contaban todos los hijos:
+  `saga-header.ts` "N libros" ahora filtra `kind === 'book'` (sumaba la carpeta
+  `notas` y los `.md` sueltos) y `book-card.ts::itemCount` excluye `note`/`notes`,
+  mismo criterio que `landing.ts::items`.
+- [x] **El "N cap." de la tarjeta de libro miente cuando el libro está partido**
+  (visto el 2026-09-01 arreglando los contadores del mazo de tapas). `book-card`
+  cuenta hijos directos (`itemCount()`, hoy ya sin notas), pero `fs.rs::
+  list_sections_or_chapters` devuelve **`Section` por cada carpeta de parte** y
+  solo mete `chapter` para los `.html` sueltos en la raíz del libro. O sea: un
+  libro con 3 partes de 8 capítulos cada una dice "3 cap." en vez de 24, y uno
+  mixto (partes + capítulos sueltos) suma peras con manzanas.
+  **Hecho en el mismo PR** (lo levantó también la review de CodeRabbit, que
+  coincidió con este item): `itemCount` pasó a `chapterCount` y suma los nietos
+  `chapter` de cada `section` más los capítulos directos. Filtrar por `chapter`
+  deja afuera las notas sin nombrarlas, así que el filtro de `note`/`notes` se
+  cayó. Las secciones con `excluded: true` suman 0 — Rust las manda con
+  `children: []` y además no van al EPUB, que es lo correcto acá.
 
 ## EPUB
 
@@ -1496,6 +1524,51 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   (reserva de derechos, "obra de ficción / personajes ficticios",
   prohibición de reproducción, etc.) elegibles al armar la página legal,
   bilingües como el copyright.
+- [x] **Las rutas de imagen se guardan absolutas y no sobreviven el cambio de PC**
+  (encontrado el 2026-09-01 verificando el mazo de tapas: en esta Mac los 4
+  libros de Meridian 2.0 mostraban placeholder). `book-config-modal.ts:216`
+  `pickCover()` — igual `pickBackCover()` y `pickAuthorPhoto()` — guarda tal cual
+  lo que devuelve el file dialog, o sea una ruta absoluta, incluso cuando el
+  archivo está **dentro de la carpeta del libro**. Los `book.json` viejos quedaron
+  con `/home/tatoh/Downloads/...` de la PC Linux; auditado sobre `~/novelas`:
+  35 relativas (`cover.png`) OK, 4 absolutas rotas, y las 4 tenían un `cover.png`
+  al lado. Con git sync entre PCs como feature central esto se rompe solo.
+  **Lo peor es en el EPUB**: `epub.rs::embed_image` (línea 932) devuelve
+  `Ok(None)` si el path no existe, así que el libro se exporta **sin portada y
+  sin un solo aviso**. Y el auto-discovery de `find_cover_in` (línea 1540) no
+  salva, porque solo corre cuando `tapa` está **vacío**, no cuando apunta a un
+  path muerto — teniendo el `cover.png` ahí al lado en la misma carpeta.
+  **Hecho en `fix/tapas-al-repo`** (falta verificación a mano):
+  1. **Al elegir**: `book_config.rs::adopt_image` + comando
+     `adopt_config_image`. Si la imagen cae bajo la carpeta del libro/saga se
+     guarda relativa sin copiar; si viene de afuera se copia como
+     `cover|back-cover|author.<ext>` y se guarda el nombre. Enganchado en los 4
+     pickers de imagen (`book-config-modal.ts` ×3, `saga-config-modal.ts` ×1).
+     Mismo criterio que ya tenía la normalización del import wizard
+     (`import_wizard.rs:615`), que es por qué los libros importados sí quedaron
+     con `cover.png` relativo.
+  2. **Al leer y al exportar**: `image_field_unusable()` reemplaza al chequeo de
+     "field vacío" en los 6 lugares que autodescubrían (`get_book_config` ×3,
+     `saga_config.rs`, `epub.rs` ×2). Ahora un path muerto también dispara el
+     `find_cover_in`, así que los `book.json` viejos con la ruta de Linux
+     resuelven al `cover.png` de al lado sin tocar el repo de contenido.
+  3. **Al reemplazar**: la elegida pasa a ser LA tapa — barre las otras
+     extensiones del mismo stem, así no queda un `cover.png` viejo al lado del
+     `cover.jpg` nuevo.
+  **Verificado a mano por el autor el 2026-09-01**: cambió las 4 tapas de
+  Meridian 2.0 desde Canva vía Downloads; los `book.json` quedaron con
+  `tapa: "cover.png"` y las imágenes adentro de cada carpeta de libro.
+  **Reescalar la tapa al copiar — DESCARTADO por el autor (2026-09-01).** Copiar
+  al repo mete PNGs de 5–6 MB en git y las versiones viejas quedan en la historia
+  (ese commit fueron ~23 MB). Propuse bajar a ~1600px al adoptar la imagen y lo
+  descartó: es la misma tapa que se embebe en el EPUB y tiene que ir en calidad
+  buena. No volver a proponerlo.
+- **Tapa que no existe: avisar en vez de placeholder mudo.** Lo que quedó afuera
+  del item de arriba: si no hay **ninguna** imagen al lado, `CoverCache.urlFor`
+  tira y la UI cae al placeholder sin decir nada, y el EPUB se exporta sin
+  portada en silencio (`epub.rs::embed_image` devuelve `Ok(None)`). Contra la
+  convención "el remedio se da adentro de la app": tiene que mostrar el path que
+  no existe y el botón "Elegir otra", y el export avisar que salió sin portada.
 - Lista "Otros libros del mismo autor" en EPUB (contratapa ya está embebida).
 - Preview tipo Kindle (B/N, distintos tamaños — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
 - Pesos extra de fuente (300 Light, 600 SemiBold, 900 Black). Hoy solo Regular/Bold/Italic/BoldItalic; pesos custom requieren edit manual del `theme.json`.

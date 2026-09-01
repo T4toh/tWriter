@@ -1,5 +1,6 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { invoke } from '@tauri-apps/api/core';
 import { FontsService } from '../core/fonts-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
 import { SagaConfig, SagaConfigService } from '../core/saga-config-service';
@@ -191,8 +192,26 @@ export class SagaConfigModal {
       defaultPath: this.sagaPath() ?? undefined,
     });
     if (!result) return;
+    const rel = await this.adoptImage(result, 'cover');
+    if (!rel) return;
     const cur = this.config();
-    if (cur) this.config.set({ ...cur, tapa: result });
+    if (cur) this.config.set({ ...cur, tapa: rel });
+  }
+
+  /** Ver `adoptImage` del modal de libro: la imagen tiene que vivir en el repo. */
+  private async adoptImage(source: string, stem: string): Promise<string | null> {
+    const dir = this.sagaPath();
+    if (!dir) return null;
+    try {
+      return await invoke<string>('adopt_config_image', {
+        dirPath: dir,
+        sourcePath: source,
+        stem,
+      });
+    } catch (err) {
+      this.error.set(`No se pudo usar esa imagen: ${err}`);
+      return null;
+    }
   }
 
   protected update<K extends keyof SagaConfig>(key: K, value: SagaConfig[K]): void {

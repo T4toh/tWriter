@@ -15,25 +15,41 @@
   width: 90px;
   flex-shrink: 0;
   aspect-ratio: 2 / 3;
-  overflow: hidden;
+}
+
+// Mazo: la del frente ocupa el slot, las de atrás asoman por arriba con una
+// rotación leve. El bleed vertical entra en el padding del header y el
+// horizontal en el gap con .info, así que no empuja el layout.
+.deck-card {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
   border-radius: 3px;
   background: var(--bg-soft);
   border: 1px solid var(--border);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
+  &[data-pos='1'] {
+    transform: translateY(-7px) rotate(-3deg) scale(0.96);
+    filter: brightness(0.88);
   }
 
-  &.borrowed img {
-    opacity: 0.7;
+  &[data-pos='2'] {
+    transform: translateY(-13px) rotate(4deg) scale(0.92);
+    filter: brightness(0.78);
   }
+}
+
+.cover-slot.borrowed .deck-card {
+  opacity: 0.7;
 }
 
 .borrowed-tag {
   position: absolute;
+  z-index: 10;
   bottom: 4px;
   left: 4px;
   font-size: 9px;
@@ -49,6 +65,10 @@
 .cover-placeholder {
   width: 100%;
   height: 100%;
+  border-radius: 3px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;

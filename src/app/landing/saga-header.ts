@@ -14,6 +14,9 @@ import { DictionaryService } from '../core/dictionary-service';
 import { SagaConfig, SagaConfigService } from '../core/saga-config-service';
 import { TreeNode } from '../core/types';
 
+/** Tapas visibles en el mazo, contando la del frente. */
+const MAX_DECK = 3;
+
 @Component({
   selector: 'app-saga-header',
   imports: [LucideBookOpen, LucideSettings],
@@ -29,7 +32,8 @@ export class SagaHeader {
   readonly node = input.required<TreeNode>();
 
   protected readonly config = signal<SagaConfig | null>(null);
-  protected readonly coverDataUrl = signal<string | null>(null);
+  /** Mazo de tapas: `[0]` es la del frente, el resto asoma detrás. */
+  protected readonly covers = signal<string[]>([]);
   protected readonly coverFromBook = signal<boolean>(false);
 
   protected readonly displayName = computed(() => {
@@ -40,7 +44,10 @@ export class SagaHeader {
 
   protected readonly author = computed(() => this.config()?.autor ?? null);
   protected readonly idioma = computed(() => this.config()?.idioma ?? null);
-  protected readonly bookCount = computed(() => this.node().children.length);
+  // Solo libros: los hijos incluyen la carpeta notas/ y los .md sueltos.
+  protected readonly bookCount = computed(
+    () => this.node().children.filter((c) => c.kind === 'book').length,
+  );
   protected readonly dictCount = signal<number>(0);
   protected readonly hasDictionary = computed(() => this.dictCount() > 0);
   protected readonly dictSize = computed(() => this.dictCount());
@@ -82,46 +89,43 @@ export class SagaHeader {
       } catch {
         this.dictCount.set(0);
       }
-      await this.loadCover(node, cfg.tapa ?? null);
+      await this.loadCovers(node, cfg.tapa ?? null);
     } catch {
       this.config.set(null);
       this.dictCount.set(0);
-      this.coverDataUrl.set(null);
+      this.covers.set([]);
+      this.coverFromBook.set(false);
     }
   }
 
-  private async loadCover(saga: TreeNode, tapa: string | null): Promise<void> {
+  private async loadCovers(saga: TreeNode, tapa: string | null): Promise<void> {
     const sagaVer = this.cfgService.savedAt();
     const bookVer = this.bookCfgService.savedAt();
+    const deck: string[] = [];
     if (tapa && tapa.trim()) {
       const fullPath = tapa.startsWith('/') ? tapa : `${saga.path}/${tapa}`;
       try {
-        const url = await this.coverCache.urlFor(fullPath, sagaVer);
-        this.coverDataUrl.set(url);
-        this.coverFromBook.set(false);
-        return;
+        deck.push(await this.coverCache.urlFor(fullPath, sagaVer));
       } catch {
-        // fall through al fallback
+        // sin tapa propia usable — el frente lo pone el primer libro
       }
     }
-    // Fallback: tapa del primer libro con tapa
+    // La saga sin tapa propia hereda la del primer libro; el resto de los
+    // libros con tapa completa el mazo para que se vea que hay más de uno.
+    const heredada = deck.length === 0;
     for (const child of saga.children) {
+      if (deck.length >= MAX_DECK) break;
       if (child.kind !== 'book') continue;
       try {
-        const bcfg = await this.bookCfgService.load(child.path);
-        const btapa = bcfg.tapa;
-        if (btapa && btapa.trim()) {
-          const fullPath = btapa.startsWith('/') ? btapa : `${child.path}/${btapa}`;
-          const url = await this.coverCache.urlFor(fullPath, bookVer);
-          this.coverDataUrl.set(url);
-          this.coverFromBook.set(true);
-          return;
-        }
+        const btapa = (await this.bookCfgService.load(child.path)).tapa;
+        if (!btapa || !btapa.trim()) continue;
+        const fullPath = btapa.startsWith('/') ? btapa : `${child.path}/${btapa}`;
+        deck.push(await this.coverCache.urlFor(fullPath, bookVer));
       } catch {
         // probar siguiente
       }
     }
-    this.coverDataUrl.set(null);
-    this.coverFromBook.set(false);
+    this.covers.set(deck);
+    this.coverFromBook.set(heredada && deck.length > 0);
   }
 }
