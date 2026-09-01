@@ -933,7 +933,7 @@ git commit -m "feat(epub): incisos de la página legal elegibles y editables"
 
 **Interfaces:**
 - Consumes: `catalogo::escanear` (Task 1), `image::reescalar_jpeg` (Task 3).
-- Produces: `build_otros_libros_xhtml(cfg: &BookConfig, cat: &Catalogo, tapas: &HashMap<String, String>) -> String`, donde `tapas` mapea `link` → nombre de archivo dentro del EPUB. El archivo se llama `7_otros_libros.xhtml`, id de manifest `otros-libros`. Task 7 lo suma al índice con ese href y ese label.
+- Produces: `build_otros_libros_xhtml(cfg: &BookConfig, cat: &Catalogo, tapas: &HashMap<String, String>) -> String`, donde `tapas` mapea `link` → nombre de archivo dentro del EPUB. El archivo se llama `7_otros_libros.xhtml`, id de manifest `otros-libros`. Task 7 lo suma al índice con ese href y ese label. También `embebido_reescalado(origen, stem, ancho_max, nitido, zip, opts, items, item_id) -> Result<Option<String>, String>`, que usan las Tasks 6 y 8, y el campo `avisos: Vec<String>` de `ExportResult`, que consume la Task 11.
 
 - [ ] **Step 1: Escribir los tests que fallan**
 
@@ -1146,9 +1146,69 @@ fn build_otros_libros_xhtml(
 }
 ```
 
-- [ ] **Step 4: Embeber las miniaturas y sumar la página al spine**
+- [ ] **Step 4: Escribir el helper de embebido reescalado**
 
-En `export_impl`, justo **antes** del bloque "5a-bis) Sobre el autor" (`src-tauri/src/epub.rs:643`):
+Al lado de `embed_image` en `src-tauri/src/epub.rs`. Lo usan también las Tasks
+6 y 8, así que la firma tiene que quedar como está acá:
+
+```rust
+/// Lee una imagen de disco, la reescala y la mete al zip + al manifest.
+/// `nitido` usa el camino PNG sin recomprimir (QR); si no, va a JPEG.
+/// Devuelve el nombre del archivo dentro del EPUB, o None si no se pudo —
+/// nunca aborta el export por una imagen.
+#[allow(clippy::too_many_arguments)]
+fn embebido_reescalado(
+    origen: &Path,
+    stem: &str,
+    ancho_max: u32,
+    nitido: bool,
+    zip: &mut ZipWriter<File>,
+    opts: SimpleFileOptions,
+    items: &mut Vec<Item>,
+    item_id: &str,
+) -> Result<Option<String>, String> {
+    let bytes = match fs::read(origen) {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!(target: "epub", path = %origen.display(), error = %e, "no pude leer la imagen, sigo sin ella");
+            return Ok(None);
+        }
+    };
+    let procesada = if nitido {
+        crate::image::reescalar_png_nitido(&bytes, ancho_max)
+    } else {
+        crate::image::reescalar_jpeg(&bytes, ancho_max)
+    };
+    let procesada = match procesada {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!(target: "epub", path = %origen.display(), error = %e, "no pude procesar la imagen, sigo sin ella");
+            return Ok(None);
+        }
+    };
+    let es_png = procesada.len() >= 4 && &procesada[1..4] == b"PNG";
+    let (dest, mime) = if es_png {
+        (format!("{}.png", stem), "image/png")
+    } else {
+        (format!("{}.jpg", stem), "image/jpeg")
+    };
+    zip.start_file(format!("OEBPS/{}", dest), opts).map_err(|e| e.to_string())?;
+    zip.write_all(&procesada).map_err(|e| e.to_string())?;
+    items.push(Item {
+        id: item_id.to_string(),
+        href: dest.clone(),
+        media_type: mime.into(),
+        spine_order: None,
+        properties: None,
+    });
+    Ok(Some(dest))
+}
+```
+
+- [ ] **Step 5: Embeber las miniaturas y sumar la página al spine**
+
+En `export_impl`, justo **antes** del bloque "5a-bis) Sobre el autor"
+(`src-tauri/src/epub.rs:643`):
 
 ```rust
     // 5a) Otros libros del autor. El catálogo sale de escanear el root: un
@@ -1162,31 +1222,33 @@ En `export_impl`, justo **antes** del bloque "5a-bis) Sobre el autor" (`src-taur
             .chain(catalogo.otros.iter())
             .enumerate()
         {
-            let Some(origen) = &libro.tapa else { continue };
-            let bytes = match fs::read(origen) {
-                Ok(b) => b,
-                Err(e) => {
-                    tracing::warn!(target: "epub", tapa = %origen.display(), error = %e, "no pude leer la tapa del catálogo, va sin miniatura");
-                    continue;
-                }
+            let Some(origen) = &libro.tapa else {
+                // El libro está publicado pero su imagen no está en disco.
+                // No es motivo para abortar el export, pero sí para decirlo.
+                avisos.push(format!(
+                    "\"{}\" se listó sin tapa: no encontré la imagen al lado de su book.json",
+                    libro.titulo
+                ));
+                continue;
             };
-            let chica = match crate::image::reescalar_jpeg(&bytes, 400) {
-                Ok(b) => b,
-                Err(e) => {
-                    tracing::warn!(target: "epub", tapa = %origen.display(), error = %e, "no pude reescalar la tapa del catálogo, va sin miniatura");
-                    continue;
-                }
+            let Some(dest) = embebido_reescalado(
+                origen,
+                &format!("cat-{}", idx),
+                400,
+                false,
+                &mut zip,
+                opts,
+                &mut items,
+                &format!("cat-image-{}", idx),
+            )?
+            else {
+                avisos.push(format!(
+                    "\"{}\" se listó sin tapa: no pude procesar {}",
+                    libro.titulo,
+                    origen.display()
+                ));
+                continue;
             };
-            let dest = format!("cat-{}.jpg", idx);
-            zip.start_file(format!("OEBPS/{}", dest), opts).map_err(|e| e.to_string())?;
-            zip.write_all(&chica).map_err(|e| e.to_string())?;
-            items.push(Item {
-                id: format!("cat-image-{}", idx),
-                href: dest.clone(),
-                media_type: "image/jpeg".into(),
-                spine_order: None,
-                properties: None,
-            });
             tapas.insert(libro.link.clone(), dest);
         }
 
@@ -1204,19 +1266,49 @@ En `export_impl`, justo **antes** del bloque "5a-bis) Sobre el autor" (`src-taur
     }
 ```
 
-Nota: `reescalar_jpeg` devuelve los bytes tal cual si la imagen ya entra en 400 px — en ese caso el archivo puede no ser JPEG. Para que el media-type nunca mienta, cambiar la firma del helper de Task 3 no es necesario: el `dest` se decide por el resultado. Usar:
+- [ ] **Step 6: Devolver los avisos al frontend**
+
+La convención del proyecto es que si la app detectó el problema, tiene que
+decir cuál es — un "se exportó sin tapa" mudo hace perder tiempo. `ExportResult`
+gana un campo (`src-tauri/src/epub.rs:14`):
 
 ```rust
-            let (dest, mime) = if chica.len() >= 4 && &chica[1..4] == b"PNG" {
-                (format!("cat-{}.png", idx), "image/png")
-            } else {
-                (format!("cat-{}.jpg", idx), "image/jpeg")
-            };
+pub struct ExportResult {
+    pub epub_path: String,
+    pub chapters: u32,
+    /// Problemas que no abortaron el export pero que el autor tiene que ver
+    /// (tapas que faltan, imágenes que no se pudieron procesar).
+    #[serde(default)]
+    pub avisos: Vec<String>,
+}
 ```
 
-y reemplazar el `dest`/`media_type` de arriba por estos dos.
+Declarar `let mut avisos: Vec<String> = Vec::new();` al principio de
+`export_impl`, junto a `let mut items`, y sumar `avisos` al `ExportResult` que
+arma el `Ok(...)` del final.
 
-- [ ] **Step 5: Sumar el CSS de la página**
+Test:
+
+```rust
+#[test]
+fn el_export_avisa_cuando_un_publicado_no_tiene_tapa_en_disco() {
+    let (_root, book) = repo_con_publicados();
+    let hermano = book.parent().unwrap().join("2 - Hermano");
+    std::fs::write(
+        hermano.join("book.json"),
+        r#"{"titulo":"Hermano","link":"https://x/h","tapa":"no-existe.png"}"#,
+    )
+    .unwrap();
+    let result = export_impl(book.to_str().unwrap()).unwrap();
+    assert!(
+        result.avisos.iter().any(|a| a.contains("Hermano") && a.contains("sin tapa")),
+        "avisos: {:?}",
+        result.avisos
+    );
+}
+```
+
+- [ ] **Step 7: Sumar el CSS de la página**
 
 En `build_css` de `src-tauri/src/epub.rs`, dentro del bloque de reglas base (el mismo string donde ya viven `.about-author` y compañía), agregar:
 
@@ -1234,12 +1326,12 @@ Nada de flexbox ni grid: los lectores viejos los ignoran y el resultado queda pe
 
 Y en la lista de selectores de fuentes editoriales (`src-tauri/src/epub.rs:155`), agregar `body.otros-libros-body`; en la de heading (`src-tauri/src/epub.rs:170`), agregar `.otros-libros h1`.
 
-- [ ] **Step 6: Correr los tests y ver que pasan**
+- [ ] **Step 8: Correr los tests y ver que pasan**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml`
-Expected: PASS, incluidos los cinco nuevos.
+Expected: PASS, incluidos los seis nuevos.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add src-tauri/src/epub.rs
@@ -1254,7 +1346,7 @@ git commit -m "feat(epub): sección Otros libros al final del EPUB"
 - Modify: `src-tauri/src/epub.rs` (`build_about_author_xhtml` y su bloque en `export_impl`)
 
 **Interfaces:**
-- Consumes: `autor::leer`, `autor::resolver_imagen` (Task 2), `image::reescalar_png_nitido` y `reescalar_jpeg` (Task 3).
+- Consumes: `autor::leer`, `autor::resolver_imagen` (Task 2), `image::reescalar_png_nitido` y `reescalar_jpeg` (Task 3), `embebido_reescalado` (Task 5).
 - Produces: `build_about_author_xhtml(cfg: &BookConfig, bio: &str, foto: Option<&str>, web: Option<&str>, qr: Option<&str>) -> String`. **Cambia la firma actual** (hoy es `(cfg, photo_filename)`), así que hay que actualizar los tests existentes `about_author_xhtml_renders_heading_photo_and_bio` y `about_author_xhtml_english_heading`.
 
 - [ ] **Step 1: Escribir los tests que fallan**
@@ -1480,65 +1572,7 @@ Reemplazar el bloque "5a-bis) Sobre el autor" por:
     }
 ```
 
-- [ ] **Step 5: Escribir el helper de embebido reescalado**
-
-Al lado de `embed_image` en `src-tauri/src/epub.rs`:
-
-```rust
-/// Lee una imagen de disco, la reescala y la mete al zip + al manifest.
-/// `nitido` usa el camino PNG sin recomprimir (QR); si no, va a JPEG.
-/// Devuelve el nombre del archivo dentro del EPUB, o None si no se pudo —
-/// nunca aborta el export por una imagen.
-#[allow(clippy::too_many_arguments)]
-fn embebido_reescalado(
-    origen: &Path,
-    stem: &str,
-    ancho_max: u32,
-    nitido: bool,
-    zip: &mut ZipWriter<File>,
-    opts: SimpleFileOptions,
-    items: &mut Vec<Item>,
-    item_id: &str,
-) -> Result<Option<String>, String> {
-    let bytes = match fs::read(origen) {
-        Ok(b) => b,
-        Err(e) => {
-            tracing::warn!(target: "epub", path = %origen.display(), error = %e, "no pude leer la imagen, sigo sin ella");
-            return Ok(None);
-        }
-    };
-    let procesada = if nitido {
-        crate::image::reescalar_png_nitido(&bytes, ancho_max)
-    } else {
-        crate::image::reescalar_jpeg(&bytes, ancho_max)
-    };
-    let procesada = match procesada {
-        Ok(b) => b,
-        Err(e) => {
-            tracing::warn!(target: "epub", path = %origen.display(), error = %e, "no pude procesar la imagen, sigo sin ella");
-            return Ok(None);
-        }
-    };
-    let es_png = procesada.len() >= 4 && &procesada[1..4] == b"PNG";
-    let (dest, mime) = if es_png {
-        (format!("{}.png", stem), "image/png")
-    } else {
-        (format!("{}.jpg", stem), "image/jpeg")
-    };
-    zip.start_file(format!("OEBPS/{}", dest), opts).map_err(|e| e.to_string())?;
-    zip.write_all(&procesada).map_err(|e| e.to_string())?;
-    items.push(Item {
-        id: item_id.to_string(),
-        href: dest.clone(),
-        media_type: mime.into(),
-        spine_order: None,
-        properties: None,
-    });
-    Ok(Some(dest))
-}
-```
-
-- [ ] **Step 6: CSS de la web y el QR**
+- [ ] **Step 5: CSS de la web y el QR**
 
 En `build_css`, junto a las reglas de `.about-author`:
 
@@ -1548,12 +1582,12 @@ img.autor-qr { width: 150px; max-width: 40%; }
 p.autor-web-url { margin: 0.3em 0 0 0; font-size: 0.9em; }
 ```
 
-- [ ] **Step 7: Correr los tests y ver que pasan**
+- [ ] **Step 6: Correr los tests y ver que pasan**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml`
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src-tauri/src/epub.rs
@@ -2349,7 +2383,59 @@ git commit -m "feat(autor): modal de perfil del autor en la vista raíz"
 
 ---
 
-### Task 11: Cerrar el TODO y dejar la verificación anotada
+### Task 11: Mostrar los avisos del export en la UI
+
+**Files:**
+- Modify: `src/app/core/chapter-service.ts:395-420` (`exportEpub`)
+
+**Interfaces:**
+- Consumes: el campo `avisos: string[]` de `ExportResult` (Task 5).
+- Produces: nada.
+
+- [ ] **Step 1: Tipar y mostrar los avisos**
+
+En `exportEpub` de `src/app/core/chapter-service.ts`, cambiar el tipo del
+`invoke` y sumar el toast:
+
+```typescript
+      const result = await invoke<{
+        epub_path: string;
+        chapters: number;
+        avisos: string[];
+      }>('export_book', { bookPath: node.path });
+```
+
+y después del `toast.success` que ya está:
+
+```typescript
+      // Los avisos no son errores: el EPUB salió igual. Pero si la app
+      // detectó que faltaba una tapa, decirlo es lo mínimo — el autor no
+      // tiene por qué abrir el archivo para enterarse.
+      for (const aviso of result.avisos ?? []) {
+        this.debug.warn('epub', `${node.name}: ${aviso}`);
+        this.toast.warn(aviso);
+      }
+```
+
+Antes de escribirlo, confirmar que `ToastService` expone `warn` leyendo
+`src/app/core/toast-service.ts`; si el método se llama distinto, usar ese.
+Mismo chequeo para `debug.warn`.
+
+- [ ] **Step 2: Compilar**
+
+Run: `pnpm build`
+Expected: build limpio.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/app/core/chapter-service.ts
+git commit -m "feat(epub): avisar en la UI cuando un libro del catálogo va sin tapa"
+```
+
+---
+
+### Task 12: Cerrar el TODO y dejar la verificación anotada
 
 **Files:**
 - Modify: `TODO.md`
