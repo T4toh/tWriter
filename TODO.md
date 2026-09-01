@@ -1517,14 +1517,14 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## EPUB
 
-- **Copyright editable en ambos idiomas** (ES/EN): hoy el texto de la
+- [x] **Copyright editable en ambos idiomas** (ES/EN): hoy el texto de la
   página de copyright sale fijo/auto-generado. Permitir editar el cuerpo y
   que cambie según el `idioma` del libro.
 - **Incisos extra de copyright tipo Reedsy**: sumar cláusulas opcionales
   (reserva de derechos, "obra de ficción / personajes ficticios",
   prohibición de reproducción, etc.) elegibles al armar la página legal,
   bilingües como el copyright.
-- **Nota de uso de IA en la página legal** (pedido del autor, 2026-09-01): inciso
+- [x] **Nota de uso de IA en la página legal** (pedido del autor, 2026-09-01): inciso
   opcional que declare que la IA se usó **solo para generar imágenes** — el texto
   lo escribe el autor. Va como una cláusula más del item de arriba (bilingüe
   ES/EN, elegible al armar la página legal), no como texto fijo: hay libros sin
@@ -1532,6 +1532,15 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   con inteligencia artificial. El texto es obra exclusiva del autor." / "The
   images in this work were generated with artificial intelligence. The text is
   the sole work of the author."
+- [x] **Back matter del EPUB: catálogo, perfil de autor y página legal**
+  (spec en `docs/superpowers/specs/2026-09-01-back-matter-epub-design.md`).
+  Sección "Otros libros" que se arma escaneando el root (`catalogo.rs`: un
+  libro está publicado si su `book.json` tiene `link`), perfil global en
+  `autor.json` con bio ES/EN, foto, web y QR (`autor.rs`), incisos de la
+  página legal elegibles y editables, y todas las páginas editoriales en el
+  índice con `class="toc-editorial"`. De yapa, las imágenes ahora se
+  reescalan antes de embeberse (crate `image`): la tapa iba a resolución de
+  imprenta adentro del EPUB. **Pendiente de verificación manual del autor.**
 - [x] **Las rutas de imagen se guardan absolutas y no sobreviven el cambio de PC**
   (encontrado el 2026-09-01 verificando el mazo de tapas: en esta Mac los 4
   libros de Meridian 2.0 mostraban placeholder). `book-config-modal.ts:216`
