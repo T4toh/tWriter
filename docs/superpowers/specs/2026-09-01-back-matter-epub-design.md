@@ -30,6 +30,7 @@ el back matter y todas se alimentan de datos que ya están en el repo:
 | Perfil del autor | `autor.json` en la raíz | Un repo, un escritor. Los campos del libro quedan como override. |
 | Página legal | Checks por inciso + texto editable | Cubre también el ítem viejo de "copyright editable en ambos idiomas". |
 | Disposición de la lista | Tapa a la izquierda, texto al lado | Entran varios libros por pantalla y se lee como catálogo. |
+| Índice | Todas las editoriales, agrupadas aparte | Se puede saltar a cualquier página, sin que el listado de capítulos pierda legibilidad. |
 
 ## Modelo de datos
 
@@ -122,7 +123,8 @@ El root sale de `find_saga_and_root`, que ya existe en `epub.rs`.
 La lista va antes que la bio: el lector acaba de terminar la historia, es el
 momento en que le interesa el próximo libro.
 
-Ninguna de las tres entra al TOC, igual que hoy.
+Todas las páginas editoriales entran al índice, agrupadas aparte de los
+capítulos. Ver la sección "Índice" más abajo.
 
 ### `otros_libros.xhtml`
 
@@ -170,6 +172,36 @@ editoriales.
 `body.otros-libros-body` se suma a la regla de fuentes editoriales de
 `epub.rs:155`, y `.otros-libros h1` a la de `epub.rs:170`. Así hereda lo mismo
 que la portadilla, el copyright, la dedicatoria y el TOC, sin CSS por tema.
+
+## Índice
+
+Hoy el índice son solo los capítulos: las páginas editoriales no están ni en
+`toc.xhtml` ni en `toc.ncx`. Pasan a estar todas, pero **agrupadas**, para que
+el listado de capítulos siga siendo lo que domina la pantalla.
+
+El `<ol class="toc">` queda en tres tramos, en orden de lectura:
+
+```
+Copyright                 <- li.toc-editorial
+Dedicatoria               <- li.toc-editorial (si existe)
+1. La partida             <- capítulos, como hoy
+2. ...
+Otros libros              <- li.toc-editorial, con separador arriba
+Sobre el autor            <- li.toc-editorial
+```
+
+Las entradas editoriales llevan `class="toc-editorial"`, siguiendo el patrón
+que el nav ya usa con `li.toc-part`. El CSS les da cuerpo más chico y color
+atenuado, y el primer `li.toc-editorial` del tramo final lleva un `border-top`
+fino que separa visualmente el catálogo de los capítulos. Los capítulos no
+cambian en nada.
+
+`toc.ncx` (el legacy) recibe las mismas entradas en el mismo orden, sin
+distinción de estilo — el formato no la soporta y los lectores que lo usan
+tampoco.
+
+La portadilla y la contratapa **no** entran: son imágenes de página completa,
+no destinos de navegación.
 
 ## Miniaturas de tapa
 
@@ -238,7 +270,12 @@ placeholder mudo".
 - **back-compat**: un `BookConfig` con solo `derechos_reservados: true`
   produce la misma página legal que la implementación actual,
 - la bio de `autor.json` se usa cuando el libro no tiene la suya, y el libro
-  pisa al global cuando la tiene.
+  pisa al global cuando la tiene,
+- el índice incluye copyright, dedicatoria, otros libros y sobre el autor, en
+  ese orden relativo a los capítulos y con `class="toc-editorial"`, y las
+  mismas entradas aparecen en `toc.ncx`,
+- una página editorial que no se genera (sin dedicatoria, sin publicados)
+  tampoco deja entrada en el índice.
 
 `image`: reescalar una PNG grande da 400 px de ancho y menos de 100 KB.
 
