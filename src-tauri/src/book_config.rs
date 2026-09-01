@@ -22,19 +22,24 @@ pub fn find_author_photo_in(dir: &Path) -> Option<String> {
     find_named_image(dir, "author").or_else(|| find_named_image(dir, "autor"))
 }
 
+/// Única resolución de campos de imagen del repo: dado el valor crudo de un
+/// campo tipo `tapa`/`foto`/`qr` (relativo a `dir` o absoluto), devuelve el
+/// path absoluto si apunta a un archivo que existe en esta máquina. `None`
+/// si el campo está vacío o el archivo no está (el caso de un `book.json`
+/// viejo con un path absoluto de otra PC).
+pub fn resolver_imagen(dir: &Path, campo: Option<&str>) -> Option<PathBuf> {
+    let value = campo.map(str::trim).filter(|s| !s.is_empty())?;
+    let p = Path::new(value);
+    let full = if p.is_absolute() { p.to_path_buf() } else { dir.join(p) };
+    full.is_file().then_some(full)
+}
+
 /// `true` si el field de imagen no sirve y conviene autodescubrir: está vacío,
 /// **o** apunta a un archivo que no está en esta máquina — el caso de los
 /// `book.json` viejos con un path absoluto de otra PC. Sin esto el EPUB se
 /// exportaba sin portada en silencio teniendo el `cover.png` al lado.
 pub fn image_field_unusable(dir: &Path, field: Option<&str>) -> bool {
-    match field.map(str::trim).filter(|s| !s.is_empty()) {
-        None => true,
-        Some(value) => {
-            let p = Path::new(value);
-            let full = if p.is_absolute() { p.to_path_buf() } else { dir.join(p) };
-            !full.is_file()
-        }
-    }
+    resolver_imagen(dir, field).is_none()
 }
 
 /// Stems canónicos de las imágenes que vive al lado de un `book.json`/`saga.json`.

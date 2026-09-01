@@ -7,6 +7,8 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::book_config::resolver_imagen;
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct AutorConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -51,10 +53,10 @@ pub fn leer(root: &Path) -> AutorConfig {
         .ok()
         .and_then(|raw| serde_json::from_str::<AutorConfig>(&raw).ok())
         .unwrap_or_default();
-    if !apunta_a_un_archivo(root, cfg.foto.as_deref()) {
+    if resolver_imagen(root, cfg.foto.as_deref()).is_none() {
         cfg.foto = buscar(root, FOTO_STEMS);
     }
-    if !apunta_a_un_archivo(root, cfg.qr.as_deref()) {
+    if resolver_imagen(root, cfg.qr.as_deref()).is_none() {
         cfg.qr = buscar(root, QR_STEMS);
     }
     cfg
@@ -64,18 +66,6 @@ pub fn escribir(root: &Path, cfg: &AutorConfig) -> Result<(), String> {
     let mut json = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
     json.push('\n');
     fs::write(root.join("autor.json"), json).map_err(|e| e.to_string())
-}
-
-/// Path absoluto de un campo de imagen, o None si está vacío o no existe.
-pub fn resolver_imagen(root: &Path, campo: Option<&str>) -> Option<PathBuf> {
-    let rel = campo.map(str::trim).filter(|s| !s.is_empty())?;
-    let p = Path::new(rel);
-    let abs = if p.is_absolute() { p.to_path_buf() } else { root.join(p) };
-    abs.is_file().then_some(abs)
-}
-
-fn apunta_a_un_archivo(root: &Path, campo: Option<&str>) -> bool {
-    resolver_imagen(root, campo).is_some()
 }
 
 fn buscar(root: &Path, stems: &[&str]) -> Option<String> {
