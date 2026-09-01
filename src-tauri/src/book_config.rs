@@ -134,6 +134,11 @@ pub struct BookConfig {
     pub serie: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub numero_en_serie: Option<u32>,
+    /// URL pública del libro (la página del autor, o la ficha de la tienda).
+    /// Tenerla cargada es lo que mete al libro en la sección "Otros libros"
+    /// de los EPUB de los demás libros. Ver `catalogo.rs`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link: Option<String>,
     /// Mostrar el título del capítulo en la chapter title page. Default: true.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mostrar_titulo_capitulo: Option<bool>,

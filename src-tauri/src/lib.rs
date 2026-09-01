@@ -1,5 +1,6 @@
 mod audit;
 mod book_config;
+mod catalogo;
 mod create;
 mod debug_bridge;
 mod demo_template;
