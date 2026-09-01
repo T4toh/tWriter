@@ -8,8 +8,8 @@ todo lo que hace falta saber está acá.
 
 - **Spec**: `docs/superpowers/specs/2026-08-31-formas-derivadas-diccionario-design.md`
 - **Plan**: `docs/superpowers/plans/2026-08-31-formas-derivadas-diccionario.md`
-- **TODO**: el item sigue **abierto** en `TODO.md` — se cierra recién cuando pase
-  la verificación manual de abajo.
+- **TODO**: el item de conjugaciones está **cerrado**. Quedó abierto uno nuevo,
+  sobre las limitaciones de `inferLemma` que salieron de la review del PR.
 
 ## Qué hace
 
@@ -42,7 +42,9 @@ pnpm build → PASS
 | Review final de rama | ✅ corrida — encontró 2 Critical y 4 Important |
 | Ola de arreglos | ✅ `ac4a67e`, los 6 hallazgos ADDRESSED |
 | Re-review acotada | ✅ cero breakage nuevo, recomienda merge |
-| **Task 7 — verificación manual** | ❌ **PENDIENTE, es lo único que falta** |
+| **Task 7 — verificación manual** | ✅ **hecha por el autor el 2026-09-01**, los 12 pasos |
+| Review de CodeRabbit (PR #82) | ✅ triada, 3 arreglados / 3 descartados / 2 al TODO |
+| Item del TODO | ✅ cerrado |
 
 ### Los commits
 
@@ -178,3 +180,39 @@ Después, correr la verificación manual de arriba. Si pasa: marcar el item de
 conjugaciones en `TODO.md` con `[x]`, anotando que la solución no fue ninguno de
 los dos caminos que planteaba el item (conjugador vs. wildcard) sino un tercero —
 generador para lo que no se puede pelar, pelado en el filtro para lo que sí.
+
+
+## Review de CodeRabbit en el PR #82 (2026-09-01)
+
+Ocho comentarios. Triados contra el código, no aceptados en bloque:
+
+**Arreglados** (commit `209a405`):
+- **Carrera al cambiar de saga** (Major, y el único de verdad importante).
+  `dictWords.set(next)` sin guarda después del `await`: si el autor cambia de
+  saga con el invoke en vuelo, la lista de la saga anterior queda instalada
+  sobre la nueva y una escritura posterior la persiste encima. Era
+  **preexistente** — `addToDictionary` ya lo hacía — y `addManyToDictionary` copió
+  el patrón. Guardado en los tres lugares, incluido `persist()` de
+  `DictionaryService`.
+- **`formasPara` no se limpiaba al cerrar el modal**: al reabrirlo para otra saga
+  el panel aparecía solo con la palabra vieja. (El mecanismo que describía
+  CodeRabbit era otro y estaba mal: `close()` sí resetea el idioma, así que el
+  panel no queda montado. El bug real es al reabrir.)
+- Una frase del spec que decía que `bardear` no termina en `-ar`.
+
+**Descartados, con razón**:
+- **`tsc` vs `tsc.cmd` en Windows**: ningún workflow de CI corre los smoke
+  runners (verificado), el patrón es idéntico en los seis que ya existían, y el
+  autor trabaja en Linux. No lo introduce este PR.
+- **Línea vacía antes de un comentario SCSS**: stylelint no está configurado en
+  el repo, no hay linter que lo marque nunca.
+- **Renombrar `canDeriveForms`/`addToDictWithForms` a español**: el contrato
+  entero de ese popover ya es inglés (`addToDict`, `canAddToDict`,
+  `dictSuggestions`, `apply`, `dismiss`). Renombrar solo lo nuevo dejaría el
+  archivo más inconsistente, no menos.
+
+**Al TODO, no arreglados**: `inferLemma` no invierte los cambios ortográficos
+(`tranqué` → `tranquar`) ni sirve a raíces de 3 letras (`pagás`, `leo` → `[]`).
+Verificado que es más amplio de lo que decía CodeRabbit, y también que no muerde:
+son verbos españoles reales que LT conoce y que nunca llegan al popover. Bajar el
+piso de raíz corta reintroduciría `Aedan` → `aedar`.
