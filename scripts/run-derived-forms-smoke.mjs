@@ -24,6 +24,11 @@ const r = spawnSync(
     '--esModuleInterop',
     '--outDir', outDir,
     'src/app/dictionary/derived-forms.ts',
+    // `word-validator.ts` tampoco tiene imports, así que compila igual de suelto.
+    // Entra acá porque `existsCaseInsensitive` es lo que deduplica las formas
+    // generadas antes de escribirlas, y su criterio de identidad tiene que
+    // sobrevivir a los pares mínimos con tilde que emite el generador.
+    'src/app/dictionary/word-validator.ts',
   ],
   { cwd: repo, encoding: 'utf8' },
 );
@@ -35,6 +40,8 @@ if (r.status !== 0) {
 
 const mod = await import(pathToFileURL(join(outDir, 'derived-forms.js')).href);
 const { makeDictLookup, stripInflection, generateForms, inferLemma } = mod;
+const validator = await import(pathToFileURL(join(outDir, 'word-validator.js')).href);
+const { existsCaseInsensitive, compareWords } = validator;
 
 let passed = 0;
 let failed = 0;
@@ -209,6 +216,63 @@ console.log('inferLemma');
   check('LIMITACIÓN: Bastien propone bastier, y se cancela a mano',
     inferLemma('Bastien', 'es')[0].lema === 'bastier',
     JSON.stringify(inferLemma('Bastien', 'es')));
+
+  // Los sufijos de 1ª plural salieron de REGLAS: el núcleo de 15 formas no los
+  // emite, así que inferirlos prometía una cobertura que no llegaba nunca.
+  check('casteamos no infiere lema: el generador no emite la 1ª plural',
+    inferLemma('casteamos', 'es').length === 0,
+    JSON.stringify(inferLemma('casteamos', 'es')));
+  check('casteábamos tampoco',
+    inferLemma('casteábamos', 'es').length === 0,
+    JSON.stringify(inferLemma('casteábamos', 'es')));
+}
+
+console.log('inferLemma × generateForms — todo sufijo inferido se genera');
+{
+  // La propiedad que faltaba: si `+ formas…` acepta una palabra, alguna de las
+  // listas que ofrece tiene que contenerla, o el autor agrega 15 formas y la
+  // palabra que apretó sigue subrayada.
+  for (const word of [
+    'bardean', 'bardeaba', 'bardeaban', 'bardeaste', 'bardearon', 'bardeando',
+    'bardeado', 'bardeada', 'bardeó', 'bardeé', 'bardeá', 'bardeás',
+    'castea', 'casteando', 'teletransporta', 'teletransporto', 'teletransportó',
+    'comiendo', 'comían', 'comía', 'comieron', 'comiste', 'comió',
+    'aprendés', 'sobrevivís', 'sobreviví', 'vivido', 'vivida', 'telequinético',
+  ]) {
+    const candidatos = inferLemma(word, 'es');
+    const cubre = candidatos.some((c) =>
+      generateForms(c.lema, c.categoria, 'es').includes(word.toLowerCase()));
+    check(`${word} queda cubierta por alguno de sus candidatos`, cubre,
+      JSON.stringify(candidatos));
+  }
+}
+
+console.log('existsCaseInsensitive — identidad acento-sensible');
+{
+  // El dedupe real de `addManyWords`/`addManyToDictionary`: acumular las formas
+  // saltando las que ya están. Con el collator de sensitivity base, `bardeo` y
+  // `bardeó` eran «la misma», y cada verbo en -ar perdía el pretérito 3ª sg y el
+  // imperativo voseo — y al reabrir el panel salían como «ya está».
+  const formas = generateForms('teletransportar', 'verbo', 'es');
+  const acumulada = [];
+  for (const f of formas) {
+    if (existsCaseInsensitive(acumulada, f)) continue;
+    acumulada.push(f);
+  }
+  check('las 15 formas generadas sobreviven al dedupe',
+    acumulada.length === 15, `${acumulada.length}: ${acumulada.join(' ')}`);
+  check('el par mínimo -o/-ó sobrevive',
+    acumulada.includes('teletransporto') && acumulada.includes('teletransportó'),
+    acumulada.join(' '));
+  check('el par mínimo -a/-á sobrevive',
+    acumulada.includes('teletransporta') && acumulada.includes('teletransportá'),
+    acumulada.join(' '));
+  check('bardeó no cuenta como ya presente cuando está bardeo',
+    existsCaseInsensitive(['bardeo', 'bardea'], 'bardeó') === false);
+  check('las mayúsculas sí se ignoran',
+    existsCaseInsensitive(['Bardeó'], 'bardeó') === true);
+  check('el orden alfabético sigue ignorando las tildes',
+    compareWords('bardeo', 'bardeó') === 0 && compareWords('Bardeo', 'bardeó') === 0);
 }
 
 console.log('');

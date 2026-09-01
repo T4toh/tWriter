@@ -1,6 +1,17 @@
 /** Reglas de flexión por idioma de saga. Nunca se mezclan entre idiomas. */
 export type IdiomaFlexion = 'es' | 'en';
 
+/** Reduce el idioma declarado por la saga (`es`, `es-AR`, `en-US`…) a la familia
+ *  de reglas de flexión. Null si no lo declara: en ese caso no se pela ni se
+ *  genera nada y el filtro se comporta como antes. */
+export function idiomaFlexionDe(raw: string | null | undefined): IdiomaFlexion | null {
+  const s = raw?.trim().toLowerCase();
+  if (!s) return null;
+  if (s.startsWith('es')) return 'es';
+  if (s.startsWith('en')) return 'en';
+  return null;
+}
+
 export interface DictLookup {
   /** Canónica si la grafía coincide exacto, comparando en minúsculas. */
   exactGet(word: string): string | null;
@@ -220,16 +231,21 @@ interface ReglaSufijo {
 
 /** Ordenadas de sufijo más largo a más corto: la primera que matchea gana.
  *  `-a` y `-o` no están acá — caen al fallback de adjetivo, que además
- *  reconstruye el verbo como segundo candidato. */
+ *  reconstruye el verbo como segundo candidato.
+ *
+ *  Todo sufijo de esta tabla tiene que ser una forma que `generateForms` emita:
+ *  si no, el autor pide las formas, se agregan las 15, y la palabra que apretó
+ *  sigue subrayada. Por eso NO están `-amos` ni `-ábamos` (1ª plural presente e
+ *  imperfecto): el núcleo verbal son 15 formas por decisión del spec y ninguna
+ *  de las dos está ahí. `casteamos` no infiere lema y se agrega sola con
+ *  `+ diccionario`, que es el costo de un click que el spec ya acepta. */
 const REGLAS: readonly ReglaSufijo[] = [
-  { sufijo: 'ábamos', terminaciones: ['ar'] },
   { sufijo: 'ieron', terminaciones: ['er', 'ir'] },
   { sufijo: 'iendo', terminaciones: ['er', 'ir'] },
   { sufijo: 'ando', terminaciones: ['ar'] },
   { sufijo: 'aban', terminaciones: ['ar'] },
   { sufijo: 'aste', terminaciones: ['ar'] },
   { sufijo: 'aron', terminaciones: ['ar'] },
-  { sufijo: 'amos', terminaciones: ['ar'] },
   { sufijo: 'iste', terminaciones: ['er', 'ir'] },
   { sufijo: 'ado', terminaciones: ['ar'] },
   { sufijo: 'ada', terminaciones: ['ar'] },

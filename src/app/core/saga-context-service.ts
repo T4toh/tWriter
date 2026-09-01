@@ -4,6 +4,7 @@ import { existsCaseInsensitive, validateWord } from '../dictionary/word-validato
 import {
   DictLookup,
   IdiomaFlexion,
+  idiomaFlexionDe,
   makeDictLookup,
   stripInflection,
 } from '../dictionary/derived-forms';
@@ -39,13 +40,9 @@ export class SagaContextService {
   /** Idioma de la saga reducido a las dos familias de reglas de flexión.
    *  Tolera variantes tipo `es-AR`. Null si la saga no declara idioma: en ese
    *  caso no se pela nada y el filtro se comporta como antes. */
-  readonly idiomaFlexion = computed<IdiomaFlexion | null>(() => {
-    const raw = this.config()?.idioma?.trim().toLowerCase();
-    if (!raw) return null;
-    if (raw.startsWith('es')) return 'es';
-    if (raw.startsWith('en')) return 'en';
-    return null;
-  });
+  readonly idiomaFlexion = computed<IdiomaFlexion | null>(() =>
+    idiomaFlexionDe(this.config()?.idioma),
+  );
   readonly varianteEs = computed<string | null>(() => {
     const v = this.config()?.variante_es;
     return v && v.trim() ? v : null;

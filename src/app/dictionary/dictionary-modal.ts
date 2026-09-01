@@ -2,10 +2,9 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LucideCheck, LucideX } from '@lucide/angular';
 import { DictionaryService } from '../core/dictionary-service';
-import { SagaContextService } from '../core/saga-context-service';
 import { ToastService } from '../core/toast-service';
-import { TreeNode } from '../core/types';
 import { DerivedFormsPanel } from './derived-forms-panel';
+import { inferLemma } from './derived-forms';
 import { validateWord } from './word-validator';
 
 @Component({
@@ -17,11 +16,13 @@ import { validateWord } from './word-validator';
 export class DictionaryModal {
   private svc = inject(DictionaryService);
   private toast = inject(ToastService);
-  private sagaCtx = inject(SagaContextService);
 
   /** Palabra para la que está abierto el panel de formas derivadas, o null. */
   protected readonly formasPara = signal<string | null>(null);
-  protected readonly idiomaFlexion = this.sagaCtx.idiomaFlexion;
+  /** El idioma sale de la saga que se está editando, no de la del capítulo
+   *  abierto: el modal se abre para un nodo cualquiera del árbol y también
+   *  desde el landing, donde no hay capítulo. */
+  protected readonly idiomaFlexion = this.svc.idiomaFlexion;
 
   protected readonly editing = this.svc.editing;
   protected readonly words = this.svc.words;
@@ -45,6 +46,15 @@ export class DictionaryModal {
   protected readonly canAdd = computed(() => {
     const v = this.newWordValidation();
     return v !== null && v.ok && !this.adding();
+  });
+
+  /** Mismo criterio que el popover del editor: «+ formas…» solo si hay lema que
+   *  inferir. Sin esto un nombre propio en `-ar` (`Krilar`) cae al fallback del
+   *  panel y ofrece 15 conjugaciones de un verbo inexistente, todas tildadas. */
+  protected readonly puedeDerivar = computed<boolean>(() => {
+    const idioma = this.idiomaFlexion();
+    if (idioma !== 'es' || !this.canAdd()) return false;
+    return inferLemma(this.newWord().trim(), idioma).length > 0;
   });
 
   protected readonly filteredWords = computed<string[]>(() => {
@@ -98,7 +108,9 @@ export class DictionaryModal {
   }
 
   protected async agregarFormas(formas: string[]): Promise<void> {
-    const result = await this.sagaCtx.addManyToDictionary(formas);
+    // Vía DictionaryService: escribe en la saga que el modal edita y su
+    // `persist()` ya sincroniza `SagaContextService` cuando además es la activa.
+    const result = await this.svc.addManyWords(formas);
     if (!result.ok) {
       this.toast.error(result.reason ?? 'No se pudieron agregar las formas');
       return;
@@ -107,16 +119,6 @@ export class DictionaryModal {
       result.added === 1 ? '1 forma agregada' : `${result.added} formas agregadas`,
     );
     this.formasPara.set(null);
-    const target = this.editing();
-    if (target) {
-      const nodo: TreeNode = {
-        name: target.nombre,
-        path: target.path,
-        kind: 'saga',
-        children: [],
-      };
-      await this.svc.openFor(nodo);
-    }
   }
 
   protected onAddKeydown(event: KeyboardEvent): void {

@@ -280,10 +280,17 @@ Se prueba por sufijo más largo primero. Primer match gana.
 | `iendo` | `-er`, `-ir` (dos candidatos) | verbo |
 | `ado` `ada` | `-ar` | verbo |
 | `ido` `ida` | `-er`, `-ir` | verbo |
-| `ábamos` `aban` `aba` `aste` `aron` `amos` `ás` `ó` `é` `á` `an` | `-ar` | verbo |
+| `aban` `aba` `aste` `aron` `ás` `ó` `é` `á` `an` | `-ar` | verbo |
 | `ían` `ía` `iste` `ieron` `ió` `és` `ís` `í` `en` | `-er`, `-ir` | verbo |
 | `a` (sin match previo) | el lema tal cual → adjetivo; y `lema+r` → verbo | dos candidatos |
 | `o` (sin match previo) | el lema tal cual → adjetivo; y `lema[:-1]+ar` → verbo | dos candidatos |
+
+**Corrección 2026-09-01**: la tabla listaba también `ábamos` y `amos`, que el
+núcleo de 15 formas no emite. Inferirlos hacía que el autor apretara `+ formas…`
+sobre `casteamos`, agregara 15 formas, y `casteamos` siguiera subrayada. Se
+sacan los dos sufijos en vez de crecer el generador: el núcleo de 15 tiene su
+propia justificación arriba, y el costo de la forma que falta es el click que
+esta misma spec ya acepta.
 
 **Stop-list**: palabras terminadas en `ción`, `sión`, `miento`, `dad`, `dades` son
 sustantivos y devuelven cero candidatos. Sin esto `teletransportación` — que está

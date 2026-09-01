@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import {
   Categoria,
   IdiomaFlexion,
+  LemmaCandidate,
   generateForms,
   inferLemma,
 } from './derived-forms';
@@ -66,7 +67,9 @@ interface FormaItem {
           @if (categoria() === 'verbo') {
             El lema tiene que ser un infinitivo terminado en -ar, -er o -ir.
           } @else {
-            Los adjetivos invariables en género no necesitan formas extra.
+            Los adjetivos que no terminan en -o son invariables en género y no
+            necesitan formas extra. Si «{{ palabra() }}» es una forma verbal,
+            elegí «verbo».
           }
         </p>
       } @else {
@@ -121,6 +124,9 @@ export class DerivedFormsPanel {
 
   protected readonly lema = signal<string>('');
   protected readonly categoria = signal<Categoria>('verbo');
+  /** Los dos candidatos que devuelve `inferLemma` para las formas en `-a`/`-o`:
+   *  el radio elige entre ellos, y elegir cambia el lema además de la categoría. */
+  private readonly candidatos = signal<readonly LemmaCandidate[]>([]);
   private readonly excluidasSet = signal<ReadonlySet<string>>(new Set<string>());
 
   protected readonly formas = computed<FormaItem[]>(() => {
@@ -141,9 +147,11 @@ export class DerivedFormsPanel {
     // Cuando cambia la palabra de entrada, se resiembra lema y categoría desde
     // el primer candidato inferido y se limpian las exclusiones de la anterior.
     effect(() => {
-      const candidato = inferLemma(this.palabra(), this.idioma())[0];
-      this.lema.set(candidato?.lema ?? this.palabra().trim().toLowerCase());
-      this.categoria.set(candidato?.categoria ?? 'verbo');
+      const candidatos = inferLemma(this.palabra(), this.idioma());
+      this.candidatos.set(candidatos);
+      const primero = candidatos[0];
+      this.lema.set(primero?.lema ?? this.palabra().trim().toLowerCase());
+      this.categoria.set(primero?.categoria ?? 'verbo');
       this.excluidasSet.set(new Set<string>());
     });
   }
@@ -159,6 +167,11 @@ export class DerivedFormsPanel {
 
   protected cambiarCategoria(valor: Categoria): void {
     this.categoria.set(valor);
+    // `bardea` infiere `bardea`/adjetivo y `bardear`/verbo: sin mover el lema,
+    // pasar el radio a «verbo» sigue generando cero formas y el caso más
+    // frecuente del corpus (3ª persona en -a) queda muerto.
+    const candidato = this.candidatos().find((c) => c.categoria === valor);
+    if (candidato) this.lema.set(candidato.lema);
     this.excluidasSet.set(new Set<string>());
   }
 

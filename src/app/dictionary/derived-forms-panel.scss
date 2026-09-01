@@ -2,7 +2,10 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
-  z-index: 60;
+  // Por encima de los modales (200/201): el panel se abre ENCIMA del modal del
+  // diccionario. Mismo escalón que `modal-host` (300/301), que es el otro
+  // diálogo del repo que aparece sobre un modal abierto.
+  z-index: 300;
 }
 
 .formas-panel {
@@ -10,7 +13,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 61;
+  z-index: 301;
   width: min(28rem, 90vw);
   max-height: 80vh;
   display: flex;

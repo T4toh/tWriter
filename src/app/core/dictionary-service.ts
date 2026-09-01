@@ -8,7 +8,8 @@ import {
   existsCaseInsensitive,
   validateWord,
 } from '../dictionary/word-validator';
-import { SagaContextService } from './saga-context-service';
+import { IdiomaFlexion, idiomaFlexionDe } from '../dictionary/derived-forms';
+import { SagaConfig, SagaContextService } from './saga-context-service';
 import { TreeNode } from './types';
 
 export interface DictionaryTarget {
@@ -32,6 +33,13 @@ export class DictionaryService {
   /** Bumpea con cada save para que el badge del saga-header re-loadee el conteo. */
   readonly savedAt = signal<number>(0);
 
+  /** Idioma de la saga que el modal está editando — NO el de la saga del
+   *  capítulo abierto. El panel de formas derivadas depende de este: con un
+   *  capítulo de Meridian abierto y el diccionario de Milky Way en pantalla, el
+   *  otro idioma es el equivocado, y sin capítulo abierto no hay ninguno. */
+  private readonly idioma = signal<IdiomaFlexion | null>(null);
+  readonly idiomaFlexion = this.idioma.asReadonly();
+
   readonly count = computed(() => this.words().length);
   readonly problematic = computed<ProblematicEntry[]>(() => detectProblematic(this.words()));
 
@@ -40,6 +48,12 @@ export class DictionaryService {
     this.editing.set({ path: node.path, nombre: node.name });
     this.loading.set(true);
     this.error.set(null);
+    try {
+      const cfg = await invoke<SagaConfig>('get_saga_config', { sagaPath: node.path });
+      this.idioma.set(idiomaFlexionDe(cfg.idioma));
+    } catch {
+      this.idioma.set(null);
+    }
     try {
       const existing = await invoke<string[]>('get_saga_dictionary', { sagaPath: node.path });
       this.words.set([...existing].sort(compareWords));
@@ -55,6 +69,25 @@ export class DictionaryService {
     this.editing.set(null);
     this.words.set([]);
     this.error.set(null);
+    this.idioma.set(null);
+  }
+
+  /** Agrega varias palabras en UNA sola escritura, sobre la saga que este
+   *  service está editando. Descarta en silencio las inválidas y las que ya
+   *  están: el panel de formas derivadas ya las muestra como «ya está». */
+  async addManyWords(words: readonly string[]): Promise<OpResult & { added: number }> {
+    const next = [...this.words()];
+    let added = 0;
+    for (const raw of words) {
+      const result = validateWord(raw);
+      if (!result.ok) continue;
+      if (existsCaseInsensitive(next, result.value)) continue;
+      next.push(result.value);
+      added += 1;
+    }
+    if (added === 0) return { ok: true, added: 0 };
+    const r = await this.persist(next.sort(compareWords));
+    return { ...r, added: r.ok ? added : 0 };
   }
 
   async addWord(raw: string): Promise<OpResult> {
