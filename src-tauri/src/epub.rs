@@ -1090,7 +1090,10 @@ fn embebido_reescalado(
         Ok(b) => b,
         Err(e) => {
             tracing::warn!(target: "epub", path = %origen.display(), error = %e, "no pude leer la imagen, sigo sin ella");
-            avisos.push(format!("No pude leer la imagen \"{}\": {}", origen.display(), e));
+            avisos.push(format!(
+                "No pude leer el archivo de imagen \"{}\": revisá que exista y que la app tenga permiso para abrirlo.",
+                origen.display()
+            ));
             return Ok(None);
         }
     };
@@ -1103,7 +1106,10 @@ fn embebido_reescalado(
         Ok(b) => b,
         Err(e) => {
             tracing::warn!(target: "epub", path = %origen.display(), error = %e, "no pude procesar la imagen, sigo sin ella");
-            avisos.push(format!("No pude procesar la imagen \"{}\": {}", origen.display(), e));
+            avisos.push(format!(
+                "No pude procesar la imagen \"{}\": puede estar dañada o en un formato no soportado (usá PNG o JPEG).",
+                origen.display()
+            ));
             return Ok(None);
         }
     };
