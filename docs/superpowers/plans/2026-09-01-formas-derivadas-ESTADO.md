@@ -31,8 +31,8 @@ subjuntivo tienen 0 apariciones en el corpus.
 ## Estado
 
 ```
-7 commits · 13 archivos · +1170/-8
-node scripts/run-derived-forms-smoke.mjs → 94 ok, 0 fail
+11 commits · 16 files changed, 1526 insertions(+), 29 deletions(-)
+node scripts/run-derived-forms-smoke.mjs → 107 ok, 0 fail
 pnpm build → PASS
 ```
 
@@ -49,6 +49,10 @@ pnpm build → PASS
 ### Los commits
 
 ```
+9324fb7 docs(estado): verificación manual hecha y triage de la review de CodeRabbit
+209a405 fix(diccionario): carrera al cambiar de saga y panel que sobrevivía al modal
+160d0a6 fix(diccionario): el infinitivo es su propio lema
+6fc1f06 docs(estado): handoff de las formas derivadas para retomar en otra PC
 ac4a67e fix(diccionario): defectos de integración de las formas derivadas
 556d07c feat(diccionario): «+ formas…» en el popover de LanguageTool
 1372eac feat(diccionario): panel de formas derivadas con preview editable
@@ -58,7 +62,9 @@ ac4a67e fix(diccionario): defectos de integración de las formas derivadas
 54d23a0 feat(diccionario): pelado de flexión con regla por idioma de saga
 ```
 
-## Verificación manual pendiente (Task 7)
+## Verificación manual (Task 7) — HECHA el 2026-09-01
+
+Los 12 pasos pasaron. Se dejan escritos porque son la regresión a correr si se toca esto de nuevo.
 
 Requiere LanguageTool arriba: `scripts/start-languagetool.sh` (Docker, `:8081`).
 Después `pnpm tauri dev`.
