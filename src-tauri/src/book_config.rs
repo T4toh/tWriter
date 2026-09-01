@@ -9,7 +9,7 @@ use crate::theme::ThemeRef;
 // nomás (Cargo.toml), así que `embebido_reescalado` no puede decodificarlas — ver
 // findings-finales.md, Important 4. Ofrecerlas acá sería prometer un formato que
 // el decoder no sabe abrir.
-const COVER_EXTS: &[&str] = &["jpg", "jpeg", "png"];
+pub(crate) const COVER_EXTS: &[&str] = &["jpg", "jpeg", "png"];
 
 /// Busca `cover.<ext>` en `dir`. Devuelve el nombre relativo (ej: "cover.jpg") si existe.
 pub fn find_cover_in(dir: &Path) -> Option<String> {

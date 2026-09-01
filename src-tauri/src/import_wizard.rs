@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tauri::{AppHandle, Emitter};
 
-use crate::book_config::BookConfig;
+use crate::book_config::{BookConfig, COVER_EXTS};
 use crate::fs::is_chapter_file;
 
 /// Skip más permisivo que `fs::should_skip_dir`: solo metadatos reales.
@@ -626,19 +626,8 @@ fn apply_impl(app: AppHandle, plan: WizardPlan) -> Result<ImportSummary, String>
         }
         let mut image_copies: Vec<(PathBuf, PathBuf)> = Vec::new();
         for (field, stem) in [(&mut book_cfg.tapa, "cover"), (&mut book_cfg.contratapa, "back-cover")] {
-            if let Some(value) = field.as_deref().filter(|s| !s.trim().is_empty()) {
-                let candidate = PathBuf::from(value);
-                if candidate.is_absolute() && candidate.is_file() {
-                    let ext = candidate
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .map(|s| s.to_lowercase())
-                        .unwrap_or_else(|| "png".to_string());
-                    let dest_name = format!("{}.{}", stem, ext);
-                    let dest = book_dir.join(&dest_name);
-                    image_copies.push((candidate, dest));
-                    *field = Some(dest_name);
-                }
+            if let Some(pair) = resolve_cover_image(field, stem, &book_dir, &mut summary.failed) {
+                image_copies.push(pair);
             }
         }
         if let Err(e) = write_book_json(&book_dir, &book_cfg) {
@@ -703,6 +692,55 @@ fn emit_progress(app: &AppHandle, done: u32, total: u32, current: &str) {
             current: current.to_string(),
         },
     );
+}
+
+/// Valida la tapa/contratapa elegida en el wizard antes de copiarla.
+///
+/// El picker del wizard solo filtra por UI: se puede tipear un nombre a mano
+/// o elegir "todos los archivos" y colar una extensión que el decoder de
+/// portadas no sabe abrir (`image` se compila sin soporte webp/gif, ver
+/// `book_config::COVER_EXTS`). Si `field` apunta a un archivo con una
+/// extensión no soportada, no se copia nada y se limpia el campo para que
+/// el `book.json` no quede referenciando un archivo que el EPUB no puede
+/// decodificar — mejor sin tapa que con una referencia rota o un webp que
+/// exporta el EPUB sin portada en silencio. El aviso se empuja a `failed`,
+/// que ya es donde el wizard junta el resto de los problemas por-archivo
+/// (ver `handle_chapter`/`handle_extra`), así que el resto del import sigue
+/// su curso y el autor ve el motivo en la misma lista al terminar.
+///
+/// Devuelve `Some((origen, destino))` para que `apply_impl` copie el archivo,
+/// o `None` si no había nada que copiar (campo vacío/relativo) o si se
+/// rechazó por formato.
+fn resolve_cover_image(
+    field: &mut Option<String>,
+    stem: &str,
+    book_dir: &Path,
+    failed: &mut Vec<String>,
+) -> Option<(PathBuf, PathBuf)> {
+    let value = field.as_deref().filter(|s| !s.trim().is_empty())?;
+    let candidate = PathBuf::from(value);
+    if !(candidate.is_absolute() && candidate.is_file()) {
+        return None;
+    }
+    let ext = candidate
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+    if !COVER_EXTS.contains(&ext.as_str()) {
+        let etiqueta = if stem == "cover" { "tapa" } else { "contratapa" };
+        let nombre = candidate.file_name().and_then(|n| n.to_str()).unwrap_or(value);
+        failed.push(format!(
+            "{} \"{}\": formato de imagen no soportado, usá JPG o PNG",
+            etiqueta, nombre
+        ));
+        *field = None;
+        return None;
+    }
+    let dest_name = format!("{}.{}", stem, ext);
+    let dest = book_dir.join(&dest_name);
+    *field = Some(dest_name);
+    Some((candidate, dest))
 }
 
 fn ensure_dir(p: &Path, summary: &mut ImportSummary) -> Result<(), String> {
@@ -996,6 +1034,58 @@ mod tests {
             .find(|f| f.name == "section_a" && f.ext == "odt")
             .expect("original section_a.odt en extras");
         assert_eq!(orig.subpath.as_deref(), Some("original"));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolve_cover_image_rechaza_extension_no_soportada_sin_tocar_el_campo() {
+        let root = unique_tmp("cover-webp");
+        let source = root.join("mi tapa.webp");
+        touch(&source);
+        let book_dir = root.join("book");
+        fs::create_dir_all(&book_dir).expect("mkdir book_dir");
+
+        let mut field = Some(source.to_string_lossy().to_string());
+        let mut failed = Vec::new();
+        let result = resolve_cover_image(&mut field, "cover", &book_dir, &mut failed);
+
+        // No hay nada para copiar...
+        assert!(result.is_none(), "un .webp no debería producir una copia");
+        // ...el campo queda limpio, así el book.json no referencia un archivo
+        // que el EPUB no puede decodificar...
+        assert_eq!(field, None, "el field no debe quedar apuntando al webp");
+        // ...y el archivo no se copió al book_dir.
+        assert!(
+            !book_dir.join("cover.webp").exists(),
+            "el webp no debe copiarse al book_dir"
+        );
+        // ...y el autor se entera del motivo, en español, con el nombre del
+        // archivo y los formatos que sí andan.
+        assert_eq!(failed.len(), 1);
+        assert!(failed[0].contains("mi tapa.webp"), "el mensaje: {}", failed[0]);
+        assert!(failed[0].contains("JPG"), "el mensaje: {}", failed[0]);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolve_cover_image_acepta_png_y_reescribe_el_campo_a_relativo() {
+        let root = unique_tmp("cover-png");
+        let source = root.join("mi tapa.png");
+        touch(&source);
+        let book_dir = root.join("book");
+        fs::create_dir_all(&book_dir).expect("mkdir book_dir");
+
+        let mut field = Some(source.to_string_lossy().to_string());
+        let mut failed = Vec::new();
+        let result = resolve_cover_image(&mut field, "cover", &book_dir, &mut failed);
+
+        let (src, dst) = result.expect("un .png sí debería agendar una copia");
+        assert_eq!(src, source);
+        assert_eq!(dst, book_dir.join("cover.png"));
+        assert_eq!(field.as_deref(), Some("cover.png"));
+        assert!(failed.is_empty());
 
         let _ = fs::remove_dir_all(&root);
     }
