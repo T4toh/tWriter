@@ -43,8 +43,10 @@ pub fn image_field_unusable(dir: &Path, field: Option<&str>) -> bool {
     resolver_imagen(dir, field).is_none()
 }
 
-/// Stems canónicos de las imágenes que vive al lado de un `book.json`/`saga.json`.
-const IMAGE_STEMS: &[&str] = &["cover", "back-cover", "author"];
+/// Stems canónicos de las imágenes que vive al lado de un `book.json`/`saga.json`
+/// (`cover`, `back-cover`, `author`) o de `autor.json` en la raíz del repo
+/// (`autor`, `qr`) — estos dos últimos son los que manda el modal del autor.
+const IMAGE_STEMS: &[&str] = &["cover", "back-cover", "author", "autor", "qr"];
 
 /// Deja la imagen elegida **dentro** de la carpeta del libro/saga y devuelve el
 /// nombre relativo para guardar en el JSON. Si ya estaba adentro, no copia nada
@@ -417,5 +419,21 @@ mod tests {
         assert!(adopt_image(libro.path(), &pdf, "cover").is_err());
         assert!(adopt_image(libro.path(), &ok, "../escape").is_err());
         assert!(adopt_image(libro.path(), &afuera.path().join("no-existe.png"), "cover").is_err());
+    }
+
+    #[test]
+    fn acepta_los_stems_del_modal_del_autor() {
+        // El modal del autor manda "autor" y "qr" a adopt_config_image; si
+        // IMAGE_STEMS no los incluye, los dos pickers del modal fallan siempre
+        // con "stem no permitido" (ver findings-finales.md, Important 1).
+        let root = TempDir::new().unwrap();
+        let afuera = TempDir::new().unwrap();
+        let src = afuera.path().join("qr.png");
+        png(&src);
+
+        let rel = adopt_image(root.path(), &src, "qr").unwrap();
+
+        assert_eq!(rel, "qr.png");
+        assert!(root.path().join("qr.png").is_file());
     }
 }
