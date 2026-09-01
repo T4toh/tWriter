@@ -409,6 +409,10 @@ nav ol.toc-sub > li.toc-chapter > a {
   color: inherit;
 }
 
+nav ol.toc > li.toc-editorial { font-size: 0.9em; opacity: 0.75; }
+nav ol.toc > li.toc-editorial + li.toc-part { margin-top: 0.8em; }
+nav ol.toc > li.toc-part + li.toc-editorial { margin-top: 1em; padding-top: 0.8em; border-top: 1px solid currentColor; }
+
 /* Misc */
 .center-align { text-align: center; text-indent: 0; }
 .right-align { text-align: right; text-indent: 0; }

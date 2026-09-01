@@ -527,6 +527,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             href: title_href,
             label: toc_label,
             children: Vec::new(),
+            editorial: false,
         };
 
         // Parts
@@ -568,6 +569,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
                 href: part_href,
                 label: toc_label,
                 children: Vec::new(),
+                editorial: false,
             });
         }
         toc_entries.push(entry);
@@ -600,6 +602,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             href: title_href,
             label: toc_label,
             children: Vec::new(),
+            editorial: false,
         };
 
         for (p_idx, part) in ep.parts.iter().enumerate() {
@@ -640,6 +643,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
                 href: part_href,
                 label: toc_label,
                 children: Vec::new(),
+                editorial: false,
             });
         }
         toc_entries.push(entry);
@@ -802,6 +806,36 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         }
     }
 
+    // Índice: las páginas editoriales van agrupadas, delante y detrás de los
+    // capítulos. Solo entran las que efectivamente se generaron.
+    let ed = |href: &str, label: &str| TocEntry {
+        href: href.to_string(),
+        label: label.to_string(),
+        children: Vec::new(),
+        editorial: true,
+    };
+    let mut front: Vec<TocEntry> = vec![ed("2_copyright.xhtml", "Copyright")];
+    if items.iter().any(|i| i.id == "dedication") {
+        front.push(ed(
+            "3_dedication.xhtml",
+            if is_en { "Dedication" } else { "Dedicatoria" },
+        ));
+    }
+    if items.iter().any(|i| i.id == "otros-libros") {
+        toc_entries.push(ed(
+            "7_otros_libros.xhtml",
+            if is_en { "Also by the Author" } else { "Otros libros" },
+        ));
+    }
+    if items.iter().any(|i| i.id == "about-author") {
+        toc_entries.push(ed(
+            "8_about_author.xhtml",
+            if is_en { "About the Author" } else { "Sobre el autor" },
+        ));
+    }
+    front.append(&mut toc_entries);
+    let toc_entries = front;
+
     // 6) toc.xhtml (visible nav + EPUB 3 properties="nav"). Lo metemos al spine
     //    después del frontmatter para que el lector pueda navegar a él.
     //    Lo agregamos al final del array para que aparezca al final, pero su
@@ -897,6 +931,10 @@ struct TocEntry {
     href: String,
     label: String,
     children: Vec<TocEntry>,
+    /// Página editorial (copyright, dedicatoria, catálogo, bio) en vez de
+    /// capítulo. Se renderea atenuada y agrupada, para que el listado de
+    /// capítulos siga dominando la pantalla.
+    editorial: bool,
 }
 
 fn collect_chapters(
@@ -1548,8 +1586,14 @@ fn to_roman(mut n: u32) -> String {
 fn build_toc_xhtml(cfg: &BookConfig, entries: &[TocEntry]) -> String {
     let mut lis = String::new();
     for e in entries {
+        let clase = if e.editorial {
+            "toc-editorial toc-body"
+        } else {
+            "toc-part toc-body"
+        };
         lis.push_str(&format!(
-            "<li class=\"toc-part toc-body\"><a href=\"{}\">{}</a>",
+            "<li class=\"{}\"><a href=\"{}\">{}</a>",
+            clase,
             xml_escape(&e.href),
             xml_escape(&e.label)
         ));
@@ -2816,6 +2860,70 @@ mod tests {
             "avisos: {:?}",
             result.avisos
         );
+    }
+
+    #[test]
+    fn el_indice_incluye_las_paginas_editoriales_agrupadas() {
+        let (root, book) = repo_con_publicados();
+        std::fs::write(root.join("autor.json"), r#"{"bio":{"es":"x"}}"#).unwrap();
+        std::fs::write(
+            book.join("book.json"),
+            r#"{"titulo":"Actual","dedicatoria":"Para vos"}"#,
+        )
+        .unwrap();
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let toc = String::from_utf8(entries.get("OEBPS/toc.xhtml").unwrap().clone()).unwrap();
+
+        for etiqueta in ["Copyright", "Dedicatoria", "Otros libros", "Sobre el autor"] {
+            assert!(toc.contains(etiqueta), "falta {} en el índice", etiqueta);
+        }
+        assert!(toc.contains("toc-editorial"));
+        // El copyright va antes del primer capítulo y el catálogo después.
+        let pos_copy = toc.find("Copyright").unwrap();
+        let pos_cap = toc.find("Cap").unwrap_or(toc.len());
+        let pos_otros = toc.find("Otros libros").unwrap();
+        assert!(pos_copy < pos_cap);
+        assert!(pos_otros > pos_cap);
+        // La portadilla y la contratapa no son destinos de navegación.
+        // (chequeo por atributo href completo: "1_title.xhtml" a secas matchea
+        // como substring dentro de "11_ch1_title.xhtml", el href real del
+        // capítulo 1 — sin las comillas el assert no discrimina nada.)
+        assert!(!toc.contains("href=\"1_title.xhtml\""));
+
+        let ncx = String::from_utf8(entries.get("OEBPS/toc.ncx").unwrap().clone()).unwrap();
+        assert!(ncx.contains("Otros libros"));
+        assert!(ncx.contains("Sobre el autor"));
+    }
+
+    #[test]
+    fn una_pagina_editorial_ausente_no_deja_entrada_en_el_indice() {
+        let tmp = tempdir();
+        let book = tmp.join("book");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        std::fs::write(book.join("book.json"), r#"{"titulo":"Solo"}"#).unwrap();
+        std::fs::write(book.join("Cap1").join("1.html"), "<p>x</p>").unwrap();
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let toc = String::from_utf8(entries.get("OEBPS/toc.xhtml").unwrap().clone()).unwrap();
+        assert!(!toc.contains("Dedicatoria"));
+        assert!(!toc.contains("Otros libros"));
+        assert!(!toc.contains("Sobre el autor"));
+        assert!(toc.contains("Copyright"), "el copyright siempre está");
+    }
+
+    #[test]
+    fn el_indice_en_ingles_usa_las_etiquetas_en_ingles() {
+        let tmp = tempdir();
+        let book = tmp.join("book");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        std::fs::write(book.join("book.json"), r#"{"titulo":"Solo","idioma":"en"}"#).unwrap();
+        std::fs::write(book.join("Cap1").join("1.html"), "<p>x</p>").unwrap();
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let toc = String::from_utf8(entries.get("OEBPS/toc.xhtml").unwrap().clone()).unwrap();
+        assert!(toc.contains("Copyright"));
+        assert!(!toc.contains("Índice</h1>"));
     }
 
     fn tempdir() -> std::path::PathBuf {
