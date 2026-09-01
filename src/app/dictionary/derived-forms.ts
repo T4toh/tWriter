@@ -103,3 +103,100 @@ function pelarEncliticos(w: string, resolver: (resto: string) => string | null):
   }
   return null;
 }
+
+export type Categoria = 'verbo' | 'adjetivo';
+
+/** Formas a ofrecer para un lema. Solo español; en inglés devuelve [].
+ *
+ *  El generador NUNCA escribe un plural: de eso se encarga `stripInflection`.
+ *  Por eso el núcleo verbal son 15 formas y no 17 (sin `bardeados`/`bardeadas`)
+ *  y los adjetivos son 2 y no 4. */
+export function generateForms(
+  lema: string,
+  categoria: Categoria,
+  idioma: IdiomaFlexion,
+): string[] {
+  if (idioma !== 'es') return [];
+  const l = lema.trim().toLowerCase();
+  if (!l) return [];
+  return categoria === 'verbo' ? conjugar(l) : generoAdjetivo(l);
+}
+
+/** Adjetivos en `-o`: masculino y femenino singular. Los invariables en género
+ *  (`-e`, `-ista`, consonante) no generan nada — la entrada sola alcanza. */
+function generoAdjetivo(lema: string): string[] {
+  if (!lema.endsWith('o')) return [];
+  return [lema, lema.slice(0, -1) + 'a'];
+}
+
+function conjugar(lema: string): string[] {
+  const term = lema.slice(-2);
+  const raiz = lema.slice(0, -2);
+  if (raiz.length < 2) return [];
+
+  if (term === 'ar') {
+    return dedupe([
+      lema,
+      raiz + 'ando',
+      raiz + 'ado',
+      raiz + 'ada',
+      raiz + 'o',
+      raiz + 'ás',
+      raiz + 'a',
+      raiz + 'an',
+      preteritoPrimeraAr(raiz),
+      raiz + 'aste',
+      raiz + 'ó',
+      raiz + 'aron',
+      raiz + 'aba',
+      raiz + 'aban',
+      raiz + 'á',
+    ]);
+  }
+
+  if (term !== 'er' && term !== 'ir') return [];
+
+  // Raíz terminada en vocal (`leer`, `oír`): la `i` átona entre vocales pasa a
+  // `y`, pero la `i` tónica lleva tilde y NO pasa a `y`. Confundir los dos casos
+  // escribe formas que no existen (`leyste`, `leido`) y esas sí silencian typos.
+  const enVocal = VOCAL_FINAL.test(raiz);
+  const gerundio = enVocal ? 'yendo' : 'iendo';
+  const participio = enVocal ? 'ído' : 'ido';
+  const participioF = enVocal ? 'ída' : 'ida';
+  const preterito2 = enVocal ? 'íste' : 'iste';
+  const preterito3 = enVocal ? 'yó' : 'ió';
+  const preterito3pl = enVocal ? 'yeron' : 'ieron';
+  const presenteVoseo = term === 'er' ? 'és' : 'ís';
+  const imperativoVoseo = term === 'er' ? 'é' : 'í';
+
+  return dedupe([
+    lema,
+    raiz + gerundio,
+    raiz + participio,
+    raiz + participioF,
+    raiz + 'o',
+    raiz + presenteVoseo,
+    raiz + 'e',
+    raiz + 'en',
+    raiz + 'í',
+    raiz + preterito2,
+    raiz + preterito3,
+    raiz + preterito3pl,
+    raiz + 'ía',
+    raiz + 'ían',
+    raiz + imperativoVoseo,
+  ]);
+}
+
+/** Ajuste ortográfico del pretérito 1ª sg: `trancar`→`tranqué`, `pagar`→`pagué`,
+ *  `cazar`→`cacé`. No es modelar un irregular, es cómo se escribe el sonido. */
+function preteritoPrimeraAr(raiz: string): string {
+  if (raiz.endsWith('c')) return raiz.slice(0, -1) + 'qué';
+  if (raiz.endsWith('g')) return raiz + 'ué';
+  if (raiz.endsWith('z')) return raiz.slice(0, -1) + 'cé';
+  return raiz + 'é';
+}
+
+function dedupe(formas: readonly string[]): string[] {
+  return [...new Set(formas)];
+}
