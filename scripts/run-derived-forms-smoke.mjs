@@ -206,6 +206,28 @@ console.log('inferLemma');
   check('la stop-list corta -miento y -dad',
     inferLemma('arcanismiento', 'es').length === 0 && inferLemma('oscuridad', 'es').length === 0);
   check('en inglés no infiere nada', inferLemma('chobbos', 'en').length === 0);
+  // El infinitivo es su propio lema. Sin este caso el botón «+ formas…» no
+  // aparecía sobre la entrada más obvia (reportado a mano por el autor sobre
+  // `Moniquear`, 2026-09-01).
+  for (const [word, esperado] of [
+    ['Moniquear', 'moniquear'],
+    ['bardear', 'bardear'],
+    ['castear', 'castear'],
+    ['teletransportar', 'teletransportar'],
+    ['comer', 'comer'],
+    ['vivir', 'vivir'],
+  ]) {
+    const c = inferLemma(word, 'es');
+    check(
+      `${word} es su propio lema (verbo)`,
+      c.length === 1 && c[0].lema === esperado && c[0].categoria === 'verbo',
+      JSON.stringify(c),
+    );
+    const formas = generateForms(c[0]?.lema ?? '', 'verbo', 'es');
+    check(`  …y genera formas (${formas.length})`, formas.length >= 14, formas.length);
+  }
+  check('el infinitivo en inglés sigue sin inferir nada', inferLemma('bardear', 'en').length === 0);
+
   check('un nombre propio corto no se confunde con un verbo',
     inferLemma('Aedan', 'es').length === 0, JSON.stringify(inferLemma('Aedan', 'es')));
   check('una palabra sin sufijo reconocible no da candidatos',

@@ -292,6 +292,20 @@ sacan los dos sufijos en vez de crecer el generador: el núcleo de 15 tiene su
 propia justificación arriba, y el costo de la forma que falta es el click que
 esta misma spec ya acepta.
 
+**Corrección 2026-09-01 (segunda)**: la tabla no contemplaba el caso en que la
+palabra **ya es el infinitivo**. `bardear`, `castear`, `Moniquear` no matchean
+ninguna regla de sufijo — ninguna termina en `-ar`/`-er`/`-ir` — ni el fallback de
+`-a`/`-o`, que pide terminación en vocal. Resultado: `inferLemma` devolvía `[]` y
+el botón `+ formas…` **no aparecía sobre la entrada más obvia de todas**.
+Detectado por el autor en la verificación manual, después de que seis reviews por
+tarea y la review final de rama lo dieran por bueno — todas compararon el código
+contra esta tabla, que tenía el mismo hueco.
+
+Se agrega antes del loop de reglas: si la palabra termina en `-ar`/`-er`/`-ir`,
+es su propio lema, categoría verbo. Un sustantivo con esa terminación (`altar`,
+`Brámar`) también cae ahí y propone un verbo inexistente — misma limitación
+aceptada que `Bastien`, mismo remedio: cancelar el preview.
+
 **Stop-list**: palabras terminadas en `ción`, `sión`, `miento`, `dad`, `dades` son
 sustantivos y devuelven cero candidatos. Sin esto `teletransportación` — que está
 en el diccionario de Meridian — se ofrecería como verbo.

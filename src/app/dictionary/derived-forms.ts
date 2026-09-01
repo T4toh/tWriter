@@ -266,6 +266,9 @@ const REGLAS: readonly ReglaSufijo[] = [
   { sufijo: 'í', terminaciones: ['ir'] },
 ];
 
+/** Terminaciones de infinitivo: si la palabra ya termina así, es su propio lema. */
+const INFINITIVOS: readonly string[] = ['ar', 'er', 'ir'];
+
 const MIN_RAIZ = 3;
 /** Los sufijos de una o dos letras (`-an`, `-en`, `-ó`) matchean cualquier cosa,
  *  incluidos nombres propios, así que piden una raíz más larga para aceptarse. */
@@ -277,6 +280,17 @@ export function inferLemma(word: string, idioma: IdiomaFlexion): LemmaCandidate[
   const w = word.trim().toLowerCase();
   if (w.length < MIN_RAIZ + 1) return [];
   if (STOP_SUSTANTIVOS.some((s) => w.endsWith(s))) return [];
+
+  // La palabra YA es el infinitivo: es su propio lema. Sin este caso el botón
+  // «+ formas…» no aparece justo sobre la entrada más obvia — `bardear`,
+  // `castear`, `Moniquear` — porque ninguna regla de sufijo matchea un
+  // infinitivo y el fallback de `-a`/`-o` tampoco (terminan en `r`).
+  // Un sustantivo en `-ar`/`-er` (`altar`, `Brámar`) también cae acá y propone
+  // un verbo que no existe: misma limitación aceptada que `Bastien`, y el mismo
+  // remedio, que es cancelar el preview.
+  if (INFINITIVOS.some((t) => w.endsWith(t))) {
+    return [{ lema: w, categoria: 'verbo' }];
+  }
 
   for (const regla of REGLAS) {
     if (!w.endsWith(regla.sufijo)) continue;
