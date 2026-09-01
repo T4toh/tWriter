@@ -198,10 +198,20 @@ están. Es la medición que decide si las guardas alcanzan:
 | Meridian 2.0 `es` | 13.982 | **1** — `lúmenes` → `lúmen` (4 apariciones) |
 | Milky Way `en` | 11.462 | **2** — `Koziaras` → `koziara`, `naruus` → `naruu` |
 
-Tres de 25.444, y las tres son plurales correctos de entradas que ya están en el
-diccionario. **Cero falsos positivos.** Ninguna palabra común (`perlas`, `casas`,
-`manos`, `luces`, `dientes`, `sombras`, `piedras`) pela, porque la guarda de "el
-resto ya tiene que estar en el diccionario" las corta a todas.
+Tres de 25.444, y el autor confirmó las tres como plurales legítimos de palabras
+propias del mundo:
+
+- **`lúmen`** — arcanismo inventado (magia y tecnología a la vez). Plural `-es`
+  tras `n`, con la tilde donde el autor la puso.
+- **`Koziara`** — nombre propio usado como expresión ("vale más que dos de esos
+  koziaras"), así que el plural aparece en el texto.
+- **`naruu`** — animal de un planeta de la saga; el plural es `+s` a secas, que es
+  justo la única regla que se implementa en inglés.
+
+O sea **cero falsos positivos y tres verdaderos positivos**: las tres son palabras
+que hoy hay que agregar a mano y que la feature cubre sola. Ninguna palabra común
+(`perlas`, `casas`, `manos`, `luces`, `dientes`, `sombras`, `piedras`) pela, porque
+la guarda de "el resto ya tiene que estar en el diccionario" las corta a todas.
 
 La medición se hizo sin las formas verbales generadas, que todavía no existen. Con
 ellas los enclíticos suman cobertura, pero el riesgo medido no cambia: la guarda es
