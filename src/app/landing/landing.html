@@ -1,3 +1,9 @@
+@if (!currentNode()) {
+  <div class="root-actions">
+    <button type="button" class="autor-btn" (click)="abrirAutor()">Autor…</button>
+  </div>
+}
+
 <nav class="breadcrumb">
   @for (c of crumbs(); track $index; let last = $last) {
     <button

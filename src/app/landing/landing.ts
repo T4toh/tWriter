@@ -1,4 +1,5 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
+import { AutorService } from '../core/autor-service';
 import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { NavigationService } from '../core/navigation-service';
@@ -27,6 +28,7 @@ interface Crumb {
 })
 export class Landing {
   private project = inject(ProjectService);
+  private autorSvc = inject(AutorService);
   private chapter = inject(ChapterService);
   private nav = inject(NavigationService);
   private bookCfg = inject(BookConfigService);
@@ -179,6 +181,10 @@ export class Landing {
 
   protected goCrumb(crumb: Crumb): void {
     this.nav.setBrowsing(crumb.node?.path ?? null);
+  }
+
+  protected abrirAutor(): void {
+    this.autorSvc.open();
   }
 
   protected onCardContextMenu(event: MouseEvent, node: TreeNode): void {

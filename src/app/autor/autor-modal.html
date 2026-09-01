@@ -1,0 +1,60 @@
+@if (editing()) {
+  <div class="backdrop" (click)="close()"></div>
+  <div class="modal" role="dialog" aria-label="Perfil del autor">
+    <h2>Autor</h2>
+    @if (config(); as c) {
+      <label class="field">
+        <span>Nombre</span>
+        <input type="text" [ngModel]="c.nombre" (ngModelChange)="update('nombre', $event)" />
+      </label>
+
+      <label class="field">
+        <span>Bio en español</span>
+        <textarea rows="5" [ngModel]="bio('es')" (ngModelChange)="setBio('es', $event)"></textarea>
+      </label>
+
+      <label class="field">
+        <span>Bio en inglés</span>
+        <textarea rows="5" [ngModel]="bio('en')" (ngModelChange)="setBio('en', $event)"></textarea>
+      </label>
+
+      <label class="field">
+        <span>Web</span>
+        <input
+          type="url"
+          placeholder="https://tatoh.ar"
+          [ngModel]="c.web"
+          (ngModelChange)="update('web', $event)"
+        />
+      </label>
+
+      <div class="field">
+        <span>Foto</span>
+        <div class="picker">
+          <span class="path">{{ c.foto || 'sin foto' }}</span>
+          <button type="button" (click)="pickFoto()">Elegir…</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <span>QR de la web</span>
+        <div class="picker">
+          <span class="path">{{ c.qr || 'sin QR' }}</span>
+          <button type="button" (click)="pickQr()">Elegir…</button>
+        </div>
+        <small class="hint">
+          Va al final del EPUB, al lado de la dirección de tu web.
+        </small>
+      </div>
+    }
+
+    @if (error(); as e) {
+      <p class="error">{{ e }}</p>
+    }
+
+    <div class="actions">
+      <button type="button" (click)="close()">Cancelar</button>
+      <button type="button" [disabled]="saving()" (click)="save()">Guardar</button>
+    </div>
+  </div>
+}

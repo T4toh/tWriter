@@ -8,6 +8,29 @@
   color: var(--fg);
 }
 
+.root-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px 0;
+  flex-shrink: 0;
+}
+
+.autor-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--border);
+    color: var(--fg);
+  }
+}
+
 .breadcrumb {
   display: flex;
   align-items: center;
