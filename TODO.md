@@ -1577,8 +1577,11 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   (`autor`), en `saga.json` (`autor`) y en `autor.json` (`nombre`), que es el
   perfil global que agregó `autor.rs`. Tres fuentes para un dato que en un repo
   de novelas es uno solo: el que escribe. La resolución debería ser
-  `autor.json` primero y los otros dos como override heredado, igual que ya
-  funciona la bio. Ojo con el orden de trabajo: `epub.rs` usa `cfg.autor` en
+  `autor.json` primero y los otros dos solo como respaldo para repos que
+  todavía no tengan perfil global. **Decidido con el autor el 2026-09-01**: el
+  campo sale del modal del libro, no se queda como override — con `autor.json`
+  existiendo es duplicación, y el override por novela se agrega después si
+  hace falta, apoyado en el mecanismo nuevo y no en el viejo. Ojo con el orden de trabajo: `epub.rs` usa `cfg.autor` en
   cuatro lugares (portadilla, copyright, metadata OPF, y un fallback que lo
   completa desde la saga en `epub.rs:1794`), así que primero va la resolución
   con fallback y recién después se limpian los `book.json` en disco —
