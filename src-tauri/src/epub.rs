@@ -1058,22 +1058,24 @@ fn build_copyright_xhtml(cfg: &BookConfig) -> String {
         by_word,
         xml_escape(autor)
     ));
-    if cfg.derechos_reservados.unwrap_or(true) {
-        if is_en {
-            body.push_str(
-                "<p>All rights reserved. No part of this publication may be reproduced, stored or transmitted in any form or by any means, electronic, mechanical, photocopying, recording or otherwise, without the prior written permission of the author.</p>\n",
-            );
-            body.push_str(
-                "<p>This novel is entirely a work of fiction. The names, characters and incidents portrayed in it are the work of the author's imagination. Any resemblance to actual persons, living or dead, events or localities is entirely coincidental.</p>\n",
-            );
-        } else {
-            body.push_str(
-                "<p>Todos los derechos reservados. Ninguna parte de esta publicación puede ser reproducida, almacenada ni transmitida en forma alguna por medio electrónico, mecánico, fotocopia, grabación u otros sin autorización escrita del autor.</p>\n",
-            );
-            body.push_str(
-                "<p>Esta novela es enteramente una obra de ficción. Los nombres, personajes y eventos retratados son producto de la imaginación del autor. Cualquier parecido con personas reales, vivas o fallecidas, eventos o lugares es enteramente coincidencia.</p>\n",
-            );
+    let reserva = cfg.derechos_reservados.unwrap_or(true);
+    // Sin campo propio, el inciso de ficción sigue a `derechos_reservados`:
+    // es lo que hacía antes de separarlos.
+    let ficcion = cfg.obra_de_ficcion.unwrap_or(reserva);
+    let ia = cfg.nota_ia.unwrap_or(false);
+    for (clave, activo) in [("reserva", reserva), ("ficcion", ficcion), ("ia", ia)] {
+        if !activo {
+            continue;
         }
+        let texto = cfg
+            .textos_legales
+            .as_ref()
+            .and_then(|m| m.get(clave))
+            .map(String::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| texto_inciso_default(clave, is_en));
+        body.push_str(&format!("<p>{}</p>\n", xml_escape(texto)));
     }
     if let Some(isbn) = cfg.isbn.as_deref().filter(|s| !s.is_empty()) {
         body.push_str(&format!("<p>ISBN: {}</p>\n", xml_escape(isbn)));
@@ -1092,6 +1094,21 @@ fn build_copyright_xhtml(cfg: &BookConfig) -> String {
     body.push_str(&format!("<p>{}</p>", edited));
 
     xhtml_shell(&cfg.titulo, &body, lang, "copyright-body")
+}
+
+/// Redacción default de cada inciso de la página legal. Las claves son las
+/// mismas que usa `BookConfig::textos_legales` y las que precarga el modal
+/// de configuración del libro.
+pub fn texto_inciso_default(clave: &str, is_en: bool) -> &'static str {
+    match (clave, is_en) {
+        ("reserva", false) => "Todos los derechos reservados. Ninguna parte de esta publicación puede ser reproducida, almacenada ni transmitida en forma alguna por medio electrónico, mecánico, fotocopia, grabación u otros sin autorización escrita del autor.",
+        ("reserva", true) => "All rights reserved. No part of this publication may be reproduced, stored or transmitted in any form or by any means, electronic, mechanical, photocopying, recording or otherwise, without the prior written permission of the author.",
+        ("ficcion", false) => "Esta novela es enteramente una obra de ficción. Los nombres, personajes y eventos retratados son producto de la imaginación del autor. Cualquier parecido con personas reales, vivas o fallecidas, eventos o lugares es enteramente coincidencia.",
+        ("ficcion", true) => "This novel is entirely a work of fiction. The names, characters and incidents portrayed in it are the work of the author's imagination. Any resemblance to actual persons, living or dead, events or localities is entirely coincidental.",
+        ("ia", false) => "Las imágenes de esta obra fueron generadas con inteligencia artificial. El texto es obra exclusiva del autor.",
+        ("ia", true) => "The images in this work were generated with artificial intelligence. The text is the sole work of the author.",
+        _ => "",
+    }
 }
 
 fn build_dedication_xhtml(text: &str) -> String {
@@ -2036,6 +2053,70 @@ mod tests {
         assert!(xhtml_en.contains("Published by My Press"));
         assert!(xhtml_en.contains("Edited with tWriter"));
         assert!(!xhtml_en.contains(" por Ignacio"));
+    }
+
+    #[test]
+    fn copyright_back_compat_con_derechos_reservados_solo() {
+        // Un book.json de los que ya existen en el repo: sin los campos nuevos.
+        let cfg: BookConfig = serde_json::from_str(
+            r#"{"titulo":"X","autor":"A","copyright_anio":2026,"derechos_reservados":true}"#,
+        )
+        .unwrap();
+        let xhtml = build_copyright_xhtml(&cfg);
+        assert!(xhtml.contains("Todos los derechos reservados."));
+        assert!(xhtml.contains("Esta novela es enteramente una obra de ficción."));
+        assert!(!xhtml.contains("inteligencia artificial"));
+    }
+
+    #[test]
+    fn copyright_permite_apagar_solo_el_inciso_de_ficcion() {
+        let cfg: BookConfig = serde_json::from_str(
+            r#"{"titulo":"X","derechos_reservados":true,"obra_de_ficcion":false}"#,
+        )
+        .unwrap();
+        let xhtml = build_copyright_xhtml(&cfg);
+        assert!(xhtml.contains("Todos los derechos reservados."));
+        assert!(!xhtml.contains("obra de ficción"));
+    }
+
+    #[test]
+    fn copyright_suma_la_nota_de_ia_cuando_esta_prendida() {
+        let cfg: BookConfig =
+            serde_json::from_str(r#"{"titulo":"X","nota_ia":true}"#).unwrap();
+        let xhtml = build_copyright_xhtml(&cfg);
+        assert!(xhtml.contains(
+            "Las imágenes de esta obra fueron generadas con inteligencia artificial."
+        ));
+        assert!(xhtml.contains("El texto es obra exclusiva del autor."));
+    }
+
+    #[test]
+    fn copyright_nota_de_ia_en_ingles() {
+        let cfg: BookConfig =
+            serde_json::from_str(r#"{"titulo":"X","idioma":"en","nota_ia":true}"#).unwrap();
+        let xhtml = build_copyright_xhtml(&cfg);
+        assert!(xhtml.contains("The images in this work were generated with artificial intelligence."));
+    }
+
+    #[test]
+    fn copyright_usa_el_texto_editado_en_vez_del_default() {
+        let cfg: BookConfig = serde_json::from_str(
+            r#"{"titulo":"X","nota_ia":true,"textos_legales":{"ia":"Las tapas las hizo una máquina."}}"#,
+        )
+        .unwrap();
+        let xhtml = build_copyright_xhtml(&cfg);
+        assert!(xhtml.contains("Las tapas las hizo una máquina."));
+        assert!(!xhtml.contains("inteligencia artificial"));
+    }
+
+    #[test]
+    fn copyright_ignora_un_texto_editado_de_un_inciso_apagado() {
+        let cfg: BookConfig = serde_json::from_str(
+            r#"{"titulo":"X","derechos_reservados":false,"textos_legales":{"reserva":"No copiar."}}"#,
+        )
+        .unwrap();
+        let xhtml = build_copyright_xhtml(&cfg);
+        assert!(!xhtml.contains("No copiar."));
     }
 
     #[test]

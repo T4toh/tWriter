@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -131,6 +132,20 @@ pub struct BookConfig {
     pub copyright_anio: Option<u32>,
     #[serde(default)]
     pub derechos_reservados: Option<bool>,
+    /// Inciso "obra de ficción" de la página legal. Si está ausente hereda
+    /// `derechos_reservados`, que es lo que lo prendía antes de que los
+    /// incisos se separaran — así los book.json viejos exportan igual.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub obra_de_ficcion: Option<bool>,
+    /// Inciso que aclara que la IA se usó solo para generar imágenes y que
+    /// el texto es del autor. Default: apagado.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nota_ia: Option<bool>,
+    /// Redacción propia por inciso, con las claves "reserva", "ficcion" e
+    /// "ia". Solo se guarda lo que el autor haya editado; lo que falta usa
+    /// el texto default del idioma del libro.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub textos_legales: Option<BTreeMap<String, String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dedicatoria: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
