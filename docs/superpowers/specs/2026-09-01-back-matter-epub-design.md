@@ -171,7 +171,13 @@ editoriales.
 
 `body.otros-libros-body` se suma a la regla de fuentes editoriales de
 `epub.rs:155`, y `.otros-libros h1` a la de `epub.rs:170`. Así hereda lo mismo
-que la portadilla, el copyright, la dedicatoria y el TOC, sin CSS por tema.
+que la portadilla, el copyright, la dedicatoria y el TOC.
+
+**No se agrega ninguna tipografía ni ningún control nuevo al theme editor.** La
+página usa la fuente editorial del tema y punto. Lo único que queda para el que
+alguna vez la quiera distinta son las clases propias (`otros-libros`,
+`libro-titulo`, `libro-subtitulo`, `toc-editorial`), que un tema futuro podría
+apuntar sin tocar el builder.
 
 ## Índice
 
