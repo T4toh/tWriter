@@ -734,7 +734,13 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             None => None,
         };
 
-        let qr_filename = match crate::book_config::resolver_imagen(&root_dir, perfil.qr.as_deref())
+        // El QR solo tiene sentido junto a la web: el builder no lo referencia
+        // sin `web`, así que embeberlo igual dejaría un recurso colgado en el
+        // manifest. Misma condición que usa build_about_author_xhtml.
+        let hay_web = perfil.web.as_deref().map(str::trim).is_some_and(|s| !s.is_empty());
+        let qr_filename = match hay_web
+            .then(|| crate::book_config::resolver_imagen(&root_dir, perfil.qr.as_deref()))
+            .flatten()
         {
             Some(origen) => embebido_reescalado(
                 &origen,
@@ -2450,6 +2456,59 @@ mod tests {
             String::from_utf8(entries.get("OEBPS/8_about_author.xhtml").unwrap().clone()).unwrap();
         assert!(page.contains("La del libro."));
         assert!(!page.contains("La global."));
+    }
+
+    #[test]
+    fn about_author_foto_usa_la_del_perfil_cuando_el_libro_no_tiene() {
+        let (root, book) = repo_con_publicados();
+        std::fs::write(root.join("autor.json"), r#"{"bio":{"es":"x"},"foto":"autor.png"}"#).unwrap();
+        let foto = ::image::RgbImage::from_pixel(120, 120, ::image::Rgb([10, 10, 10]));
+        ::image::DynamicImage::ImageRgb8(foto).save(root.join("autor.png")).unwrap();
+
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let bytes = entries.get("OEBPS/author.png").expect("no se embebió la foto del perfil");
+        let ancho = ::image::load_from_memory(bytes).unwrap().width();
+        assert_eq!(ancho, 120, "tiene que ser la foto del perfil (120px), no otra");
+    }
+
+    #[test]
+    fn about_author_foto_del_libro_pisa_la_del_perfil() {
+        let (root, book) = repo_con_publicados();
+        std::fs::write(root.join("autor.json"), r#"{"bio":{"es":"x"},"foto":"autor.png"}"#).unwrap();
+        let foto_perfil = ::image::RgbImage::from_pixel(120, 120, ::image::Rgb([10, 10, 10]));
+        ::image::DynamicImage::ImageRgb8(foto_perfil).save(root.join("autor.png")).unwrap();
+
+        std::fs::write(
+            book.join("book.json"),
+            r#"{"titulo":"Actual","foto_autor":"libro.png"}"#,
+        )
+        .unwrap();
+        let foto_libro = ::image::RgbImage::from_pixel(200, 200, ::image::Rgb([10, 10, 10]));
+        ::image::DynamicImage::ImageRgb8(foto_libro).save(book.join("libro.png")).unwrap();
+
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let bytes = entries.get("OEBPS/author.png").expect("no se embebió la foto");
+        let ancho = ::image::load_from_memory(bytes).unwrap().width();
+        assert_eq!(ancho, 200, "tiene que ser la foto del libro (200px), que pisa a la del perfil");
+    }
+
+    #[test]
+    fn about_author_sin_web_no_embebe_el_qr() {
+        let (root, book) = repo_con_publicados();
+        std::fs::write(root.join("autor.json"), r#"{"bio":{"es":"x"},"qr":"qr.png"}"#).unwrap();
+        let qr = ::image::RgbImage::from_pixel(120, 120, ::image::Rgb([0, 0, 0]));
+        ::image::DynamicImage::ImageRgb8(qr).save(root.join("qr.png")).unwrap();
+
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        assert!(
+            !entries.contains_key("OEBPS/author-qr.png"),
+            "sin web no hay a dónde apuntar, no se debería embeber el QR"
+        );
+        let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
+        assert!(!opf.contains("author-qr"), "el manifest no debería declarar un QR huérfano");
     }
 
     #[test]
