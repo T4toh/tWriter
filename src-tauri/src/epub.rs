@@ -788,31 +788,36 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         });
     }
 
-    // 5b) Back cover (si hay imagen)
+    // 5b) Back cover (si hay imagen). Reescalada por el mismo motivo que la
+    // tapa: sale del mismo repo, a la misma resolución de imprenta.
     if let Some(back_rel) = &cfg.contratapa {
-        if let Some((bc_filename, bc_mime)) =
-            embed_image(&book_dir, back_rel, "back-cover", &mut zip, opts)?
-        {
-            spine_idx += 1;
-            items.push(Item {
-                id: "back-cover-image".into(),
-                href: bc_filename.clone(),
-                media_type: bc_mime,
-                spine_order: None,
-
-                properties: None,
-            });
-            let xhtml = build_back_cover_xhtml(&bc_filename);
-            zip.start_file("OEBPS/9_back_cover.xhtml", opts).map_err(|e| e.to_string())?;
-            zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
-            items.push(Item {
-                id: "back-cover".into(),
-                href: "9_back_cover.xhtml".into(),
-                media_type: "application/xhtml+xml".into(),
-                spine_order: Some(spine_idx),
-
-                properties: None,
-            });
+        let origen = {
+            let p = Path::new(back_rel);
+            if p.is_absolute() { p.to_path_buf() } else { book_dir.join(p) }
+        };
+        if origen.is_file() {
+            if let Some(bc_filename) = embebido_reescalado(
+                &origen,
+                "back-cover",
+                1600,
+                false,
+                &mut zip,
+                opts,
+                &mut items,
+                "back-cover-image",
+            )? {
+                spine_idx += 1;
+                let xhtml = build_back_cover_xhtml(&bc_filename);
+                zip.start_file("OEBPS/9_back_cover.xhtml", opts).map_err(|e| e.to_string())?;
+                zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
+                items.push(Item {
+                    id: "back-cover".into(),
+                    href: "9_back_cover.xhtml".into(),
+                    media_type: "application/xhtml+xml".into(),
+                    spine_order: Some(spine_idx),
+                    properties: None,
+                });
+            }
         }
     }
 
@@ -2889,6 +2894,40 @@ mod tests {
         // El XHTML de la portada tiene que apuntar al nombre real del archivo.
         let cover_page = String::from_utf8(entries.get("OEBPS/0_cover.xhtml").unwrap().clone()).unwrap();
         assert!(cover_page.contains(nombre.trim_start_matches("OEBPS/")));
+    }
+
+    #[test]
+    fn la_contratapa_del_libro_se_reescala_antes_de_embeberse() {
+        let tmp = tempdir();
+        let book = tmp.join("book");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        std::fs::write(
+            book.join("book.json"),
+            r#"{"titulo":"Grande","contratapa":"back.png"}"#,
+        )
+        .unwrap();
+        std::fs::write(book.join("Cap1").join("1.html"), "<p>x</p>").unwrap();
+        let grande = ::image::RgbImage::from_pixel(3000, 4500, ::image::Rgb([9, 9, 9]));
+        ::image::DynamicImage::ImageRgb8(grande).save(book.join("back.png")).unwrap();
+
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let (nombre, bytes) = entries
+            .iter()
+            .find(|(k, _)| k.starts_with("OEBPS/back-cover."))
+            .expect("no está la contratapa");
+        // El peso solo no discrimina (un PNG de color plano comprime a poco
+        // esté reescalado o no); lo que prueba el reescalado es el ancho
+        // decodificado.
+        let img = ::image::load_from_memory(bytes).unwrap();
+        assert_eq!(img.width(), 1600);
+        // La contratapa no es portada: no lleva properties="cover-image".
+        let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
+        assert!(!opf.contains(r#"properties="cover-image""#));
+        // El XHTML de la contratapa tiene que apuntar al nombre real del archivo.
+        let back_cover_page =
+            String::from_utf8(entries.get("OEBPS/9_back_cover.xhtml").unwrap().clone()).unwrap();
+        assert!(back_cover_page.contains(nombre.trim_start_matches("OEBPS/")));
     }
 
     #[test]
