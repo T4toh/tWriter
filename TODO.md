@@ -1524,6 +1524,14 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   (reserva de derechos, "obra de ficción / personajes ficticios",
   prohibición de reproducción, etc.) elegibles al armar la página legal,
   bilingües como el copyright.
+- **Nota de uso de IA en la página legal** (pedido del autor, 2026-09-01): inciso
+  opcional que declare que la IA se usó **solo para generar imágenes** — el texto
+  lo escribe el autor. Va como una cláusula más del item de arriba (bilingüe
+  ES/EN, elegible al armar la página legal), no como texto fijo: hay libros sin
+  imágenes generadas. Redacción tipo "Las imágenes de esta obra fueron generadas
+  con inteligencia artificial. El texto es obra exclusiva del autor." / "The
+  images in this work were generated with artificial intelligence. The text is
+  the sole work of the author."
 - [x] **Las rutas de imagen se guardan absolutas y no sobreviven el cambio de PC**
   (encontrado el 2026-09-01 verificando el mazo de tapas: en esta Mac los 4
   libros de Meridian 2.0 mostraban placeholder). `book-config-modal.ts:216`
