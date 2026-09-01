@@ -1565,9 +1565,12 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   no vaya al EPUB, pero es lo que el autor copia y pega al publicar, así que
   tener dónde escribirla ya justifica el campo.
 
-  **Abierto**: si son bilingües. Milky Way está en inglés, así que si hay blurb
-  en los dos idiomas el campo es un mapa por idioma como `bio` de `autor.json`,
-  no un string suelto. Preguntar antes de implementar.
+  **Son bilingües** (confirmado por el autor, 2026-09-01), así que blurb y
+  sinopsis van como mapa por idioma —`{"es": "...", "en": "..."}`— igual que
+  `bio` en `autor.json`, y no como string suelto. El que se emite lo elige el
+  `idioma` del libro, con caída al otro idioma si falta, que es exactamente lo
+  que ya hace `AutorConfig::bio_en`: reusar esa función en vez de escribir la
+  misma resolución por tercera vez.
 
 - **Sacar el autor del libro: hoy vive en tres lugares** (pedido del autor,
   2026-09-01). Después del back matter, el nombre del autor está en `book.json`
