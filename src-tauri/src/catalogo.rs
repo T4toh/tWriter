@@ -8,7 +8,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::book_config::BookConfig;
+use crate::book_config::{resolver_imagen, BookConfig};
 use crate::saga_config::SagaConfig;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -84,11 +84,7 @@ fn publicados_de(saga_dir: &Path, actual: &Path) -> Vec<LibroPublicado> {
         let Some(link) = cfg.link.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
             continue;
         };
-        let tapa = cfg
-            .tapa
-            .as_deref()
-            .map(|rel| resolver(&libro_dir, rel))
-            .filter(|p| p.is_file());
+        let tapa = resolver_imagen(&libro_dir, cfg.tapa.as_deref());
         let libro = LibroPublicado {
             titulo: cfg.titulo.clone(),
             subtitulo: cfg.subtitulo.clone().filter(|s| !s.trim().is_empty()),
@@ -111,15 +107,6 @@ fn nombre_de_saga(saga_dir: &Path) -> Option<String> {
     let raw = fs::read_to_string(saga_dir.join("saga.json")).ok()?;
     let cfg: SagaConfig = serde_json::from_str(&raw).ok()?;
     Some(cfg.nombre).filter(|n| !n.trim().is_empty())
-}
-
-fn resolver(base: &Path, rel: &str) -> PathBuf {
-    let p = Path::new(rel);
-    if p.is_absolute() {
-        p.to_path_buf()
-    } else {
-        base.join(p)
-    }
 }
 
 /// `canonicalize` falla si el path no existe; en ese caso el path tal cual

@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::book_config::resolver_imagen;
+use crate::book_config::{find_named_image, resolver_imagen};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct AutorConfig {
@@ -33,7 +33,6 @@ pub struct AutorConfig {
 /// `book_config::find_author_photo_in` para la foto per-libro.
 const FOTO_STEMS: &[&str] = &["autor", "author"];
 const QR_STEMS: &[&str] = &["qr"];
-const EXTS: &[&str] = &["png", "jpg", "jpeg", "webp"];
 
 impl AutorConfig {
     /// Bio del idioma pedido; si no está, la de cualquier otro idioma
@@ -69,15 +68,7 @@ pub fn escribir(root: &Path, cfg: &AutorConfig) -> Result<(), String> {
 }
 
 fn buscar(root: &Path, stems: &[&str]) -> Option<String> {
-    for stem in stems {
-        for ext in EXTS {
-            let nombre = format!("{}.{}", stem, ext);
-            if root.join(&nombre).is_file() {
-                return Some(nombre);
-            }
-        }
-    }
-    None
+    stems.iter().find_map(|s| find_named_image(root, s))
 }
 
 #[tauri::command]

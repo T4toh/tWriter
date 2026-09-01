@@ -722,15 +722,8 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     let bio = bio_libro.or_else(|| perfil.bio_en(cfg.idioma.as_deref().unwrap_or("es")));
     if let Some(bio) = bio {
         // Foto: la del libro gana; si no, la del perfil global.
-        let foto_origen = cfg
-            .foto_autor
-            .as_deref()
-            .map(|rel| {
-                let p = std::path::Path::new(rel);
-                if p.is_absolute() { p.to_path_buf() } else { book_dir.join(p) }
-            })
-            .filter(|p| p.is_file())
-            .or_else(|| crate::book_config::resolver_imagen(&root_dir, perfil.foto.as_deref()));
+        let foto_origen = resolver_imagen(&book_dir, cfg.foto_autor.as_deref())
+            .or_else(|| resolver_imagen(&root_dir, perfil.foto.as_deref()));
 
         let foto_filename = match foto_origen {
             Some(origen) => embebido_reescalado(

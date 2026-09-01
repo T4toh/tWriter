@@ -106,7 +106,7 @@ pub fn adopt_config_image(
     adopt_image(Path::new(&dir_path), Path::new(&source_path), &stem)
 }
 
-fn find_named_image(dir: &Path, stem: &str) -> Option<String> {
+pub(crate) fn find_named_image(dir: &Path, stem: &str) -> Option<String> {
     for ext in COVER_EXTS {
         let candidate = dir.join(format!("{}.{}", stem, ext));
         if candidate.is_file() {
