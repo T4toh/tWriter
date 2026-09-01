@@ -422,8 +422,8 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             &mut avisos,
         )? {
             // `embebido_reescalado` no sabe de `properties`; se la ponemos acá.
-            // `last_mut` alcanza: acaba de pushear justo ese item, es el
-            // primero de la lista (la tapa va antes que cualquier otro item).
+            // `last_mut` alcanza: el item de la tapa es el que `embebido_reescalado`
+            // acaba de pushear a `items`, así que siempre es el último.
             if let Some(it) = items.last_mut() {
                 it.properties = Some("cover-image".into());
             }
