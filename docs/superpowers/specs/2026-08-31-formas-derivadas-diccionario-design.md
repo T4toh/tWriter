@@ -126,9 +126,9 @@ export interface LemmaCandidate {
 }
 
 export interface DictLookup {
-  /** Grafía exacta, comparada en minúsculas. */
-  has(word: string): boolean;
-  /** Sin diacríticos y en minúsculas. Devuelve la forma canónica o null. */
+  /** Canónica si la grafía coincide exacto, comparando en minúsculas. */
+  exactGet(word: string): string | null;
+  /** Canónica ignorando diacríticos. Solo se consulta después de pelar algo. */
   foldedGet(word: string): string | null;
 }
 ```
@@ -282,15 +282,21 @@ Se prueba por sufijo más largo primero. Primer match gana.
 | `ido` `ida` | `-er`, `-ir` | verbo |
 | `ábamos` `aban` `aba` `aste` `aron` `amos` `ás` `ó` `é` `á` `an` | `-ar` | verbo |
 | `ían` `ía` `iste` `ieron` `ió` `és` `ís` `í` `en` | `-er`, `-ir` | verbo |
-| `o` `a` (sin match previo) | el lema tal cual | adjetivo |
+| `a` (sin match previo) | el lema tal cual → adjetivo; y `lema+r` → verbo | dos candidatos |
+| `o` (sin match previo) | el lema tal cual → adjetivo; y `lema[:-1]+ar` → verbo | dos candidatos |
 
 **Stop-list**: palabras terminadas en `ción`, `sión`, `miento`, `dad`, `dades` son
 sustantivos y devuelven cero candidatos. Sin esto `teletransportación` — que está
 en el diccionario de Meridian — se ofrecería como verbo.
 
 **Ambigüedad `-o`/`-a`**: `teletransporto` (presente 1ª sg) y `telequinético`
-(adjetivo) tienen la misma forma. Se propone **adjetivo**, que es lo más frecuente
-con esa terminación en el corpus, y el radio del preview permite cambiarlo.
+(adjetivo) tienen la misma forma. Se devuelven **los dos candidatos**, con adjetivo
+primero (es lo más frecuente con esa terminación en el corpus) y el verbo
+reconstruido segundo: `castea` → `castear`, `teletransporta` → `teletransportar`,
+`teletransporto` → `teletransportar`. Importa porque las formas de 3ª persona
+terminadas en `-a` son justo las que están hoy en el diccionario de Meridian
+(`castea`, `bardea`, `teletransporta`), así que es el caso que más se va a tocar.
+El radio del preview elige entre los dos.
 
 **Caso de las formas generadas**: los verbos y adjetivos son palabras comunes, así
 que el campo de lema se prellena en minúsculas aunque la palabra marcada venga
