@@ -41,7 +41,8 @@ el back matter y todas se alimentan de datos que ya están en el repo:
   "nombre": "Ignacio Martín Arano",
   "bio": { "es": "...", "en": "..." },
   "foto": "autor.jpg",
-  "web": "https://tatoh.ar/libros"
+  "web": "https://tatoh.ar",
+  "qr": "qr.png"
 }
 ```
 
@@ -53,6 +54,43 @@ foto, igual que hace hoy `find_author_photo_in`.
 La página "Sobre el autor" usa la bio del idioma del libro; si esa falta, cae a
 la otra. Si no hay ninguna bio ni en `autor.json` ni en el libro, la página no
 se genera (comportamiento actual).
+
+### La página "Sobre el autor"
+
+Queda con tres piezas, todas opcionales:
+
+```
++--------+
+|        |   Ignacio Martín Arano
+|  foto  |   bio, uno o más párrafos
+|        |
++--------+
+                                    +-------+
+             tatoh.ar               |  QR   |
+                                    +-------+
+```
+
+- **Foto**: como hoy.
+- **Bio**: la del idioma del libro; si falta, cae a la otra. Sin ninguna bio
+  (ni en `autor.json` ni en el libro) la página no se genera, que es el
+  comportamiento actual.
+- **Web + QR**: la URL va como texto enlazado y el QR al lado, alineado a la
+  derecha, ~150 px. Si falta el QR va solo el texto; si falta la web no va
+  ninguno de los dos. El QR **también** linkea a la web, para el que lee en
+  pantalla y no puede escanearse a sí mismo.
+
+El QR se autodetecta como `qr.*` en la raíz, igual que hoy se autodetecta
+`autor.*` / `author.*` para la foto.
+
+**El QR se embebe como PNG, sin pasar por JPEG.** El recomprimido mete
+artefactos en los bordes de los módulos y hay lectores que fallan al escanear.
+Solo se reescala si viene más ancho de 600 px, y con remuestreo de vecino más
+cercano para no difuminar los bordes. No comparte camino con las tapas.
+
+Se descartó generar el QR en Rust desde el campo `web` (crate `qrcode`):
+evitaría que quede desfasado si cambia la URL, pero es una dependencia más para
+un dato que no cambia. Si algún día molesta mantenerlo a mano, el cambio es
+local a `autor.rs`.
 
 `sobre_el_autor` y `foto_autor` **siguen existiendo en `book.json` como
 override**. No hay migración: los libros que ya los tengan cargados exportan
@@ -243,7 +281,7 @@ imágenes: no hay forma de reescalar sin decoder.
 
 ### Modal "Autor" (nuevo)
 
-Nombre, bio ES, bio EN, foto y web. Se abre desde el header de la vista raíz
+Nombre, bio ES, bio EN, foto, web y QR. Se abre desde el header de la vista raíz
 del landing, que es la única pantalla que representa al repo entero y por lo
 tanto al autor. Sigue el patrón de `saga-config-modal`.
 
@@ -281,7 +319,11 @@ placeholder mudo".
   ese orden relativo a los capítulos y con `class="toc-editorial"`, y las
   mismas entradas aparecen en `toc.ncx`,
 - una página editorial que no se genera (sin dedicatoria, sin publicados)
-  tampoco deja entrada en el índice.
+  tampoco deja entrada en el índice,
+- el QR se embebe como PNG y no como JPEG, y una imagen de más de 600 px se
+  reescala mientras que una chica se copia tal cual,
+- sin `web` no se renderea ni el texto ni el QR; con `web` y sin `qr` va solo
+  el texto.
 
 `image`: reescalar una PNG grande da 400 px de ancho y menos de 100 KB.
 
