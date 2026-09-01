@@ -97,7 +97,19 @@ cabecera de `src/app/core/search-highlight.spec.ts` deja sentado ese criterio.
 - **Sin `public`** explícito en miembros de clase (es default).
 - **Return types explícitos** en métodos.
 - **`inject()`** para DI dentro de funciones/constructores, no constructor params.
-- Spanish para UI, comments y nombres de variables de dominio.
+- **Idioma de los identificadores** (medido sobre el código, no aspiracional).
+  Spanish para UI, comments y **sustantivos de dominio**; inglés para verbos y
+  mecánica de framework. La frontera es el dato: `saga`, `libro`, `capitulo`,
+  `parte`, `seccion`, `nota`, `plantilla`, `titulo`, `tapa`, `finalizada` son
+  nombres de campos de los JSON y de carpetas en disco, así que se quedan en
+  español; lo que los rodea va en inglés. De ahí que los nombres mixtos sean
+  correctos y no haya que "arreglarlos": `loadSagaFinalizada`,
+  `createCapituloHere`, `setRepeticionesExcepciones`, `sagaDirName`.
+  **Excepción conocida, no la ensanches**: las tapas están al revés — el campo
+  del JSON es `tapa` pero en TS todo es inglés (`CoverCache`, `coverDataUrl`,
+  `pickCover`, `covers`, `thumbs`). Alinear eso es un rename mecánico de
+  `landing/` + `core/cover-cache.ts` pendiente; hasta que se haga, en esa zona
+  seguir el inglés de alrededor en vez de mezclar.
 - **El remedio se da adentro de la app.** Si la app puede detectar un problema de
   entorno (daemon caído, runtime ausente, sidecar faltante, credencial vencida),
   tiene que decir **qué** pasó y dar el remedio **accionable** ahí mismo: un botón
