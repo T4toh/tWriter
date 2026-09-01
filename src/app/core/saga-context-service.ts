@@ -142,7 +142,10 @@ export class SagaContextService {
     const next = [...existing, result.value];
     try {
       await invoke('set_saga_dictionary', { sagaPath: path, words: next });
-      this.dictWords.set(next);
+      // Solo instalar la lista si seguimos en la misma saga: si el autor cambió
+      // de saga mientras el invoke estaba en vuelo, `next` es de la saga
+      // anterior y una escritura posterior la persistiría sobre la nueva.
+      if (this.sagaPath() === path) this.dictWords.set(next);
       return { ok: true };
     } catch (err) {
       return { ok: false, reason: String(err) };
@@ -169,7 +172,9 @@ export class SagaContextService {
     if (added === 0) return { ok: true, added: 0 };
     try {
       await invoke('set_saga_dictionary', { sagaPath: path, words: next });
-      this.dictWords.set(next);
+      // Misma guarda que `addToDictionary`: la lista es de `path`, no de la
+      // saga que esté activa cuando el invoke termine.
+      if (this.sagaPath() === path) this.dictWords.set(next);
       return { ok: true, added };
     } catch (err) {
       return { ok: false, added: 0, reason: String(err) };

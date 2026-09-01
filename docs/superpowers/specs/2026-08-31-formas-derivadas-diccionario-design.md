@@ -293,9 +293,10 @@ propia justificación arriba, y el costo de la forma que falta es el click que
 esta misma spec ya acepta.
 
 **Corrección 2026-09-01 (segunda)**: la tabla no contemplaba el caso en que la
-palabra **ya es el infinitivo**. `bardear`, `castear`, `Moniquear` no matchean
-ninguna regla de sufijo — ninguna termina en `-ar`/`-er`/`-ir` — ni el fallback de
-`-a`/`-o`, que pide terminación en vocal. Resultado: `inferLemma` devolvía `[]` y
+palabra **ya es el infinitivo**. Las reglas de la tabla mapean formas
+**flexionadas** de vuelta al lema, y ninguna de ellas matchea un infinitivo;
+el fallback de `-a`/`-o` tampoco, porque un infinitivo termina en `r`. Así que
+`bardear`, `castear` y `Moniquear` no matcheaban nada. Resultado: `inferLemma` devolvía `[]` y
 el botón `+ formas…` **no aparecía sobre la entrada más obvia de todas**.
 Detectado por el autor en la verificación manual, después de que seis reviews por
 tarea y la review final de rama lo dieran por bueno — todas compararon el código

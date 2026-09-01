@@ -70,6 +70,9 @@ export class DictionaryModal {
       if (!e) {
         this.newWord.set('');
         this.searchText.set('');
+        // Sin esto el panel de formas queda armado: al reabrir el modal para
+        // otra saga aparece solo, con la palabra de la saga anterior.
+        this.formasPara.set(null);
         this.confirmDelete.set(null);
       }
     });

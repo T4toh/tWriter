@@ -134,6 +134,10 @@ export class DictionaryService {
     }
     try {
       await invoke('set_saga_dictionary', { sagaPath: editing.path, words: next });
+      // El modal pudo cambiar de saga mientras el invoke estaba en vuelo: sin
+      // esta guarda, la lista de la saga anterior queda mostrada — y editable —
+      // sobre la nueva.
+      if (this.editing()?.path !== editing.path) return { ok: true };
       this.words.set(next);
       this.savedAt.set(Date.now());
       // Refrescar la saga activa si coincide para que el live-filter del editor

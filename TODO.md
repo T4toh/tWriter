@@ -1139,30 +1139,84 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
     Confirma la decisión ya tomada en la sección de Búsqueda: el
     diccionario per-saga (`<saga>/diccionario.txt`) es el camino.
 
-- **Agregar un verbo al diccionario y que entren todas sus conjugaciones**
-  (pedido del autor, 2026-08-31). Hoy `<saga>/diccionario.txt` es una lista
+- [x] **Agregar un verbo al diccionario y que entren todas sus conjugaciones**
+  (pedido del autor, 2026-08-31; **verificado a mano por el autor el 2026-09-01**,
+  PR #82). Hoy `<saga>/diccionario.txt` era una lista
   plana de formas exactas: el filtro de `editor.ts:638` compara
   `word.toLowerCase()` contra el `Set`, así que agregar `teletransportar` no
   silencia `teletransportó`, `teletransportaba`, `teletransportándose` ni las
   otras ~60 formas — hay que tipearlas una por una. Es el caso de todo verbo
   inventado del worldbuilding.
-  Dos caminos, hay que elegir uno:
-  1. **Conjugador propio** (puro TS en `src/app/dictionary/`, con smoke runner
-     tipo `run-rae-smoke.mjs`): al agregar una palabra que termine en
-     `-ar/-er/-ir`, ofrecer "agregar también las conjugaciones" y escribir las
-     formas regulares (indicativo, subjuntivo, imperativo **con voseo**,
-     participio, gerundio) + enclíticos (`-se`, `-lo`, `-le`, `-me`) al
-     `diccionario.txt`. Las formas quedan visibles y editables a mano, y el
-     `merge=union` del `.gitattributes` las sincroniza sola. Irregulares: no
-     modelarlos — el 100% de los verbos inventados que aparecen (`teletransportar`)
-     son regulares; si alguno no lo es, se corrige la línea a mano.
-  2. **Prefijo/wildcard en el filtro** (`teletransport*` como entrada): diez
-     líneas en vez de un conjugador, archivo chico. Contra: el wildcard silencia
-     también typos reales que empiecen igual, y el diccionario deja de ser una
-     lista de palabras legible.
-  Nota aparte: el diccionario es per-saga y no per-idioma, así que un conjugador
-  de español no ayuda a las sagas en inglés (donde igual el problema es chico:
-  `-s/-ed/-ing`).
+  **No fue ninguno de los dos caminos que planteaba este item** (conjugador que
+  escribe todo, o wildcard de prefijo), sino un tercero que salió de medir los
+  diccionarios reales en vez de suponer. Spec:
+  `docs/superpowers/specs/2026-08-31-formas-derivadas-diccionario-design.md`.
+
+  Dos mecanismos separados, con una regla que los divide: **el generador nunca
+  escribe un plural**.
+
+  | | español | inglés |
+  |---|---|---|
+  | **Pelar al filtrar** (no escribe nada) | enclíticos, plural `-s`/`-es`/`-ces` | plural `-s` |
+  | **Generar al archivo** (preview editable) | verbos (15 formas), género de adjetivos (2) | — nada — |
+
+  Lo que cambió respecto de la premisa del item, todo medido sobre las 439
+  entradas reales y el corpus de las novelas:
+  - **Los plurales eran el 93% del dolor, no los verbos.** 39 de 42 familias del
+    diccionario son singular/plural. Por eso el plural se pela y no se genera.
+  - **Los verbos son un problema exclusivamente español**: cero verbos en las 265
+    entradas inglesas de Milky Way, y ahí el plural es `+s` mecánico sin una sola
+    excepción. La nota de "un conjugador de español no ayuda al inglés" era
+    correcta pero irrelevante: en inglés no hay nada que conjugar.
+  - **Los infinitivos casi nunca están en el diccionario** — se agrega la forma
+    que marcó LT, nunca el lema — así que el flujo infiere el lema hacia atrás
+    (`inferLemma`) y arranca desde el popover, no desde el modal.
+  - **Futuro, condicional y subjuntivo tienen 0 apariciones** en tres novelas: el
+    núcleo se recortó a 15 formas en vez de las ~60 que estimaba este item.
+  - Los irregulares **no se modelan**, como decía el item, pero el remedio no es
+    corregir la línea a mano después: el preview es tildable y se destilda la
+    forma que no existe antes de escribir.
+
+  Medición de seguridad del pelador sobre el texto completo: 3 palabras nuevas
+  silenciadas sobre 25.444 únicas, las tres plurales legítimos (`lúmenes`,
+  `Koziaras`, `naruus`). Cero falsos positivos.
+
+  Dos bugs de integración que solo aparecieron en la review de rama completa —
+  las seis reviews por tarea los dieron por buenos porque el plan especificaba el
+  código defectuoso: una sola `Intl.Collator` con `sensitivity: 'base'` servía
+  para ordenar **y** para decidir identidad, así que cada verbo `-ar` perdía en
+  silencio el pretérito 3ª sg y el imperativo voseo; y el modal escribía al
+  `diccionario.txt` de la saga del capítulo **activo**, no de la que estaba
+  editando. Un tercero lo encontró el autor probando a mano: `inferLemma` no
+  contemplaba que la palabra ya fuera el infinitivo, así que `+ formas…` no
+  aparecía sobre `bardear` ni `Moniquear`.
+
+  Limitación aceptada: un nombre propio terminado en `-ar`/`-er`/`-en`/`-an`
+  (`Brámar`, `Bastien`) también ofrece el botón y propone un verbo inexistente.
+  No hay señal para distinguirlo sin un etiquetador morfológico, y el popover
+  aparece justo sobre las palabras que LT no conoce, donde caen las dos cosas.
+  Se cancela el preview. El autor lo prefiere así: el botón es el canal para
+  verbos truchos o que el diccionario libre todavía no tiene, no la vía estándar
+  de cargar palabras.
+- **`inferLemma` no invierte los cambios ortográficos ni sirve a raíces cortas**
+  (salió de la review de CodeRabbit en el PR #82, 2026-09-01; medido, no supuesto).
+  Las formas que el generador emite con cambio ortográfico no vuelven a su lema:
+  `tranqué` → `tranquar` (no `trancar`), `pagué` → `paguar`, `leyendo` →
+  `leyendar`, `leído` → `leídar`. Y las de raíz corta no devuelven nada:
+  `pagás`, `pagó`, `pagá`, `cazó`, `cacé`, `leo`, `leí`, `leé` → `[]`, porque
+  `MIN_RAIZ_SUFIJO_CORTO = 4` corta cualquier sufijo de una o dos letras sobre
+  raíces de 3 (`pag`, `caz`, `le`). Lo mismo deja afuera los infinitivos cortos:
+  `dar`, `ser`, `ver`, `ir` → `[]`.
+  **Por qué no se arregló junto con el resto**: ese piso es lo que evita que
+  `Aedan` proponga el verbo `aedar`, así que bajarlo cambia un trade-off medido.
+  Y en la práctica no muerde: son todos verbos españoles **reales**, que LT
+  conoce, así que nunca se marcan como TYPOS ni llegan al popover. Los verbos
+  inventados del worldbuilding tienen raíces largas (`barde`, `caste`,
+  `moniqu`, `teletransport`) y son todos `-ear` regulares.
+  Si alguna vez muerde, el arreglo es agregar reglas inversas para `-yendo`,
+  `-yó`, `-yeron`, las terminaciones acentuadas y `-qué`/`-gué`/`-cé`, más una
+  aserción de ida y vuelta que recorra la salida de `generateForms` en vez de la
+  muestra de corpus que hay hoy.
 - **Detectar mayúsculas rancias en las palabras propias del autor** (pedido del
   autor, 2026-08-31): `AEdan` por `Aedan`, `YIRIel` por `Yiriel`. Hoy **nada**
   las marca, y la causa está identificada: el filtro de TYPOS de `editor.ts:638`
