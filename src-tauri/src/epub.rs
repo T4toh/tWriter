@@ -14,6 +14,10 @@ use crate::theme::{resolve_theme, FontEmbed, ResolvedTheme};
 pub struct ExportResult {
     pub epub_path: String,
     pub chapters: u32,
+    /// Problemas que no abortaron el export pero que el autor tiene que ver
+    /// (tapas que faltan, imágenes que no se pudieron procesar).
+    #[serde(default)]
+    pub avisos: Vec<String>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -152,7 +156,7 @@ fn build_theme_rules_block(theme: &ResolvedTheme) -> String {
         .filter(|s| !s.is_empty());
     if let Some(ef) = editorial_body {
         out.push_str(
-            "body.title-body, body.copyright-body, body.dedication-body, body.nav-body, body.about-author-body {\n",
+            "body.title-body, body.copyright-body, body.dedication-body, body.nav-body, body.about-author-body, body.otros-libros-body {\n",
         );
         out.push_str(&format!("  font-family: \"{}\", serif;\n", ef));
         out.push_str("}\n");
@@ -167,7 +171,7 @@ fn build_theme_rules_block(theme: &ResolvedTheme) -> String {
         // `nav ol.toc > li.toc-part > a` cuando editorial está set (mismo
         // selector pelado en specificity, gana orden de cascada).
         out.push_str(
-            "p.title-page-title, nav h1, nav ol.toc > li.toc-part > a, h1.about-author-title {\n",
+            "p.title-page-title, nav h1, nav ol.toc > li.toc-part > a, h1.about-author-title, .otros-libros h1 {\n",
         );
         out.push_str(&format!("  font-family: \"{}\", sans-serif;\n", eh));
         out.push_str("}\n");
@@ -366,6 +370,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     zip.write_all(css.as_bytes()).map_err(|e| e.to_string())?;
 
     let mut items: Vec<Item> = Vec::new();
+    let mut avisos: Vec<String> = Vec::new();
     items.push(Item {
         id: "css".into(),
         href: "style.css".into(),
@@ -640,6 +645,60 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         toc_entries.push(entry);
     }
 
+    // 5a) Otros libros del autor. El catálogo sale de escanear el root: un
+    // libro está publicado si su book.json tiene `link`.
+    let catalogo = crate::catalogo::escanear(&root_dir, &book_dir);
+    if !catalogo.misma_saga.is_empty() || !catalogo.otros.is_empty() {
+        let mut tapas: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        for (idx, libro) in catalogo
+            .misma_saga
+            .iter()
+            .chain(catalogo.otros.iter())
+            .enumerate()
+        {
+            let Some(origen) = &libro.tapa else {
+                // El libro está publicado pero su imagen no está en disco.
+                // No es motivo para abortar el export, pero sí para decirlo.
+                avisos.push(format!(
+                    "\"{}\" se listó sin tapa: no encontré la imagen al lado de su book.json",
+                    libro.titulo
+                ));
+                continue;
+            };
+            let Some(dest) = embebido_reescalado(
+                origen,
+                &format!("cat-{}", idx),
+                400,
+                false,
+                &mut zip,
+                opts,
+                &mut items,
+                &format!("cat-image-{}", idx),
+            )?
+            else {
+                avisos.push(format!(
+                    "\"{}\" se listó sin tapa: no pude procesar {}",
+                    libro.titulo,
+                    origen.display()
+                ));
+                continue;
+            };
+            tapas.insert(libro.link.clone(), dest);
+        }
+
+        spine_idx += 1;
+        let xhtml = build_otros_libros_xhtml(&cfg, &catalogo, &tapas);
+        zip.start_file("OEBPS/7_otros_libros.xhtml", opts).map_err(|e| e.to_string())?;
+        zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
+        items.push(Item {
+            id: "otros-libros".into(),
+            href: "7_otros_libros.xhtml".into(),
+            media_type: "application/xhtml+xml".into(),
+            spine_order: Some(spine_idx),
+            properties: None,
+        });
+    }
+
     // 5a-bis) Sobre el autor (si hay bio). Va después del último capítulo /
     // epílogo y antes de la contratapa.
     if cfg
@@ -776,6 +835,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     Ok(ExportResult {
         epub_path: epub_path.to_string_lossy().into_owned(),
         chapters: total_chapter_files,
+        avisos,
     })
 }
 
@@ -962,6 +1022,58 @@ fn embed_image(
         .map_err(|e| e.to_string())?;
     zip.write_all(&bytes).map_err(|e| e.to_string())?;
     Ok(Some((dest, mime.to_string())))
+}
+
+/// Lee una imagen de disco, la reescala y la mete al zip + al manifest.
+/// `nitido` usa el camino PNG sin recomprimir (QR); si no, va a JPEG.
+/// Devuelve el nombre del archivo dentro del EPUB, o None si no se pudo —
+/// nunca aborta el export por una imagen.
+#[allow(clippy::too_many_arguments)]
+fn embebido_reescalado(
+    origen: &Path,
+    stem: &str,
+    ancho_max: u32,
+    nitido: bool,
+    zip: &mut ZipWriter<File>,
+    opts: SimpleFileOptions,
+    items: &mut Vec<Item>,
+    item_id: &str,
+) -> Result<Option<String>, String> {
+    let bytes = match fs::read(origen) {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!(target: "epub", path = %origen.display(), error = %e, "no pude leer la imagen, sigo sin ella");
+            return Ok(None);
+        }
+    };
+    let procesada = if nitido {
+        crate::image::reescalar_png_nitido(&bytes, ancho_max)
+    } else {
+        crate::image::reescalar_jpeg(&bytes, ancho_max)
+    };
+    let procesada = match procesada {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!(target: "epub", path = %origen.display(), error = %e, "no pude procesar la imagen, sigo sin ella");
+            return Ok(None);
+        }
+    };
+    let es_png = procesada.len() >= 4 && &procesada[1..4] == b"PNG";
+    let (dest, mime) = if es_png {
+        (format!("{}.png", stem), "image/png")
+    } else {
+        (format!("{}.jpg", stem), "image/jpeg")
+    };
+    zip.start_file(format!("OEBPS/{}", dest), opts).map_err(|e| e.to_string())?;
+    zip.write_all(&procesada).map_err(|e| e.to_string())?;
+    items.push(Item {
+        id: item_id.to_string(),
+        href: dest.clone(),
+        media_type: mime.into(),
+        spine_order: None,
+        properties: None,
+    });
+    Ok(Some(dest))
 }
 
 // ───────── XHTML builders ─────────
@@ -1156,6 +1268,67 @@ fn build_about_author_xhtml(cfg: &BookConfig, photo_filename: Option<&str>) -> S
         bio_paragraphs,
     );
     xhtml_shell(heading, &body, lang, "about-author-body")
+}
+
+/// Página "Otros libros": los publicados de la misma saga y los del resto.
+/// `tapas` mapea el link de cada libro al nombre del archivo de su
+/// miniatura ya embebida en el EPUB; un libro sin entrada va sin imagen.
+fn build_otros_libros_xhtml(
+    cfg: &BookConfig,
+    cat: &crate::catalogo::Catalogo,
+    tapas: &std::collections::HashMap<String, String>,
+) -> String {
+    let lang = cfg.idioma.as_deref().unwrap_or("es");
+    let is_en = lang == "en";
+    let heading = if is_en { "Also by the Author" } else { "Otros libros" };
+
+    let bloque = |titulo: &str, libros: &[crate::catalogo::LibroPublicado]| -> String {
+        if libros.is_empty() {
+            return String::new();
+        }
+        let mut s = format!("<h2>{}</h2>\n<ul class=\"libro-list\">\n", xml_escape(titulo));
+        for l in libros {
+            s.push_str("<li class=\"libro\">");
+            if let Some(archivo) = tapas.get(&l.link) {
+                s.push_str(&format!(
+                    r#"<a href="{}"><img class="libro-tapa" src="{}" alt=""/></a>"#,
+                    xml_escape(&l.link),
+                    xml_escape(archivo)
+                ));
+            }
+            s.push_str(&format!(
+                "<p class=\"libro-titulo\"><a href=\"{}\">{}</a></p>",
+                xml_escape(&l.link),
+                xml_escape(&l.titulo)
+            ));
+            if let Some(sub) = &l.subtitulo {
+                s.push_str(&format!("<p class=\"libro-subtitulo\">{}</p>", xml_escape(sub)));
+            }
+            s.push_str("</li>\n");
+        }
+        s.push_str("</ul>\n");
+        s
+    };
+
+    let titulo_saga = match (&cat.saga_actual, is_en) {
+        (Some(n), false) => format!("Más de {}", n),
+        (Some(n), true) => format!("More from {}", n),
+        (None, false) => "Más de esta serie".to_string(),
+        (None, true) => "More from This Series".to_string(),
+    };
+    let titulo_otros = if is_en {
+        "Other Books by the Author"
+    } else {
+        "Otros libros del autor"
+    };
+
+    let body = format!(
+        "<div class=\"otros-libros\">\n<h1>{}</h1>\n{}{}</div>",
+        xml_escape(heading),
+        bloque(&titulo_saga, &cat.misma_saga),
+        bloque(titulo_otros, &cat.otros),
+    );
+    xhtml_shell(heading, &body, lang, "otros-libros-body")
 }
 
 fn build_chapter_title_xhtml(title: &str, show_title: bool, prefix: Option<&str>) -> String {
@@ -1926,11 +2099,11 @@ mod tests {
         };
         let block = build_theme_rules_block(&resolved);
         assert!(block.contains(
-            "body.title-body, body.copyright-body, body.dedication-body, body.nav-body, body.about-author-body {"
+            "body.title-body, body.copyright-body, body.dedication-body, body.nav-body, body.about-author-body, body.otros-libros-body {"
         ));
         assert!(block.contains("font-family: \"Cormorant\", serif;"));
         assert!(block.contains(
-            "p.title-page-title, nav h1, nav ol.toc > li.toc-part > a, h1.about-author-title {"
+            "p.title-page-title, nav h1, nav ol.toc > li.toc-part > a, h1.about-author-title, .otros-libros h1 {"
         ));
         assert!(block.contains("font-family: \"Playfair\", sans-serif;"));
     }
@@ -2262,6 +2435,156 @@ mod tests {
         // Sin fuentes embebidas: no se declara el namespace ibooks ni el meta.
         assert!(!opf.contains("ibooks:specified-fonts"));
         assert!(!opf.contains("vocabulary.itunes.apple.com"));
+    }
+
+    /// Arma un repo mínimo: root con dos sagas, y devuelve el path del libro
+    /// que se va a exportar (que tiene un capítulo).
+    fn repo_con_publicados() -> (std::path::PathBuf, std::path::PathBuf) {
+        let root = tempdir();
+        let saga = root.join("1 - Meridian");
+        let otra = root.join("2 - Buenos Aires");
+        std::fs::create_dir_all(&saga).unwrap();
+        std::fs::create_dir_all(&otra).unwrap();
+        std::fs::write(saga.join("saga.json"), r#"{"nombre":"Meridian"}"#).unwrap();
+        std::fs::write(otra.join("saga.json"), r#"{"nombre":"Buenos Aires 2077"}"#).unwrap();
+
+        let book = saga.join("1 - Actual");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        std::fs::write(book.join("book.json"), r#"{"titulo":"Actual"}"#).unwrap();
+        std::fs::write(book.join("Cap1").join("1.html"), "<p>x</p>").unwrap();
+
+        let hermano = saga.join("2 - Hermano");
+        std::fs::create_dir_all(&hermano).unwrap();
+        std::fs::write(
+            hermano.join("book.json"),
+            r#"{"titulo":"Hermano","subtitulo":"Meridian #2","link":"https://tatoh.ar/libros/hermano","numero_en_serie":2}"#,
+        )
+        .unwrap();
+
+        let ajeno = otra.join("1 - Luces");
+        std::fs::create_dir_all(&ajeno).unwrap();
+        std::fs::write(
+            ajeno.join("book.json"),
+            r#"{"titulo":"Luces","link":"https://tatoh.ar/libros/luces"}"#,
+        )
+        .unwrap();
+
+        (root, book)
+    }
+
+    #[test]
+    fn export_impl_genera_la_pagina_de_otros_libros_con_los_dos_bloques() {
+        let (_root, book) = repo_con_publicados();
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let page = String::from_utf8(entries.get("OEBPS/7_otros_libros.xhtml").unwrap().clone()).unwrap();
+        assert!(page.contains("Más de Meridian"));
+        assert!(page.contains("Otros libros del autor"));
+        assert!(page.contains("https://tatoh.ar/libros/hermano"));
+        assert!(page.contains("https://tatoh.ar/libros/luces"));
+        assert!(page.contains("Meridian #2"));
+        // El libro que se exporta no se lista a sí mismo.
+        assert!(!page.contains(">Actual<"));
+        let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
+        assert!(opf.contains(r#"id="otros-libros""#));
+    }
+
+    #[test]
+    fn export_impl_omite_la_pagina_cuando_no_hay_publicados() {
+        let tmp = tempdir();
+        let book = tmp.join("book");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        std::fs::write(book.join("book.json"), r#"{"titulo":"Solo"}"#).unwrap();
+        std::fs::write(book.join("Cap1").join("1.html"), "<p>x</p>").unwrap();
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        assert!(!entries.contains_key("OEBPS/7_otros_libros.xhtml"));
+    }
+
+    #[test]
+    fn otros_libros_omite_el_bloque_de_saga_cuando_esta_vacio() {
+        let cat = crate::catalogo::Catalogo {
+            misma_saga: Vec::new(),
+            otros: vec![crate::catalogo::LibroPublicado {
+                titulo: "Luces".into(),
+                subtitulo: None,
+                link: "https://x/l".into(),
+                tapa: None,
+                numero_en_serie: None,
+            }],
+            saga_actual: Some("Meridian".into()),
+        };
+        let cfg = BookConfig { titulo: "X".into(), ..Default::default() };
+        let xhtml = build_otros_libros_xhtml(&cfg, &cat, &std::collections::HashMap::new());
+        assert!(!xhtml.contains("Más de Meridian"));
+        assert!(xhtml.contains("Otros libros del autor"));
+    }
+
+    #[test]
+    fn otros_libros_en_ingles() {
+        let cat = crate::catalogo::Catalogo {
+            misma_saga: vec![crate::catalogo::LibroPublicado {
+                titulo: "Deployment".into(),
+                subtitulo: None,
+                link: "https://x/d".into(),
+                tapa: None,
+                numero_en_serie: Some(1),
+            }],
+            otros: Vec::new(),
+            saga_actual: Some("Milky Way".into()),
+        };
+        let cfg = BookConfig {
+            titulo: "X".into(),
+            idioma: Some("en".into()),
+            ..Default::default()
+        };
+        let xhtml = build_otros_libros_xhtml(&cfg, &cat, &std::collections::HashMap::new());
+        assert!(xhtml.contains("More from Milky Way"));
+        assert!(xhtml.contains("<h1>Also by the Author</h1>"));
+    }
+
+    #[test]
+    fn otros_libros_embebe_la_tapa_reescalada() {
+        let (_root, book) = repo_con_publicados();
+        // Al hermano le ponemos una tapa grande de verdad.
+        let hermano = book.parent().unwrap().join("2 - Hermano");
+        let grande = ::image::RgbImage::from_pixel(2000, 3000, ::image::Rgb([10, 20, 30]));
+        ::image::DynamicImage::ImageRgb8(grande)
+            .save(hermano.join("cover.png"))
+            .unwrap();
+        std::fs::write(
+            hermano.join("book.json"),
+            r#"{"titulo":"Hermano","link":"https://tatoh.ar/libros/hermano","tapa":"cover.png","numero_en_serie":2}"#,
+        )
+        .unwrap();
+
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let miniatura = entries
+            .keys()
+            .find(|k| k.starts_with("OEBPS/cat-"))
+            .expect("no se embebió la miniatura");
+        let bytes = entries.get(miniatura).unwrap();
+        assert!(bytes.len() < 100 * 1024, "la miniatura pesa {} bytes", bytes.len());
+        let page = String::from_utf8(entries.get("OEBPS/7_otros_libros.xhtml").unwrap().clone()).unwrap();
+        assert!(page.contains("class=\"libro-tapa\""));
+    }
+
+    #[test]
+    fn el_export_avisa_cuando_un_publicado_no_tiene_tapa_en_disco() {
+        let (_root, book) = repo_con_publicados();
+        let hermano = book.parent().unwrap().join("2 - Hermano");
+        std::fs::write(
+            hermano.join("book.json"),
+            r#"{"titulo":"Hermano","link":"https://x/h","tapa":"no-existe.png"}"#,
+        )
+        .unwrap();
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        assert!(
+            result.avisos.iter().any(|a| a.contains("Hermano") && a.contains("sin tapa")),
+            "avisos: {:?}",
+            result.avisos
+        );
     }
 
     fn tempdir() -> std::path::PathBuf {

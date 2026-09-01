@@ -183,6 +183,16 @@ h1.about-author-title {
   max-width: 28em;
 }
 
+/* Otros libros: nada de flexbox ni grid — los lectores viejos los ignoran
+   y el resultado queda peor que el apilado simple con float. */
+.otros-libros h2 { margin-top: 1.6em; text-align: center; }
+ul.libro-list { list-style: none; margin: 0; padding: 0; }
+li.libro { margin: 0 0 1.4em 0; }
+li.libro:after { content: ""; display: block; clear: both; }
+img.libro-tapa { float: left; width: 25%; max-width: 110px; margin: 0 1em 0.5em 0; }
+p.libro-titulo { margin: 0; font-weight: bold; }
+p.libro-subtitulo { margin: 0.2em 0 0 0; font-size: 0.9em; }
+
 /* ─────────────────── Title page elementos ─────────────────── */
 .title-page-author {
   font-size: 1.3em;
