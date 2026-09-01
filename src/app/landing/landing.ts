@@ -1,5 +1,4 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
-import { AutorService } from '../core/autor-service';
 import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { NavigationService } from '../core/navigation-service';
@@ -10,6 +9,7 @@ import { TreeNode } from '../core/types';
 import { ModalService } from '../shared/modal-service';
 import { ContextMenuService } from '../shared/context-menu-service';
 import { NodeActionsService } from '../shared/node-actions-service';
+import { AutorCard } from './autor-card';
 import { BookCard } from './book-card';
 import { CreateCard } from './create-card';
 import { FolderCard } from './folder-card';
@@ -23,14 +23,13 @@ interface Crumb {
 
 @Component({
   selector: 'app-landing',
-  imports: [BookCard, SagaCard, SagaHeader, CreateCard, FolderCard],
+  imports: [BookCard, SagaCard, SagaHeader, CreateCard, FolderCard, AutorCard],
   templateUrl: './landing.html',
   styleUrl: './landing.scss',
 })
 export class Landing {
   private project = inject(ProjectService);
   private settings = inject(SettingsService);
-  private autorSvc = inject(AutorService);
   private chapter = inject(ChapterService);
   private nav = inject(NavigationService);
   private bookCfg = inject(BookConfigService);
@@ -128,6 +127,12 @@ export class Landing {
     return !this.sagaFinalizada();
   });
 
+  /** Vista raíz: sin nodo actual y con root elegido. Misma condición que
+   *  antes gateaba el botón "Autor…" del header — ahora gatea la card. */
+  protected readonly showAutorCard = computed<boolean>(
+    () => !this.currentNode() && !!this.root(),
+  );
+
   constructor() {
     effect(() => {
       const path = this.bookContextPath();
@@ -184,10 +189,6 @@ export class Landing {
 
   protected goCrumb(crumb: Crumb): void {
     this.nav.setBrowsing(crumb.node?.path ?? null);
-  }
-
-  protected abrirAutor(): void {
-    this.autorSvc.open();
   }
 
   protected onCardContextMenu(event: MouseEvent, node: TreeNode): void {

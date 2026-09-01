@@ -1,9 +1,3 @@
-@if (!currentNode() && root()) {
-  <div class="root-actions">
-    <button type="button" class="autor-btn" (click)="abrirAutor()">Autor…</button>
-  </div>
-}
-
 <nav class="breadcrumb">
   @for (c of crumbs(); track $index; let last = $last) {
     <button
@@ -32,12 +26,15 @@
   }
 }
 
-@if (items().length === 0 && !canCreateCapitulo() && !canCreateEpilogo() && !canCreateParte() && !canCreateBook()) {
+@if (items().length === 0 && !canCreateCapitulo() && !canCreateEpilogo() && !canCreateParte() && !canCreateBook() && !showAutorCard()) {
   <p class="empty" (contextmenu)="onEmptyContext($event)">
     Sin items todavía. Click derecho acá para crear una saga.
   </p>
 } @else {
   <div class="grid" [attr.data-mode]="items()[0]?.kind === 'book' ? 'books' : 'generic'">
+    @if (showAutorCard()) {
+      <app-autor-card />
+    }
     @for (item of items(); track item.path) {
       @if (item.kind === 'book') {
         <app-book-card

@@ -1,7 +1,8 @@
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { invoke } from '@tauri-apps/api/core';
 import { AutorConfig, AutorService } from '../core/autor-service';
+import { CoverCache } from '../core/cover-cache';
 import { NativeDialogsService } from '../core/native-dialogs-service';
 import { SettingsService } from '../core/settings-service';
 
@@ -15,11 +16,45 @@ export class AutorModal {
   private svc = inject(AutorService);
   private dialogs = inject(NativeDialogsService);
   private settings = inject(SettingsService);
+  private coverCache = inject(CoverCache);
 
   protected readonly editing = this.svc.editing;
   protected readonly config = signal<AutorConfig | null>(null);
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
+
+  /** Bump manual al reemplazar foto/QR — invalida el blob cacheado, porque
+   *  `adopt_config_image` puede cambiar la extensión del archivo (mismo
+   *  nombre relativo "autor.jpg" → "autor.png") y la cache está keyed por path. */
+  private readonly previewVersion = signal(0);
+  protected readonly fotoPreviewUrl = signal<string | null>(null);
+  protected readonly qrPreviewUrl = signal<string | null>(null);
+
+  /** Bio a mostrar en el preview: la del libro no existe acá — se muestra la
+   *  de español y, si está vacía, se cae a inglés. Mismo criterio que
+   *  `AutorConfig::bio_en` en Rust (usado por el EPUB), sin selector de idioma. */
+  protected readonly previewBio = computed<string>(() => {
+    const bio = this.config()?.bio;
+    if (!bio) return '';
+    const es = bio['es']?.trim();
+    if (es) return es;
+    return bio['en']?.trim() ?? '';
+  });
+
+  /** Un `<p>` por línea no vacía — así arma la página el EPUB
+   *  (`build_about_author_xhtml` en `epub.rs`), no como un solo bloque. */
+  protected readonly previewParrafos = computed<string[]>(() =>
+    this.previewBio()
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0),
+  );
+
+  protected readonly previewWebHost = computed<string | null>(() => {
+    const web = this.config()?.web?.trim();
+    if (!web) return null;
+    return web.replace(/^https?:\/\//, '');
+  });
 
   constructor() {
     effect(() => {
@@ -29,6 +64,37 @@ export class AutorModal {
         .then((cfg) => this.config.set(cfg))
         .catch((e) => this.error.set(String(e)));
     });
+
+    effect(() => {
+      const cfg = this.config();
+      const root = this.settings.root();
+      const version = this.previewVersion();
+      if (!cfg || !root) {
+        this.fotoPreviewUrl.set(null);
+        this.qrPreviewUrl.set(null);
+        return;
+      }
+      void this.loadPreviewImg(cfg.foto ?? null, root, version, this.fotoPreviewUrl);
+      void this.loadPreviewImg(cfg.qr ?? null, root, version, this.qrPreviewUrl);
+    });
+  }
+
+  private async loadPreviewImg(
+    nombre: string | null | undefined,
+    root: string,
+    version: number,
+    target: WritableSignal<string | null>,
+  ): Promise<void> {
+    if (!nombre || !nombre.trim()) {
+      target.set(null);
+      return;
+    }
+    const fullPath = nombre.startsWith('/') ? nombre : `${root}/${nombre}`;
+    try {
+      target.set(await this.coverCache.urlFor(fullPath, version));
+    } catch {
+      target.set(null);
+    }
   }
 
   protected update<K extends keyof AutorConfig>(key: K, value: AutorConfig[K]): void {
@@ -75,6 +141,7 @@ export class AutorModal {
         stem,
       });
       this.update(campo, rel);
+      this.previewVersion.update((v) => v + 1);
     } catch (e) {
       this.error.set(`No pude copiar la imagen: ${e}`);
     }

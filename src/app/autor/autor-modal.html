@@ -3,48 +3,77 @@
   <div class="modal" role="dialog" aria-label="Perfil del autor">
     <h2>Autor</h2>
     @if (config(); as c) {
-      <label class="field">
-        <span>Nombre</span>
-        <input type="text" [ngModel]="c.nombre" (ngModelChange)="update('nombre', $event)" />
-      </label>
+      <div class="split">
+        <div class="form-col">
+          <label class="field">
+            <span>Nombre</span>
+            <input type="text" [ngModel]="c.nombre" (ngModelChange)="update('nombre', $event)" />
+          </label>
 
-      <label class="field">
-        <span>Bio en español</span>
-        <textarea rows="5" [ngModel]="bio('es')" (ngModelChange)="setBio('es', $event)"></textarea>
-      </label>
+          <label class="field">
+            <span>Bio en español</span>
+            <textarea rows="5" [ngModel]="bio('es')" (ngModelChange)="setBio('es', $event)"></textarea>
+          </label>
 
-      <label class="field">
-        <span>Bio en inglés</span>
-        <textarea rows="5" [ngModel]="bio('en')" (ngModelChange)="setBio('en', $event)"></textarea>
-      </label>
+          <label class="field">
+            <span>Bio en inglés</span>
+            <textarea rows="5" [ngModel]="bio('en')" (ngModelChange)="setBio('en', $event)"></textarea>
+          </label>
 
-      <label class="field">
-        <span>Web</span>
-        <input
-          type="url"
-          placeholder="https://tatoh.ar"
-          [ngModel]="c.web"
-          (ngModelChange)="update('web', $event)"
-        />
-      </label>
+          <label class="field">
+            <span>Web</span>
+            <input
+              type="url"
+              placeholder="https://tatoh.ar"
+              [ngModel]="c.web"
+              (ngModelChange)="update('web', $event)"
+            />
+          </label>
 
-      <div class="field">
-        <span>Foto</span>
-        <div class="picker">
-          <span class="path">{{ c.foto || 'sin foto' }}</span>
-          <button type="button" (click)="pickFoto()">Elegir…</button>
+          <div class="field">
+            <span>Foto</span>
+            <div class="picker">
+              <span class="path">{{ c.foto || 'sin foto' }}</span>
+              <button type="button" (click)="pickFoto()">Elegir…</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <span>QR de la web</span>
+            <div class="picker">
+              <span class="path">{{ c.qr || 'sin QR' }}</span>
+              <button type="button" (click)="pickQr()">Elegir…</button>
+            </div>
+            <small class="hint">
+              Va al final del EPUB, al lado de la dirección de tu web.
+            </small>
+          </div>
         </div>
-      </div>
 
-      <div class="field">
-        <span>QR de la web</span>
-        <div class="picker">
-          <span class="path">{{ c.qr || 'sin QR' }}</span>
-          <button type="button" (click)="pickQr()">Elegir…</button>
-        </div>
-        <small class="hint">
-          Va al final del EPUB, al lado de la dirección de tu web.
-        </small>
+        <section class="preview-col">
+          <span class="preview-label">Vista previa — página "Sobre el autor"</span>
+          <div class="preview-page">
+            @if (fotoPreviewUrl(); as url) {
+              <img class="preview-photo" [src]="url" [alt]="c.nombre || 'Autor'" />
+            }
+            <h1 class="preview-heading">Sobre el autor</h1>
+            <div class="preview-bio">
+              @for (p of previewParrafos(); track $index) {
+                <p>{{ p }}</p>
+              } @empty {
+                <p class="preview-empty">Sin bio todavía.</p>
+              }
+            </div>
+            @if (previewWebHost(); as host) {
+              <div class="preview-web">
+                @if (qrPreviewUrl(); as qrUrl) {
+                  <img class="preview-qr" [src]="qrUrl" alt="" />
+                }
+                <p class="preview-web-url">{{ host }}</p>
+              </div>
+            }
+          </div>
+        </section>
       </div>
     }
 
