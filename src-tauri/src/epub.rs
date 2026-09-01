@@ -1081,41 +1081,6 @@ fn collect_html_parts(dir: &Path) -> Result<Vec<PathBuf>, String> {
 
 // ───────── Imágenes (cover / back-cover) ─────────
 
-fn embed_image(
-    book_dir: &Path,
-    image_rel: &str,
-    dest_stem: &str,
-    zip: &mut ZipWriter<File>,
-    opts: SimpleFileOptions,
-) -> Result<Option<(String, String)>, String> {
-    let candidate = if Path::new(image_rel).is_absolute() {
-        PathBuf::from(image_rel)
-    } else {
-        book_dir.join(image_rel)
-    };
-    if !candidate.is_file() {
-        return Ok(None);
-    }
-    let ext = candidate
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|s| s.to_lowercase())
-        .unwrap_or_default();
-    let (mime, dest_ext) = match ext.as_str() {
-        "png" => ("image/png", "png"),
-        "jpg" | "jpeg" => ("image/jpeg", "jpg"),
-        "webp" => ("image/webp", "webp"),
-        "gif" => ("image/gif", "gif"),
-        _ => return Ok(None),
-    };
-    let bytes = fs::read(&candidate).map_err(|e| e.to_string())?;
-    let dest = format!("{}.{}", dest_stem, dest_ext);
-    zip.start_file(format!("OEBPS/{}", dest), opts)
-        .map_err(|e| e.to_string())?;
-    zip.write_all(&bytes).map_err(|e| e.to_string())?;
-    Ok(Some((dest, mime.to_string())))
-}
-
 /// Lee una imagen de disco, la reescala y la mete al zip + al manifest.
 /// `nitido` usa el camino PNG sin recomprimir (QR); si no, va a JPEG.
 /// Devuelve el nombre del archivo dentro del EPUB, o None si no se pudo —
