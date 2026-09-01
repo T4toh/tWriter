@@ -420,6 +420,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             opts,
             &mut items,
             "cover-image",
+            &mut avisos,
         )? {
             // `embebido_reescalado` no sabe de `properties`; se la ponemos acá.
             if let Some(it) = items.iter_mut().find(|i| i.id == "cover-image") {
@@ -684,13 +685,9 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
                 opts,
                 &mut items,
                 &format!("cat-image-{}", idx),
+                &mut avisos,
             )?
             else {
-                avisos.push(format!(
-                    "\"{}\" se listó sin tapa: no pude procesar {}",
-                    libro.titulo,
-                    origen.display()
-                ));
                 continue;
             };
             tapas.insert(libro.link.clone(), dest);
@@ -740,6 +737,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
                 opts,
                 &mut items,
                 "author-image",
+                &mut avisos,
             )?,
             None => None,
         };
@@ -761,6 +759,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
                 opts,
                 &mut items,
                 "author-qr-image",
+                &mut avisos,
             )?,
             None => None,
         };
@@ -796,6 +795,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
             opts,
             &mut items,
             "back-cover-image",
+            &mut avisos,
         )? {
             spine_idx += 1;
             let xhtml = build_back_cover_xhtml(&bc_filename);
@@ -1085,11 +1085,13 @@ fn embebido_reescalado(
     opts: SimpleFileOptions,
     items: &mut Vec<Item>,
     item_id: &str,
+    avisos: &mut Vec<String>,
 ) -> Result<Option<String>, String> {
     let bytes = match fs::read(origen) {
         Ok(b) => b,
         Err(e) => {
             tracing::warn!(target: "epub", path = %origen.display(), error = %e, "no pude leer la imagen, sigo sin ella");
+            avisos.push(format!("No pude leer la imagen \"{}\": {}", origen.display(), e));
             return Ok(None);
         }
     };
@@ -1102,6 +1104,7 @@ fn embebido_reescalado(
         Ok(b) => b,
         Err(e) => {
             tracing::warn!(target: "epub", path = %origen.display(), error = %e, "no pude procesar la imagen, sigo sin ella");
+            avisos.push(format!("No pude procesar la imagen \"{}\": {}", origen.display(), e));
             return Ok(None);
         }
     };
@@ -2849,6 +2852,38 @@ mod tests {
         // El XHTML de la portada tiene que apuntar al nombre real del archivo.
         let cover_page = String::from_utf8(entries.get("OEBPS/0_cover.xhtml").unwrap().clone()).unwrap();
         assert!(cover_page.contains(nombre.trim_start_matches("OEBPS/")));
+    }
+
+    #[test]
+    fn una_tapa_corrupta_deja_aviso_en_vez_de_fallar_muda() {
+        // El archivo existe (así que resolver_imagen lo encuentra) pero no es
+        // una imagen válida: falla adentro de embebido_reescalado al decodificar.
+        // El export no debe abortar, pero el autor tiene que enterarse.
+        let tmp = tempdir();
+        let book = tmp.join("book");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        std::fs::write(
+            book.join("book.json"),
+            r#"{"titulo":"Grande","tapa":"cover.png"}"#,
+        )
+        .unwrap();
+        std::fs::write(book.join("Cap1").join("1.html"), "<p>x</p>").unwrap();
+        std::fs::write(book.join("cover.png"), b"no soy una imagen").unwrap();
+
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        assert!(
+            result
+                .avisos
+                .iter()
+                .any(|a| a.contains("No pude procesar la imagen") && a.contains("cover.png")),
+            "avisos: {:?}",
+            result.avisos
+        );
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        assert!(
+            !entries.keys().any(|k| k.starts_with("OEBPS/cover.")),
+            "no debería haber tapa embebida"
+        );
     }
 
     #[test]
