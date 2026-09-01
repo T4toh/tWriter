@@ -1501,20 +1501,19 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   `saga-header.ts` "N libros" ahora filtra `kind === 'book'` (sumaba la carpeta
   `notas` y los `.md` sueltos) y `book-card.ts::itemCount` excluye `note`/`notes`,
   mismo criterio que `landing.ts::items`.
-- **El "N cap." de la tarjeta de libro miente cuando el libro está partido**
+- [x] **El "N cap." de la tarjeta de libro miente cuando el libro está partido**
   (visto el 2026-09-01 arreglando los contadores del mazo de tapas). `book-card`
   cuenta hijos directos (`itemCount()`, hoy ya sin notas), pero `fs.rs::
   list_sections_or_chapters` devuelve **`Section` por cada carpeta de parte** y
   solo mete `chapter` para los `.html` sueltos en la raíz del libro. O sea: un
   libro con 3 partes de 8 capítulos cada una dice "3 cap." en vez de 24, y uno
   mixto (partes + capítulos sueltos) suma peras con manzanas.
-  Fix barato: si algún hijo es `section`, contar los nietos `chapter`
-  (`children.flatMap(c => c.kind === 'section' ? c.children : [c])` filtrando
-  `chapter`) en vez de los hijos directos. Ojo con dos cosas: las secciones con
-  `excluded: true` vienen con `children: []` desde Rust y además no van al EPUB,
-  así que no deberían sumar; y si el conteo real termina siendo caro o confuso,
-  la alternativa perezosa es cambiar el label a "N partes" cuando los hijos son
-  secciones — menos útil, pero honesto.
+  **Hecho en el mismo PR** (lo levantó también la review de CodeRabbit, que
+  coincidió con este item): `itemCount` pasó a `chapterCount` y suma los nietos
+  `chapter` de cada `section` más los capítulos directos. Filtrar por `chapter`
+  deja afuera las notas sin nombrarlas, así que el filtro de `note`/`notes` se
+  cayó. Las secciones con `excluded: true` suman 0 — Rust las manda con
+  `children: []` y además no van al EPUB, que es lo correcto acá.
 
 ## EPUB
 

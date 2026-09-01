@@ -24,7 +24,7 @@
     <div class="foot">
       <span class="date">{{ formatDate(node().modifiedMs) }}</span>
       <span class="count">
-        {{ itemCount() }} cap.
+        {{ chapterCount() }} cap.
         @if (node().wordCount; as w) {
           · {{ formatWords(w) }}
         }

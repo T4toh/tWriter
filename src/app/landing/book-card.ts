@@ -48,12 +48,20 @@ export class BookCard {
 
   protected readonly author = computed(() => this.config()?.autor ?? null);
 
-  // Mismo criterio que la galería (landing.ts::items): las notas no son
-  // contenido del libro.
-  protected readonly itemCount = computed(
-    () =>
-      this.node().children.filter((c) => c.kind !== 'note' && c.kind !== 'notes')
-        .length,
+  // Cuenta capítulos de verdad: un libro partido trae carpetas `section` y los
+  // capítulos están un nivel abajo. Contar hijos directos daba el número de
+  // partes ("3 cap." por 3 partes de 8). Filtrar por `chapter` también deja
+  // afuera las notas sin nombrarlas, y las secciones excluidas del EPUB suman 0
+  // porque Rust las manda con `children: []`.
+  protected readonly chapterCount = computed(() =>
+    this.node().children.reduce(
+      (total, hijo) =>
+        total +
+        (hijo.kind === 'section'
+          ? hijo.children.filter((nieto) => nieto.kind === 'chapter').length
+          : Number(hijo.kind === 'chapter')),
+      0,
+    ),
   );
 
   protected readonly isConfigured = computed(() => {
