@@ -42,6 +42,11 @@ tantivy = { version = "0.22", features = ["stopwords"] }
 regex = "1"
 # Listado de fuentes del OS para el selector del editor (sin deps C — pure Rust).
 fontdb = { version = "0.23", default-features = false, features = ["fontconfig", "memmap"] }
+# Decodificar y reescalar tapas para el EPUB: las del repo son PNG de
+# imprenta (hasta 7 MB) y embeberlas tal cual infla el archivo y el costo
+# de delivery de KDP. default-features=false deja solo png+jpeg — nada de
+# formatos exóticos ni deps C.
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
 # Wallet/keyring del sistema para secretos sensibles (apiKey de LT Premium).
 # Linux: libsecret (gnome-keyring / KWallet6+). macOS: Keychain. Windows: Credential Manager.
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
