@@ -6,7 +6,7 @@ use uuid::Uuid;
 use zip::write::{SimpleFileOptions, ZipWriter};
 use zip::CompressionMethod;
 
-use crate::book_config::{find_back_cover_in, find_cover_in, BookConfig};
+use crate::book_config::{find_back_cover_in, find_cover_in, image_field_unusable, BookConfig};
 use crate::fs::is_excluded_dir;
 use crate::theme::{resolve_theme, FontEmbed, ResolvedTheme};
 
@@ -1537,12 +1537,12 @@ fn read_or_default_config(book_dir: &Path) -> BookConfig {
         }
     }
     // Auto-discovery de cover/back-cover en disco si el JSON no los tiene
-    if cfg.tapa.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+    if image_field_unusable(book_dir, cfg.tapa.as_deref()) {
         if let Some(found) = find_cover_in(book_dir) {
             cfg.tapa = Some(found);
         }
     }
-    if cfg.contratapa.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+    if image_field_unusable(book_dir, cfg.contratapa.as_deref()) {
         if let Some(found) = find_back_cover_in(book_dir) {
             cfg.contratapa = Some(found);
         }

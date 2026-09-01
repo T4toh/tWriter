@@ -220,8 +220,10 @@ export class BookConfigModal {
       defaultPath: this.bookPath() ?? undefined,
     });
     if (!result) return;
+    const rel = await this.adoptImage(result, 'cover');
+    if (!rel) return;
     const cur = this.config();
-    if (cur) this.config.set({ ...cur, tapa: result });
+    if (cur) this.config.set({ ...cur, tapa: rel });
   }
 
   protected async pickBackCover(): Promise<void> {
@@ -231,8 +233,10 @@ export class BookConfigModal {
       defaultPath: this.bookPath() ?? undefined,
     });
     if (!result) return;
+    const rel = await this.adoptImage(result, 'back-cover');
+    if (!rel) return;
     const cur = this.config();
-    if (cur) this.config.set({ ...cur, contratapa: result });
+    if (cur) this.config.set({ ...cur, contratapa: rel });
   }
 
   protected async pickAuthorPhoto(): Promise<void> {
@@ -242,8 +246,30 @@ export class BookConfigModal {
       defaultPath: this.bookPath() ?? undefined,
     });
     if (!result) return;
+    const rel = await this.adoptImage(result, 'author');
+    if (!rel) return;
     const cur = this.config();
-    if (cur) this.config.set({ ...cur, foto_autor: result });
+    if (cur) this.config.set({ ...cur, foto_autor: rel });
+  }
+
+  /**
+   * Deja la imagen dentro de la carpeta del libro y devuelve el nombre
+   * relativo. El path absoluto del file dialog no sirve: la imagen no viaja
+   * por git y el EPUB sale sin portada en la otra PC.
+   */
+  private async adoptImage(source: string, stem: string): Promise<string | null> {
+    const dir = this.bookPath();
+    if (!dir) return null;
+    try {
+      return await invoke<string>('adopt_config_image', {
+        dirPath: dir,
+        sourcePath: source,
+        stem,
+      });
+    } catch (err) {
+      this.error.set(`No se pudo usar esa imagen: ${err}`);
+      return null;
+    }
   }
 
   protected update<K extends keyof BookConfig>(key: K, value: BookConfig[K]): void {
