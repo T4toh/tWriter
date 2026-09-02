@@ -81,11 +81,23 @@ console.log('detectarEnCapitulo');
   check('ES sin convertir: rayas > 0', res.rayas > 0, res);
 }
 {
-  // Sin idioma seteado (null): sigue elegible para rayas, igual que
-  // `canApplyRae` en editor.ts (no se pierde por el gate).
+  // Sin idioma seteado (null) + contenido en español: `detectLang` decide
+  // 'es', así que rayas sigue elegible (no se pierde por no tener el campo).
   const html = '<p>"No sé," dijo ella. "De verdad."</p>';
   const res = detectarEnCapitulo(html, null, opts);
-  check('sin idioma seteado: rayas > 0 (no se pierde por el gate)', res.rayas > 0, res);
+  check('sin idioma seteado + contenido ES: rayas > 0', res.rayas > 0, res);
+}
+{
+  // La otra cara de la moneda del caso anterior: sin idioma seteado (null)
+  // pero con contenido en inglés, `detectLang` decide 'en' — rayas tiene que
+  // gatearse igual que si `idioma` viniera explícito en 'en'. Este es el caso
+  // que destapó la inconsistencia del fix round 1 (rayas gateaba con el campo
+  // CRUDO, comillas con el EFECTIVO — acá los dos entran con `idioma` nulo y
+  // antes salían clasificados distinto).
+  const html = '<p>"I don\'t know," she said. "Really."</p>';
+  const res = detectarEnCapitulo(html, null, opts);
+  check('sin idioma seteado + contenido EN: rayas gateadas a 0', res.rayas === 0, res);
+  check('sin idioma seteado + contenido EN: comillas > 0', res.comillas > 0, res);
 }
 {
   // ES ya convertido y limpio: nada que hacer.
