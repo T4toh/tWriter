@@ -1327,34 +1327,43 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Encontrado el 2026-08-20 numerando las sagas a mano (`Milky Way` →
   `3 - Milky Way`, `Vieja República` → `4 - Vieja República`). El rename por
   git es limpio para el contenido — 1.256 renames, 0 cambios de contenido —
-  pero **dos archivos locales quedan apuntando a los paths viejos**, y ninguno
-  viaja por git porque `.twriter/` está gitignoreado:
-  - `.twriter/stats.json` está **keyeado por path relativo**
-    (`Milky Way/1 - Deployment/4 - Work/3.html`). En el rename quedaron 294 de
-    533 claves huérfanas → se pierden palabras y última-edición de esos
-    capítulos. Hay que reescribir el prefijo de las claves.
-  - `.twriter/search-index` indexa por path → hay que borrarlo para que
-    reindexe.
-  - `settings.json` (`app_config_dir`) guarda **paths absolutos** en
-    `treeExpanded` (115 entradas) y `lastSession.chapterPath`. Si el capítulo
-    abierto estaba en la saga renombrada, la sesión no se restaura.
+  pero archivos locales quedaban apuntando a los paths viejos, y ninguno
+  viaja por git porque `.twriter/` está gitignoreado.
 
-  **Esto va contra el principio del CLAUDE.md** ("el remedio se da adentro de
-  la app"): la app puede detectar el problema y no lo hace. Al abrir el root
-  ya camina el árbol, así que tiene todo para notar que una clave de
-  `stats.json` no corresponde a ningún archivo en disco. Arreglo propuesto,
-  de menor a mayor:
-  1. **Barato y suficiente**: al cargar `stats.json`, descartar las claves
-     cuyo archivo no existe. Se pierde el histórico de esos capítulos pero
-     el archivo no crece con basura para siempre. Una línea de filtro.
-  2. **Lo correcto**: detectar el rename. Git ya sabe que fue un rename
-     (`R100`); `git.rs` puede pedirle a libgit2 los renames entre HEAD y el
-     commit anterior y remapear las claves de `stats.json` en consecuencia.
-     Cubre también el caso de que el rename lo haya hecho la otra PC y llegue
-     por pull — que es el caso que más duele, porque ahí el autor no hizo nada
-     y las estadísticas se evaporan igual.
-  3. Purgar de `treeExpanded` los paths que ya no existen (hoy hay 16
-     huérfanos acumulados de reorganizaciones viejas, inocuos pero sucios).
+  **Arreglado en `fix/estado-local-huerfano`, falta que el autor lo verifique
+  a mano.**
+
+  - `stats.json` (keyeado por path relativo, 294 de 533 claves huérfanas en
+    el incidente): `stats::reconciliar_stats()` corre al armar el árbol y
+    remapea. Criterio: mismo largo de path y difiere en **exactamente un
+    segmento de carpeta**, con el nombre del archivo igual — si no,
+    `Libro/1.html` y `Libro/2.html` pasarían por rename. Solo remapea con un
+    candidato único que todavía no tenga stat propio.
+
+    **No se apoya en git**, y es a propósito: `storage.rs` clasifica roots en
+    Dropbox, pCloud, Nextcloud, OneDrive, Drive, iCloud, Mega y Local, donde
+    no hay repo del que leer los `R100`, y el bug pasa igual. Tampoco depende
+    de cuántos commits atrás quedó el rename.
+
+    Las claves que no matchean con nada **no se borran**: un checkout de otra
+    rama hace desaparecer capítulos, y borrarlas ahí sería tirar histórico
+    real para ahorrar kilobytes. Costo cuando está sano: N `is_file()`; el
+    walk se paga solo si hay huérfanas. 7 tests en `stats.rs`.
+
+  - `treeExpanded` de `settings.json` (paths absolutos, 16 huérfanos
+    acumulados): `persistExpanded()` filtra contra el árbol vivo. El filtro
+    va al persistir y no al hidratar para no tocar el timing del restore de
+    sesión.
+
+  - `search-index`: **no hacía falta nada**. El item decía que había que
+    borrarlo para que reindexe, pero `full_reindex` arranca con
+    `delete_all_documents()` (`search.rs:601`), o sea que se sana solo. Lo que
+    sí puede quedar sucio son los hits stale **entre** reindexados completos,
+    porque los updates incrementales van por path: si molesta, es otro item.
+
+  **Verificar**: renombrar una carpeta de saga desde Finder, abrir la app, y
+  confirmar que los capítulos de adentro conservan sus palabras y su fecha de
+  última edición en vez de mostrar 0.
 
   **Nota para quien lo toque en Mac**: el fix del typo `Notas/Buenos AIres
   2077` → `Notas/Buenos Aires 2077` es un rename **solo de caja**, y APFS es
