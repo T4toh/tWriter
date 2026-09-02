@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import {
   ConteoDetector,
   RevisionLibroService,
@@ -19,6 +19,23 @@ export class RevisionLibroModal {
   protected readonly rayas = signal<boolean>(false);
   protected readonly comillas = signal<boolean>(false);
   protected readonly arreglosRae = signal<boolean>(false);
+
+  // El modal se monta una sola vez en app.html y solo se oculta con el @if
+  // interno (`svc.libro()`), así que las casillas nunca pasan por el
+  // constructor de nuevo al cambiar de libro. Sin este reset, tildar «Rayas»
+  // en el libro A y después abrir el libro B deja la casilla tildada para B
+  // sin que el autor la haya marcado — y "Aplicar" reescribe capítulos de B
+  // con una selección que quedó pegada de A. Lee SOLO `svc.libro()`: si acá
+  // adentro se lee `resultado()` también, el effect se re-dispara al
+  // terminar cada escaneo y destilda las casillas en la cara del autor.
+  constructor() {
+    effect(() => {
+      this.svc.libro();
+      this.rayas.set(false);
+      this.comillas.set(false);
+      this.arreglosRae.set(false);
+    });
+  }
 
   protected readonly puedeAplicar = computed<boolean>(() => {
     const r = this.svc.resultado();
