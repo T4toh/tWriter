@@ -657,9 +657,37 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         toc_entries.push(entry);
     }
 
+    // 5a-ter) Página en blanco que cierra la novela. Solo va si después
+    // viene back matter (catálogo o "Sobre el autor"); si no hay nada
+    // detrás, la página en blanco sería un defecto visual sin propósito.
+    // No entra al índice (ni toc.xhtml ni toc.ncx): no es un destino de
+    // navegación, es un cierre visual.
+    let catalogo = crate::catalogo::escanear(&root_dir, &book_dir);
+    let perfil = crate::autor::leer(&root_dir);
+    let bio_libro = cfg
+        .sobre_el_autor
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let bio = bio_libro.or_else(|| perfil.bio_en(cfg.idioma.as_deref().unwrap_or("es")));
+    let hay_back_matter =
+        !catalogo.misma_saga.is_empty() || !catalogo.otros.is_empty() || bio.is_some();
+    if hay_back_matter {
+        spine_idx += 1;
+        let xhtml = xhtml_shell("", "", &lang_str, "blank-body");
+        zip.start_file("OEBPS/6_blank.xhtml", opts).map_err(|e| e.to_string())?;
+        zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
+        items.push(Item {
+            id: "blank-separator".into(),
+            href: "6_blank.xhtml".into(),
+            media_type: "application/xhtml+xml".into(),
+            spine_order: Some(spine_idx),
+            properties: None,
+        });
+    }
+
     // 5c) Otros libros del autor. El catálogo sale de escanear el root: un
     // libro está publicado si su book.json tiene `link`.
-    let catalogo = crate::catalogo::escanear(&root_dir, &book_dir);
     if !catalogo.misma_saga.is_empty() || !catalogo.otros.is_empty() {
         // Indexado por posición y no por `link`: dos libros publicados pueden
         // compartir el mismo link (ej: placeholder mientras no existe la
@@ -713,14 +741,8 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
     }
 
     // 5a-bis) Sobre el autor. La bio, la foto, la web y el QR salen de
-    // autor.json en la raíz; el book.json puede pisar bio y foto.
-    let perfil = crate::autor::leer(&root_dir);
-    let bio_libro = cfg
-        .sobre_el_autor
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
-    let bio = bio_libro.or_else(|| perfil.bio_en(cfg.idioma.as_deref().unwrap_or("es")));
+    // autor.json en la raíz; el book.json puede pisar bio y foto. `perfil`
+    // y `bio` ya se calcularon arriba para decidir la página en blanco.
     if let Some(bio) = bio {
         // Foto: la del libro gana; si no, la del perfil global.
         let foto_origen = resolver_imagen(&book_dir, cfg.foto_autor.as_deref())
@@ -2828,6 +2850,37 @@ mod tests {
         let result = export_impl(book.to_str().unwrap()).unwrap();
         let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
         assert!(!entries.contains_key("OEBPS/7_otros_libros.xhtml"));
+    }
+
+    #[test]
+    fn pagina_en_blanco_separa_la_novela_del_back_matter_solo_si_hay_alguno() {
+        // Caso 1: hay catálogo (back matter) → la página en blanco existe,
+        // va al spine, y NO entra ni a toc.xhtml ni a toc.ncx.
+        let (_root, book) = repo_con_publicados();
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        assert!(entries.contains_key("OEBPS/6_blank.xhtml"));
+        let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
+        assert!(opf.contains(r#"idref="blank-separator""#));
+        let toc = String::from_utf8(entries.get("OEBPS/toc.xhtml").unwrap().clone()).unwrap();
+        assert!(!toc.contains("6_blank.xhtml"));
+        let ncx = String::from_utf8(entries.get("OEBPS/toc.ncx").unwrap().clone()).unwrap();
+        assert!(!ncx.contains("6_blank.xhtml"));
+
+        // Caso 2: ni catálogo ni bio → no hay back matter → no hay página en
+        // blanco. Un test que solo mirara el caso 1 pasaría igual si la
+        // página se pusiera siempre.
+        let tmp = tempdir();
+        let solo = tmp.join("book");
+        std::fs::create_dir_all(solo.join("Cap1")).unwrap();
+        std::fs::write(solo.join("book.json"), r#"{"titulo":"Solo"}"#).unwrap();
+        std::fs::write(solo.join("Cap1").join("1.html"), "<p>x</p>").unwrap();
+        let result_solo = export_impl(solo.to_str().unwrap()).unwrap();
+        let entries_solo = read_epub_entries(std::path::Path::new(&result_solo.epub_path));
+        assert!(!entries_solo.contains_key("OEBPS/6_blank.xhtml"));
+        let opf_solo =
+            String::from_utf8(entries_solo.get("OEBPS/content.opf").unwrap().clone()).unwrap();
+        assert!(!opf_solo.contains("blank-separator"));
     }
 
     #[test]
