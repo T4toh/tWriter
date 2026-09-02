@@ -26,6 +26,7 @@ import { Editor } from './editor/editor';
 import { NotesEditor } from './notes-editor/notes-editor';
 import { DebugPanel } from './debug/debug-panel';
 import { BookConfigModal } from './book-config/book-config-modal';
+import { RevisionLibroModal } from './revision-libro/revision-libro-modal';
 import { SagaConfigModal } from './saga-config/saga-config-modal';
 import { DictionaryModal } from './dictionary/dictionary-modal';
 import { SplitChapterModal } from './split-chapter/split-chapter-modal';
@@ -78,7 +79,7 @@ import {
 @Component({
   selector: 'app-root',
   imports: [
-    Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, DictionaryModal, SplitChapterModal,
+    Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, RevisionLibroModal, SagaConfigModal, DictionaryModal, SplitChapterModal,
     NoteFormModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, ToastContainer,
     SettingsModal, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, AboutModal, AutorModal, Spinner, ModalHost, ContextMenuHost,
     LucideArrowDownToLine, LucideArrowUpDown, LucideChevronDown, LucideChevronRight,

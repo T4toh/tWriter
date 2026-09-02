@@ -1,0 +1,125 @@
+.rl-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 50%);
+  z-index: 200;
+}
+
+.rl-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 201;
+  width: min(560px, 90vw);
+  max-height: 85vh;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  color: var(--fg);
+}
+
+.rl-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-soft);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+
+  h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.rl-escanear {
+  flex-shrink: 0;
+}
+
+.rl-error {
+  margin: 0.75rem 1.5rem 0;
+  color: #c87070;
+  font-size: 12px;
+}
+
+.rl-vacio {
+  margin: 0;
+  padding: 1.5rem;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.rl-body {
+  padding: 1rem 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rl-fila {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bg-soft);
+  }
+
+  input[type='checkbox']:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.rl-fila-reporte {
+  cursor: default;
+  flex-wrap: wrap;
+
+  &:hover {
+    background: transparent;
+  }
+}
+
+.rl-nombre {
+  font-size: 13px;
+  font-weight: 500;
+  flex: 1;
+}
+
+.rl-conteo {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.rl-nota {
+  flex-basis: 100%;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--fg-muted);
+}
+
+.rl-actions {
+  padding: 0.75rem 1.5rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-soft);
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
