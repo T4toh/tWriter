@@ -74,12 +74,14 @@ console.log('detectarEnCapitulo');
   const res = detectarEnCapitulo(html, 'en', opts);
   check('EN con diálogo: rayas gateadas a 0', res.rayas === 0, res);
   check('EN con diálogo: comillas > 0', res.comillas > 0, res);
+  check('EN explícito: esIngles === true', res.esIngles === true, res);
 }
 {
   // ES sin convertir: el converter tiene trabajo.
   const html = '<p>"No sé," dijo ella. "De verdad."</p>';
   const res = detectarEnCapitulo(html, 'es', opts);
   check('ES sin convertir: rayas > 0', res.rayas > 0, res);
+  check('ES explícito: esIngles === false', res.esIngles === false, res);
 }
 {
   // Sin idioma seteado (null) + contenido en español: `detectLang` decide
@@ -99,6 +101,7 @@ console.log('detectarEnCapitulo');
   const res = detectarEnCapitulo(html, null, opts);
   check('sin idioma seteado + contenido EN: rayas gateadas a 0', res.rayas === 0, res);
   check('sin idioma seteado + contenido EN: comillas > 0', res.comillas > 0, res);
+  check('sin idioma seteado + contenido EN: esIngles === true (fallback a detectLang)', res.esIngles === true, res);
 }
 {
   // ES ya convertido y limpio: nada que hacer.

@@ -31,6 +31,11 @@ export interface ResultadoDeteccionCapitulo {
   comillas: number;
   arreglosRae: number;
   repeticiones: number;
+  /** Idioma EFECTIVO (con fallback a `detectLang`) que se usó para gatear
+   *  rayas/comillas/arreglosRae acá adentro. Lo expone el servicio de
+   *  escaneo para contar capítulos por idioma sin re-derivarlo — el gateo
+   *  vive en un solo lugar a propósito. */
+  esIngles: boolean;
 }
 
 /**
@@ -103,7 +108,7 @@ export function detectarEnCapitulo(
     ignorar: opts.diccionario,
   });
 
-  return { rayas, comillas, arreglosRae, repeticiones: reps.length };
+  return { rayas, comillas, arreglosRae, repeticiones: reps.length, esIngles };
 }
 
 /**

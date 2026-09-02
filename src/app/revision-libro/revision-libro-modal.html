@@ -2,7 +2,7 @@
   <div class="rl-backdrop" (click)="svc.cerrar()"></div>
   <div class="rl-modal" (click)="$event.stopPropagation()">
     <header class="rl-header">
-      <h2>Revisar «{{ libro.name }}»</h2>
+      <h2>Revisar «{{ libro.name }}»{{ idiomaLibro() ? ' · ' + idiomaLibro() : '' }}</h2>
       <button type="button" class="rl-escanear btn btn-secondary" [disabled]="svc.escaneando()" (click)="svc.escanear()">
         @if (svc.escaneando()) { <app-spinner [size]="14" /> } @else { Escanear }
       </button>
@@ -14,21 +14,42 @@
 
     @if (svc.resultado(); as r) {
       <div class="rl-body">
-        <label class="rl-fila">
-          <input type="checkbox" [checked]="rayas()" (change)="rayas.set(!rayas())" [disabled]="r.rayas.capitulos === 0" />
-          <span class="rl-nombre">Rayas RAE</span>
-          <span class="rl-conteo">{{ resumenCapitulos(r.rayas) }}</span>
-        </label>
-        <label class="rl-fila">
-          <input type="checkbox" [checked]="comillas()" (change)="comillas.set(!comillas())" [disabled]="r.comillas.capitulos === 0" />
-          <span class="rl-nombre">Comillas tipográficas</span>
-          <span class="rl-conteo">{{ resumenCapitulos(r.comillas) }}</span>
-        </label>
-        <label class="rl-fila">
-          <input type="checkbox" [checked]="arreglosRae()" (change)="arreglosRae.set(!arreglosRae())" [disabled]="r.arreglosRae.cambios === 0" />
-          <span class="rl-nombre">Arreglos RAE</span>
-          <span class="rl-conteo">{{ resumen(r.arreglosRae) }}</span>
-        </label>
+        @if (r.capitulosEs > 0) {
+          <label class="rl-fila">
+            <input type="checkbox" [checked]="rayas()" (change)="rayas.set(!rayas())" [disabled]="r.rayas.capitulos === 0" />
+            <span class="rl-nombre">Rayas RAE</span>
+            <span class="rl-conteo">{{ resumenCapitulos(r.rayas) }}</span>
+          </label>
+        } @else {
+          <div class="rl-fila rl-fila-reporte">
+            <span class="rl-nombre">Rayas RAE</span>
+            <span class="rl-conteo">solo para capítulos en español</span>
+          </div>
+        }
+        @if (r.capitulosEn > 0) {
+          <label class="rl-fila">
+            <input type="checkbox" [checked]="comillas()" (change)="comillas.set(!comillas())" [disabled]="r.comillas.capitulos === 0" />
+            <span class="rl-nombre">Comillas tipográficas</span>
+            <span class="rl-conteo">{{ resumenCapitulos(r.comillas) }}</span>
+          </label>
+        } @else {
+          <div class="rl-fila rl-fila-reporte">
+            <span class="rl-nombre">Comillas tipográficas</span>
+            <span class="rl-conteo">solo para capítulos en inglés</span>
+          </div>
+        }
+        @if (r.capitulosEs > 0) {
+          <label class="rl-fila">
+            <input type="checkbox" [checked]="arreglosRae()" (change)="arreglosRae.set(!arreglosRae())" [disabled]="r.arreglosRae.cambios === 0" />
+            <span class="rl-nombre">Arreglos RAE</span>
+            <span class="rl-conteo">{{ resumen(r.arreglosRae) }}</span>
+          </label>
+        } @else {
+          <div class="rl-fila rl-fila-reporte">
+            <span class="rl-nombre">Arreglos RAE</span>
+            <span class="rl-conteo">solo para capítulos en español</span>
+          </div>
+        }
         <div class="rl-fila rl-fila-reporte">
           <span class="rl-nombre">Repeticiones</span>
           <span class="rl-conteo">{{ resumen(r.repeticiones) }}</span>

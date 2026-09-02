@@ -48,6 +48,22 @@ export class RevisionLibroModal {
     );
   });
 
+  /** Idioma del libro derivado del conteo real de capítulos que dejó el
+   *  escaneo (`capitulosEs`/`capitulosEn` en `ResumenRevision`) — no de
+   *  `book.json`, que puede estar desactualizado o vacío, y no de una
+   *  segunda llamada a `detectLang`: es el mismo dato con el que
+   *  `detectarEnCapitulo` decidió si cada detector aplica, así que el header
+   *  y las filas de abajo no se pueden contradecir. `null` antes de escanear
+   *  — ahí no se conoce el idioma de ningún capítulo todavía. */
+  protected readonly idiomaLibro = computed<string | null>(() => {
+    const r = this.svc.resultado();
+    if (!r) return null;
+    const { capitulosEs: es, capitulosEn: en } = r;
+    if (es > 0 && en > 0) return `español e inglés (${es} y ${en} capítulos)`;
+    if (en > 0) return 'inglés';
+    return 'español';
+  });
+
   protected async aplicar(): Promise<void> {
     const seleccion: SeleccionRevision = {
       rayas: this.rayas(),

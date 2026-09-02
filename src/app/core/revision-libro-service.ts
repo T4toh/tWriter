@@ -35,6 +35,13 @@ export interface ResumenRevision {
   comillas: ConteoCapitulos;
   arreglosRae: ConteoDetector;
   repeticiones: ConteoDetector;
+  /** Capítulos por idioma EFECTIVO (`detectarEnCapitulo::esIngles`), contados
+   *  mientras se escanea. Es lo que decide si rayas/arreglosRae (necesitan
+   *  `capitulosEs > 0`) y comillas (`capitulosEn > 0`) aplican al libro —
+   *  un detector puede no encontrar nada y aun así aplicar, o directamente
+   *  no aplicar porque el libro no tiene ningún capítulo de ese idioma. */
+  capitulosEs: number;
+  capitulosEn: number;
 }
 
 /**
@@ -104,6 +111,7 @@ export class RevisionLibroService {
       const vacio = (): ConteoDetector => ({ cambios: 0, capitulos: 0 });
       const res: ResumenRevision = {
         rayas: vacioCap(), comillas: vacioCap(), arreglosRae: vacio(), repeticiones: vacio(),
+        capitulosEs: 0, capitulosEn: 0,
       };
       // Una sola vez para todo el libro: es el mismo diccionario de saga para
       // todos sus capítulos.
@@ -117,6 +125,7 @@ export class RevisionLibroService {
       let procesados = 0;
       for (const p of payloads) {
         const det = detectarEnCapitulo(p.html, p.idioma, { excepciones, diccionario });
+        if (det.esIngles) res.capitulosEn += 1; else res.capitulosEs += 1;
         if (det.rayas > 0) res.rayas.capitulos += 1;
         if (det.comillas > 0) res.comillas.capitulos += 1;
         if (det.arreglosRae > 0) { res.arreglosRae.cambios += det.arreglosRae; res.arreglosRae.capitulos += 1; }
