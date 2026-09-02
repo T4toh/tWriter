@@ -33,6 +33,7 @@ const r = spawnSync(
     'src/app/dialogos/tags.ts',
     'src/app/dialogos/aplicar-fixes.ts',
     'src/app/dialogos/plano-con-mapa.ts',
+    'src/app/editor/rae-convert.ts',
     'src/app/quotes/educate.ts',
     'src/app/repeticiones/detector.ts',
     'src/app/core/types.ts',
@@ -124,6 +125,28 @@ console.log('aplicarEnCapitulo');
     const det = detectarEnCapitulo(html, 'es', { excepciones: EXCEPCIONES_DEFAULT, diccionario: [] });
     check('detectarEnCapitulo: arreglosRae no cuenta la conversión pendiente', det.arreglosRae === 0, det);
   }
+}
+
+{
+  // Fix crítico: comillas angulares sin diálogo de verdad, rayas tildado.
+  // `convert()` crudo aplanaría «»→"" sin convertir nada — con el guard, el
+  // html sale intacto.
+  const html = '<p>El cartel decía «Prohibido pasar».</p>';
+  const res = aplicarEnCapitulo(html, 'es', todo);
+  check('ES con «» sin diálogo: html sin cambios', res.html === html, res.html);
+}
+{
+  // Mismo caso con comillas tipográficas rectas “ ”.
+  const html = '<p>El cartel decía “Prohibido pasar”.</p>';
+  const res = aplicarEnCapitulo(html, 'es', todo);
+  check('ES con “” sin diálogo: html sin cambios', res.html === html, res.html);
+}
+{
+  // El guard no puede matar el caso bueno: diálogo de verdad sin convertir
+  // sigue convirtiéndose.
+  const html = '<p>"No sé," dijo ella. "De verdad."</p>';
+  const res = aplicarEnCapitulo(html, 'es', todo);
+  check('ES con diálogo de verdad: sí convierte a raya', res.html.includes('—'), res.html);
 }
 
 rmSync(outDir, { recursive: true, force: true });

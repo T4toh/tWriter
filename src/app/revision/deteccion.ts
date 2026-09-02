@@ -1,4 +1,4 @@
-import { convert } from '../dialogos/converter';
+import { convertFragmentHtml } from '../editor/rae-convert';
 import { detectLang } from '../dialogos/detect';
 import { htmlToPlain, validateRae } from '../dialogos/validator';
 import { aplicarFixesHtml } from '../dialogos/aplicar-fixes';
@@ -70,7 +70,15 @@ export function detectarEnCapitulo(
   // rectas, corrupción real.
   // NO "arreglar" esto para que calce con `canApplyRae` — es la divergencia
   // correcta, ver arriba.
-  const rayas = !esIngles ? convert(html).changes : 0;
+  //
+  // `convertFragmentHtml` (no `convert()` crudo) es el mismo guard "solo se
+  // normalizaron comillas" que usa el editor (`rae-convert.ts`) y que
+  // `validator.ts::pushPendingConversion` aplica por párrafo. Sin él, un
+  // capítulo español que solo tiene «» / “” / ‘’ sin diálogo de verdad cuenta
+  // como "1 cambio" y aplicar le aplana la tipografía de comillas a ASCII sin
+  // convertir nada a raya — peor que no tocarlo. Los tres guards tienen que
+  // mantenerse juntos.
+  const rayas = !esIngles && convertFragmentHtml(html) !== null ? 1 : 0;
 
   // Comillas: solo capítulos en inglés (efectivo, con fallback a detectLang si
   // no hay idioma seteado), igual que `quotes-fix-service`.
@@ -124,7 +132,7 @@ export function aplicarEnCapitulo(
   let out = html;
   let salteados = 0;
 
-  if (seleccion.rayas && !esIngles) out = convert(out).text;
+  if (seleccion.rayas && !esIngles) out = convertFragmentHtml(out) ?? out;
   if (seleccion.comillas && esIngles) out = educateQuotes(out).text;
   if (seleccion.arreglosRae) {
     const fixes = validateRae(htmlToPlain(out), idiomaEfectivo)

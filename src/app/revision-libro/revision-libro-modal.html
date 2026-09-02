@@ -15,14 +15,14 @@
     @if (svc.resultado(); as r) {
       <div class="rl-body">
         <label class="rl-fila">
-          <input type="checkbox" [checked]="rayas()" (change)="rayas.set(!rayas())" [disabled]="r.rayas.cambios === 0" />
+          <input type="checkbox" [checked]="rayas()" (change)="rayas.set(!rayas())" [disabled]="r.rayas.capitulos === 0" />
           <span class="rl-nombre">Rayas RAE</span>
-          <span class="rl-conteo">{{ resumen(r.rayas) }}</span>
+          <span class="rl-conteo">{{ resumenCapitulos(r.rayas) }}</span>
         </label>
         <label class="rl-fila">
-          <input type="checkbox" [checked]="comillas()" (change)="comillas.set(!comillas())" [disabled]="r.comillas.cambios === 0" />
+          <input type="checkbox" [checked]="comillas()" (change)="comillas.set(!comillas())" [disabled]="r.comillas.capitulos === 0" />
           <span class="rl-nombre">Comillas tipográficas</span>
-          <span class="rl-conteo">{{ resumen(r.comillas) }}</span>
+          <span class="rl-conteo">{{ resumenCapitulos(r.comillas) }}</span>
         </label>
         <label class="rl-fila">
           <input type="checkbox" [checked]="arreglosRae()" (change)="arreglosRae.set(!arreglosRae())" [disabled]="r.arreglosRae.cambios === 0" />

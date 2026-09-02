@@ -31,6 +31,7 @@ const r = spawnSync(
     'src/app/dialogos/validator.ts',
     'src/app/dialogos/rules-dedicated.ts',
     'src/app/dialogos/tags.ts',
+    'src/app/editor/rae-convert.ts',
     'src/app/quotes/educate.ts',
     'src/app/repeticiones/detector.ts',
     'src/app/core/types.ts',
@@ -108,6 +109,28 @@ console.log('detectarEnCapitulo');
     res.rayas === 0 && res.comillas === 0 && res.arreglosRae === 0 && res.repeticiones === 0,
     res,
   );
+}
+
+{
+  // Fix crítico: comillas angulares sin diálogo de verdad. `convert()` crudo
+  // las normalizaría a rectas y eso solo ya cuenta como "1 cambio" — el guard
+  // de `convertFragmentHtml` tiene que devolver rayas: 0.
+  const html = '<p>El cartel decía «Prohibido pasar».</p>';
+  const res = detectarEnCapitulo(html, 'es', opts);
+  check('ES con «» sin diálogo: rayas === 0', res.rayas === 0, res);
+}
+{
+  // Mismo caso con comillas tipográficas rectas “ ”.
+  const html = '<p>El cartel decía “Prohibido pasar”.</p>';
+  const res = detectarEnCapitulo(html, 'es', opts);
+  check('ES con “” sin diálogo: rayas === 0', res.rayas === 0, res);
+}
+{
+  // El guard no puede matar el caso bueno: diálogo de verdad sin convertir
+  // sigue contando.
+  const html = '<p>"No sé," dijo ella. "De verdad."</p>';
+  const res = detectarEnCapitulo(html, 'es', opts);
+  check('ES con diálogo de verdad sin convertir: rayas > 0', res.rayas > 0, res);
 }
 
 rmSync(outDir, { recursive: true, force: true });

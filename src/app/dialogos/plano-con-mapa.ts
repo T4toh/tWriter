@@ -1,4 +1,4 @@
-import { BR_RE, ENTITY_MAP, P_BLOCK_RE } from './validator';
+import { ENTITY_MAP, P_BLOCK_RE } from './validator';
 
 const BR_SOLO_RE = /^<br\s*\/?>$/i;
 

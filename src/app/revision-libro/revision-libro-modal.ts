@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import {
+  ConteoCapitulos,
   ConteoDetector,
   RevisionLibroService,
   SeleccionRevision,
@@ -41,8 +42,8 @@ export class RevisionLibroModal {
     const r = this.svc.resultado();
     if (!r || this.svc.aplicando()) return false;
     return (
-      (this.rayas() && r.rayas.cambios > 0)
-      || (this.comillas() && r.comillas.cambios > 0)
+      (this.rayas() && r.rayas.capitulos > 0)
+      || (this.comillas() && r.comillas.capitulos > 0)
       || (this.arreglosRae() && r.arreglosRae.cambios > 0)
     );
   });
@@ -54,6 +55,13 @@ export class RevisionLibroModal {
       arreglosRae: this.arreglosRae(),
     };
     await this.svc.aplicar(seleccion);
+  }
+
+  /** Rayas/comillas: no hay conteo real de cambios (ver `ConteoCapitulos`),
+   *  así que la fila dice solo en cuántos capítulos hay algo para tocar. */
+  protected resumenCapitulos(c: ConteoCapitulos): string {
+    if (c.capitulos === 0) return 'sin cambios';
+    return `${c.capitulos} capítulo${c.capitulos === 1 ? '' : 's'}`;
   }
 
   protected resumen(c: ConteoDetector): string {

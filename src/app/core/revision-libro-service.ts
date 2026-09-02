@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { aplicarEnCapitulo, detectarEnCapitulo, SeleccionRevision } from '../revision/deteccion';
+import { countWords } from './chapter-service';
 import { GitService } from './git-service';
 import { ProjectService } from './project-service';
 import { SettingsService } from './settings-service';
@@ -15,14 +16,23 @@ interface ChapterPayload {
   idioma?: string | null;
 }
 
+/** Rayas y comillas: `converter`/`educateQuotes` devuelven `changes` 0|1 por
+ *  capítulo (¿hubo cambio?, no cuántos), así que lo único real que se puede
+ *  mostrar es en cuántos capítulos hay algo para tocar — no un conteo de
+ *  cambios inventado. */
+export interface ConteoCapitulos {
+  capitulos: number;
+}
+
+/** Arreglos RAE y repeticiones sí traen conteo real de violaciones. */
 export interface ConteoDetector {
   cambios: number;
   capitulos: number;
 }
 
 export interface ResumenRevision {
-  rayas: ConteoDetector;
-  comillas: ConteoDetector;
+  rayas: ConteoCapitulos;
+  comillas: ConteoCapitulos;
   arreglosRae: ConteoDetector;
   repeticiones: ConteoDetector;
 }
@@ -73,6 +83,13 @@ export class RevisionLibroService {
     }
   }
 
+  /** Escanea el libro capturado en `node` al arrancar. Si mientras tanto se
+   *  cierra el modal o se abre otro libro (`this.libro()` cambia), los
+   *  conteos calculados se descartan sin tocar `resultado`/`error` — si no,
+   *  el escaneo de un libro A que sigue en vuelo aterriza sobre el B que el
+   *  autor ya tiene abierto. `escaneando` sí se resetea siempre en el
+   *  `finally`: es un flag de "hay un escaneo en curso", no un dato de libro,
+   *  y dejarlo pegado en `true` trabaría el botón del libro que quedó abierto. */
   async escanear(): Promise<void> {
     const node = this.libro();
     if (!node) return;
@@ -82,13 +99,16 @@ export class RevisionLibroService {
       const payloads = await invoke<ChapterPayload[]>('list_chapters_for_audit', {
         scopePath: node.path,
       });
+      if (this.libro() !== node) return;
+      const vacioCap = (): ConteoCapitulos => ({ capitulos: 0 });
       const vacio = (): ConteoDetector => ({ cambios: 0, capitulos: 0 });
       const res: ResumenRevision = {
-        rayas: vacio(), comillas: vacio(), arreglosRae: vacio(), repeticiones: vacio(),
+        rayas: vacioCap(), comillas: vacioCap(), arreglosRae: vacio(), repeticiones: vacio(),
       };
       // Una sola vez para todo el libro: es el mismo diccionario de saga para
       // todos sus capítulos.
       const diccionario = await this.palabrasDeLaSaga(node);
+      if (this.libro() !== node) return;
       // Los nombres propios inventados del mundo. Sin esto, que `Kallai`
       // aparezca cinco veces en una escena cuenta como cinco repeticiones y el
       // número que ve el autor no significa nada. Es la misma fuente que usa
@@ -97,17 +117,25 @@ export class RevisionLibroService {
       let procesados = 0;
       for (const p of payloads) {
         const det = detectarEnCapitulo(p.html, p.idioma, { excepciones, diccionario });
-        if (det.rayas > 0) { res.rayas.cambios += det.rayas; res.rayas.capitulos += 1; }
-        if (det.comillas > 0) { res.comillas.cambios += det.comillas; res.comillas.capitulos += 1; }
+        if (det.rayas > 0) res.rayas.capitulos += 1;
+        if (det.comillas > 0) res.comillas.capitulos += 1;
         if (det.arreglosRae > 0) { res.arreglosRae.cambios += det.arreglosRae; res.arreglosRae.capitulos += 1; }
         if (det.repeticiones > 0) { res.repeticiones.cambios += det.repeticiones; res.repeticiones.capitulos += 1; }
 
         procesados += 1;
-        if (procesados % 5 === 0) await new Promise((r) => setTimeout(r, 0));
+        if (procesados % 5 === 0) {
+          await new Promise((r) => setTimeout(r, 0));
+          if (this.libro() !== node) return;
+        }
       }
       this.resultado.set(res);
     } catch (e) {
-      this.error.set(String(e));
+      if (this.libro() === node) {
+        // Un rescaneo fallido no puede dejar los conteos viejos ni las
+        // casillas habilitadas al lado del mensaje de error.
+        this.resultado.set(null);
+        this.error.set(String(e));
+      }
     } finally {
       this.escaneando.set(false);
     }
@@ -134,6 +162,9 @@ export class RevisionLibroService {
       const payloads = await invoke<ChapterPayload[]>('list_chapters_for_audit', {
         scopePath: node.path,
       });
+      // Mismo root para todos los capítulos del libro — se resuelve una sola
+      // vez, igual que `diccionario` en `escanear`.
+      const root = this.project.root();
       let salteados = 0;
       let procesados = 0;
       for (const p of payloads) {
@@ -141,6 +172,17 @@ export class RevisionLibroService {
         salteados += s;
         if (html !== p.html) {
           await invoke('write_chapter', { path: p.path, html });
+          if (root) {
+            // Mismo camino que `chapter-service.ts::saveInPane`: sin esto el
+            // árbol y la galería siguen mostrando palabras/fecha viejas para
+            // capítulos que se acaban de reescribir.
+            await invoke('write_chapter_stats', {
+              root,
+              chapterPath: p.path,
+              palabras: countWords(html),
+              ultimaEdicion: new Date().toISOString(),
+            });
+          }
           modificados += 1;
         }
         procesados += 1;
@@ -159,7 +201,9 @@ export class RevisionLibroService {
           `${salteados} arreglo${salteados === 1 ? '' : 's'} de RAE se saltearon por tocar texto con formato. Revisalos a mano desde el panel «Revisar RAE».`,
         );
       }
-      await this.escanear();
+      // Si mientras se aplicaba el autor cerró el modal o abrió otro libro,
+      // no dispares un rescaneo fantasma sobre el libro que quedó abierto.
+      if (this.libro() === node) await this.escanear();
     } catch (e) {
       // Si ya se escribieron capítulos antes del error, decirlo: el autor
       // necesita saber que el libro quedó a medio aplicar para decidir si
@@ -168,7 +212,9 @@ export class RevisionLibroService {
         modificados > 0
           ? `Se modificaron ${modificados} capítulo${modificados === 1 ? '' : 's'} antes del error. `
           : '';
-      this.error.set(`${prefijo}${e}`);
+      // El error solo se muestra si el modal sigue en el mismo libro — si no,
+      // el mensaje de A aterriza sobre el B que el autor ya tiene abierto.
+      if (this.libro() === node) this.error.set(`${prefijo}${e}`);
       this.toast.error(`Revisión: ${prefijo}${e}`);
     } finally {
       // El refresco corre en el finally (no solo en el camino feliz): si
