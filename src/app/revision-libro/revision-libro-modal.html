@@ -3,7 +3,7 @@
   <div class="rl-modal" (click)="$event.stopPropagation()">
     <header class="rl-header">
       <h2>Revisar «{{ libro.name }}»{{ idiomaLibro() ? ' · ' + idiomaLibro() : '' }}</h2>
-      <button type="button" class="rl-escanear btn btn-secondary" [disabled]="svc.escaneando()" (click)="svc.escanear()">
+      <button type="button" class="rl-escanear btn btn-secondary" [disabled]="svc.escaneando() || svc.aplicando()" (click)="svc.escanear()">
         @if (svc.escaneando()) { <app-spinner [size]="14" /> } @else { Escanear }
       </button>
     </header>
@@ -23,6 +23,7 @@
             <input type="checkbox" [checked]="rayas()" (change)="rayas.set(!rayas())" [disabled]="r.rayas.capitulos === 0" />
             <span class="rl-nombre">Rayas RAE</span>
             <span class="rl-conteo">{{ resumenCapitulos(r.rayas) }}</span>
+            <span class="rl-nota">también normaliza las comillas tipográficas de todo el capítulo, no solo el diálogo</span>
           </label>
         } @else {
           <div class="rl-fila rl-fila-reporte">

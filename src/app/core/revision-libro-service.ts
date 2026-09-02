@@ -2,8 +2,10 @@ import { Injectable, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { aplicarEnCapitulo, detectarEnCapitulo, SeleccionRevision } from '../revision/deteccion';
 import { BookConfigService } from './book-config-service';
-import { countWords } from './chapter-service';
+import { ChapterService, countWords } from './chapter-service';
+import { DebugService } from './debug-service';
 import { GitService } from './git-service';
+import { NoteService } from './note-service';
 import { ProjectService } from './project-service';
 import { SettingsService } from './settings-service';
 import { ToastService } from './toast-service';
@@ -63,6 +65,9 @@ export class RevisionLibroService {
   private git = inject(GitService);
   private toast = inject(ToastService);
   private bookConfig = inject(BookConfigService);
+  private chapter = inject(ChapterService);
+  private note = inject(NoteService);
+  private debug = inject(DebugService);
 
   readonly libro = signal<TreeNode | null>(null);
   readonly escaneando = signal<boolean>(false);
@@ -126,6 +131,13 @@ export class RevisionLibroService {
     this.escaneando.set(true);
     this.error.set(null);
     try {
+      // `list_chapters_for_audit` lee del disco. Si el autor tiene un
+      // capítulo o nota abierta en el editor con un autosave pendiente (ver
+      // `AUTOSAVE_MS` en chapter-service.ts), sin este flush el escaneo ve el
+      // buffer viejo y los conteos que muestra no corresponden a lo que hay
+      // — mismo patrón que `NodeActionsService.irAGaleria`, en los dos panes.
+      await this.chapter.flushAllDirty();
+      await this.note.flushAllDirty();
       const payloads = await invoke<ChapterPayload[]>('list_chapters_for_audit', {
         scopePath: node.path,
       });
@@ -192,6 +204,11 @@ export class RevisionLibroService {
     // auto-commit ya disparado) para decírselo al autor y refrescar árbol/git.
     let modificados = 0;
     try {
+      // Mismo motivo que en `escanear`: sin flushear antes, un autosave
+      // pendiente que dispara DESPUÉS de este lote reescribe el archivo con
+      // el buffer viejo y se pierde en silencio la corrección recién aplicada.
+      await this.chapter.flushAllDirty();
+      await this.note.flushAllDirty();
       const payloads = await invoke<ChapterPayload[]>('list_chapters_for_audit', {
         scopePath: node.path,
       });
@@ -206,18 +223,27 @@ export class RevisionLibroService {
         salteados += s;
         if (html !== p.html) {
           await invoke('write_chapter', { path: p.path, html });
+          // Contar apenas `write_chapter` tuvo éxito, ANTES de las stats: si
+          // `write_chapter_stats` de abajo falla, el capítulo ya quedó
+          // escrito en disco (con su auto-commit ya disparado) y el `finally`
+          // necesita saber que hay que refrescar árbol/git igual.
+          modificados += 1;
           if (root) {
             // Mismo camino que `chapter-service.ts::saveInPane`: sin esto el
             // árbol y la galería siguen mostrando palabras/fecha viejas para
-            // capítulos que se acaban de reescribir.
-            await invoke('write_chapter_stats', {
-              root,
-              chapterPath: p.path,
-              palabras: countWords(html),
-              ultimaEdicion: new Date().toISOString(),
-            });
+            // capítulos que se acaban de reescribir. Un fallo acá es
+            // cosmético (stats desactualizadas) — no aborta el lote.
+            try {
+              await invoke('write_chapter_stats', {
+                root,
+                chapterPath: p.path,
+                palabras: countWords(html),
+                ultimaEdicion: new Date().toISOString(),
+              });
+            } catch (err) {
+              this.debug.error('revision-libro', `stats de ${p.path}: ${err}`);
+            }
           }
-          modificados += 1;
         }
         procesados += 1;
         this.toast.update(toastId, `Aplicando correcciones (${procesados} de ${payloads.length})`);

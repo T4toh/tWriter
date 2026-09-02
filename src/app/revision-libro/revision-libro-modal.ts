@@ -40,7 +40,7 @@ export class RevisionLibroModal {
 
   protected readonly puedeAplicar = computed<boolean>(() => {
     const r = this.svc.resultado();
-    if (!r || this.svc.aplicando()) return false;
+    if (!r || this.svc.aplicando() || this.svc.escaneando()) return false;
     return (
       (this.rayas() && r.rayas.capitulos > 0)
       || (this.comillas() && r.comillas.capitulos > 0)
