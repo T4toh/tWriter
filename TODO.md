@@ -399,7 +399,8 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   posiciones que ya calculan `validator.ts` y `detector.ts`, pero corridas
   server-side.
 
-- **Tesauro de sinónimos embebido** (español **e inglés**). rla-es trae
+- [x] **Tesauro de sinónimos embebido** (español **e inglés**, verificado a
+  mano por el autor el 2026-09-02). rla-es trae
   `sinonimos/palabras/th_es_v2.dat` — **21.846 entradas**, 2,8 MB, formato
   MyThes (`palabra|N` y N líneas `-|sinónimo|sinónimo|…`), más un `.idx` de
   361 KB con offsets que **no se bundlea** (ver más abajo). Encoding
@@ -480,8 +481,14 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   porque WebKit no mueve el caret al hacer click derecho
   (`src/app/editor/palabra-en.ts` + `scripts/run-tesauro-smoke.mjs`, 10 casos).
   La `S` de `⌘⇧S` quedó descartada: es "Guardar como" en casi toda app de
-  escritorio. **Falta la verificación a mano del autor** con la app levantada —
-  no se marca `[x]` hasta entonces.
+  escritorio.
+
+  **Veredicto del autor (2026-09-02): anda bien, y no se toca más.** La
+  función hace lo que promete; lo flojo es el material de base — los `.dat`
+  de MyThes dan sinónimos pobres para prosa. Mejorarlo pediría otra fuente de
+  datos, y el autor decidió que no vale el tiempo. O sea que "malo" acá es la
+  calidad de los sinónimos, no la implementación: no abrir de nuevo este item
+  para refactorizar el parser ni la UI.
 
 - **Guionado para el EPUB**. rla-es trae `separacion/hyph_es.dic`, **6.207
   patrones** (Javier Bezos / CervanTeX). Sirve para justificado con separación

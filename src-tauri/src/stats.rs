@@ -9,7 +9,7 @@
 //! Keys son paths relativos al root, separador `/` siempre (cross-platform).
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -55,6 +55,114 @@ pub fn write_stats(root: &Path, stats: &StatsMap) -> Result<(), String> {
     let tmp = p.with_extension("json.tmp");
     fs::write(&tmp, raw).map_err(|e| e.to_string())?;
     fs::rename(&tmp, &p).map_err(|e| e.to_string())
+}
+
+/// True si `a` y `b` son el mismo path salvo por **un** segmento de carpeta.
+/// Esa es exactamente la firma de un rename de carpeta. El nombre del archivo
+/// tiene que coincidir: sin esa condición, `Libro/1.html` y `Libro/2.html`
+/// —dos capítulos distintos— pasarían por "rename".
+fn difiere_en_una_carpeta(a: &[&str], b: &[&str]) -> bool {
+    if a.len() != b.len() || a.len() < 2 {
+        return false;
+    }
+    if a[a.len() - 1] != b[b.len() - 1] {
+        return false;
+    }
+    a.iter().zip(b).filter(|(x, y)| x != y).count() == 1
+}
+
+/// Un rename de carpeta hecho fuera de la app —a mano, por la otra PC, o por
+/// el servicio de sync— deja claves de `stats.json` apuntando a paths que ya no
+/// existen, y con eso se evaporan las palabras y la última edición de esos
+/// capítulos. Acá se reconcilian.
+///
+/// Se remapea solo cuando hay **un** capítulo real que difiere en un segmento
+/// de carpeta y que todavía no tiene stat propio. Con dos o más candidatos se
+/// deja como está: adivinar mal mezcla el histórico de dos capítulos.
+///
+/// A propósito **no** se borran las claves que no matchean con nada. Un
+/// checkout de otra rama hace desaparecer capítulos, y ahí borrarlas sería
+/// tirar histórico real para ahorrar unos kilobytes.
+///
+/// No se apoya en git: el mismo bug pasa en roots de Dropbox, pCloud, iCloud o
+/// locales, donde no hay repo del que leer los renames.
+///
+/// Devuelve cuántas claves se remapearon.
+pub fn reconciliar_stats(root: &Path) -> usize {
+    let stats = read_stats(root);
+    if stats.is_empty() {
+        return 0;
+    }
+    // Detectar huérfanas son N `is_file()`; el walk de abajo se paga solo si
+    // efectivamente hay alguna, o sea casi nunca.
+    let huerfanas: Vec<String> = stats
+        .keys()
+        .filter(|k| !root.join(k.as_str()).is_file())
+        .cloned()
+        .collect();
+    if huerfanas.is_empty() {
+        return 0;
+    }
+
+    let reales: Vec<String> = crate::search::collect_indexable(root)
+        .into_iter()
+        .filter(|(_, kind)| kind == "chapter")
+        .filter_map(|(p, _)| relative_key(root, &p))
+        .filter(|k| !stats.contains_key(k))
+        .collect();
+
+    // ponytail: O(huérfanas × capítulos sin stat). Con el corpus real son
+    // 294 × 533 de comparaciones de Vec<&str> cortos y solo en el camino de
+    // error; si alguna vez molesta, indexar `reales` por nombre de archivo.
+    let mut tomados: HashSet<&str> = HashSet::new();
+    let mut movidas: Vec<(String, String)> = Vec::new();
+    for vieja in &huerfanas {
+        let segs_v: Vec<&str> = vieja.split('/').collect();
+        let mut candidata: Option<&str> = None;
+        let mut ambigua = false;
+        for real in &reales {
+            if tomados.contains(real.as_str()) {
+                continue;
+            }
+            let segs_r: Vec<&str> = real.split('/').collect();
+            if !difiere_en_una_carpeta(&segs_v, &segs_r) {
+                continue;
+            }
+            if candidata.is_some() {
+                ambigua = true;
+                break;
+            }
+            candidata = Some(real.as_str());
+        }
+        if ambigua {
+            continue;
+        }
+        if let Some(nueva) = candidata {
+            tomados.insert(nueva);
+            movidas.push((vieja.clone(), nueva.to_string()));
+        }
+    }
+
+    if movidas.is_empty() {
+        return 0;
+    }
+    let mut nuevas = stats;
+    for (vieja, nueva) in &movidas {
+        if let Some(stat) = nuevas.remove(vieja) {
+            nuevas.insert(nueva.clone(), stat);
+        }
+    }
+    if let Err(e) = write_stats(root, &nuevas) {
+        tracing::warn!(target: "stats", error = %e, "no pude reescribir stats.json reconciliado");
+        return 0;
+    }
+    tracing::info!(
+        target: "stats",
+        remapeadas = movidas.len(),
+        huerfanas = huerfanas.len(),
+        "stats.json reconciliado tras un rename de carpeta afuera de la app"
+    );
+    movidas.len()
 }
 
 /// Actualiza un stat puntual.
@@ -194,6 +302,102 @@ pub fn palabras_for_chapter(stats: &StatsMap, root: &Path, chapter_path: &Path) 
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    /// Arma un root con los capítulos dados y un `stats.json` con las claves
+    /// dadas, para no repetir el andamiaje en cada test de reconciliación.
+    fn root_con(capitulos: &[&str], claves: &[&str]) -> TempDir {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        for cap in capitulos {
+            let p = root.join(cap);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(&p, "<p>texto</p>\n").unwrap();
+            // saga.json/book.json no hacen falta: el walk junta los .html igual.
+        }
+        let mut mapa = StatsMap::new();
+        for (i, k) in claves.iter().enumerate() {
+            mapa.insert(
+                (*k).to_string(),
+                ChapterStat {
+                    palabras: 100 + i as u32,
+                    ultima_edicion: Some("2026-08-20T00:00:00Z".into()),
+                },
+            );
+        }
+        write_stats(root, &mapa).unwrap();
+        tmp
+    }
+
+    #[test]
+    fn reconciliar_remapea_el_rename_de_una_saga() {
+        // El caso real del autor: `Milky Way` pasó a `3 - Milky Way` a mano.
+        let tmp = root_con(
+            &["3 - Milky Way/1 - Deployment/3.html"],
+            &["Milky Way/1 - Deployment/3.html"],
+        );
+        assert_eq!(reconciliar_stats(tmp.path()), 1);
+        let stats = read_stats(tmp.path());
+        assert!(!stats.contains_key("Milky Way/1 - Deployment/3.html"));
+        assert_eq!(
+            stats.get("3 - Milky Way/1 - Deployment/3.html").unwrap().palabras,
+            100,
+            "el histórico tiene que viajar a la clave nueva, no reiniciarse"
+        );
+    }
+
+    #[test]
+    fn reconciliar_remapea_el_rename_del_padre_inmediato() {
+        // El segmento que cambia es el padre del archivo, no el primero.
+        let tmp = root_con(&["Saga/1 - Libro/3.html"], &["Saga/Libro/3.html"]);
+        assert_eq!(reconciliar_stats(tmp.path()), 1);
+        assert!(read_stats(tmp.path()).contains_key("Saga/1 - Libro/3.html"));
+    }
+
+    #[test]
+    fn reconciliar_no_adivina_cuando_hay_dos_candidatos() {
+        // `A/L/3.html` difiere en un segmento tanto de `X/L/3.html` como de
+        // `Y/L/3.html`. Elegir uno mezclaría el histórico de dos capítulos.
+        let tmp = root_con(&["X/L/3.html", "Y/L/3.html"], &["A/L/3.html"]);
+        assert_eq!(reconciliar_stats(tmp.path()), 0);
+        assert!(read_stats(tmp.path()).contains_key("A/L/3.html"));
+    }
+
+    #[test]
+    fn reconciliar_no_confunde_dos_capitulos_del_mismo_libro() {
+        // `1.html` y `2.html` difieren en un segmento, pero es el nombre del
+        // archivo: son capítulos distintos, no un rename de carpeta.
+        let tmp = root_con(&["Saga/Libro/2.html"], &["Saga/Libro/1.html"]);
+        assert_eq!(reconciliar_stats(tmp.path()), 0);
+    }
+
+    #[test]
+    fn reconciliar_conserva_la_huerfana_que_no_matchea_con_nada() {
+        // Pasa al cambiar de rama: el capítulo no está en el working tree.
+        // Borrar la clave sería tirar histórico real para ahorrar kilobytes.
+        let tmp = root_con(&["Saga/Libro/1.html"], &["Otra Saga/Otro/9.html"]);
+        assert_eq!(reconciliar_stats(tmp.path()), 0);
+        assert!(read_stats(tmp.path()).contains_key("Otra Saga/Otro/9.html"));
+    }
+
+    #[test]
+    fn reconciliar_no_toca_nada_cuando_esta_todo_sano() {
+        let tmp = root_con(&["Saga/Libro/1.html"], &["Saga/Libro/1.html"]);
+        assert_eq!(reconciliar_stats(tmp.path()), 0);
+        assert_eq!(read_stats(tmp.path()).len(), 1);
+    }
+
+    #[test]
+    fn reconciliar_no_pisa_un_capitulo_que_ya_tiene_stat() {
+        // `Saga/Libro/2.html` ya tiene su propia entrada, así que no puede ser
+        // el destino del rename de `Saga/Viejo/2.html`.
+        let tmp = root_con(
+            &["Saga/Libro/2.html"],
+            &["Saga/Libro/2.html", "Saga/Viejo/2.html"],
+        );
+        assert_eq!(reconciliar_stats(tmp.path()), 0);
+        let stats = read_stats(tmp.path());
+        assert_eq!(stats.get("Saga/Libro/2.html").unwrap().palabras, 100);
+    }
 
     #[test]
     fn migrate_moves_palabras_out_of_meta() {

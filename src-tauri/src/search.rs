@@ -646,7 +646,7 @@ pub fn full_reindex(
 }
 
 /// Camina el repo y devuelve la lista de `(path, kind)` a indexar.
-fn collect_indexable(root: &Path) -> Vec<(PathBuf, String)> {
+pub(crate) fn collect_indexable(root: &Path) -> Vec<(PathBuf, String)> {
     let mut out = Vec::new();
     walk_collect(root, &mut out, 0);
     out

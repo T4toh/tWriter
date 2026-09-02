@@ -130,6 +130,10 @@ pub fn get_tree(root: String) -> Result<TreeNode, String> {
             tracing::warn!(target: "fs", error = %e, "migración stats falló");
         }
     }
+    // Un rename de carpeta hecho afuera de la app deja las claves apuntando a
+    // paths viejos. Se reconcilia acá, antes de leer: si no, el árbol muestra
+    // 0 palabras en esos capítulos hasta el próximo save.
+    stats::reconciliar_stats(&root_path);
     let stats_map = stats::read_stats(&root_path);
     TREE_CTX.with(|c| *c.borrow_mut() = Some((root_path.clone(), stats_map)));
 
