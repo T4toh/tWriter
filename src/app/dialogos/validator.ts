@@ -114,11 +114,11 @@ function pushDedicated(para: string, offset: number, out: RaeViolation[]): void 
   }
 }
 
-const P_BLOCK_RE = /<p\b[^>]*>([\s\S]*?)<\/p>/gi;
-const BR_RE = /<br\s*\/?>/i;
+export const P_BLOCK_RE = /<p\b[^>]*>([\s\S]*?)<\/p>/gi;
+export const BR_RE = /<br\s*\/?>/i;
 const TAG_RE = /<[^>]+>/g;
 
-const ENTITY_MAP: Record<string, string> = {
+export const ENTITY_MAP: Record<string, string> = {
   '&nbsp;': ' ',
   '&amp;': '&',
   '&lt;': '<',
