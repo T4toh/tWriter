@@ -10,8 +10,8 @@
     "watch": "ng build --watch --configuration development",
     "tauri": "tauri",
     "lint:css": "stylelint \"src/**/*.scss\"",
-    "lint:css:epub": "stylelint --config .stylelintrc.epub.cjs src-tauri/src/epub_style.css",
-    "lint:css:all": "stylelint \"src/**/*.scss\" && stylelint --config .stylelintrc.epub.cjs src-tauri/src/epub_style.css"
+    "lint:css:epub": "stylelint --config .stylelintrc.epub.cjs src-tauri/resources/epub_style.css",
+    "lint:css:all": "stylelint \"src/**/*.scss\" && stylelint --config .stylelintrc.epub.cjs src-tauri/resources/epub_style.css"
   },
   "private": true,
   "dependencies": {

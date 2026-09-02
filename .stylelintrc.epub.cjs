@@ -1,4 +1,4 @@
-// Config de stylelint SOLO para src-tauri/src/epub_style.css.
+// Config de stylelint SOLO para src-tauri/resources/epub_style.css.
 //
 // A propósito, no extiende stylelint-config-standard-scss: esa hoja usa
 // float, display:table y vh porque los e-readers (Kindle KF8/KFX en

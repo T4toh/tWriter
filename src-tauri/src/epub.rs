@@ -6,6 +6,9 @@ use uuid::Uuid;
 use zip::write::{SimpleFileOptions, ZipWriter};
 use zip::CompressionMethod;
 
+use tauri::path::BaseDirectory;
+use tauri::{AppHandle, Manager};
+
 use crate::book_config::{
     find_back_cover_in, find_cover_in, image_field_unusable, resolver_imagen, BookConfig,
 };
@@ -82,7 +85,34 @@ fn read_export_dir(dir: &Path) -> Result<Vec<ExportEntry>, String> {
     Ok(out)
 }
 
-const CSS_TEMPLATE: &str = include_str!("epub_style.css");
+const CSS_REL: &str = "resources/epub_style.css";
+
+/// La hoja del EPUB en el repo. En dev se lee de acá y no de la copia que
+/// `tauri-build` deja en `target/`: editarla y exportar de nuevo alcanza.
+fn css_template_dev_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CSS_REL)
+}
+
+/// La hoja se lee en runtime, no con `include_str!`. Con `include_str!` el CSS
+/// quedaba adentro del binario y el watcher de `tauri dev` solo mira `.rs`, así
+/// que tocarla no cambiaba nada en la app corriendo: se editaba, se exportaba,
+/// no pasaba nada, y uno terminaba "arreglando" un CSS que ya estaba bien.
+fn css_template(app: &AppHandle) -> Result<String, String> {
+    let ruta = if cfg!(debug_assertions) {
+        css_template_dev_path()
+    } else {
+        app.path()
+            .resolve(CSS_REL, BaseDirectory::Resource)
+            .map_err(|e| format!("no pude resolver {}: {}", CSS_REL, e))?
+    };
+    fs::read_to_string(&ruta).map_err(|e| {
+        format!(
+            "no pude leer la hoja de estilos del EPUB en {}: {}. El bundle está incompleto — reinstalá la app.",
+            ruta.display(),
+            e
+        )
+    })
+}
 
 fn page_rule_for(template: &str, override_margin: Option<&str>) -> String {
     let (size, default_margin) = match template {
@@ -266,11 +296,11 @@ fn heading_has_bold(theme: &ResolvedTheme) -> bool {
         .any(|f| f.family.to_ascii_lowercase() == target && f.weight >= 700 && f.style == "normal")
 }
 
-fn build_css(template: &str, theme: &ResolvedTheme) -> String {
+fn build_css(plantilla: &str, template: &str, theme: &ResolvedTheme) -> String {
     let page_rule = page_rule_for(template, theme.page_margin.as_deref());
     let font_face = build_font_face_block(&theme.fonts);
     let theme_rules = build_theme_rules_block(theme);
-    CSS_TEMPLATE
+    plantilla
         .replace("/* @PAGE_SIZE */", &page_rule)
         .replace("/* @FONT_FACE */", &font_face)
         .replace("/* @THEME_RULES */", &theme_rules)
@@ -314,13 +344,14 @@ struct Item {
 
 /// Exporta un libro a EPUB en `<book>/exports/<title>.epub`.
 #[tauri::command]
-pub async fn export_book(book_path: String) -> Result<ExportResult, String> {
-    tauri::async_runtime::spawn_blocking(move || export_impl(&book_path))
+pub async fn export_book(app: AppHandle, book_path: String) -> Result<ExportResult, String> {
+    let plantilla_css = css_template(&app)?;
+    tauri::async_runtime::spawn_blocking(move || export_impl(&book_path, &plantilla_css))
         .await
         .map_err(|e| format!("task: {}", e))?
 }
 
-fn export_impl(book_path: &str) -> Result<ExportResult, String> {
+fn export_impl(book_path: &str, plantilla_css: &str) -> Result<ExportResult, String> {
     let book_dir = PathBuf::from(book_path);
     if !book_dir.is_dir() {
         tracing::error!(target: "epub", path = %book_path, "export_book: no es directorio");
@@ -367,7 +398,7 @@ fn export_impl(book_path: &str) -> Result<ExportResult, String> {
         .as_deref()
         .or(cfg.template.as_deref())
         .unwrap_or("6x9");
-    let css = build_css(template, &resolved_theme);
+    let css = build_css(plantilla_css, template, &resolved_theme);
     zip.start_file("OEBPS/style.css", opts).map_err(|e| e.to_string())?;
     zip.write_all(css.as_bytes()).map_err(|e| e.to_string())?;
 
@@ -1976,6 +2007,21 @@ mod tests {
     use crate::theme::{FontEmbed, ResolvedTheme};
     use std::path::PathBuf;
     use tempfile::TempDir;
+
+    /// Los tests no tienen `AppHandle`, así que leen la hoja del repo. Estos
+    /// dos wrappers tapan a los de `super::*` (un item local gana sobre un
+    /// glob import) para no repetir el argumento en cada caso.
+    fn plantilla_css() -> String {
+        fs::read_to_string(css_template_dev_path()).expect("hoja de estilos del EPUB")
+    }
+
+    fn export_impl(book_path: &str) -> Result<ExportResult, String> {
+        super::export_impl(book_path, &plantilla_css())
+    }
+
+    fn build_css(template: &str, theme: &ResolvedTheme) -> String {
+        super::build_css(&plantilla_css(), template, theme)
+    }
 
     #[test]
     fn unconfigured_css_keeps_placeholders_empty() {

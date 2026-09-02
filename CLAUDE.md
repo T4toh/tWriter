@@ -134,6 +134,11 @@ El scaffold inicial usa nombres `app.component.*` — refactorizar a convencione
 
 - **Pandoc**: bundleado como `external bin` en `src-tauri/binaries/pandoc-<target>`, declarado en `tauri.conf.json`. Usado solo al importar `.docx`/`.odt`.
 - **LanguageTool**: NO sidecar. Corre como Docker container del usuario (`localhost:8081`). La feature de gramática se habilita solo si se detecta el endpoint.
+- **CSS del EPUB**: `src-tauri/resources/epub_style.css` es un `resource`, no
+  un `include_str!`. Se lee en runtime (`epub.rs::css_template`): en debug
+  desde `CARGO_MANIFEST_DIR`, en release vía `BaseDirectory::Resource`.
+  Editarla y volver a exportar alcanza — no hay que recompilar Rust. Lintea
+  con `pnpm lint:css:epub`.
 - **Tesauro de sinónimos**: `src-tauri/resources/tesauro/` shipea dos `.dat`
   MyThes de terceros, declarados como `resources` en `tauri.conf.json` (van
   al bundle, no son sidecar). `th_es_v2.dat` (español, LGPL 2.1, de
