@@ -114,6 +114,35 @@
   }
 }
 
+.gs-bloque {
+  border-top: 1px solid var(--border);
+  padding: 0.5rem 0;
+
+  &:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  > summary {
+    cursor: pointer;
+    padding: 4px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg);
+    user-select: none;
+
+    &:hover {
+      color: var(--accent);
+    }
+  }
+}
+
+.gs-bloque-intro {
+  margin: 0 0 0.5rem;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
 .gs-section-divider {
   margin: 0.5rem 0 0.25rem;
   font-size: 11px;
@@ -351,6 +380,12 @@ option {
   font-size: 11px;
   color: var(--fg-muted);
 
+  // Solo cuando abajo vienen opciones: en los otros dos usos la nota cierra
+  // un <details> y un margen inferior le abriría un hueco de más.
+  & + .gs-option {
+    margin-top: 10px;
+  }
+
   a {
     color: var(--accent);
     text-decoration: underline;
@@ -534,16 +569,23 @@ option {
   flex: 1;
 }
 
-.test-ok {
+.test-ok,
+.test-fail {
+  // El SVG es inline y se apoyaba en la baseline del texto, así que el tilde
+  // quedaba más abajo que la palabra. Con inline-flex los centra a los dos.
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
-  color: #4caf50;
   font-weight: 600;
 }
 
+.test-ok {
+  color: #4caf50;
+}
+
 .test-fail {
-  font-size: 12px;
   color: #c87070;
-  font-weight: 600;
 }
 
 

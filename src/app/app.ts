@@ -37,7 +37,7 @@ import { MarkdownReader } from './markdown-reader/markdown-reader';
 import { SearchPanel } from './search-panel/search-panel';
 import { RaeAuditPanel } from './rae-audit/rae-audit-panel';
 import { ToastContainer } from './toast/toast-container';
-import { GrammarSettings } from './grammar-settings/grammar-settings';
+import { SettingsModal } from './settings-modal/settings-modal';
 import { ImportJoplin } from './import-joplin/import-joplin';
 import { ImportWizard } from './import-wizard/import-wizard';
 import { UpdateBanner } from './update-banner/update-banner';
@@ -56,7 +56,6 @@ import { atajo } from './shared/atajo';
 import {
   LucideArrowDownToLine,
   LucideArrowUpDown,
-  LucideBug,
   LucideInfo,
   LucideChevronDown,
   LucideChevronRight,
@@ -64,6 +63,7 @@ import {
   LucideDownload,
   LucideDynamicIcon,
   LucideFolder,
+  LucideHouse,
   LucideMoveHorizontal,
   LucideMoveVertical,
   LucideNotebook,
@@ -80,9 +80,9 @@ import {
   imports: [
     Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, DictionaryModal, SplitChapterModal,
     NoteFormModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, ToastContainer,
-    GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, AboutModal, AutorModal, Spinner, ModalHost, ContextMenuHost,
-    LucideArrowDownToLine, LucideArrowUpDown, LucideBug, LucideChevronDown, LucideChevronRight,
-    LucideCircleQuestionMark, LucideDownload, LucideDynamicIcon, LucideFolder, LucideMoveHorizontal,
+    SettingsModal, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, AboutModal, AutorModal, Spinner, ModalHost, ContextMenuHost,
+    LucideArrowDownToLine, LucideArrowUpDown, LucideChevronDown, LucideChevronRight,
+    LucideCircleQuestionMark, LucideDownload, LucideDynamicIcon, LucideFolder, LucideHouse, LucideMoveHorizontal,
     LucideMoveVertical, LucideNotebook, LucideNotebookPen, LucidePlus, LucideRefreshCw,
     LucideSearch, LucideSettings, LucideX, LucideInfo,
   ],
@@ -92,7 +92,7 @@ import {
 export class App {
   /** Etiquetas de atajos por plataforma (⌘ en Mac). Ver `shared/atajo.ts`. */
   protected readonly atajo = atajo;
-  @ViewChild(GrammarSettings) private grammarSettings?: GrammarSettings;
+  @ViewChild(SettingsModal) private settingsModal?: SettingsModal;
   protected importWizard = inject(ImportWizardService);
   protected importJoplin = inject(ImportJoplinService);
   protected imageViewer = inject(ImageViewerService);
@@ -218,7 +218,7 @@ export class App {
     // string en el footer.
     effect(() => {
       if (this.grammar.pedidoDeConfig() === 0) return;
-      this.openGrammarSettings();
+      this.settingsModal?.show('gramatica');
     });
     // Mutex per-pane: cuando se abre un capítulo en un pane, la nota del MISMO pane se cierra.
     effect(() => {
@@ -454,10 +454,6 @@ export class App {
     return absOrRel;
   }
 
-  protected toggleDebug(): void {
-    this.debug.toggle();
-  }
-
   protected captureSnapshot(): void {
     const tree = this.project.tree();
     const counts = tree ? countByKind(tree) : { sagas: 0, books: 0, sections: 0, chapters: 0 };
@@ -494,8 +490,11 @@ export class App {
     });
   }
 
-  protected openGrammarSettings(): void {
-    this.grammarSettings?.show();
+  protected openSettings(): void {
+    // General abierto y Gramática colapsada: es el bloque corto y el que
+    // estrena contenido. La apertura automática por LT caído sigue pidiendo
+    // `gramatica` explícito, que es donde está el remedio.
+    this.settingsModal?.show('general');
   }
 
   protected openAbout(): void {
@@ -534,6 +533,22 @@ export class App {
 
   protected toggleSearch(): void {
     this.search.toggle();
+  }
+
+  protected irAlInicio(): void {
+    void this.nodeActions.irAlInicio();
+  }
+
+  // El modo focus esconde el panel izquierdo, o sea que el botón de casita
+  // desaparece justo cuando más lejos estás de la raíz. Por eso el atajo.
+  @HostListener('window:keydown.meta.shift.h', ['$event'])
+  @HostListener('window:keydown.control.shift.h', ['$event'])
+  protected onIrAlInicio(event: Event): void {
+    event.preventDefault();
+    // El botón del header está `[disabled]="!root()"`; sin esta guarda el
+    // atajo haría lo que el botón tiene prohibido.
+    if (!this.root()) return;
+    this.irAlInicio();
   }
 
   @HostListener('window:keydown.Escape')

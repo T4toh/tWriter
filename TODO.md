@@ -22,18 +22,35 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Verificado con `pnpm tauri dev` corriendo: editar la hoja y exportar de
   nuevo, sin tocar nada de Rust, alcanza para ver el cambio en el EPUB.
 
-- **No hay forma directa de volver a la raíz** (pedido del autor, 2026-09-02).
-  Hoy, para llegar a la vista raíz —la que lista las sagas y donde vive la
-  carta del autor— hay que hacer doble click en una saga y después tocar
-  "Inicio". O sea que el camino a la pantalla de más arriba pasa por bajar
-  primero. El autor lo describe como mal diseñado desde que se cambió la
-  navegación, y coincide: la raíz debería estar a un click desde cualquier
-  lado, no a dos y en la dirección equivocada.
-  Sin decidir todavía cómo: puede ser el breadcrumb —que ya existe arriba de
-  la vista y ya sabe la cadena completa— haciendo clickeable el primer tramo,
-  un botón fijo, o un atajo de teclado. Mirar primero qué hace hoy
-  `landing.html`, que renderea el breadcrumb con `crumbs()` y `goCrumb()`, y
-  por qué esa cadena no arranca en la raíz.
+- [x] **No hay forma directa de volver a la raíz**
+  (`feat/inicio-y-settings`, verificado a mano por el autor el 2026-09-02).
+  Para llegar a la vista raíz —la que lista las sagas y donde vive la carta
+  del autor— había que hacer doble click en una saga y después tocar
+  "Inicio". El camino a la pantalla de más arriba pasaba por bajar primero.
+  El diagnóstico original apuntaba al breadcrumb, pero el breadcrumb
+  estaba bien: `crumbs()` siempre arranca con `Inicio` y ya era clickeable.
+  El problema es que el landing entero —breadcrumb incluido— vive detrás de
+  un `@if (!active())` en `editor.html`, así que con un capítulo abierto no
+  existe; y lo único que cerraba el archivo era el doble-click en carpeta del
+  árbol, que te deja en la galería de esa carpeta. Se sumó
+  `NodeActionsService.irAlInicio()` (flushea, cierra capítulo y nota, y llama
+  a `NavigationService.goRoot()`, que ya existía sin llamadores), un botón de
+  casita primero en la fila de acciones del panel izquierdo, y el atajo
+  `Cmd/Ctrl+Shift+H` porque el modo focus esconde ese panel.
+  Verificado con capítulo abierto (casita) y en modo focus (atajo).
+
+- [x] **Configuración de verdad en vez de "Configurar gramática"**
+  (`feat/inicio-y-settings`, verificado a mano por el autor el 2026-09-02).
+  El engranaje abría un modal que solo configuraba LanguageTool.
+  Ahora es `settings-modal/` con bloques colapsables (`<details>` nativo):
+  General —que estrena el toggle del panel de debug, sacado del header— y
+  Gramática, con las tres secciones que ya estaban. `show()` recibe qué
+  bloque desplegar, y el effect que abre el modal cuando LT se cae pide
+  `gramatica` para que el remedio no quede detrás de un click. El estado
+  colapsado no se persiste, por lo mismo.
+  Pendiente, para cuando haya con qué llenarlo: un bloque de temas de UI.
+  Verificado bajando LT y disparando un chequeo: el modal abre con Gramática
+  desplegada y General cerrada.
 
 ## Editor / UX
 

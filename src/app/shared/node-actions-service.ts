@@ -574,6 +574,31 @@ export class NodeActionsService {
     await this.quotesFix.fixScope(node.path);
   }
 
+  /** Deja el editor y muestra la galería de tarjetas de `path` (null = raíz).
+   *  Flushea ediciones pendientes antes de cerrar para no perder cambios, y
+   *  navega recién al final.
+   *
+   *  Recorre **los dos panes**: `ChapterService.save()`/`close()` y sus
+   *  equivalentes de notas son atajos a `saveInPane(0)`/`closeInPane(0)`, así
+   *  que en modo split se perdían los cambios sin guardar del pane 1 y encima
+   *  quedaba medio editor mostrando un capítulo después de pedir "inicio". */
+  async irAGaleria(path: string | null): Promise<void> {
+    for (const paneId of [0, 1] as const) {
+      await this.chapter.saveInPane(paneId);
+      await this.note.saveInPane(paneId);
+      this.note.closeInPane(paneId);
+      this.chapter.closeInPane(paneId);
+    }
+    this.nav.setBrowsing(path);
+  }
+
+  /** Vuelve a la vista raíz (la galería de sagas, donde vive la carta del
+   *  autor). Sin esto el único camino a la raíz era bajar a una saga para que
+   *  apareciera el breadcrumb y recién ahí tocar "Inicio". */
+  async irAlInicio(): Promise<void> {
+    await this.irAGaleria(null);
+  }
+
   configBook(node: TreeNode): void {
     this.bookCfg.openFor(node);
   }
