@@ -100,6 +100,9 @@
         <img class="crop-image" [src]="r.dataUrl" alt="" />
         <div
           class="crop-square"
+          tabindex="0"
+          role="group"
+          aria-label="Cuadro de recorte. Usá las flechas del teclado para moverlo."
           [style.left.px]="recorteSquareStyle().left"
           [style.top.px]="recorteSquareStyle().top"
           [style.width.px]="recorteSquareStyle().size"
@@ -107,6 +110,7 @@
           (pointerdown)="onRecorteQuadradoPointerDown($event)"
           (pointermove)="onRecorteQuadradoPointerMove($event)"
           (pointerup)="onRecorteQuadradoPointerUp($event)"
+          (keydown)="onRecorteQuadradoKeydown($event)"
         ></div>
       </div>
       <div class="actions">

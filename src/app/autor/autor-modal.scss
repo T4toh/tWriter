@@ -257,6 +257,7 @@ textarea {
 
 .crop-frame {
   position: relative;
+
   // El tamaño real lo pone el binding inline (escalado a partir de las
   // dimensiones naturales de la foto); esto es solo el borde de referencia.
   border: 1px solid var(--border);
@@ -279,6 +280,11 @@ textarea {
   box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.45);
   cursor: move;
   touch-action: none;
+
+  &:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
 }
 
 .actions {

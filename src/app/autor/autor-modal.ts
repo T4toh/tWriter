@@ -87,6 +87,9 @@ export class AutorModal {
   constructor() {
     effect(() => {
       if (!this.editing()) return;
+      // Un error de la apertura anterior no debe sobrevivir a un cierre y
+      // reapertura del modal.
+      this.error.set(null);
       void this.svc
         .load()
         .then((cfg) => this.config.set(cfg))
@@ -271,6 +274,36 @@ export class AutorModal {
 
   protected onRecorteQuadradoPointerUp(ev: PointerEvent): void {
     if (this.dragState?.pointerId === ev.pointerId) this.dragState = null;
+  }
+
+  /** Mueve el cuadro de recorte con las flechas — Shift para un paso más
+   *  grande. `preventDefault` evita que las flechas scrolleen el diálogo. */
+  protected onRecorteQuadradoKeydown(ev: KeyboardEvent): void {
+    const r = this.recorte();
+    if (!r) return;
+    const paso = ev.shiftKey ? 20 : 4;
+    let dx = 0;
+    let dy = 0;
+    switch (ev.key) {
+      case 'ArrowLeft':
+        dx = -paso;
+        break;
+      case 'ArrowRight':
+        dx = paso;
+        break;
+      case 'ArrowUp':
+        dy = -paso;
+        break;
+      case 'ArrowDown':
+        dy = paso;
+        break;
+      default:
+        return;
+    }
+    ev.preventDefault();
+    const x = clamp(r.x + dx, 0, r.width - r.side);
+    const y = clamp(r.y + dy, 0, r.height - r.side);
+    this.recorte.set({ ...r, x, y });
   }
 
   protected async confirmarRecorte(): Promise<void> {
