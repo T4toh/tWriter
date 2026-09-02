@@ -250,11 +250,45 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   backdrop, aplicar fixes desde los dos popovers, y los tres del select (borde
   derecho sin salirse, borde inferior abriendo hacia arriba, ventana chica
   scrolleando adentro sin scrollbar espurio) — y da el comportamiento por bueno.
-- **Performance en archivos grandes**: lag/scroll pesado en capítulos
-  largos. Puede ser el scroll nativo de Windows/Linux, pero medir primero:
-  si es el render de ProseMirror, evaluar virtualización o paginar el
-  documento. Confirmar si el costo está en el editor o en el repintado del
-  árbol/status.
+- **Performance en archivos grandes**: lag/scroll pesado en capítulos largos.
+
+  **Analizado el 2026-09-02 leyendo el código, no midiendo.** Se armó un
+  banco de pruebas (`3 - Banco de Pruebas` del repo de prueba: 5k / 25k /
+  100k / 300k palabras) y en la M5 del autor **hasta el de 300k va liso**, o
+  sea que en este hardware no hay nada que medir. Perseguir un número que no
+  se reproduce es cómo se termina virtualizando de gusto. Así que el criterio
+  pasa a ser: arreglar lo que es **algorítmicamente incorrecto** —eso no
+  depende de la máquina, solo del tamaño del documento— y dejar el resto para
+  cuando haya una queja real en hardware más lento.
+
+  Lo que corre por tecla tipeada, relevado sobre `editor.ts`:
+
+  - `refreshState()` (en `onTransaction` **y** `onSelectionUpdate`) llamaba a
+    `computeCursorPos`, que recorría `doc.descendants()` entero para contar
+    bloques. **Arreglado** en `20dc294`: `$from.index(0)` da el mismo número
+    en O(1). Era O(bloques) por tecla y por movimiento de cursor.
+  - **`onUpdate` hace `editor.getHTML()` en cada tecla** (`editor.ts:1836`) y
+    mete el string en `pane.content`. Eso serializa el documento **entero**
+    por cada carácter: en el capítulo de 300k palabras es armar 1,7 MB de
+    string por tecla. Es el costo O(n) por tecla que queda, y el que
+    explicaría el síntoma en una máquina lenta.
+
+    **No se toca todavía**, a propósito. El arreglo es marcar sucio (barato) y
+    debouncear la serialización, pero `content()` se lee en 16 lugares y el
+    save tendría que forzar un flush antes de escribir. Es un cambio de
+    contrato, no una optimización local: sin un número que muestre que hace
+    falta, el riesgo de romper un save supera al beneficio. **Disparador para
+    hacerlo**: que aparezca lag reportado en hardware más lento.
+  - El resto de lo que corre por tecla ya está debounceado y no acumula:
+    gramática 2000 ms, RAE 1500 ms, repeticiones 1500 ms, autosave 1500 ms.
+    Cuando disparan son O(n), pero una vez por pausa, no por tecla.
+
+  Del lado del árbol: `chapter_word_count` cae a leer y contar el HTML cuando
+  la clave no está en `stats.json` (`stats.rs:296`), o sea que **cada
+  `get_tree()` releía todos los capítulos con la clave huérfana**. Eso lo
+  arregla la reconciliación de stats del item de Tree/Importer. Queda como
+  costo estructural que un capítulo nunca guardado por la app se recuente en
+  cada carga del árbol; si alguna vez molesta, cachear por mtime.
 - [x] **Educador de comillas tipográficas (inglés)** (`feat/comillas-tipograficas-en`,
   PR #60): contraparte en inglés del conversor a rayas RAE, para novelas
   importadas que quedaron con comillas rectas ASCII. `quotes/educate.ts`
@@ -399,7 +433,8 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   posiciones que ya calculan `validator.ts` y `detector.ts`, pero corridas
   server-side.
 
-- **Tesauro de sinónimos embebido** (español **e inglés**). rla-es trae
+- [x] **Tesauro de sinónimos embebido** (español **e inglés**, verificado a
+  mano por el autor el 2026-09-02). rla-es trae
   `sinonimos/palabras/th_es_v2.dat` — **21.846 entradas**, 2,8 MB, formato
   MyThes (`palabra|N` y N líneas `-|sinónimo|sinónimo|…`), más un `.idx` de
   361 KB con offsets que **no se bundlea** (ver más abajo). Encoding
@@ -480,8 +515,14 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   porque WebKit no mueve el caret al hacer click derecho
   (`src/app/editor/palabra-en.ts` + `scripts/run-tesauro-smoke.mjs`, 10 casos).
   La `S` de `⌘⇧S` quedó descartada: es "Guardar como" en casi toda app de
-  escritorio. **Falta la verificación a mano del autor** con la app levantada —
-  no se marca `[x]` hasta entonces.
+  escritorio.
+
+  **Veredicto del autor (2026-09-02): anda bien, y no se toca más.** La
+  función hace lo que promete; lo flojo es el material de base — los `.dat`
+  de MyThes dan sinónimos pobres para prosa. Mejorarlo pediría otra fuente de
+  datos, y el autor decidió que no vale el tiempo. O sea que "malo" acá es la
+  calidad de los sinónimos, no la implementación: no abrir de nuevo este item
+  para refactorizar el parser ni la UI.
 
 - **Guionado para el EPUB**. rla-es trae `separacion/hyph_es.dic`, **6.207
   patrones** (Javier Bezos / CervanTeX). Sirve para justificado con separación
@@ -1316,38 +1357,50 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Tree / Importer
 
-- **Renombrar una carpeta fuera de la app deja estado local huérfano.**
+- [x] **Renombrar una carpeta fuera de la app deja estado local huérfano**
+  (`fix/estado-local-huerfano`, verificado a mano por el autor el
+  2026-09-02: 10 claves huérfanas de 19 pasaron a 0 al abrir el repo).
   Encontrado el 2026-08-20 numerando las sagas a mano (`Milky Way` →
   `3 - Milky Way`, `Vieja República` → `4 - Vieja República`). El rename por
   git es limpio para el contenido — 1.256 renames, 0 cambios de contenido —
-  pero **dos archivos locales quedan apuntando a los paths viejos**, y ninguno
-  viaja por git porque `.twriter/` está gitignoreado:
-  - `.twriter/stats.json` está **keyeado por path relativo**
-    (`Milky Way/1 - Deployment/4 - Work/3.html`). En el rename quedaron 294 de
-    533 claves huérfanas → se pierden palabras y última-edición de esos
-    capítulos. Hay que reescribir el prefijo de las claves.
-  - `.twriter/search-index` indexa por path → hay que borrarlo para que
-    reindexe.
-  - `settings.json` (`app_config_dir`) guarda **paths absolutos** en
-    `treeExpanded` (115 entradas) y `lastSession.chapterPath`. Si el capítulo
-    abierto estaba en la saga renombrada, la sesión no se restaura.
+  pero archivos locales quedaban apuntando a los paths viejos, y ninguno
+  viaja por git porque `.twriter/` está gitignoreado.
 
-  **Esto va contra el principio del CLAUDE.md** ("el remedio se da adentro de
-  la app"): la app puede detectar el problema y no lo hace. Al abrir el root
-  ya camina el árbol, así que tiene todo para notar que una clave de
-  `stats.json` no corresponde a ningún archivo en disco. Arreglo propuesto,
-  de menor a mayor:
-  1. **Barato y suficiente**: al cargar `stats.json`, descartar las claves
-     cuyo archivo no existe. Se pierde el histórico de esos capítulos pero
-     el archivo no crece con basura para siempre. Una línea de filtro.
-  2. **Lo correcto**: detectar el rename. Git ya sabe que fue un rename
-     (`R100`); `git.rs` puede pedirle a libgit2 los renames entre HEAD y el
-     commit anterior y remapear las claves de `stats.json` en consecuencia.
-     Cubre también el caso de que el rename lo haya hecho la otra PC y llegue
-     por pull — que es el caso que más duele, porque ahí el autor no hizo nada
-     y las estadísticas se evaporan igual.
-  3. Purgar de `treeExpanded` los paths que ya no existen (hoy hay 16
-     huérfanos acumulados de reorganizaciones viejas, inocuos pero sucios).
+  - `stats.json` (keyeado por path relativo, 294 de 533 claves huérfanas en
+    el incidente): `stats::reconciliar_stats()` corre al armar el árbol y
+    remapea. Criterio: mismo largo de path y difiere en **exactamente un
+    segmento de carpeta**, con el nombre del archivo igual — si no,
+    `Libro/1.html` y `Libro/2.html` pasarían por rename. Solo remapea con un
+    candidato único que todavía no tenga stat propio.
+
+    **No se apoya en git**, y es a propósito: `storage.rs` clasifica roots en
+    Dropbox, pCloud, Nextcloud, OneDrive, Drive, iCloud, Mega y Local, donde
+    no hay repo del que leer los `R100`, y el bug pasa igual. Tampoco depende
+    de cuántos commits atrás quedó el rename.
+
+    Las claves que no matchean con nada **no se borran**: un checkout de otra
+    rama hace desaparecer capítulos, y borrarlas ahí sería tirar histórico
+    real para ahorrar kilobytes. Costo cuando está sano: N `is_file()`; el
+    walk se paga solo si hay huérfanas. 7 tests en `stats.rs`.
+
+  - `treeExpanded` de `settings.json` (paths absolutos, 16 huérfanos
+    acumulados): `persistExpanded()` filtra contra el árbol vivo. El filtro
+    va al persistir y no al hidratar para no tocar el timing del restore de
+    sesión.
+
+  - `search-index`: **no hacía falta nada**. El item decía que había que
+    borrarlo para que reindexe, pero `full_reindex` arranca con
+    `delete_all_documents()` (`search.rs:601`), o sea que se sana solo. Lo que
+    sí puede quedar sucio son los hits stale **entre** reindexados completos,
+    porque los updates incrementales van por path: si molesta, es otro item.
+
+  **Ojo con el síntoma**: el item original decía que se pierden palabras y
+  última-edición, y eso estaba mal medido. `palabras` se auto-repara —
+  `palabras_for_chapter` cae a leer el HTML y contar (`stats.rs:296`), así que
+  nunca se ve un 0— y `ultima_edicion` hoy **no la lee nadie**: se escribe en
+  cada save y ningún lector la consume. Lo que el arreglo evita de verdad es
+  que cada `get_tree()` relea y recuente todos los capítulos con clave
+  huérfana. Por eso se verifica sobre `stats.json`, no sobre la UI.
 
   **Nota para quien lo toque en Mac**: el fix del typo `Notas/Buenos AIres
   2077` → `Notas/Buenos Aires 2077` es un rename **solo de caja**, y APFS es
