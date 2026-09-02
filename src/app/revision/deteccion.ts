@@ -1,12 +1,22 @@
 import { convert } from '../dialogos/converter';
 import { detectLang } from '../dialogos/detect';
 import { htmlToPlain, validateRae } from '../dialogos/validator';
+import { aplicarFixesHtml } from '../dialogos/aplicar-fixes';
 import { educateQuotes } from '../quotes/educate';
 import {
   DEFAULTS as REP_DEFAULTS,
   detectRepeticiones,
   ExcepcionesDeliberadas,
 } from '../repeticiones/detector';
+import { RaeAutoFix } from '../core/types';
+
+/** Qué transformaciones aplicar. Repeticiones no está: no se auto-aplican,
+ *  solo se listan para que el autor las revise a mano. */
+export interface SeleccionRevision {
+  rayas: boolean;
+  comillas: boolean;
+  arreglosRae: boolean;
+}
 
 export interface OpcionesDeteccion {
   /** Formas de repetición deliberada a filtrar (ver `repeticiones/detector.ts`). */
@@ -79,4 +89,44 @@ export function detectarEnCapitulo(
   });
 
   return { rayas, comillas, arreglosRae, repeticiones: reps.length };
+}
+
+/**
+ * Aplica sobre UN capítulo las transformaciones tildadas en `seleccion`,
+ * encadenadas sobre el mismo HTML. Comparte `esIngles` con `detectarEnCapitulo`
+ * — es la misma función la que decide si un capítulo es inglés para las dos,
+ * a propósito: el bug que esto previene ya pasó dos veces en este plan (rayas
+ * españolas aplicadas sobre diálogo en inglés porque el gate se derivó a mano
+ * en un segundo lugar y no coincidía con el de detectar).
+ *
+ * `rayas` y `comillas` son mutuamente excluyentes por idioma, así que el orden
+ * entre ellas no importa. `arreglosRae` sí tiene que ir DESPUÉS: si el capítulo
+ * ya pasó por `convert()` acá mismo, `validateRae` (que corre `convert()` por
+ * párrafo para detectar `pending-conversion`) ve texto ya convertido y no
+ * vuelve a proponer el mismo fix — sin este orden, un capítulo con `rayas` y
+ * `arreglosRae` tildados a la vez terminaría con dos pasadas de conversión
+ * pisándose.
+ */
+export function aplicarEnCapitulo(
+  html: string,
+  idioma: string | null | undefined,
+  seleccion: SeleccionRevision,
+): { html: string; salteados: number } {
+  const idiomaEfectivo = idioma ?? detectLang(html);
+  const esIngles = idiomaEfectivo === 'en';
+  let out = html;
+  let salteados = 0;
+
+  if (seleccion.rayas && !esIngles) out = convert(out).text;
+  if (seleccion.comillas && esIngles) out = educateQuotes(out).text;
+  if (seleccion.arreglosRae) {
+    const fixes = validateRae(htmlToPlain(out), idiomaEfectivo)
+      .map((v) => v.autoFix)
+      .filter((f): f is RaeAutoFix => f !== undefined);
+    const r = aplicarFixesHtml(out, fixes);
+    out = r.html;
+    salteados = r.salteados;
+  }
+
+  return { html: out, salteados };
 }

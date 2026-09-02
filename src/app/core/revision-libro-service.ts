@@ -1,8 +1,13 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
-import { detectarEnCapitulo } from '../revision/deteccion';
+import { aplicarEnCapitulo, detectarEnCapitulo, SeleccionRevision } from '../revision/deteccion';
+import { GitService } from './git-service';
+import { ProjectService } from './project-service';
 import { SettingsService } from './settings-service';
+import { ToastService } from './toast-service';
 import { TreeNode } from './types';
+
+export type { SeleccionRevision } from '../revision/deteccion';
 
 interface ChapterPayload {
   path: string;
@@ -30,9 +35,13 @@ export interface ResumenRevision {
 @Injectable({ providedIn: 'root' })
 export class RevisionLibroService {
   private settings = inject(SettingsService);
+  private project = inject(ProjectService);
+  private git = inject(GitService);
+  private toast = inject(ToastService);
 
   readonly libro = signal<TreeNode | null>(null);
   readonly escaneando = signal<boolean>(false);
+  readonly aplicando = signal<boolean>(false);
   readonly resultado = signal<ResumenRevision | null>(null);
   readonly error = signal<string | null>(null);
 
@@ -101,6 +110,63 @@ export class RevisionLibroService {
       this.error.set(String(e));
     } finally {
       this.escaneando.set(false);
+    }
+  }
+
+  /** Aplica al libro entero las transformaciones tildadas en `seleccion`. Un
+   *  solo `write_chapter` por capítulo, encadenando rayas → comillas →
+   *  arreglosRae sobre el mismo HTML, y solo si algo cambió — cada write
+   *  dispara el auto-commit del repo de novelas, así que escribir de más
+   *  ensucia el historial. El gateo de idioma es el mismo que usa `escanear`
+   *  (`aplicarEnCapitulo`, hermana pura de `detectarEnCapitulo`): un capítulo
+   *  en inglés nunca puede salir con rayas españolas ni comillas aplanadas. */
+  async aplicar(seleccion: SeleccionRevision): Promise<void> {
+    const node = this.libro();
+    if (!node) return;
+    this.aplicando.set(true);
+    this.error.set(null);
+    const toastId = this.toast.progreso('Aplicando correcciones…');
+    try {
+      const payloads = await invoke<ChapterPayload[]>('list_chapters_for_audit', {
+        scopePath: node.path,
+      });
+      let modificados = 0;
+      let salteados = 0;
+      let procesados = 0;
+      for (const p of payloads) {
+        const { html, salteados: s } = aplicarEnCapitulo(p.html, p.idioma, seleccion);
+        salteados += s;
+        if (html !== p.html) {
+          await invoke('write_chapter', { path: p.path, html });
+          modificados += 1;
+        }
+        procesados += 1;
+        this.toast.update(toastId, `Aplicando correcciones (${procesados} de ${payloads.length})`);
+        if (procesados % 5 === 0) await new Promise((r) => setTimeout(r, 0));
+      }
+      if (modificados > 0) {
+        await this.project.loadTree();
+        void this.git.refreshStatus();
+      }
+      this.toast.success(
+        `${modificados} capítulo${modificados === 1 ? '' : 's'} modificado${modificados === 1 ? '' : 's'}.`,
+      );
+      if (salteados > 0) {
+        // No es un error: son fixes de RAE que cruzaban el borde de un tag y
+        // no se aplicaron a propósito (ver `aplicarFixesHtml`). Decirlo es lo
+        // mínimo — si no, el autor cuenta los arreglos y el número no le
+        // cierra.
+        this.toast.warn(
+          `${salteados} arreglo${salteados === 1 ? '' : 's'} de RAE se saltearon por tocar texto con formato. Revisalos a mano desde el panel «Revisar RAE».`,
+        );
+      }
+      await this.escanear();
+    } catch (e) {
+      this.error.set(String(e));
+      this.toast.error(`Revisión: ${e}`);
+    } finally {
+      this.toast.dismiss(toastId);
+      this.aplicando.set(false);
     }
   }
 }
