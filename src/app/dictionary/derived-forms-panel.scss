@@ -1,7 +1,8 @@
 .formas-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgb(0 0 0 / 45%);
+
   // Por encima de los modales (200/201): el panel se abre ENCIMA del modal del
   // diccionario. Mismo escalón que `modal-host` (300/301), que es el otro
   // diálogo del repo que aparece sobre un modal abierto.
@@ -22,7 +23,7 @@
   color: var(--panel-fg, #e8e8ea);
   border: 1px solid var(--panel-border, #3a3a40);
   border-radius: 0.5rem;
-  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.5);
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 50%);
 
   header {
     display: flex;

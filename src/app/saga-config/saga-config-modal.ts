@@ -6,7 +6,8 @@ import { NativeDialogsService } from '../core/native-dialogs-service';
 import { SagaConfig, SagaConfigService } from '../core/saga-config-service';
 import { SettingsService } from '../core/settings-service';
 import { ThemesService } from '../core/themes-service';
-import { Theme, ThemeRef } from '../core/types';
+import { Theme, ThemeRef, TreeNode } from '../core/types';
+import { NodeActionsService } from '../shared/node-actions-service';
 import { Select, SelectOption } from '../shared/select';
 
 @Component({
@@ -21,6 +22,7 @@ export class SagaConfigModal {
   private fontsSvc = inject(FontsService);
   private settings = inject(SettingsService);
   private dialogs = inject(NativeDialogsService);
+  private nodeActions = inject(NodeActionsService);
 
   protected readonly globalVariantEs = this.settings.grammarVariantEs;
   protected readonly globalVariantEn = this.settings.grammarVariantEn;
@@ -188,7 +190,7 @@ export class SagaConfigModal {
   protected async pickCover(): Promise<void> {
     const result = await this.dialogs.pickSingleFile({
       title: 'Seleccionar tapa de saga',
-      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg'] }],
       defaultPath: this.sagaPath() ?? undefined,
     });
     if (!result) return;
@@ -220,15 +222,22 @@ export class SagaConfigModal {
     this.config.set({ ...cur, [key]: value });
   }
 
+  /** Si el nombre editado difiere del que codifica la carpeta, renombra la
+   *  carpeta en disco preservando el prefijo numérico de orden
+   *  (`"1 - Meridian 2.0"` → `"1 - Meridian"`). El filesystem es la fuente de
+   *  verdad: si el rename falla (colisión, permisos), propaga el error para
+   *  que `save()` no persista un `nombre` que la carpeta no tiene.
+   *  Devuelve el path nuevo, o el original si no hizo falta renombrar. */
   protected async save(): Promise<void> {
     const path = this.sagaPath();
     const cfg = this.config();
-    if (!path || !cfg) return;
+    const node = this.editing();
+    if (!path || !cfg || !node) return;
     this.saving.set(true);
     this.error.set(null);
     try {
       const cleaned: SagaConfig = {
-        nombre: cfg.nombre,
+        nombre: cfg.nombre.trim(),
         autor: blank(cfg.autor),
         idioma: cfg.idioma,
         variante_es: cfg.variante_es ?? null,
@@ -247,7 +256,8 @@ export class SagaConfigModal {
         finalizada: cfg.finalizada ?? null,
         theme: this.buildThemeRef(),
       };
-      await this.svc.save(path, cleaned);
+      const finalPath = await this.nodeActions.renameFolderIfNeeded(node, cleaned.nombre);
+      await this.svc.save(finalPath, cleaned);
       this.svc.close();
     } catch (err) {
       this.error.set(String(err));

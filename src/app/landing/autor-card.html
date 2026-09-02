@@ -1,0 +1,18 @@
+<button type="button" class="autor-card" (click)="onClick()">
+  <div class="foto-slot">
+    @if (fotoUrl(); as url) {
+      <img [src]="url" alt="" />
+    } @else {
+      <div class="foto-placeholder">
+        <span>{{ displayName() }}</span>
+      </div>
+    }
+  </div>
+  <div class="info">
+    <span class="kind">autor</span>
+    <h3 class="name">{{ displayName() }}</h3>
+    @if (!tieneNombre()) {
+      <p class="hint">Sin configurar</p>
+    }
+  </div>
+</button>

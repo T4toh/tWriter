@@ -1,7 +1,7 @@
 .ij-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgb(0 0 0 / 50%);
   z-index: 200;
 }
 
@@ -19,7 +19,7 @@
   color: var(--fg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
   overflow: hidden;
 }
 
@@ -88,8 +88,8 @@
   margin: 0.5rem 0;
   padding: 0.5rem 0.75rem;
   color: #b22;
-  background: rgba(220, 60, 60, 0.08);
-  border: 1px solid rgba(220, 60, 60, 0.25);
+  background: rgb(220 60 60 / 8%);
+  border: 1px solid rgb(220 60 60 / 25%);
   border-radius: 4px;
   font-size: 13px;
 }
@@ -118,7 +118,7 @@
   border-radius: 6px;
 
   &.warn {
-    border-color: rgba(220, 160, 60, 0.5);
+    border-color: rgb(220 160 60 / 50%);
   }
 }
 
@@ -237,10 +237,12 @@
     font-size: 15px;
     color: var(--fg);
   }
+
   ul {
     margin: 0 0 0.75rem;
     padding-left: 1.25rem;
     font-size: 14px;
+
     li {
       margin-bottom: 0.25rem;
     }

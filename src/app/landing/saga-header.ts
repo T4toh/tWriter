@@ -11,6 +11,7 @@ import { LucideBookOpen, LucideSettings } from '@lucide/angular';
 import { BookConfigService } from '../core/book-config-service';
 import { CoverCache } from '../core/cover-cache';
 import { DictionaryService } from '../core/dictionary-service';
+import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { SagaConfig, SagaConfigService } from '../core/saga-config-service';
 import { TreeNode } from '../core/types';
 
@@ -39,7 +40,7 @@ export class SagaHeader {
   protected readonly displayName = computed(() => {
     const cfg = this.config();
     if (cfg?.nombre) return cfg.nombre;
-    return this.node().name.replace(/^\d+\s*-\s*/, '');
+    return sinPrefijoNumerico(this.node().name);
   });
 
   protected readonly author = computed(() => this.config()?.autor ?? null);

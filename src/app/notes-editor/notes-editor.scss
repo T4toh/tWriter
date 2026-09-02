@@ -124,14 +124,14 @@
     border-radius: 3px;
     box-shadow:
       0 0 0 1px var(--border),
-      0 4px 24px rgba(0, 0, 0, 0.08);
+      0 4px 24px rgb(0 0 0 / 8%);
     caret-color: var(--fg);
     font-family: var(--font-body);
     font-size: var(--editor-font-size, 17px);
     line-height: 1.55;
 
     p {
-      margin: 0 0 0.8em 0;
+      margin: 0 0 0.8em;
       text-align: left;
     }
 
@@ -227,7 +227,7 @@
 }
 
 .editor-host ::ng-deep .search-hit {
-  background: rgba(255, 213, 0, 0.35);
+  background: rgb(255 213 0 / 35%);
   border-radius: 2px;
 }
 
@@ -284,9 +284,11 @@
   &.dirty {
     background: var(--border);
   }
+
   &.saved {
     color: var(--fg-muted);
   }
+
   &.error {
     background: #b04040;
     color: white;

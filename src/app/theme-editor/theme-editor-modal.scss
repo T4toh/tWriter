@@ -1,7 +1,7 @@
 .te-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgb(0 0 0 / 50%);
   z-index: 200;
 }
 
@@ -16,7 +16,7 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -239,7 +239,7 @@ select {
   align-items: start;
 }
 
-@media (max-width: 880px) {
+@media (width <= 880px) {
   .te-split {
     grid-template-columns: 1fr;
   }
@@ -285,7 +285,7 @@ select {
   border-radius: 8px;
   background: var(--bg-soft);
   padding: 1rem 1.1rem 1.2rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 15%);
 
   .prev-title {
     margin: 0 0 0.4rem;
@@ -324,6 +324,7 @@ select {
   p {
     margin: 0 0 0.6em;
   }
+
   p:last-child {
     margin-bottom: 0;
   }
@@ -365,15 +366,18 @@ select {
     font-weight: 500;
     text-align: center;
   }
+
   h1:first-child {
     margin-top: 0;
   }
+
   p {
     margin: 0 0 0.8em;
     text-align: center;
     font-size: 13.5px;
     line-height: 1.6;
   }
+
   .prev-toc {
     list-style: none;
     margin: 0;
@@ -389,23 +393,25 @@ select {
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 12% 10%;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
   color: #1a1a1a;
   margin: 0 auto;
   width: 88%;
 
   &.page-mock--small {
     width: 180px;
-    padding: 6% 6%;
+    padding: 6%;
   }
 
   &.tpl-6x9,
   &.tpl- {
     aspect-ratio: 6 / 9;
   }
+
   &.tpl-5x8 {
     aspect-ratio: 5 / 8;
   }
+
   &.tpl-a5 {
     aspect-ratio: 148 / 210;
   }
@@ -443,10 +449,12 @@ select {
   &.ctp-top .ctp-inner {
     justify-content: flex-start;
   }
+
   &.ctp-center .ctp-inner,
   &.ctp- .ctp-inner {
     justify-content: center;
   }
+
   &.ctp-bottom .ctp-inner {
     justify-content: flex-end;
   }
@@ -478,6 +486,7 @@ select {
     .ctp-title {
       font-size: 0.95em;
     }
+
     .ctp-part,
     .ctp-prefix {
       font-size: 0.55em;

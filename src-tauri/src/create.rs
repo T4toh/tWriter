@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::book_config::BookConfig;
 use crate::saga_config::SagaConfig;
 use crate::search;
+use crate::util::strip_numeric_prefix;
 
 #[derive(Serialize, Debug)]
 pub struct CreateResult {
@@ -341,17 +342,6 @@ fn build_inherited_book_config(
         ),
         ..Default::default()
     }
-}
-
-fn strip_numeric_prefix(s: &str) -> String {
-    let trimmed = s.trim_start();
-    let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
-    if digits.is_empty() {
-        return s.to_string();
-    }
-    let rest = &trimmed[digits.len()..];
-    rest.trim_start_matches(|c: char| c.is_whitespace() || c == '-')
-        .to_string()
 }
 
 fn current_year() -> u32 {

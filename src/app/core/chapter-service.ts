@@ -396,10 +396,11 @@ export class ChapterService {
   async exportEpub(node: TreeNode): Promise<string | null> {
     if (node.kind !== 'book') return null;
     try {
-      const result = await invoke<{ epub_path: string; chapters: number }>(
-        'export_book',
-        { bookPath: node.path },
-      );
+      const result = await invoke<{
+        epub_path: string;
+        chapters: number;
+        avisos: string[];
+      }>('export_book', { bookPath: node.path });
       const filename = result.epub_path.split('/').pop() ?? 'epub';
       this.debug.info(
         'epub',
@@ -408,6 +409,13 @@ export class ChapterService {
       this.toast.success(
         `EPUB generado: ${filename} (${result.chapters} parte${result.chapters === 1 ? '' : 's'})`,
       );
+      // Los avisos no son errores: el EPUB salió igual. Pero si la app
+      // detectó que faltaba una tapa, decirlo es lo mínimo — el autor no
+      // tiene por qué abrir el archivo para enterarse.
+      for (const aviso of result.avisos ?? []) {
+        this.debug.warn('epub', `${node.name}: ${aviso}`);
+        this.toast.warn(aviso);
+      }
       await this.project.loadTree();
       void this.exports.refresh(node.path);
       return result.epub_path;

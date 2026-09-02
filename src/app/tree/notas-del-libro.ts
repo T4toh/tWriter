@@ -1,3 +1,4 @@
+import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { TreeNode } from '../core/types';
 
 /** Nota lista para pintar en la tab "Este libro". Lleva el `TreeNode` original
@@ -31,11 +32,6 @@ export interface NotasDelLibro {
    *  devuelve el path que le corresponde y el backend crea la carpeta. null si
    *  no se resolvió ningún libro. */
   carpetaLibroPath: string | null;
-}
-
-/** Saca el prefijo `N - ` que ordena las carpetas en el filesystem. */
-export function sinPrefijoNumerico(nombre: string): string {
-  return nombre.replace(/^\d+\s*-\s*/, '');
 }
 
 /** ¿La carpeta de notas `candidato` corresponde a la saga `saga`? Calza exacto

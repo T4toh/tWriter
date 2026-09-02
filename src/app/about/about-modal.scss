@@ -3,7 +3,7 @@
 .ab-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgb(0 0 0 / 50%);
   z-index: 200;
 }
 
@@ -21,7 +21,7 @@
   color: var(--fg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
   overflow: hidden;
 }
 
@@ -74,7 +74,7 @@
 
 .ab-error {
   border: 1px solid var(--border);
-  border-left: 3px solid currentColor;
+  border-left: 3px solid currentcolor;
   padding: 0.6rem 0.8rem;
   font-size: 0.85rem;
 }
@@ -83,7 +83,7 @@
   display: inline-block;
   margin-left: 0.4rem;
   padding: 0.05rem 0.45rem;
-  border: 1px solid currentColor;
+  border: 1px solid currentcolor;
   border-radius: 999px;
   font-size: 0.72rem;
   opacity: 0.75;

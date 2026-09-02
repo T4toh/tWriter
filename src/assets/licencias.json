@@ -212,6 +212,13 @@
           "texto": 11
         },
         {
+          "nombre": "image",
+          "version": "0.25.10",
+          "origen": "cargo",
+          "licencia": "MIT OR Apache-2.0",
+          "texto": 3
+        },
+        {
           "nombre": "keyring",
           "version": "3.6.3",
           "origen": "cargo",

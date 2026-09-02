@@ -193,22 +193,12 @@ pub fn palabras_for_chapter(stats: &StatsMap, root: &Path, chapter_path: &Path) 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn tempdir(label: &str) -> PathBuf {
-        let mut p = std::env::temp_dir();
-        let suffix: u128 = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        p.push(format!("twriter-stats-test-{}-{}", label, suffix));
-        let _ = fs::remove_dir_all(&p);
-        fs::create_dir_all(&p).unwrap();
-        p
-    }
+    use tempfile::TempDir;
 
     #[test]
     fn migrate_moves_palabras_out_of_meta() {
-        let root = tempdir("migrate");
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
         let book = root.join("Saga/Libro");
         fs::create_dir_all(&book).unwrap();
         fs::write(book.join("1.html"), "<p>Hola mundo</p>\n").unwrap();
@@ -219,7 +209,7 @@ mod tests {
         )
         .unwrap();
 
-        let n = migrate_meta_to_stats(&root).unwrap();
+        let n = migrate_meta_to_stats(root).unwrap();
         assert_eq!(n, 1);
 
         // El meta.json ya no tiene los campos volátiles.
@@ -233,7 +223,7 @@ mod tests {
         assert_eq!(v.get("titulo").and_then(|x| x.as_str()), Some("Cap"));
 
         // stats.json contiene los valores.
-        let stats = read_stats(&root);
+        let stats = read_stats(root);
         let entry = stats.get("Saga/Libro/1.html").expect("entry missing");
         assert_eq!(entry.palabras, 2);
         assert_eq!(entry.ultima_edicion.as_deref(), Some("2024-01-01"));
@@ -241,16 +231,17 @@ mod tests {
 
     #[test]
     fn upsert_stat_persists_and_overwrites() {
-        let root = tempdir("upsert");
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
         let book = root.join("Saga/Libro");
         fs::create_dir_all(&book).unwrap();
         let chap = book.join("1.html");
         fs::write(&chap, "<p>texto</p>").unwrap();
 
-        upsert_stat(&root, &chap, 10, Some("t1".into())).unwrap();
-        upsert_stat(&root, &chap, 20, Some("t2".into())).unwrap();
+        upsert_stat(root, &chap, 10, Some("t1".into())).unwrap();
+        upsert_stat(root, &chap, 20, Some("t2".into())).unwrap();
 
-        let stats = read_stats(&root);
+        let stats = read_stats(root);
         let e = stats.get("Saga/Libro/1.html").unwrap();
         assert_eq!(e.palabras, 20);
         assert_eq!(e.ultima_edicion.as_deref(), Some("t2"));
@@ -258,11 +249,12 @@ mod tests {
 
     #[test]
     fn palabras_for_chapter_falls_back_to_html() {
-        let root = tempdir("fallback");
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
         let chap = root.join("1.html");
         fs::write(&chap, "<p>uno dos tres</p>").unwrap();
         let stats = StatsMap::new();
-        let n = palabras_for_chapter(&stats, &root, &chap).unwrap();
+        let n = palabras_for_chapter(&stats, root, &chap).unwrap();
         assert_eq!(n, 3);
     }
 }

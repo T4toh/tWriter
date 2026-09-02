@@ -16,7 +16,7 @@
 
   &:hover {
     border-color: var(--accent);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 10%);
     transform: translateY(-1px);
   }
 
@@ -134,7 +134,7 @@
   width: 24px;
   height: 24px;
   border: none;
-  background: rgba(0, 0, 0, 0.05);
+  background: rgb(0 0 0 / 5%);
   color: var(--fg-muted);
   border-radius: 3px;
   cursor: pointer;
@@ -161,6 +161,6 @@
 
 @media (prefers-color-scheme: dark) {
   .card-btn {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgb(255 255 255 / 8%);
   }
 }

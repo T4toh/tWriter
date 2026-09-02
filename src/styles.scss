@@ -1,9 +1,9 @@
 :root {
   color-scheme: light dark;
-  --font-body: 'Merriweather', Georgia, 'Times New Roman', serif;
+
+  --font-body: 'Merriweather', georgia, 'Times New Roman', serif;
   --font-ui: 'Lato', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'Roboto Mono', ui-monospace, monospace;
-
   --bg: #faf8f4;
   --bg-soft: #f1ede5;
   --fg: #1c1a17;
@@ -49,13 +49,15 @@ body {
  */
 @keyframes twriter-search-flash {
   0% {
-    background: rgba(255, 220, 80, 0.55);
-    box-shadow: 0 0 0 4px rgba(255, 220, 80, 0.35);
+    background: rgb(255 220 80 / 55%);
+    box-shadow: 0 0 0 4px rgb(255 220 80 / 35%);
   }
+
   20% {
-    background: rgba(255, 220, 80, 0.55);
-    box-shadow: 0 0 0 4px rgba(255, 220, 80, 0.35);
+    background: rgb(255 220 80 / 55%);
+    box-shadow: 0 0 0 4px rgb(255 220 80 / 35%);
   }
+
   100% {
     background: transparent;
     box-shadow: none;
@@ -71,7 +73,7 @@ body {
 // variantes distintas del mismo bloque: acá arriba aplica igual (los estilos
 // globales no los encapsula Angular, solo los del componente) y hay un solo
 // lugar donde tocarlos.
-//
+
 // El criterio de las variantes, que estaba implícito: `btn-primary` es la acción
 // que confirma algo (Aplicar, Guardar, Exportar), `btn-secondary` la que cancela
 // o solo cierra, `btn-danger` la destructiva.

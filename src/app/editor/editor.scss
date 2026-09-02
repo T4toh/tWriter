@@ -106,8 +106,8 @@
 .editor-host {
   position: absolute;
   inset: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden auto;
+
   // Reserva espacio del scrollbar siempre. En WebKitGTK/Wayland el overlay
   // scrollbar default flashea durante reflow grande (ej. applyDecorations
   // tras LanguageTool), generando un "salto" visual + caret fantasma. Con
@@ -129,7 +129,7 @@
     border-radius: 3px;
     box-shadow:
       0 0 0 1px var(--border),
-      0 4px 24px rgba(0, 0, 0, 0.08);
+      0 4px 24px rgb(0 0 0 / 8%);
     caret-color: var(--fg);
     font-family: var(--editor-font-family, var(--font-body));
     font-size: var(--editor-font-size, 17px);
@@ -137,6 +137,7 @@
 
     p {
       margin: 0 0 var(--editor-para-spacing, 0) 0;
+
       // Editor flat: sin first-line indent ni justify para que escribir
       // no "salte" y los párrafos no se vean centrados. El EPUB exportado
       // aplica text-indent: 1.5em y justify desde reedsy-subset.scss.
@@ -265,7 +266,7 @@
 .rae-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgb(0 0 0 / 50%);
   z-index: 200;
 }
 
@@ -276,7 +277,7 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -289,7 +290,7 @@
   flex-shrink: 0;
 
   h2 {
-    margin: 0 0 0.25em 0;
+    margin: 0 0 0.25em;
     font-family: var(--font-ui);
     font-size: 16px;
     font-weight: 600;
@@ -347,7 +348,7 @@
   line-height: 1.6;
 
   p {
-    margin: 0 0 0.6em 0;
+    margin: 0 0 0.6em;
     text-indent: 1.5em;
     text-align: justify;
   }
@@ -405,6 +406,7 @@
     font-size: 12px;
     height: 28px;
   }
+
   ::ng-deep .sel-caret {
     font-size: 9px;
   }
@@ -422,7 +424,7 @@
   gap: 4px;
   padding: 2px 8px;
   border-radius: 10px;
-  background: rgba(193, 75, 75, 0.15);
+  background: rgb(193 75 75 / 15%);
   color: #c14b4b;
   font-size: 11px;
   font-weight: 500;
@@ -496,23 +498,28 @@
   &.dirty {
     background: var(--border);
   }
+
   &.saved {
     color: var(--fg-muted);
   }
+
   &.saving {
     display: inline-flex;
     align-items: center;
     gap: 4px;
     color: var(--accent);
   }
+
   &.error {
     background: #b04040;
     color: white;
   }
+
   &.focus-hint {
     color: var(--accent);
     font-style: italic;
   }
+
   /* El error de gramática es un botón: abre el modal de config. */
   &.indicator-btn {
     border: 0;
@@ -562,6 +569,7 @@
     background: color-mix(in srgb, var(--accent) 22%, transparent);
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
   }
+
   50% {
     background: color-mix(in srgb, var(--accent) 55%, transparent);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 90%, transparent);
@@ -610,7 +618,7 @@
 
 /* pending-conversion: D1-D5 sin convertir — naranja wavy */
 .editor-host ::ng-deep .rae-violation--pending {
-  background: rgba(210, 122, 31, 0.12);
+  background: rgb(210 122 31 / 12%);
   border-bottom: 2px solid #d27a1f;
 }
 
@@ -625,6 +633,7 @@
 }
 
 /* ─── Repeticiones cercanas ─── */
+
 /* Violeta y `text-decoration`, no `border-bottom`: la paleta del editor es
  * cálida entera y sus cuatro colores de marca ya están tomados (rojo #d23030,
  * naranja #d27a1f, ámbar #c89020, amarillo #ffd500), y todas las marcas de
@@ -641,15 +650,16 @@
  * no subrayado: el subrayado ya lo usan las marcas permanentes, y acá lo que se
  * quiere es que el ojo las encuentre de un barrido. */
 .editor-host ::ng-deep .repeticion-grupo {
-  background: rgba(130, 87, 230, 0.22);
+  background: rgb(130 87 230 / 22%);
   border-radius: 2px;
 }
 
 /* ─── Search highlights ─── */
+
 /* Marca de todas las ocurrencias de la query mientras el panel de búsqueda
  * esté abierto. Convive con grammar/rae sin romper sus borders. */
 .editor-host ::ng-deep .search-hit {
-  background: rgba(255, 213, 0, 0.35);
+  background: rgb(255 213 0 / 35%);
   border-radius: 2px;
 }
 
@@ -669,7 +679,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 20%);
   max-width: 80vw;
 
   a {

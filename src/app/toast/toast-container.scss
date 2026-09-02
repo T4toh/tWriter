@@ -19,7 +19,7 @@
   font-family: var(--font-ui);
   font-size: 13px;
   color: var(--fg);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
   cursor: pointer;
   min-width: 240px;
   max-width: 380px;
@@ -28,16 +28,18 @@
   &[data-level='success'] {
     border-left-color: #4caf50;
   }
+
   &[data-level='warn'] {
     border-left-color: #e0a020;
   }
+
   &[data-level='error'] {
     border-left-color: #b04040;
   }
 }
 
 .msg {
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 @keyframes slide-in {
@@ -45,6 +47,7 @@
     transform: translateX(20px);
     opacity: 0;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;

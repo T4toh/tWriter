@@ -1,0 +1,122 @@
+@if (editing()) {
+  <div class="backdrop" (click)="close()"></div>
+  <div class="modal" role="dialog" aria-label="Perfil del autor">
+    <h2>Autor</h2>
+    @if (config(); as c) {
+      <div class="split">
+        <div class="form-col">
+          <label class="field">
+            <span>Nombre</span>
+            <input type="text" [ngModel]="c.nombre" (ngModelChange)="update('nombre', $event)" />
+          </label>
+
+          <label class="field">
+            <span>Bio en español</span>
+            <textarea rows="3" [ngModel]="bio('es')" (ngModelChange)="setBio('es', $event)"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Bio en inglés</span>
+            <textarea rows="3" [ngModel]="bio('en')" (ngModelChange)="setBio('en', $event)"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Web</span>
+            <input
+              type="url"
+              placeholder="https://tatoh.ar"
+              [ngModel]="c.web"
+              (ngModelChange)="update('web', $event)"
+            />
+          </label>
+
+          <div class="field">
+            <span>Foto</span>
+            <div class="picker">
+              <span class="path">{{ c.foto || 'sin foto' }}</span>
+              <button type="button" (click)="pickFoto()">Elegir…</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <span>QR de la web</span>
+            <div class="picker">
+              <span class="path">{{ c.qr || 'sin QR' }}</span>
+              <button type="button" (click)="pickQr()">Elegir…</button>
+            </div>
+            <small class="hint">
+              Va al final del EPUB, al lado de la dirección de tu web. Si "Web" está vacío, el QR no se muestra: no tiene sentido escanear un código que no lleva a ningún lado.
+            </small>
+          </div>
+        </div>
+
+        <section class="preview-col">
+          <span class="preview-label">Vista previa — página "Sobre el autor"</span>
+          <div class="preview-page">
+            @if (fotoPreviewUrl(); as url) {
+              <img class="preview-photo" [src]="url" [alt]="c.nombre || 'Autor'" />
+            }
+            <h1 class="preview-heading">Sobre el autor</h1>
+            <div class="preview-bio">
+              @for (p of previewParrafos(); track $index) {
+                <p>{{ p }}</p>
+              } @empty {
+                <p class="preview-empty">Sin bio todavía.</p>
+              }
+            </div>
+            @if (previewWebHost(); as host) {
+              <div class="preview-web">
+                @if (qrPreviewUrl(); as qrUrl) {
+                  <img class="preview-qr" [src]="qrUrl" alt="" />
+                }
+                <p class="preview-web-url">{{ host }}</p>
+              </div>
+            }
+          </div>
+        </section>
+      </div>
+    }
+
+    @if (error(); as e) {
+      <p class="error">{{ e }}</p>
+    }
+
+    <div class="actions">
+      <button type="button" (click)="close()">Cancelar</button>
+      <button type="button" [disabled]="saving()" (click)="save()">Guardar</button>
+    </div>
+  </div>
+
+  @if (recorte(); as r) {
+    <div class="crop-backdrop"></div>
+    <div class="crop-modal" role="dialog" aria-label="Recortar foto">
+      <h3>Recortar foto</h3>
+      <p class="hint">Arrastrá el cuadro para elegir qué parte de la foto se usa.</p>
+      <div
+        class="crop-frame"
+        [style.width.px]="recorteFrameSize().width"
+        [style.height.px]="recorteFrameSize().height"
+      >
+        <img class="crop-image" [src]="r.dataUrl" alt="" />
+        <div
+          class="crop-square"
+          tabindex="0"
+          role="group"
+          aria-label="Cuadro de recorte. Usá las flechas del teclado para moverlo."
+          [style.left.px]="recorteSquareStyle().left"
+          [style.top.px]="recorteSquareStyle().top"
+          [style.width.px]="recorteSquareStyle().size"
+          [style.height.px]="recorteSquareStyle().size"
+          (pointerdown)="onRecorteQuadradoPointerDown($event)"
+          (pointermove)="onRecorteQuadradoPointerMove($event)"
+          (pointerup)="onRecorteQuadradoPointerUp($event)"
+          (keydown)="onRecorteQuadradoKeydown($event)"
+        ></div>
+      </div>
+      <div class="actions">
+        <button type="button" (click)="cancelarRecorte()">Cancelar</button>
+        <button type="button" (click)="confirmarRecorte()">Aplicar</button>
+      </div>
+    </div>
+  }
+}

@@ -2,6 +2,44 @@
 
 Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos van a GitHub Issues; acá quedan ideas, refactors abiertos y diseño en discusión.
 
+## Urgente
+
+- **Editar el CSS del EPUB no se ve hasta recompilar Rust — y nada lo avisa**
+  (encontrado el 2026-09-02, después de perder un rato buscando un bug de CSS
+  que no existía). `epub_style.css` se incrusta con
+  `const CSS_TEMPLATE: &str = include_str!("epub_style.css")` (`epub.rs:85`),
+  o sea en tiempo de compilación. El watcher de `pnpm tauri dev` mira archivos
+  `.rs`, así que tocar la hoja **no dispara nada**: la app sigue corriendo con
+  el CSS viejo adentro del binario.
+  Por qué es grave y no una molestia: el ciclo es editás → exportás → no ves
+  ningún cambio → concluís que el CSS está mal → lo "arreglás" de nuevo. Ya
+  pasó: se editó el CSS, se exportó, el QR seguía a la derecha y el link
+  seguía azul, y parecía que el arreglo no funcionaba cuando en realidad ni
+  se había cargado. Cualquiera que toque esa hoja cae en la misma trampa, y
+  no hay ninguna señal que lo diga.
+  Opciones, de menos a más:
+  1. Sumar `src/epub_style.css` a lo que el watcher de `tauri.conf.json`
+     vigila, si el `beforeDevCommand` lo permite. Arregla el síntoma en dev.
+  2. `build.rs` con `cargo:rerun-if-changed=src/epub_style.css`. Ayuda a
+     `cargo build`, pero **no** al watcher, así que sola no alcanza.
+  3. Mover la hoja a `resources` y leerla en runtime, como ya se hace con el
+     tesauro. Desaparece el problema —no hay nada que recompilar— y de yapa la
+     hoja queda inspeccionable en la app empaquetada. Es la más invasiva y la
+     única que lo cierra de verdad.
+
+- **No hay forma directa de volver a la raíz** (pedido del autor, 2026-09-02).
+  Hoy, para llegar a la vista raíz —la que lista las sagas y donde vive la
+  carta del autor— hay que hacer doble click en una saga y después tocar
+  "Inicio". O sea que el camino a la pantalla de más arriba pasa por bajar
+  primero. El autor lo describe como mal diseñado desde que se cambió la
+  navegación, y coincide: la raíz debería estar a un click desde cualquier
+  lado, no a dos y en la dirección equivocada.
+  Sin decidir todavía cómo: puede ser el breadcrumb —que ya existe arriba de
+  la vista y ya sabe la cadena completa— haciendo clickeable el primer tramo,
+  un botón fijo, o un atajo de teclado. Mirar primero qué hace hoy
+  `landing.html`, que renderea el breadcrumb con `crumbs()` y `goCrumb()`, y
+  por qué esa cadena no arranca en la raíz.
+
 ## Editor / UX
 
 - Más variantes de divisor de escena (más allá del `* * *`).
@@ -1515,16 +1553,61 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   cayó. Las secciones con `excluded: true` suman 0 — Rust las manda con
   `children: []` y además no van al EPUB, que es lo correcto acá.
 
+- **El export no dice que está trabajando** (pedido del autor, 2026-09-02).
+  Generar un EPUB tarda un par de segundos —medido en una M5, o sea que en
+  máquinas más lentas es peor— y en ese rato la app no muestra nada: no se
+  sabe si está haciendo algo o si el click no agarró. Hoy es la única
+  operación de la app con espera perceptible, así que es la única que
+  necesita esto.
+  Dónde vive: `chapter-service.ts::exportEpub` hace `invoke('export_book')` y
+  no muestra nada hasta el toast final. El backend sí sabe cuánto falta —
+  `export_impl` recorre capítulos, embebe imágenes y arma el zip en pasos
+  contables— así que puede emitir eventos de progreso por el bus de Tauri en
+  vez de que el frontend adivine con un spinner ciego.
+  Mínimo aceptable: que se vea que está trabajando. Mejor: en qué paso está,
+  porque "embebiendo tapas" y "escribiendo capítulos" tardan distinto y ver el
+  paso convierte la espera en información.
+
+- **Plantillas para el back matter** (idea del autor, 2026-09-02, no para ahora).
+  Hoy la página "Otros libros" y la de "Sobre el autor" tienen un solo diseño
+  cableado en `epub_style.css`. La idea es ofrecer un par de variantes —tapa
+  centrada contra tapa al costado, con sinopsis o sin ella, una columna o
+  dos— igual que ya existen plantillas de tamaño de página para el EPUB.
+  Cruza con el ítem de blurb y sinopsis: recién cuando esos campos existan hay
+  material suficiente para que las variantes se diferencien en algo más que el
+  espaciado.
+
+- **Chequeo de sintaxis para `epub_style.css`** (2026-09-02). La hoja del EPUB
+  queda **fuera** de stylelint a propósito: se lee en hardware de tinta
+  electrónica y tiene sus propias reglas —`float` en vez de flexbox, nada de
+  `object-fit`, nada de anchos porcentuales—, así que un estándar pensado para
+  navegadores no aplica. Esa decisión se mantiene.
+  Lo que sí falta es otra cosa: verificar que la hoja sea **sintácticamente
+  válida**. En un EPUB una propiedad mal escrita no falla ni avisa: simplemente
+  no hace nada, y te enterás cuando ves la página rara en el Kindle. Es el modo
+  de falla más caro que tiene este archivo, porque el ciclo de descubrimiento
+  es exportar, pasar el archivo al lector y mirar.
+  **Ojo con la solución obvia**: un parser de CSS no alcanza. `colr: red` es
+  sintaxis válida —una declaración con un nombre de propiedad inexistente— y
+  cualquier parser la acepta. Un test de Rust que parsee la hoja atraparía
+  llaves sin cerrar, pero no el typo, que es el caso real.
+  Lo que sirve es un chequeo con base de datos de propiedades: `property-no-unknown`
+  de stylelint. O sea una **segunda config de stylelint** apuntada solo a esta
+  hoja, con cero reglas de estilo y solo las de corrección (propiedad
+  desconocida, declaración duplicada, bloque vacío, valor inválido). Nada que
+  opine sobre `float` ni sobre flexbox: esas son decisiones tomadas. Cero
+  dependencias nuevas — es el mismo stylelint que ya está instalado.
+
 ## EPUB
 
-- **Copyright editable en ambos idiomas** (ES/EN): hoy el texto de la
+- [x] **Copyright editable en ambos idiomas** (ES/EN): hoy el texto de la
   página de copyright sale fijo/auto-generado. Permitir editar el cuerpo y
   que cambie según el `idioma` del libro.
 - **Incisos extra de copyright tipo Reedsy**: sumar cláusulas opcionales
   (reserva de derechos, "obra de ficción / personajes ficticios",
   prohibición de reproducción, etc.) elegibles al armar la página legal,
   bilingües como el copyright.
-- **Nota de uso de IA en la página legal** (pedido del autor, 2026-09-01): inciso
+- [x] **Nota de uso de IA en la página legal** (pedido del autor, 2026-09-01): inciso
   opcional que declare que la IA se usó **solo para generar imágenes** — el texto
   lo escribe el autor. Va como una cláusula más del item de arriba (bilingüe
   ES/EN, elegible al armar la página legal), no como texto fijo: hay libros sin
@@ -1532,6 +1615,81 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   con inteligencia artificial. El texto es obra exclusiva del autor." / "The
   images in this work were generated with artificial intelligence. The text is
   the sole work of the author."
+- [x] **Back matter del EPUB: catálogo, perfil de autor y página legal**
+  (spec en `docs/superpowers/specs/2026-09-01-back-matter-epub-design.md`).
+  Sección "Otros libros" que se arma escaneando el root (`catalogo.rs`: un
+  libro está publicado si su `book.json` tiene `link`), perfil global en
+  `autor.json` con bio ES/EN, foto, web y QR (`autor.rs`), incisos de la
+  página legal elegibles y editables, y todas las páginas editoriales en el
+  índice con `class="toc-editorial"`. De yapa, las imágenes ahora se
+  reescalan antes de embeberse (crate `image`): la tapa iba a resolución de
+  imprenta adentro del EPUB. **Verificado a mano por el autor el 2026-09-02**, en Kindle y en Apple Books.
+- [x] **XHTML inválido en el EPUB: `<br>` sin autocerrar rompe Apple Books**
+  (el autor lo pisó probando un export, 2026-09-01). Apple Books usa un parser
+  estricto y aborta apenas encuentra el primer `<br>` sin `/`
+  (`Opening and ending tag mismatch: br line 11...`); Thorium es tolerante y
+  lo dejaba pasar, por eso no se había notado. Medido sobre el repo real: 200
+  capítulos con `<br>` sin cerrar y 1 con `<hr>` sin cerrar — el `<br>` es un
+  salto de línea real adentro de un diálogo, no se puede sacar. Fix en
+  `close_void_elements()` (`epub.rs`), aplicado en `load_part()` a la salida:
+  autocierra `<br>`/`<hr>` sueltos a `<br/>`/`<hr/>` sin tocar atributos,
+  texto ni tags que ya venían autocerrados. Arregla los 200 archivos de una
+  sola vez, en el export, sin escribir nada en el repo del autor.
+
+  **Pendiente real: el editor sigue escribiendo `<br>` sin cerrar en los
+  `.html` nuevos.** El fix de arriba es un parche a la salida, no una cura —
+  los archivos fuente le siguen quedando en HTML no-XHTML (importa si algún
+  día se lee ese HTML con un parser estricto en vez de con el export actual).
+  Falta encontrar qué nodo de TipTap serializa el `<br>` (`hardBreak`,
+  probablemente con su serialización default) y hacer que autocierre al
+  guardar el capítulo.
+- **Blurb y sinopsis por libro** (pedido del autor, 2026-09-01). Dos textos
+  distintos y con usos distintos: el **blurb** es el gancho de contratapa; la
+  **sinopsis** es el resumen largo, el que va en la ficha de la tienda. Hoy no
+  existe ninguno de los dos.
+
+  **Formato, medido sobre el blurb real de La Caballera Esmeralda** (no
+  supuesto): son **tres párrafos cortos separados por línea en blanco**, ~50
+  palabras en total, texto plano sin cursivas ni nada inline. El ritmo vive en
+  los cortes — el último párrafo es de dos oraciones y pega justamente porque
+  está solo. O sea que el campo **tiene que preservar los saltos de párrafo**;
+  colapsarlos a un string de una línea arruina el texto.
+
+  Eso ya tiene convención en el repo y no hace falta inventar nada: `sobre_el_autor`
+  guarda texto plano y `build_about_author_xhtml` convierte cada línea no vacía
+  en un `<p>`. El blurb usa la misma, y el textarea del modal se comporta igual
+  que el de la bio.
+
+  Dónde aparece, por orden de utilidad: la contratapa generada, la tarjeta del
+  libro en el landing, y la lista de "Otros libros" del back matter — pero ahí
+  **tres párrafos son demasiado**, así que o va solo el primero o no va ninguno;
+  decidirlo mirando la página armada, no de antemano. La sinopsis probablemente
+  no vaya al EPUB, pero es lo que el autor copia y pega al publicar, así que
+  tener dónde escribirla ya justifica el campo.
+
+  **Son bilingües** (confirmado por el autor, 2026-09-01), así que blurb y
+  sinopsis van como mapa por idioma —`{"es": "...", "en": "..."}`— igual que
+  `bio` en `autor.json`, y no como string suelto. El que se emite lo elige el
+  `idioma` del libro, con caída al otro idioma si falta, que es exactamente lo
+  que ya hace `AutorConfig::bio_en`: reusar esa función en vez de escribir la
+  misma resolución por tercera vez.
+
+- **Sacar el autor del libro: hoy vive en tres lugares** (pedido del autor,
+  2026-09-01). Después del back matter, el nombre del autor está en `book.json`
+  (`autor`), en `saga.json` (`autor`) y en `autor.json` (`nombre`), que es el
+  perfil global que agregó `autor.rs`. Tres fuentes para un dato que en un repo
+  de novelas es uno solo: el que escribe. La resolución debería ser
+  `autor.json` primero y los otros dos solo como respaldo para repos que
+  todavía no tengan perfil global. **Decidido con el autor el 2026-09-01**: el
+  campo sale del modal del libro, no se queda como override — con `autor.json`
+  existiendo es duplicación, y el override por novela se agrega después si
+  hace falta, apoyado en el mecanismo nuevo y no en el viejo. Ojo con el orden de trabajo: `epub.rs` usa `cfg.autor` en
+  cuatro lugares (portadilla, copyright, metadata OPF, y un fallback que lo
+  completa desde la saga en `epub.rs:1794`), así que primero va la resolución
+  con fallback y recién después se limpian los `book.json` en disco —
+  al revés, los libros salen sin autor en el EPUB. Los 21 `book.json` de
+  `~/novelas` tienen el campo cargado, así que la migración toca todos.
+
 - [x] **Las rutas de imagen se guardan absolutas y no sobreviven el cambio de PC**
   (encontrado el 2026-09-01 verificando el mazo de tapas: en esta Mac los 4
   libros de Meridian 2.0 mostraban placeholder). `book-config-modal.ts:216`
@@ -1622,6 +1780,22 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   y recarga el de la saga activa. `set_saga_config` migra+strip antes de escribir
   para que ningún round-trip pierda palabras. Verificado end-to-end con dos
   clones: `pull --rebase` resuelve la unión sin conflicto.
+
+- **Tests que colisionan entre sí en paralelo** (medido el 2026-09-01, no
+  supuesto). Cuatro módulos tienen su propio helper `tempdir()` a mano que
+  arma el nombre con `SystemTime::now().as_nanos()` y nada más: `git.rs:703`,
+  `theme.rs:912`, `epub.rs:3114` y `stats.rs:202`. Dos tests que arrancan en el
+  mismo nanosegundo se pisan el directorio, y `cargo test` en paralelo falla de
+  forma intermitente — visto en `git::tests::pull_rebase_sets_upstream_when_missing`.
+  Además cada corrida deja un directorio colgado en `/tmp` para siempre, porque
+  nadie limpia al final.
+  El arreglo es **borrar código, no agregarlo**: `tempfile` ya es
+  dev-dependency y ya lo usan cinco módulos. `tempfile::tempdir()` es a prueba
+  de colisiones por construcción (`O_EXCL` con reintento) y se borra sola al
+  dropear el guard. La rama `feat/epub-back-matter` ya convirtió las dos copias
+  que había agregado (`autor.rs`, `catalogo.rs`); quedan estas cuatro. Ojo al
+  convertir: hay que retener el `TempDir` mientras el test use paths adentro,
+  o se borra el directorio a mitad y el test falla peor que ahora.
 
 ## Observabilidad / Stats
 

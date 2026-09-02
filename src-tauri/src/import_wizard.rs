@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tauri::{AppHandle, Emitter};
 
-use crate::book_config::BookConfig;
+use crate::book_config::{BookConfig, COVER_EXTS};
 use crate::fs::is_chapter_file;
 
 /// Skip más permisivo que `fs::should_skip_dir`: solo metadatos reales.
@@ -15,6 +15,7 @@ fn should_skip_dir(name: &str) -> bool {
 }
 use crate::import::clean_html;
 use crate::saga_config::SagaConfig;
+use crate::util::strip_numeric_prefix;
 
 // ─────────── Scan: estructura propuesta del source ───────────
 
@@ -447,17 +448,6 @@ fn leading_number(s: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
-fn strip_numeric_prefix(s: &str) -> String {
-    let trimmed = s.trim_start();
-    let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
-    if digits.is_empty() {
-        return s.to_string();
-    }
-    let rest = &trimmed[digits.len()..];
-    rest.trim_start_matches(|c: char| c.is_whitespace() || c == '-')
-        .to_string()
-}
-
 // ─────────── Apply: ejecutar el plan ───────────
 
 #[derive(Deserialize, Debug)]
@@ -624,35 +614,14 @@ fn apply_impl(app: AppHandle, plan: WizardPlan) -> Result<ImportSummary, String>
                 }
             }
         }
-        let mut image_copies: Vec<(PathBuf, PathBuf)> = Vec::new();
+        // Copiar tapa/contratapa ANTES de escribir el book.json: si la copia
+        // falla, el field tiene que quedar vacío en vez de persistir una
+        // referencia a un archivo que nunca llegó a estar en el book_dir.
         for (field, stem) in [(&mut book_cfg.tapa, "cover"), (&mut book_cfg.contratapa, "back-cover")] {
-            if let Some(value) = field.as_deref().filter(|s| !s.trim().is_empty()) {
-                let candidate = PathBuf::from(value);
-                if candidate.is_absolute() && candidate.is_file() {
-                    let ext = candidate
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .map(|s| s.to_lowercase())
-                        .unwrap_or_else(|| "png".to_string());
-                    let dest_name = format!("{}.{}", stem, ext);
-                    let dest = book_dir.join(&dest_name);
-                    image_copies.push((candidate, dest));
-                    *field = Some(dest_name);
-                }
-            }
+            resolve_cover_image(field, stem, &book_dir, &mut summary);
         }
         if let Err(e) = write_book_json(&book_dir, &book_cfg) {
             summary.failed.push(format!("book.json {}: {}", book.dir_name, e));
-        }
-        for (src, dst) in image_copies {
-            if !dst.exists() {
-                match fs::copy(&src, &dst) {
-                    Ok(_) => summary.copied_extras += 1,
-                    Err(e) => summary
-                        .failed
-                        .push(format!("copiar imagen {}: {}", src.display(), e)),
-                }
-            }
         }
 
         // direct chapters
@@ -703,6 +672,74 @@ fn emit_progress(app: &AppHandle, done: u32, total: u32, current: &str) {
             current: current.to_string(),
         },
     );
+}
+
+/// Valida la tapa/contratapa elegida en el wizard antes de copiarla.
+///
+/// El picker del wizard solo filtra por UI: se puede tipear un nombre a mano
+/// o elegir "todos los archivos" y colar una extensión que el decoder de
+/// portadas no sabe abrir (`image` se compila sin soporte webp/gif, ver
+/// `book_config::COVER_EXTS`). Si `field` apunta a un archivo con una
+/// extensión no soportada, no se copia nada y se limpia el campo para que
+/// el `book.json` no quede referenciando un archivo que el EPUB no puede
+/// decodificar — mejor sin tapa que con una referencia rota o un webp que
+/// exporta el EPUB sin portada en silencio. El aviso se empuja a `failed`,
+/// que ya es donde el wizard junta el resto de los problemas por-archivo
+/// (ver `handle_chapter`/`handle_extra`), así que el resto del import sigue
+/// su curso y el autor ve el motivo en la misma lista al terminar.
+///
+/// Copia la tapa/contratapa elegida en el wizard a `<book_dir>/<stem>.<ext>`
+/// y reescribe `field` a ese nombre relativo — pero solo si la copia salió
+/// bien. Si falla (o el formato no está soportado), `field` queda en `None`:
+/// mejor sin tapa que con un `book.json` apuntando a un archivo que no está
+/// en el book_dir. El motivo se empuja a `summary.failed`, que ya es donde
+/// el wizard junta el resto de los problemas por-archivo (ver
+/// `handle_chapter`/`handle_extra`), así que el resto del import sigue su
+/// curso y el autor ve el motivo en la misma lista al terminar.
+///
+/// No hace nada (deja `field` como está) si el campo estaba vacío o ya era
+/// relativo — nada para copiar en ese caso.
+fn resolve_cover_image(field: &mut Option<String>, stem: &str, book_dir: &Path, summary: &mut ImportSummary) {
+    let etiqueta = if stem == "cover" { "tapa" } else { "contratapa" };
+    let Some(value) = field.as_deref().filter(|s| !s.trim().is_empty()) else {
+        return;
+    };
+    let candidate = PathBuf::from(value);
+    if !(candidate.is_absolute() && candidate.is_file()) {
+        return;
+    }
+    let ext = candidate
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+    if !COVER_EXTS.contains(&ext.as_str()) {
+        let nombre = candidate.file_name().and_then(|n| n.to_str()).unwrap_or(value);
+        summary.failed.push(format!(
+            "{} \"{}\": formato de imagen no soportado, usá JPG o PNG",
+            etiqueta, nombre
+        ));
+        *field = None;
+        return;
+    }
+    let dest_name = format!("{}.{}", stem, ext);
+    let dest = book_dir.join(&dest_name);
+    if dest.exists() {
+        *field = Some(dest_name);
+        return;
+    }
+    match fs::copy(&candidate, &dest) {
+        Ok(_) => {
+            summary.copied_extras += 1;
+            *field = Some(dest_name);
+        }
+        Err(e) => {
+            summary
+                .failed
+                .push(format!("copiar {} {}: {}", etiqueta, candidate.display(), e));
+            *field = None;
+        }
+    }
 }
 
 fn ensure_dir(p: &Path, summary: &mut ImportSummary) -> Result<(), String> {
@@ -996,6 +1033,81 @@ mod tests {
             .find(|f| f.name == "section_a" && f.ext == "odt")
             .expect("original section_a.odt en extras");
         assert_eq!(orig.subpath.as_deref(), Some("original"));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolve_cover_image_rechaza_extension_no_soportada_sin_tocar_el_campo() {
+        let root = unique_tmp("cover-webp");
+        let source = root.join("mi tapa.webp");
+        touch(&source);
+        let book_dir = root.join("book");
+        fs::create_dir_all(&book_dir).expect("mkdir book_dir");
+
+        let mut field = Some(source.to_string_lossy().to_string());
+        let mut summary = ImportSummary::default();
+        resolve_cover_image(&mut field, "cover", &book_dir, &mut summary);
+
+        // ...el campo queda limpio, así el book.json no referencia un archivo
+        // que el EPUB no puede decodificar...
+        assert_eq!(field, None, "el field no debe quedar apuntando al webp");
+        // ...y el archivo no se copió al book_dir.
+        assert!(
+            !book_dir.join("cover.webp").exists(),
+            "el webp no debe copiarse al book_dir"
+        );
+        // ...y el autor se entera del motivo, en español, con el nombre del
+        // archivo y los formatos que sí andan.
+        assert_eq!(summary.failed.len(), 1);
+        assert!(summary.failed[0].contains("mi tapa.webp"), "el mensaje: {}", summary.failed[0]);
+        assert!(summary.failed[0].contains("JPG"), "el mensaje: {}", summary.failed[0]);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolve_cover_image_acepta_png_copia_y_reescribe_el_campo_a_relativo() {
+        let root = unique_tmp("cover-png");
+        let source = root.join("mi tapa.png");
+        touch(&source);
+        let book_dir = root.join("book");
+        fs::create_dir_all(&book_dir).expect("mkdir book_dir");
+
+        let mut field = Some(source.to_string_lossy().to_string());
+        let mut summary = ImportSummary::default();
+        resolve_cover_image(&mut field, "cover", &book_dir, &mut summary);
+
+        assert!(book_dir.join("cover.png").is_file(), "la copia sí debe existir en disco");
+        assert_eq!(field.as_deref(), Some("cover.png"));
+        assert!(summary.failed.is_empty());
+        assert_eq!(summary.copied_extras, 1);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolve_cover_image_copia_fallida_no_deja_el_campo_escrito() {
+        // Discrimina el bug del finding: si `fs::copy` falla, `field` no
+        // puede quedar apuntando a "cover.png" — ese archivo nunca llegó a
+        // existir en el book_dir, y persistir la referencia deja el
+        // book.json roto (mismo problema que un `write_book_json` corrido
+        // antes de intentar la copia).
+        let root = unique_tmp("cover-copy-fails");
+        let source = root.join("mi tapa.png");
+        touch(&source);
+        // book_dir NO se crea: fs::copy falla porque el destino no tiene
+        // directorio padre en disco.
+        let book_dir = root.join("book-inexistente");
+
+        let mut field = Some(source.to_string_lossy().to_string());
+        let mut summary = ImportSummary::default();
+        resolve_cover_image(&mut field, "cover", &book_dir, &mut summary);
+
+        assert_eq!(field, None, "una copia fallida no debe dejar el field escrito");
+        assert_eq!(summary.copied_extras, 0);
+        assert_eq!(summary.failed.len(), 1, "el fallo se reporta, no se traga");
+        assert!(summary.failed[0].contains("copiar"), "el mensaje: {}", summary.failed[0]);
 
         let _ = fs::remove_dir_all(&root);
     }

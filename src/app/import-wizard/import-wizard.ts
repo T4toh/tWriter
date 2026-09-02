@@ -170,7 +170,7 @@ export class ImportWizard {
   protected async pickBookCover(book: EditableBook): Promise<void> {
     const result = await this.dialogs.pickSingleFile({
       title: `Tapa para "${book.config.titulo || book.dir_name}"`,
-      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg'] }],
       defaultPath: book.source_path,
     });
     if (!result) return;

@@ -7,7 +7,7 @@
   color: var(--fg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
   padding: 8px 10px;
   font-family: var(--font-ui);
   font-size: 12px;
@@ -23,12 +23,15 @@
 .rae-pop--pending {
   border-left: 3px solid #d27a1f;
 }
+
 .rae-pop--char {
   border-left: 3px solid #d23030;
 }
+
 .rae-pop--structure {
   border-left: 3px solid #d23030;
 }
+
 .rae-pop--typo {
   border-left: 3px solid #c89020;
 }

@@ -94,27 +94,33 @@
     font-size: 12px;
     padding: 0;
   }
+
   .tb-btn:hover {
     background: var(--border);
     color: var(--fg);
   }
+
   .tb-btn.active {
     background: var(--accent);
     color: var(--bg);
   }
+
   .tb-btn.active:hover {
     filter: brightness(1.1);
   }
+
   .tb-btn .ico {
     font-weight: 600;
     font-size: 12px;
     line-height: 1;
   }
   .tb-btn .ico.bold { font-weight: 700; }
+
   .tb-btn .ico.italic {
     font-style: italic;
     font-family: var(--font-body);
   }
+
   .tb-btn.tb-text {
     width: auto;
     padding: 0 0.45em;
@@ -122,6 +128,7 @@
     font-weight: 600;
     letter-spacing: 0.05em;
   }
+
   .sep {
     width: 1px;
     height: 16px;
@@ -155,9 +162,11 @@
     background: var(--border);
     color: var(--fg);
   }
+
   &.dirty {
     background: var(--border);
   }
+
   &.saved {
     color: var(--fg-muted);
   }
@@ -202,7 +211,7 @@
   padding: 1.5rem 1.25rem;
 
   ::ng-deep .search-hit {
-    background: rgba(255, 213, 0, 0.35);
+    background: rgb(255 213 0 / 35%);
     border-radius: 2px;
   }
 
@@ -223,7 +232,7 @@
     cursor: default;
 
     p {
-      margin: 0 0 0.8em 0;
+      margin: 0 0 0.8em;
       text-align: left;
     }
 

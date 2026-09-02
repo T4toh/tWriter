@@ -1,10 +1,16 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::theme::ThemeRef;
+use crate::util::strip_numeric_prefix;
 
-const COVER_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp"];
+// Sin "webp"/"gif" a propósito: `image` se compila con `features = ["png", "jpeg"]`
+// nomás (Cargo.toml), así que `embebido_reescalado` no puede decodificarlas — ver
+// findings-finales.md, Important 4. Ofrecerlas acá sería prometer un formato que
+// el decoder no sabe abrir.
+pub(crate) const COVER_EXTS: &[&str] = &["jpg", "jpeg", "png"];
 
 /// Busca `cover.<ext>` en `dir`. Devuelve el nombre relativo (ej: "cover.jpg") si existe.
 pub fn find_cover_in(dir: &Path) -> Option<String> {
@@ -22,23 +28,30 @@ pub fn find_author_photo_in(dir: &Path) -> Option<String> {
     find_named_image(dir, "author").or_else(|| find_named_image(dir, "autor"))
 }
 
+/// Única resolución de campos de imagen del repo: dado el valor crudo de un
+/// campo tipo `tapa`/`foto`/`qr` (relativo a `dir` o absoluto), devuelve el
+/// path absoluto si apunta a un archivo que existe en esta máquina. `None`
+/// si el campo está vacío o el archivo no está (el caso de un `book.json`
+/// viejo con un path absoluto de otra PC).
+pub fn resolver_imagen(dir: &Path, campo: Option<&str>) -> Option<PathBuf> {
+    let value = campo.map(str::trim).filter(|s| !s.is_empty())?;
+    let p = Path::new(value);
+    let full = if p.is_absolute() { p.to_path_buf() } else { dir.join(p) };
+    full.is_file().then_some(full)
+}
+
 /// `true` si el field de imagen no sirve y conviene autodescubrir: está vacío,
 /// **o** apunta a un archivo que no está en esta máquina — el caso de los
 /// `book.json` viejos con un path absoluto de otra PC. Sin esto el EPUB se
 /// exportaba sin portada en silencio teniendo el `cover.png` al lado.
 pub fn image_field_unusable(dir: &Path, field: Option<&str>) -> bool {
-    match field.map(str::trim).filter(|s| !s.is_empty()) {
-        None => true,
-        Some(value) => {
-            let p = Path::new(value);
-            let full = if p.is_absolute() { p.to_path_buf() } else { dir.join(p) };
-            !full.is_file()
-        }
-    }
+    resolver_imagen(dir, field).is_none()
 }
 
-/// Stems canónicos de las imágenes que vive al lado de un `book.json`/`saga.json`.
-const IMAGE_STEMS: &[&str] = &["cover", "back-cover", "author"];
+/// Stems canónicos de las imágenes que vive al lado de un `book.json`/`saga.json`
+/// (`cover`, `back-cover`, `author`) o de `autor.json` en la raíz del repo
+/// (`autor`, `qr`) — estos dos últimos son los que manda el modal del autor.
+const IMAGE_STEMS: &[&str] = &["cover", "back-cover", "author", "autor", "qr"];
 
 /// Deja la imagen elegida **dentro** de la carpeta del libro/saga y devuelve el
 /// nombre relativo para guardar en el JSON. Si ya estaba adentro, no copia nada
@@ -84,17 +97,92 @@ pub fn adopt_image(dir: &Path, source: &Path, stem: &str) -> Result<String, Stri
     Ok(dest_name)
 }
 
-/// Wrapper de `adopt_image` para los modales de config (libro y saga).
+/// Rectángulo de recorte cuadrado, en píxeles de la imagen original elegida
+/// por el autor. Lo arma el cropper a mano de `autor-modal.ts` — no hay
+/// detección de cara, el autor mueve el cuadro.
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct CropRect {
+    pub x: u32,
+    pub y: u32,
+    pub side: u32,
+}
+
+/// Wrapper de `adopt_image`/`adopt_image_cropped` para los modales de config
+/// (libro, saga y autor). `crop` es `None` para los tres llamadores viejos
+/// (tapa/contratapa/QR) — el comportamiento no cambia. El modal del autor lo
+/// manda cuando la foto no es cuadrada y hubo que recortarla a mano.
 #[tauri::command]
 pub fn adopt_config_image(
     dir_path: String,
     source_path: String,
     stem: String,
+    crop: Option<CropRect>,
 ) -> Result<String, String> {
-    adopt_image(Path::new(&dir_path), Path::new(&source_path), &stem)
+    let dir = Path::new(&dir_path);
+    let source = Path::new(&source_path);
+    match crop {
+        None => adopt_image(dir, source, &stem),
+        Some(rect) => adopt_image_cropped(dir, source, &stem, rect),
+    }
 }
 
-fn find_named_image(dir: &Path, stem: &str) -> Option<String> {
+/// Como `adopt_image`, pero recorta `source` al cuadrado `rect` antes de
+/// escribir. A diferencia de `adopt_image`, siempre reescribe el archivo aunque
+/// `source` ya viva adentro de `dir`: el contenido cambia, no solo la
+/// ubicación, así que el atajo "ya está adentro, no copiar nada" no aplica acá.
+pub fn adopt_image_cropped(
+    dir: &Path,
+    source: &Path,
+    stem: &str,
+    rect: CropRect,
+) -> Result<String, String> {
+    if !IMAGE_STEMS.contains(&stem) {
+        return Err(format!("stem no permitido: {}", stem));
+    }
+    if !dir.is_dir() {
+        return Err(format!("no es carpeta: {}", dir.display()));
+    }
+    if !source.is_file() {
+        return Err(format!("la imagen no existe: {}", source.display()));
+    }
+    let ext = source
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+    if !COVER_EXTS.contains(&ext.as_str()) {
+        return Err(format!(
+            "formato no soportado: .{} (usar {})",
+            ext,
+            COVER_EXTS.join(", ")
+        ));
+    }
+    let bytes = fs::read(source).map_err(|e| format!("leer imagen: {}", e))?;
+    let img = ::image::load_from_memory(&bytes).map_err(|e| e.to_string())?;
+    let recortada = img.crop_imm(rect.x, rect.y, rect.side, rect.side);
+    let dest_name = format!("{}.{}", stem, ext);
+    let dest_path = dir.join(&dest_name);
+    if ext == "png" {
+        recortada
+            .save_with_format(&dest_path, ::image::ImageFormat::Png)
+            .map_err(|e| format!("guardar imagen: {}", e))?;
+    } else {
+        // jpg/jpeg: mismo encoder y calidad que `reescalar_jpeg` en image.rs.
+        let mut out = fs::File::create(&dest_path).map_err(|e| format!("guardar imagen: {}", e))?;
+        recortada
+            .to_rgb8()
+            .write_with_encoder(::image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 82))
+            .map_err(|e| format!("guardar imagen: {}", e))?;
+    }
+    // Mismo criterio que `adopt_image`: la elegida reemplaza cualquier otra
+    // extensión del mismo stem.
+    for otra in COVER_EXTS.iter().filter(|e| **e != ext) {
+        let _ = fs::remove_file(dir.join(format!("{}.{}", stem, otra)));
+    }
+    Ok(dest_name)
+}
+
+pub(crate) fn find_named_image(dir: &Path, stem: &str) -> Option<String> {
     for ext in COVER_EXTS {
         let candidate = dir.join(format!("{}.{}", stem, ext));
         if candidate.is_file() {
@@ -126,6 +214,20 @@ pub struct BookConfig {
     pub copyright_anio: Option<u32>,
     #[serde(default)]
     pub derechos_reservados: Option<bool>,
+    /// Inciso "obra de ficción" de la página legal. Si está ausente hereda
+    /// `derechos_reservados`, que es lo que lo prendía antes de que los
+    /// incisos se separaran — así los book.json viejos exportan igual.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub obra_de_ficcion: Option<bool>,
+    /// Inciso que aclara que la IA se usó solo para generar imágenes y que
+    /// el texto es del autor. Default: apagado.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nota_ia: Option<bool>,
+    /// Redacción propia por inciso, con las claves "reserva", "ficcion" e
+    /// "ia". Solo se guarda lo que el autor haya editado; lo que falta usa
+    /// el texto default del idioma del libro.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub textos_legales: Option<BTreeMap<String, String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dedicatoria: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -134,6 +236,11 @@ pub struct BookConfig {
     pub serie: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub numero_en_serie: Option<u32>,
+    /// URL pública del libro (la página del autor, o la ficha de la tienda).
+    /// Tenerla cargada es lo que mete al libro en la sección "Otros libros"
+    /// de los EPUB de los demás libros. Ver `catalogo.rs`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link: Option<String>,
     /// Mostrar el título del capítulo en la chapter title page. Default: true.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mostrar_titulo_capitulo: Option<bool>,
@@ -286,17 +393,6 @@ fn mark_as_epilogo_impl(section_path: &str) -> Result<String, String> {
     Ok(final_path.to_string_lossy().into_owned())
 }
 
-fn strip_numeric_prefix(s: &str) -> String {
-    let trimmed = s.trim_start();
-    let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
-    if digits.is_empty() {
-        return s.to_string();
-    }
-    let rest = &trimmed[digits.len()..];
-    rest.trim_start_matches(|c: char| c.is_whitespace() || c == '-')
-        .to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,5 +488,111 @@ mod tests {
         assert!(adopt_image(libro.path(), &pdf, "cover").is_err());
         assert!(adopt_image(libro.path(), &ok, "../escape").is_err());
         assert!(adopt_image(libro.path(), &afuera.path().join("no-existe.png"), "cover").is_err());
+    }
+
+    #[test]
+    fn rechaza_webp_porque_el_decoder_no_lo_sabe_abrir() {
+        // `image` se compila sin la feature `webp` (Cargo.toml): adoptar un
+        // .webp dejaría un archivo que `embebido_reescalado` nunca puede
+        // decodificar al exportar. Ver findings-finales.md, Important 4.
+        let libro = TempDir::new().unwrap();
+        let afuera = TempDir::new().unwrap();
+        let webp = afuera.path().join("tapa.webp");
+        fs::write(&webp, b"RIFF....WEBP").unwrap();
+
+        let err = adopt_image(libro.path(), &webp, "cover").unwrap_err();
+        assert!(err.contains("formato no soportado"), "err: {}", err);
+    }
+
+    #[test]
+    fn acepta_los_stems_del_modal_del_autor() {
+        // El modal del autor manda "autor" y "qr" a adopt_config_image; si
+        // IMAGE_STEMS no los incluye, los dos pickers del modal fallan siempre
+        // con "stem no permitido" (ver findings-finales.md, Important 1).
+        let root = TempDir::new().unwrap();
+        let afuera = TempDir::new().unwrap();
+        let src = afuera.path().join("qr.png");
+        png(&src);
+
+        let rel = adopt_image(root.path(), &src, "qr").unwrap();
+
+        assert_eq!(rel, "qr.png");
+        assert!(root.path().join("qr.png").is_file());
+    }
+
+    #[test]
+    fn recorta_la_region_pedida_no_cualquier_cuadrado() {
+        // Apaisada 300x200: mitad izquierda roja, mitad derecha azul — un
+        // recorte que agarre la región equivocada (o que solo sea cuadrado
+        // de cualquier lado) sale con el color que no es.
+        let libro = TempDir::new().unwrap();
+        let afuera = TempDir::new().unwrap();
+        let mut img = ::image::RgbImage::from_pixel(300, 200, ::image::Rgb([200, 0, 0]));
+        for y in 0..200 {
+            for x in 150..300 {
+                img.put_pixel(x, y, ::image::Rgb([0, 0, 200]));
+            }
+        }
+        let src = afuera.path().join("foto.png");
+        ::image::DynamicImage::ImageRgb8(img).save(&src).unwrap();
+
+        let rect = CropRect { x: 160, y: 20, side: 100 };
+        let rel = adopt_image_cropped(libro.path(), &src, "autor", rect).unwrap();
+
+        assert_eq!(rel, "autor.png");
+        let out = ::image::open(libro.path().join(&rel)).unwrap();
+        assert_eq!(
+            (out.width(), out.height()),
+            (100, 100),
+            "el lado tiene que ser el pedido (100), no el lado corto de la fuente (200)"
+        );
+        let rgb = out.to_rgb8();
+        assert_eq!(
+            rgb.get_pixel(0, 0).0,
+            [0, 0, 200],
+            "x=160 cae del lado azul de la fuente; si saliera rojo el recorte agarró otra región"
+        );
+        assert_eq!(rgb.get_pixel(99, 99).0, [0, 0, 200]);
+    }
+
+    #[test]
+    fn recortar_reescribe_aunque_la_fuente_ya_viva_adentro() {
+        // A diferencia de `adopt_image`, acá el atajo "ya está adentro, no
+        // copiar" no puede aplicar: el contenido cambia con el recorte.
+        let libro = TempDir::new().unwrap();
+        let mut img = ::image::RgbImage::from_pixel(200, 100, ::image::Rgb([10, 10, 10]));
+        for y in 0..100 {
+            for x in 100..200 {
+                img.put_pixel(x, y, ::image::Rgb([250, 250, 0]));
+            }
+        }
+        let src = libro.path().join("autor.png");
+        ::image::DynamicImage::ImageRgb8(img).save(&src).unwrap();
+
+        let rect = CropRect { x: 100, y: 0, side: 100 };
+        adopt_image_cropped(libro.path(), &src, "autor", rect).unwrap();
+
+        let out = ::image::open(libro.path().join("autor.png")).unwrap();
+        assert_eq!((out.width(), out.height()), (100, 100));
+        assert_eq!(out.to_rgb8().get_pixel(0, 0).0, [250, 250, 0]);
+    }
+
+    #[test]
+    fn sin_rect_de_recorte_adopt_config_image_no_cambia_de_comportamiento() {
+        let libro = TempDir::new().unwrap();
+        let afuera = TempDir::new().unwrap();
+        let src = afuera.path().join("Mi Tapa Rev3.png");
+        png(&src);
+
+        let rel = adopt_config_image(
+            libro.path().to_string_lossy().into_owned(),
+            src.to_string_lossy().into_owned(),
+            "cover".to_string(),
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(rel, "cover.png");
+        assert!(libro.path().join("cover.png").is_file());
     }
 }

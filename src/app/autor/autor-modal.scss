@@ -1,0 +1,318 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 50%);
+  z-index: 200;
+}
+
+.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 201;
+  width: min(880px, 95vw);
+
+  // 90vh y no 85: con dos bios de 3 renglones el contenido entra entero en
+  // una pantalla normal, y el scroll solo aparece si el autor agranda los
+  // textareas o escribe una bio larga — no de arranque.
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  font-family: var(--font-ui);
+  color: var(--fg);
+  box-sizing: border-box;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (width <= 720px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+  min-width: 0;
+
+  > span {
+    color: var(--fg-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+  }
+}
+
+input,
+textarea {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: var(--accent);
+  }
+}
+
+textarea {
+  resize: vertical;
+  font-family: var(--font-body);
+  line-height: 1.5;
+}
+
+.picker {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+
+  .path {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--fg-muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+}
+
+.hint {
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.preview-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.preview-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.preview-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem 1.25rem;
+  text-align: center;
+}
+
+.preview-photo {
+  // Cuadrada, como .about-author-photo en epub_style.css (sin
+  // border-radius) — la previa tiene que mostrar la misma forma que va a
+  // salir en el EPUB. El tamaño acá es una miniatura fija, no una réplica
+  // a escala del 22% real.
+  width: 46px;
+  height: 46px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+
+.preview-heading {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.preview-bio {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--fg);
+
+  p {
+    margin: 0 0 0.6em;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+}
+
+.preview-empty {
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+.preview-web {
+  // QR arriba, URL abajo, ambos centrados — igual que en el EPUB (ahí es
+  // <img> seguido de un <p>, o sea ya apilados; acá se fuerza column para
+  // que la previa no muestre una fila que el export nunca produce).
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+  width: 100%;
+}
+
+.preview-qr {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.preview-web-url {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.error {
+  margin: 0;
+  color: #c87070;
+  font-size: 12px;
+}
+
+// Paso de recorte: modal apilado arriba del modal del autor (mismo patrón
+// de backdrop+panel que .backdrop/.modal, con z-index más alto).
+.crop-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 60%);
+  z-index: 210;
+}
+
+.crop-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 211;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
+  padding: 1.25rem 1.5rem;
+  font-family: var(--font-ui);
+  color: var(--fg);
+
+  // El recuadro de la foto se dimensiona contra la ventana; el modal tiene
+  // que poder crecer con él en vez de recortarlo.
+  max-width: 94vw;
+  max-height: 92vh;
+  overflow: auto;
+
+  h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+  }
+}
+
+.crop-frame {
+  position: relative;
+
+  // El tamaño real lo pone el binding inline (escalado a partir de las
+  // dimensiones naturales de la foto); esto es solo el borde de referencia.
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.crop-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+.crop-square {
+  position: absolute;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 2000px rgb(0 0 0 / 45%);
+  cursor: move;
+  touch-action: none;
+
+  &:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+button {
+  padding: 0.4em 0.9em;
+  border-radius: 4px;
+  background: var(--bg-soft);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+
+  &:hover:not(:disabled) {
+    background: var(--border);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

@@ -40,15 +40,7 @@
             />
           </label>
         </div>
-        <div class="row split">
-          <label>
-            <span>Autor</span>
-            <input
-              type="text"
-              [ngModel]="c.autor"
-              (ngModelChange)="update('autor', $event)"
-            />
-          </label>
+        <div class="row">
           <label>
             <span>Idioma</span>
             <app-select
@@ -108,14 +100,48 @@
           </label>
         </div>
         <div class="row">
-          <label class="checkbox">
+          <label class="field">
+            <span>Link público</span>
             <input
-              type="checkbox"
-              [ngModel]="c.derechos_reservados"
-              (ngModelChange)="update('derechos_reservados', $event)"
+              type="url"
+              placeholder="https://tatoh.ar/libros/..."
+              [ngModel]="c.link"
+              (ngModelChange)="update('link', $event)"
             />
-            <span>Incluir cláusula de derechos reservados</span>
+            <small class="hint">
+              Con el link cargado, este libro aparece en la sección "Otros libros" de los
+              EPUB de tus otras novelas.
+            </small>
           </label>
+        </div>
+        <div class="row">
+          <fieldset class="legal">
+            <legend>Página legal</legend>
+            @for (inciso of incisos; track inciso.clave) {
+              <div class="inciso">
+                <label class="checkbox">
+                  <input
+                    type="checkbox"
+                    [checked]="incisoActivo(inciso.clave)"
+                    (change)="setInciso(inciso.clave, $any($event.target).checked)"
+                  />
+                  <span>{{ inciso.label }}</span>
+                </label>
+                @if (incisoActivo(inciso.clave)) {
+                  <button type="button" class="link-btn" (click)="toggleEdicionTexto(inciso.clave)">
+                    {{ editandoTexto().has(inciso.clave) ? 'Ocultar' : 'Editar redacción' }}
+                  </button>
+                }
+                @if (editandoTexto().has(inciso.clave)) {
+                  <textarea
+                    rows="4"
+                    [ngModel]="textoInciso(inciso.clave)"
+                    (ngModelChange)="setTextoInciso(inciso.clave, $event)"
+                  ></textarea>
+                }
+              </div>
+            }
+          </fieldset>
         </div>
         <div class="row">
           <label>
@@ -289,39 +315,6 @@
             </datalist>
           }
         }
-
-        <div class="row section-divider">
-          <span class="section-label">Sobre el autor</span>
-        </div>
-        <p class="hint-soft">
-          Si dejás la bio vacía, no se genera la página "Sobre el autor" en el
-          EPUB.
-        </p>
-        <div class="row">
-          <label>
-            <span>Bio (una línea = un párrafo)</span>
-            <textarea
-              [ngModel]="c.sobre_el_autor"
-              (ngModelChange)="update('sobre_el_autor', $event)"
-              rows="5"
-              placeholder="Nací en Cipolletti. Vivo escribiendo."
-            ></textarea>
-          </label>
-        </div>
-        <div class="row">
-          <label>
-            <span>Foto del autor (imagen)</span>
-            <div class="cover-row">
-              <input
-                type="text"
-                [ngModel]="c.foto_autor"
-                (ngModelChange)="update('foto_autor', $event)"
-                placeholder="ej: author.jpg o ruta absoluta"
-              />
-              <button type="button" (click)="pickAuthorPhoto()">Buscar…</button>
-            </div>
-          </label>
-        </div>
 
         @if (error(); as err) {
           <p class="error">{{ err }}</p>

@@ -1,7 +1,7 @@
 .gs-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgb(0 0 0 / 50%);
   z-index: 200;
 }
 
@@ -19,7 +19,7 @@
   color: var(--fg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
   overflow: hidden;
 }
 
@@ -29,7 +29,7 @@
   background: var(--bg-soft);
 
   h2 {
-    margin: 0 0 0.25em 0;
+    margin: 0 0 0.25em;
     font-family: var(--font-ui);
     font-size: 16px;
     font-weight: 600;
@@ -246,7 +246,7 @@ option {
   padding: 4px 6px;
   border-radius: 3px;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 
   &.err {
     color: #c87070;
@@ -427,12 +427,12 @@ option {
   font-weight: 500;
 
   &.ok {
-    background: rgba(76, 175, 80, 0.15);
+    background: rgb(76 175 80 / 15%);
     color: #4caf50;
   }
 
   &.warn {
-    background: rgba(200, 144, 32, 0.15);
+    background: rgb(200 144 32 / 15%);
     color: #c89020;
   }
 }
@@ -498,6 +498,7 @@ option {
 
   &[data-phase='error'] li.active {
     border-left-color: #c87070;
+
     .step-icon {
       color: #c87070;
       animation: none;

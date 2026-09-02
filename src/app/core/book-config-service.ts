@@ -14,6 +14,11 @@ export interface BookConfig {
   contratapa?: string | null;
   copyright_anio?: number | null;
   derechos_reservados?: boolean | null;
+  /** URL pública del libro. Cargarla lo publica en el catálogo de los demás EPUB. */
+  link?: string | null;
+  obra_de_ficcion?: boolean | null;
+  nota_ia?: boolean | null;
+  textos_legales?: Record<string, string> | null;
   dedicatoria?: string | null;
   imprenta?: string | null;
   serie?: string | null;
@@ -30,7 +35,7 @@ export interface BookConfig {
   /** Bio plain-text para la página "Sobre el autor" del EPUB. */
   sobre_el_autor?: string | null;
   /** Path relativo o absoluto de la foto del autor. Auto-detect de
-   *  `<book>/author.{jpg,png,webp}` o `<book>/autor.{...}`. */
+   *  `<book>/author.{jpg,jpeg,png}` o `<book>/autor.{...}`. */
   foto_autor?: string | null;
 }
 

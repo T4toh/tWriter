@@ -1,7 +1,7 @@
 .mh-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgb(0 0 0 / 60%);
   z-index: 300;
   animation: mh-fade-in 120ms ease-out both;
 
@@ -20,7 +20,7 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 50%);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -37,6 +37,7 @@
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -47,6 +48,7 @@
     opacity: 0;
     transform: translate(-50%, calc(-50% + 8px));
   }
+
   to {
     opacity: 1;
     transform: translate(-50%, -50%);
@@ -58,6 +60,7 @@
   .mh-card {
     animation: none;
   }
+
   .mh-card {
     transform: translate(-50%, -50%);
   }
@@ -93,6 +96,7 @@
     &[data-variant='error'] {
       color: #c87070;
     }
+
     &[data-variant='success'] {
       color: var(--accent);
     }
