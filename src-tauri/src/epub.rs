@@ -1454,7 +1454,17 @@ fn build_otros_libros_xhtml(
         s
     };
 
-    let titulo_saga = match (&cat.saga_actual, is_en) {
+    // El nombre publicado de la serie (`serie` en book.json) prevalece sobre
+    // el nombre de la carpeta saga: el autor puede organizar su workspace
+    // con nombres internos ("Meridian 2.0" para su propia reescritura) que
+    // no deben filtrarse al EPUB publicado.
+    let nombre_serie = cfg
+        .serie
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .or(cat.saga_actual.as_deref());
+    let titulo_saga = match (nombre_serie, is_en) {
         (Some(n), false) => format!("Más de {}", n),
         (Some(n), true) => format!("More from {}", n),
         (None, false) => "Más de esta serie".to_string(),
@@ -3009,6 +3019,48 @@ mod tests {
         let xhtml = build_otros_libros_xhtml(&cfg, &cat, &[]);
         assert!(xhtml.contains("More from Milky Way"));
         assert!(xhtml.contains("<h1>Also by the Author</h1>"));
+    }
+
+    /// `serie` (nombre publicado, en book.json) prevalece sobre el nombre de
+    /// la carpeta saga (nombre de workspace del autor, ej. "Meridian 2.0"
+    /// para su propia reescritura interna).
+    #[test]
+    fn otros_libros_prefiere_serie_del_libro_sobre_el_nombre_de_la_saga() {
+        let cat = crate::catalogo::Catalogo {
+            misma_saga: vec![crate::catalogo::LibroPublicado {
+                titulo: "Hermano".into(),
+                subtitulo: None,
+                link: "https://x/h".into(),
+                tapa: None,
+                numero_en_serie: Some(2),
+            }],
+            otros: Vec::new(),
+            saga_actual: Some("Meridian 2.0".into()),
+        };
+
+        // Con `serie` presente y distinto del nombre de saga, gana `serie`.
+        let cfg_con_serie = BookConfig {
+            titulo: "X".into(),
+            serie: Some("Meridian".into()),
+            ..Default::default()
+        };
+        let xhtml = build_otros_libros_xhtml(&cfg_con_serie, &cat, &[]);
+        assert!(xhtml.contains("Más de Meridian<"));
+        assert!(!xhtml.contains("Meridian 2.0"));
+
+        // Sin `serie`, cae al nombre de la saga.
+        let cfg_sin_serie = BookConfig { titulo: "X".into(), ..Default::default() };
+        let xhtml = build_otros_libros_xhtml(&cfg_sin_serie, &cat, &[]);
+        assert!(xhtml.contains("Más de Meridian 2.0"));
+
+        // `serie` en blanco cuenta como ausente: cae al nombre de la saga.
+        let cfg_serie_blanca = BookConfig {
+            titulo: "X".into(),
+            serie: Some("   ".into()),
+            ..Default::default()
+        };
+        let xhtml = build_otros_libros_xhtml(&cfg_serie_blanca, &cat, &[]);
+        assert!(xhtml.contains("Más de Meridian 2.0"));
     }
 
     #[test]
