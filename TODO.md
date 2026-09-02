@@ -27,6 +27,19 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
      hoja queda inspeccionable en la app empaquetada. Es la más invasiva y la
      única que lo cierra de verdad.
 
+- **No hay forma directa de volver a la raíz** (pedido del autor, 2026-09-02).
+  Hoy, para llegar a la vista raíz —la que lista las sagas y donde vive la
+  carta del autor— hay que hacer doble click en una saga y después tocar
+  "Inicio". O sea que el camino a la pantalla de más arriba pasa por bajar
+  primero. El autor lo describe como mal diseñado desde que se cambió la
+  navegación, y coincide: la raíz debería estar a un click desde cualquier
+  lado, no a dos y en la dirección equivocada.
+  Sin decidir todavía cómo: puede ser el breadcrumb —que ya existe arriba de
+  la vista y ya sabe la cadena completa— haciendo clickeable el primer tramo,
+  un botón fijo, o un atajo de teclado. Mirar primero qué hace hoy
+  `landing.html`, que renderea el breadcrumb con `crumbs()` y `goCrumb()`, y
+  por qué esa cadena no arranca en la raíz.
+
 ## Editor / UX
 
 - Más variantes de divisor de escena (más allá del `* * *`).
@@ -1539,6 +1552,21 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   deja afuera las notas sin nombrarlas, así que el filtro de `note`/`notes` se
   cayó. Las secciones con `excluded: true` suman 0 — Rust las manda con
   `children: []` y además no van al EPUB, que es lo correcto acá.
+
+- **El export no dice que está trabajando** (pedido del autor, 2026-09-02).
+  Generar un EPUB tarda un par de segundos —medido en una M5, o sea que en
+  máquinas más lentas es peor— y en ese rato la app no muestra nada: no se
+  sabe si está haciendo algo o si el click no agarró. Hoy es la única
+  operación de la app con espera perceptible, así que es la única que
+  necesita esto.
+  Dónde vive: `chapter-service.ts::exportEpub` hace `invoke('export_book')` y
+  no muestra nada hasta el toast final. El backend sí sabe cuánto falta —
+  `export_impl` recorre capítulos, embebe imágenes y arma el zip en pasos
+  contables— así que puede emitir eventos de progreso por el bus de Tauri en
+  vez de que el frontend adivine con un spinner ciego.
+  Mínimo aceptable: que se vea que está trabajando. Mejor: en qué paso está,
+  porque "embebiendo tapas" y "escribiendo capítulos" tardan distinto y ver el
+  paso convierte la espera en información.
 
 ## EPUB
 

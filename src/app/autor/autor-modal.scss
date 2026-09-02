@@ -12,7 +12,10 @@
   transform: translate(-50%, -50%);
   z-index: 201;
   width: min(880px, 95vw);
-  max-height: 85vh;
+  // 90vh y no 85: con dos bios de 3 renglones el contenido entra entero en
+  // una pantalla normal, y el scroll solo aparece si el autor agranda los
+  // textareas o escribe una bio larga — no de arranque.
+  max-height: 90vh;
   overflow-y: auto;
   background: var(--bg);
   border: 1px solid var(--border);
