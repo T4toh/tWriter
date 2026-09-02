@@ -1046,8 +1046,34 @@ fn load_part(html_path: &Path) -> Result<ChapterPart, String> {
     Ok(ChapterPart {
         stem,
         meta_title,
-        content_html: content,
+        content_html: close_void_elements(&content),
     })
+}
+
+/// Autocierra `<br>` y `<hr>` sueltos (`<br/>`) para que el XHTML sea válido.
+/// El editor todavía escribe HTML sin autocerrar en los .html de capítulo
+/// (ver TODO.md); Apple Books usa un parser estricto y aborta con "Opening
+/// and ending tag mismatch" apenas encuentra el primero, mientras que
+/// Thorium es tolerante y lo deja pasar. Se arregla acá, a la salida del
+/// EPUB, sin tocar el archivo fuente.
+///
+/// Solo toca las etiquetas `br`/`hr` (los únicos void elements del subset de
+/// HTML del proyecto además de `img`, que ya sale bien formado). Cualquier
+/// tag ya autocerrado (`<br/>`, `<br />`) se deja tal cual byte a byte; el
+/// resto del markup y el texto no se tocan.
+fn close_void_elements(html: &str) -> String {
+    let re = regex::Regex::new(r"(?i)<(br|hr)\b[^<>]*>").expect("regex de void elements válida");
+    re.replace_all(html, |caps: &regex::Captures| {
+        let full = &caps[0];
+        let sin_cierre = full.trim_end_matches('>');
+        if sin_cierre.trim_end().ends_with('/') {
+            // Ya autocerrado (con o sin espacio antes de la barra): no tocar.
+            full.to_string()
+        } else {
+            format!("{}/>", sin_cierre)
+        }
+    })
+    .into_owned()
 }
 
 fn read_part_meta_title(html_path: &Path) -> Option<String> {
@@ -1949,6 +1975,7 @@ mod tests {
     use super::*;
     use crate::theme::{FontEmbed, ResolvedTheme};
     use std::path::PathBuf;
+    use tempfile::TempDir;
 
     #[test]
     fn unconfigured_css_keeps_placeholders_empty() {
@@ -2153,7 +2180,8 @@ mod tests {
 
     #[test]
     fn export_impl_unconfigured_does_not_embed_fonts() {
-        let tmp = tempdir();
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
         let book = tmp.join("book");
         std::fs::create_dir_all(book.join("Cap1")).unwrap();
         std::fs::write(book.join("book.json"), r#"{"titulo":"Test"}"#).unwrap();
@@ -2180,7 +2208,8 @@ mod tests {
 
     #[test]
     fn export_impl_with_theme_embeds_fonts() {
-        let tmp = tempdir();
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
         let theme_fonts = tmp.join("themes").join("classic").join("fonts");
         std::fs::create_dir_all(&theme_fonts).unwrap();
         std::fs::write(theme_fonts.join("Merriweather-Regular.ttf"), b"FAKE_TTF_DATA").unwrap();
@@ -2223,17 +2252,62 @@ mod tests {
         assert!(opf.contains("vocabulary.itunes.apple.com"));
     }
 
+    #[test]
+    fn export_impl_autocierra_br_y_hr_sueltos_sin_tocar_el_resto() {
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
+        let book = tmp.join("book");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        std::fs::write(book.join("book.json"), r#"{"titulo":"Test"}"#).unwrap();
+        // <br> suelto en medio de un diálogo (el caso real: salto de línea
+        // dentro del párrafo), <hr class="scene-break"> suelto (separador de
+        // escena), y de yapa un <br/> y un <hr/> ya bien formados que no
+        // tienen que cambiar ni un byte.
+        std::fs::write(
+            book.join("Cap1").join("1.html"),
+            "<p>Dijo:<br>—Hola.</p><hr class=\"scene-break\"><p>Ya<br/>cerrado.</p><hr/>",
+        )
+        .unwrap();
+
+        let result = export_impl(book.to_str().unwrap()).expect("export ok");
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let xhtml =
+            String::from_utf8(entries.get("OEBPS/12_ch1_p1.xhtml").unwrap().clone()).unwrap();
+
+        // Los sueltos quedan autocerrados.
+        assert!(xhtml.contains("<br/>—Hola."), "xhtml: {xhtml}");
+        assert!(
+            xhtml.contains("<hr class=\"scene-break\"/>"),
+            "xhtml: {xhtml}"
+        );
+        // Los que ya venían bien formados no se tocan.
+        assert!(xhtml.contains("<br/>cerrado."));
+        assert!(xhtml.contains("<hr/>"));
+        // No quedó ningún void element sin cerrar (lo que rompía Apple Books).
+        assert!(!xhtml.contains("<br>"));
+        assert!(!xhtml.contains("<hr class=\"scene-break\">"));
+        // El texto y los demás tags alrededor están intactos.
+        assert!(xhtml.contains("Dijo:"));
+        assert!(xhtml.contains("Hola.</p>"));
+        assert!(xhtml.contains("<p>Ya"));
+    }
+
     /// Arma `root/Saga/Book/Cap1/1.html` con los tres niveles de la cadena de
     /// autor (`autor.json`, `book.json`, `saga.json`) cargados a mano, cada
     /// uno con `.autor_json`/`.book_autor`/`.saga_autor` opcionales. Cada
     /// nivel recibe un nombre distinto en los tests de abajo para poder
     /// discriminar cuál ganó.
+    ///
+    /// Devuelve el guard del tempdir junto con el path del libro — quien
+    /// llama tiene que bindearlo con nombre (no `_`) para que el árbol no
+    /// se borre antes de que el test termine de usarlo.
     fn armar_libro_con_autores(
         autor_json: Option<&str>,
         book_autor: Option<&str>,
         saga_autor: Option<&str>,
-    ) -> std::path::PathBuf {
-        let tmp = tempdir();
+    ) -> (TempDir, std::path::PathBuf) {
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
         if let Some(nombre) = autor_json {
             std::fs::write(
                 tmp.join("autor.json"),
@@ -2255,7 +2329,7 @@ mod tests {
         };
         std::fs::write(book.join("book.json"), book_json).unwrap();
         std::fs::write(book.join("Cap1").join("1.html"), "<p>Hello.</p>").unwrap();
-        book
+        (tmp_guard, book)
     }
 
     fn copyright_xhtml_de(book: &std::path::Path) -> String {
@@ -2266,7 +2340,7 @@ mod tests {
 
     #[test]
     fn autor_json_pisa_a_book_json_y_a_saga_json() {
-        let book = armar_libro_con_autores(
+        let (_guard, book) = armar_libro_con_autores(
             Some("Perfil Nombre"),
             Some("Book Autor"),
             Some("Saga Autor"),
@@ -2279,7 +2353,7 @@ mod tests {
 
     #[test]
     fn sin_perfil_global_usa_el_autor_de_book_json() {
-        let book = armar_libro_con_autores(None, Some("Book Autor"), Some("Saga Autor"));
+        let (_guard, book) = armar_libro_con_autores(None, Some("Book Autor"), Some("Saga Autor"));
         let copyright = copyright_xhtml_de(&book);
         assert!(copyright.contains("Book Autor"));
         assert!(!copyright.contains("Saga Autor"));
@@ -2287,7 +2361,7 @@ mod tests {
 
     #[test]
     fn sin_perfil_ni_autor_en_book_json_cae_a_saga_json() {
-        let book = armar_libro_con_autores(None, None, Some("Saga Autor"));
+        let (_guard, book) = armar_libro_con_autores(None, None, Some("Saga Autor"));
         let copyright = copyright_xhtml_de(&book);
         assert!(copyright.contains("Saga Autor"));
     }
@@ -2297,7 +2371,7 @@ mod tests {
         // autor.json existe (para probar bio u otro campo) pero sin `nombre`:
         // no debe ganarle al autor de book.json.
         let tmp_marker = "Book Autor";
-        let book = armar_libro_con_autores(None, Some(tmp_marker), Some("Saga Autor"));
+        let (_guard, book) = armar_libro_con_autores(None, Some(tmp_marker), Some("Saga Autor"));
         // Reescribe autor.json con bio pero sin nombre, simulando el perfil
         // configurado sin ese campo.
         let root = book.parent().unwrap().parent().unwrap();
@@ -2582,7 +2656,7 @@ mod tests {
     fn about_author_usa_la_bio_del_autor_json_cuando_el_libro_no_tiene() {
         let (root, book) = repo_con_publicados();
         std::fs::write(
-            root.join("autor.json"),
+            root.path().join("autor.json"),
             r#"{"nombre":"Tatoh","bio":{"es":"Escribe de noche."},"web":"https://tatoh.ar"}"#,
         )
         .unwrap();
@@ -2597,7 +2671,7 @@ mod tests {
     #[test]
     fn about_author_el_libro_pisa_la_bio_global() {
         let (root, book) = repo_con_publicados();
-        std::fs::write(root.join("autor.json"), r#"{"bio":{"es":"La global."}}"#).unwrap();
+        std::fs::write(root.path().join("autor.json"), r#"{"bio":{"es":"La global."}}"#).unwrap();
         std::fs::write(
             book.join("book.json"),
             r#"{"titulo":"Actual","sobre_el_autor":"La del libro."}"#,
@@ -2614,9 +2688,9 @@ mod tests {
     #[test]
     fn about_author_foto_usa_la_del_perfil_cuando_el_libro_no_tiene() {
         let (root, book) = repo_con_publicados();
-        std::fs::write(root.join("autor.json"), r#"{"bio":{"es":"x"},"foto":"autor.png"}"#).unwrap();
+        std::fs::write(root.path().join("autor.json"), r#"{"bio":{"es":"x"},"foto":"autor.png"}"#).unwrap();
         let foto = ::image::RgbImage::from_pixel(120, 120, ::image::Rgb([10, 10, 10]));
-        ::image::DynamicImage::ImageRgb8(foto).save(root.join("autor.png")).unwrap();
+        ::image::DynamicImage::ImageRgb8(foto).save(root.path().join("autor.png")).unwrap();
 
         let result = export_impl(book.to_str().unwrap()).unwrap();
         let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
@@ -2628,9 +2702,9 @@ mod tests {
     #[test]
     fn about_author_foto_del_libro_pisa_la_del_perfil() {
         let (root, book) = repo_con_publicados();
-        std::fs::write(root.join("autor.json"), r#"{"bio":{"es":"x"},"foto":"autor.png"}"#).unwrap();
+        std::fs::write(root.path().join("autor.json"), r#"{"bio":{"es":"x"},"foto":"autor.png"}"#).unwrap();
         let foto_perfil = ::image::RgbImage::from_pixel(120, 120, ::image::Rgb([10, 10, 10]));
-        ::image::DynamicImage::ImageRgb8(foto_perfil).save(root.join("autor.png")).unwrap();
+        ::image::DynamicImage::ImageRgb8(foto_perfil).save(root.path().join("autor.png")).unwrap();
 
         std::fs::write(
             book.join("book.json"),
@@ -2650,9 +2724,9 @@ mod tests {
     #[test]
     fn about_author_sin_web_no_embebe_el_qr() {
         let (root, book) = repo_con_publicados();
-        std::fs::write(root.join("autor.json"), r#"{"bio":{"es":"x"},"qr":"qr.png"}"#).unwrap();
+        std::fs::write(root.path().join("autor.json"), r#"{"bio":{"es":"x"},"qr":"qr.png"}"#).unwrap();
         let qr = ::image::RgbImage::from_pixel(120, 120, ::image::Rgb([0, 0, 0]));
-        ::image::DynamicImage::ImageRgb8(qr).save(root.join("qr.png")).unwrap();
+        ::image::DynamicImage::ImageRgb8(qr).save(root.path().join("qr.png")).unwrap();
 
         let result = export_impl(book.to_str().unwrap()).unwrap();
         let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
@@ -2668,12 +2742,12 @@ mod tests {
     fn about_author_embebe_el_qr_como_png() {
         let (root, book) = repo_con_publicados();
         std::fs::write(
-            root.join("autor.json"),
+            root.path().join("autor.json"),
             r#"{"bio":{"es":"x"},"web":"https://tatoh.ar","qr":"qr.png"}"#,
         )
         .unwrap();
         let qr = ::image::RgbImage::from_pixel(1200, 1200, ::image::Rgb([0, 0, 0]));
-        ::image::DynamicImage::ImageRgb8(qr).save(root.join("qr.png")).unwrap();
+        ::image::DynamicImage::ImageRgb8(qr).save(root.path().join("qr.png")).unwrap();
 
         let result = export_impl(book.to_str().unwrap()).unwrap();
         let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
@@ -2725,7 +2799,8 @@ mod tests {
 
     #[test]
     fn export_impl_localizes_chapter_label_in_english() {
-        let tmp = tempdir();
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
         let book = tmp.join("book");
         std::fs::create_dir_all(book.join("Cap1")).unwrap();
         // idioma=en, sin prefijo y sin mostrar título → fallback "Chapter N".
@@ -2744,7 +2819,8 @@ mod tests {
 
     #[test]
     fn export_impl_with_about_author_inserts_page() {
-        let tmp = tempdir();
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
         let book = tmp.join("book");
         std::fs::create_dir_all(book.join("Cap1")).unwrap();
         std::fs::write(
@@ -2763,7 +2839,8 @@ mod tests {
 
     #[test]
     fn export_impl_without_bio_skips_about_author() {
-        let tmp = tempdir();
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
         let book = tmp.join("book");
         std::fs::create_dir_all(book.join("Cap1")).unwrap();
         std::fs::write(book.join("book.json"), r#"{"titulo":"Test"}"#).unwrap();
@@ -2775,7 +2852,8 @@ mod tests {
 
     #[test]
     fn export_impl_unconfigured_no_ibooks_meta() {
-        let tmp = tempdir();
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
         let book = tmp.join("book");
         std::fs::create_dir_all(book.join("Cap1")).unwrap();
         std::fs::write(book.join("book.json"), r#"{"titulo":"X"}"#).unwrap();
@@ -2790,8 +2868,14 @@ mod tests {
 
     /// Arma un repo mínimo: root con dos sagas, y devuelve el path del libro
     /// que se va a exportar (que tiene un capítulo).
-    fn repo_con_publicados() -> (std::path::PathBuf, std::path::PathBuf) {
-        let root = tempdir();
+    ///
+    /// Devuelve el guard del tempdir junto con el path del libro — quien
+    /// llama tiene que bindearlo con nombre (no `_`) para que el árbol no se
+    /// borre antes de que el test termine de usarlo. Los call sites que
+    /// necesitan el root como path llaman `root.path()`.
+    fn repo_con_publicados() -> (TempDir, std::path::PathBuf) {
+        let root_guard = TempDir::new().unwrap();
+        let root = root_guard.path();
         let saga = root.join("1 - Meridian");
         let otra = root.join("2 - Buenos Aires");
         std::fs::create_dir_all(&saga).unwrap();
@@ -2820,7 +2904,7 @@ mod tests {
         )
         .unwrap();
 
-        (root, book)
+        (root_guard, book)
     }
 
     #[test]
@@ -2842,7 +2926,8 @@ mod tests {
 
     #[test]
     fn export_impl_omite_la_pagina_cuando_no_hay_publicados() {
-        let tmp = tempdir();
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
         let book = tmp.join("book");
         std::fs::create_dir_all(book.join("Cap1")).unwrap();
         std::fs::write(book.join("book.json"), r#"{"titulo":"Solo"}"#).unwrap();
@@ -2870,7 +2955,8 @@ mod tests {
         // Caso 2: ni catálogo ni bio → no hay back matter → no hay página en
         // blanco. Un test que solo mirara el caso 1 pasaría igual si la
         // página se pusiera siempre.
-        let tmp = tempdir();
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
         let solo = tmp.join("book");
         std::fs::create_dir_all(solo.join("Cap1")).unwrap();
         std::fs::write(solo.join("book.json"), r#"{"titulo":"Solo"}"#).unwrap();
@@ -3053,7 +3139,8 @@ mod tests {
 
     #[test]
     fn la_tapa_del_libro_se_reescala_antes_de_embeberse() {
-        let tmp = tempdir();
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
         let book = tmp.join("book");
         std::fs::create_dir_all(book.join("Cap1")).unwrap();
         std::fs::write(
@@ -3092,7 +3179,8 @@ mod tests {
         // El archivo existe (así que resolver_imagen lo encuentra) pero no es
         // una imagen válida: falla adentro de embebido_reescalado al decodificar.
         // El export no debe abortar, pero el autor tiene que enterarse.
-        let tmp = tempdir();
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
         let book = tmp.join("book");
         std::fs::create_dir_all(book.join("Cap1")).unwrap();
         std::fs::write(
@@ -3121,7 +3209,8 @@ mod tests {
 
     #[test]
     fn la_contratapa_del_libro_se_reescala_antes_de_embeberse() {
-        let tmp = tempdir();
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
         let book = tmp.join("book");
         std::fs::create_dir_all(book.join("Cap1")).unwrap();
         std::fs::write(
@@ -3173,7 +3262,7 @@ mod tests {
     #[test]
     fn el_indice_incluye_las_paginas_editoriales_agrupadas() {
         let (root, book) = repo_con_publicados();
-        std::fs::write(root.join("autor.json"), r#"{"bio":{"es":"x"}}"#).unwrap();
+        std::fs::write(root.path().join("autor.json"), r#"{"bio":{"es":"x"}}"#).unwrap();
         std::fs::write(
             book.join("book.json"),
             r#"{"titulo":"Actual","dedicatoria":"Para vos"}"#,
@@ -3206,7 +3295,8 @@ mod tests {
 
     #[test]
     fn una_pagina_editorial_ausente_no_deja_entrada_en_el_indice() {
-        let tmp = tempdir();
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
         let book = tmp.join("book");
         std::fs::create_dir_all(book.join("Cap1")).unwrap();
         std::fs::write(book.join("book.json"), r#"{"titulo":"Solo"}"#).unwrap();
@@ -3222,7 +3312,8 @@ mod tests {
 
     #[test]
     fn el_indice_en_ingles_usa_las_etiquetas_en_ingles() {
-        let tmp = tempdir();
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
         let book = tmp.join("book");
         std::fs::create_dir_all(book.join("Cap1")).unwrap();
         std::fs::write(book.join("book.json"), r#"{"titulo":"Solo","idioma":"en"}"#).unwrap();
@@ -3241,7 +3332,7 @@ mod tests {
         // About the Author, que `el_indice_en_ingles_usa_las_etiquetas_en_ingles`
         // no ejercita (su fixture no tiene dedicatoria, catálogo ni autor.json).
         let (root, book) = repo_con_publicados();
-        std::fs::write(root.join("autor.json"), r#"{"bio":{"en":"x"}}"#).unwrap();
+        std::fs::write(root.path().join("autor.json"), r#"{"bio":{"en":"x"}}"#).unwrap();
         std::fs::write(
             book.join("book.json"),
             r#"{"titulo":"Actual","idioma":"en","dedicatoria":"For you"}"#,
@@ -3262,15 +3353,4 @@ mod tests {
         }
     }
 
-    fn tempdir() -> std::path::PathBuf {
-        let mut p = std::env::temp_dir();
-        let suffix: u128 = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        p.push(format!("twriter-epub-test-{}", suffix));
-        let _ = std::fs::remove_dir_all(&p);
-        std::fs::create_dir_all(&p).unwrap();
-        p
-    }
 }

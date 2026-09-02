@@ -1541,6 +1541,25 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   índice con `class="toc-editorial"`. De yapa, las imágenes ahora se
   reescalan antes de embeberse (crate `image`): la tapa iba a resolución de
   imprenta adentro del EPUB. **Pendiente de verificación manual del autor.**
+- [x] **XHTML inválido en el EPUB: `<br>` sin autocerrar rompe Apple Books**
+  (el autor lo pisó probando un export, 2026-09-01). Apple Books usa un parser
+  estricto y aborta apenas encuentra el primer `<br>` sin `/`
+  (`Opening and ending tag mismatch: br line 11...`); Thorium es tolerante y
+  lo dejaba pasar, por eso no se había notado. Medido sobre el repo real: 200
+  capítulos con `<br>` sin cerrar y 1 con `<hr>` sin cerrar — el `<br>` es un
+  salto de línea real adentro de un diálogo, no se puede sacar. Fix en
+  `close_void_elements()` (`epub.rs`), aplicado en `load_part()` a la salida:
+  autocierra `<br>`/`<hr>` sueltos a `<br/>`/`<hr/>` sin tocar atributos,
+  texto ni tags que ya venían autocerrados. Arregla los 200 archivos de una
+  sola vez, en el export, sin escribir nada en el repo del autor.
+
+  **Pendiente real: el editor sigue escribiendo `<br>` sin cerrar en los
+  `.html` nuevos.** El fix de arriba es un parche a la salida, no una cura —
+  los archivos fuente le siguen quedando en HTML no-XHTML (importa si algún
+  día se lee ese HTML con un parser estricto en vez de con el export actual).
+  Falta encontrar qué nodo de TipTap serializa el `<br>` (`hardBreak`,
+  probablemente con su serialización default) y hacer que autocierre al
+  guardar el capítulo.
 - **Blurb y sinopsis por libro** (pedido del autor, 2026-09-01). Dos textos
   distintos y con usos distintos: el **blurb** es el gancho de contratapa; la
   **sinopsis** es el resumen largo, el que va en la ficha de la tienda. Hoy no
