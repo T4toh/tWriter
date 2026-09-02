@@ -17,9 +17,11 @@ export class AutorCard {
   protected readonly config = signal<AutorConfig | null>(null);
   protected readonly fotoUrl = signal<string | null>(null);
 
-  protected readonly displayName = computed(
-    () => this.config()?.nombre?.trim() || 'Autor',
-  );
+  /** Mismo criterio en toda la card: un nombre solo de espacios cuenta como
+   *  vacío, tanto para el texto mostrado como para el estado "Sin configurar". */
+  protected readonly tieneNombre = computed(() => !!this.config()?.nombre?.trim());
+
+  protected readonly displayName = computed(() => this.config()?.nombre?.trim() || 'Autor');
 
   constructor() {
     effect(() => {
