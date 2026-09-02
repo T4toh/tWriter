@@ -163,10 +163,14 @@ body.about-author-body {
    no resuelve contra un ancho no definido, así que la foto ignoraba el 22%
    y salía a su tamaño real. Con width:100% el ancho de este bloque queda
    fijo (capado por max-width) y el % de la foto sí tiene contra qué medirse. */
+/* Sin max-width ni margin:auto a propósito. Los lectores paginan en
+   columnas, y un bloque más angosto que el flujo se centra contra el ancho
+   TOTAL del flujo, no contra la columna visible: el resultado es contenido
+   corrido a la izquierda dentro de la página. El ancho lo pone la columna,
+   que en un lector ya es una medida cómoda, y lo único que centra es
+   text-align, que se resuelve por línea y siempre funciona. */
 .about-author {
-  width: 100%;
-  max-width: 28em;
-  margin: 0 auto;
+  width: auto;
 }
 
 h1.about-author-title {
@@ -197,11 +201,12 @@ h1.about-author-title {
   height: auto;
 }
 
+/* Centrada, no justificada: es un párrafo corto suelto en una página, y
+   justificarlo abre calles feas. Sin max-width, por lo mismo que arriba. */
 .about-author-bio p {
   margin: 0 0 1em;
-  text-align: justify;
+  text-align: center;
   text-indent: 0;
-  max-width: 28em;
 }
 
 /* Centrado sobre el eje de la página, como una firma al pie — el resto de
