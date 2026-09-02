@@ -1623,7 +1623,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   página legal elegibles y editables, y todas las páginas editoriales en el
   índice con `class="toc-editorial"`. De yapa, las imágenes ahora se
   reescalan antes de embeberse (crate `image`): la tapa iba a resolución de
-  imprenta adentro del EPUB. **Pendiente de verificación manual del autor.**
+  imprenta adentro del EPUB. **Verificado a mano por el autor el 2026-09-02**, en Kindle y en Apple Books.
 - [x] **XHTML inválido en el EPUB: `<br>` sin autocerrar rompe Apple Books**
   (el autor lo pisó probando un export, 2026-09-01). Apple Books usa un parser
   estricto y aborta apenas encuentra el primer `<br>` sin `/`
