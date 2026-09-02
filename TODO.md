@@ -1587,11 +1587,16 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   no hace nada, y te enterás cuando ves la página rara en el Kindle. Es el modo
   de falla más caro que tiene este archivo, porque el ciclo de descubrimiento
   es exportar, pasar el archivo al lector y mirar.
-  Dos caminos, y el segundo me gusta más: una config de stylelint aparte con
-  solo las reglas de sintaxis y ninguna de estilo; o un test de Rust que
-  parsee la hoja y falle si no es CSS válido. El segundo no suma dependencias
-  de npm, corre con `cargo test` junto al resto, y encaja con que la hoja ya
-  vive del lado Rust y se incrusta con `include_str!`.
+  **Ojo con la solución obvia**: un parser de CSS no alcanza. `colr: red` es
+  sintaxis válida —una declaración con un nombre de propiedad inexistente— y
+  cualquier parser la acepta. Un test de Rust que parsee la hoja atraparía
+  llaves sin cerrar, pero no el typo, que es el caso real.
+  Lo que sirve es un chequeo con base de datos de propiedades: `property-no-unknown`
+  de stylelint. O sea una **segunda config de stylelint** apuntada solo a esta
+  hoja, con cero reglas de estilo y solo las de corrección (propiedad
+  desconocida, declaración duplicada, bloque vacío, valor inválido). Nada que
+  opine sobre `float` ni sobre flexbox: esas son decisiones tomadas. Cero
+  dependencias nuevas — es el mismo stylelint que ya está instalado.
 
 ## EPUB
 
