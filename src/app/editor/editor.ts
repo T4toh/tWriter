@@ -1995,17 +1995,18 @@ export class Editor implements AfterViewInit, OnDestroy {
 
 function computeCursorPos(e: TipTapEditor): { paragraph: number; col: number } {
   const { $from } = e.state.selection;
-  // Top-level depth = 0 (el doc). Cualquier nodo a depth 1 es bloque
-  // top-level (paragraph, blockquote, heading, hr). Contamos cuántos vienen
-  // antes para el número de párrafo, 1-based.
+  // Número de párrafo 1-based, o sea cuántos bloques top-level hay antes del
+  // cursor. `$from.index(0)` ya es ese conteo y es O(1): ProseMirror lo tiene
+  // resuelto en el ResolvedPos.
+  //
+  // Antes esto recorría `doc.descendants()` entero para contar a mano. Daba el
+  // mismo número, pero era O(bloques del documento) y corre en CADA transacción
+  // y CADA movimiento de cursor (`refreshState`). En un capítulo de 3.000
+  // párrafos son 3.000 visitas de nodo por tecla tipeada, para un dato que ya
+  // estaba calculado.
   let paragraph = 1;
   if ($from.depth >= 1) {
-    const top = $from.before(1);
-    e.state.doc.descendants((node, pos) => {
-      if (pos >= top) return false;
-      if (node.isBlock) paragraph++;
-      return false; // solo top-level
-    });
+    paragraph = $from.index(0) + 1;
   }
   // Columna dentro del bloque que contiene al cursor (offset en chars).
   const col = $from.depth >= 1 ? $from.parentOffset : 0;
