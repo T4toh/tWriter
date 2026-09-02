@@ -63,13 +63,19 @@ export interface ResultadoDeteccionCapitulo {
  * idioma puede contradecirlo capítulo por capítulo. Por esto la detección
  * por contenido pasa a ser el ÚLTIMO recurso, no el segundo: no la "arregles"
  * subiéndola de prioridad, es la fuente menos confiable de las tres.
+ *
+ * Un `idioma` en blanco (`''` o solo espacios) no es una declaración, es un
+ * campo sin llenar: `??` no lo filtra porque no es `null`/`undefined`, así
+ * que cada nivel se normaliza a `undefined` antes de la cadena.
  */
 export function resolverIdiomaEfectivo(
   idiomaLibro: string | null | undefined,
   idiomaCapitulo: string | null | undefined,
   html: string,
 ): string {
-  return idiomaLibro ?? idiomaCapitulo ?? detectLang(html);
+  const normalizar = (idioma: string | null | undefined): string | undefined =>
+    idioma?.trim() || undefined;
+  return normalizar(idiomaLibro) ?? normalizar(idiomaCapitulo) ?? detectLang(html);
 }
 
 /**

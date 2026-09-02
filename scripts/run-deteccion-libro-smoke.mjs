@@ -173,6 +173,32 @@ console.log('detectarEnCapitulo: idioma del libro manda sobre el del capítulo')
   check('libro sin idioma + capítulo sin idioma + contenido EN: comillas > 0', res.comillas > 0, res);
 }
 
+console.log('detectarEnCapitulo: idioma en blanco no es una declaración');
+{
+  // libro con idioma: '' (campo sin llenar, no un 'es' implícito) + capítulo
+  // 'en' — el blanco del libro no puede tapar al capítulo: manda el capítulo.
+  const html = '<p>"I don\'t know," she said. "Really."</p>';
+  const res = detectarEnCapitulo(html, '', 'en', opts);
+  check('libro en blanco + capítulo en: esIngles === true (no lo tapa el blanco)', res.esIngles === true, res);
+  check('libro en blanco + capítulo en: comillas > 0', res.comillas > 0, res);
+}
+{
+  // libro con idioma: '   ' (solo espacios) + capítulo sin idioma + contenido
+  // inglés — ambos niveles en blanco, cae hasta `detectLang`.
+  const html = '<p>"I don\'t know," she said. "Really."</p>';
+  const res = detectarEnCapitulo(html, '   ', null, opts);
+  check('libro en blanco (espacios) + capítulo sin idioma + contenido EN: esIngles === true', res.esIngles === true, res);
+  check('libro en blanco (espacios) + capítulo sin idioma + contenido EN: comillas > 0', res.comillas > 0, res);
+}
+{
+  // libro 'es' + capítulo con idioma: '' — sin cambios respecto de hoy: el
+  // libro sigue mandando, el blanco del capítulo ni se llega a mirar.
+  const html = '<p>"I don\'t know," she said. "Really."</p>';
+  const res = detectarEnCapitulo(html, 'es', '', opts);
+  check('libro es + capítulo en blanco: esIngles === false', res.esIngles === false, res);
+  check('libro es + capítulo en blanco: comillas === 0', res.comillas === 0, res);
+}
+
 rmSync(outDir, { recursive: true, force: true });
 
 console.log(`\n${passed} ok, ${failed} fail`);
