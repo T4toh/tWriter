@@ -64,6 +64,7 @@ import {
   LucideDownload,
   LucideDynamicIcon,
   LucideFolder,
+  LucideHouse,
   LucideMoveHorizontal,
   LucideMoveVertical,
   LucideNotebook,
@@ -82,7 +83,7 @@ import {
     NoteFormModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, ToastContainer,
     GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, AboutModal, AutorModal, Spinner, ModalHost, ContextMenuHost,
     LucideArrowDownToLine, LucideArrowUpDown, LucideBug, LucideChevronDown, LucideChevronRight,
-    LucideCircleQuestionMark, LucideDownload, LucideDynamicIcon, LucideFolder, LucideMoveHorizontal,
+    LucideCircleQuestionMark, LucideDownload, LucideDynamicIcon, LucideFolder, LucideHouse, LucideMoveHorizontal,
     LucideMoveVertical, LucideNotebook, LucideNotebookPen, LucidePlus, LucideRefreshCw,
     LucideSearch, LucideSettings, LucideX, LucideInfo,
   ],
@@ -534,6 +535,19 @@ export class App {
 
   protected toggleSearch(): void {
     this.search.toggle();
+  }
+
+  protected irAlInicio(): void {
+    void this.nodeActions.irAlInicio();
+  }
+
+  // El modo focus esconde el panel izquierdo, o sea que el botón de casita
+  // desaparece justo cuando más lejos estás de la raíz. Por eso el atajo.
+  @HostListener('window:keydown.meta.shift.h', ['$event'])
+  @HostListener('window:keydown.control.shift.h', ['$event'])
+  protected onIrAlInicio(event: Event): void {
+    event.preventDefault();
+    this.irAlInicio();
   }
 
   @HostListener('window:keydown.Escape')

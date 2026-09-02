@@ -13,6 +13,15 @@
             type="button"
             class="icon-btn"
             [disabled]="!root()"
+            (click)="irAlInicio()"
+            title="Ir al inicio ({{ atajo('H', true) }})"
+          >
+            <svg lucideHouse [size]="16"></svg>
+          </button>
+          <button
+            type="button"
+            class="icon-btn"
+            [disabled]="!root()"
             (click)="openImportWizard()"
             title="Importar saga / novela desde otra carpeta"
           >

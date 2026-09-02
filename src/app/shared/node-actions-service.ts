@@ -574,6 +574,19 @@ export class NodeActionsService {
     await this.quotesFix.fixScope(node.path);
   }
 
+  /** Vuelve a la vista raíz (la galería de sagas, donde vive la carta del
+   *  autor). Mismo cuerpo que el doble-click en carpeta del árbol, pero con
+   *  destino raíz: sin esto el único camino a la raíz era bajar a una saga
+   *  para que apareciera el breadcrumb y recién ahí tocar "Inicio". Flushea
+   *  ediciones pendientes antes de cerrar para no perder cambios. */
+  async irAlInicio(): Promise<void> {
+    this.nav.goRoot();
+    await this.chapter.save();
+    await this.note.save();
+    this.note.close();
+    this.chapter.close();
+  }
+
   configBook(node: TreeNode): void {
     this.bookCfg.openFor(node);
   }
