@@ -64,6 +64,19 @@ export class RevisionLibroModal {
     return 'español';
   });
 
+  /** Nota discreta de dónde sale el idioma de `idiomaLibro()`: si `book.json`
+   *  lo declara, es información ("esto lo declaré yo"); si no, es un aviso
+   *  suave de que la app lo adivinó por capítulo/contenido — el autor tiene
+   *  que poder distinguir las dos cosas (ver `resolverIdiomaEfectivo` en
+   *  `deteccion.ts`). `null` antes de escanear. */
+  protected readonly notaIdioma = computed<string | null>(() => {
+    const r = this.svc.resultado();
+    if (!r) return null;
+    return r.idiomaLibroDeclarado
+      ? 'declarado en la configuración de la novela'
+      : 'detectado automáticamente: no está declarado en la configuración de la novela';
+  });
+
   protected async aplicar(): Promise<void> {
     const seleccion: SeleccionRevision = {
       rayas: this.rayas(),

@@ -8,6 +8,10 @@
       </button>
     </header>
 
+    @if (notaIdioma(); as nota) {
+      <p class="rl-nota-idioma">Idioma {{ nota }}.</p>
+    }
+
     @if (svc.error(); as err) {
       <p class="rl-error">{{ err }}</p>
     }

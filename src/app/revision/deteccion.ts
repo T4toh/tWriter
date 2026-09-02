@@ -39,20 +39,57 @@ export interface ResultadoDeteccionCapitulo {
 }
 
 /**
+ * Resuelve el idioma EFECTIVO de un capítulo. Cadena de tres niveles, en
+ * este orden de prioridad:
+ *
+ *   1. `idiomaLibro` — el campo `idioma` de `book.json`. Si el libro lo
+ *      declara, MANDA para todos sus capítulos, sin excepción, incluso si
+ *      alguno trae un `idioma` distinto (o ninguno) en su `.meta.json`.
+ *   2. `idiomaCapitulo` — el campo `idioma` del `.meta.json` del capítulo,
+ *      cuando el libro no declaró nada.
+ *   3. `detectLang(html)` — último recurso, solo cuando ni el libro ni el
+ *      capítulo declararon idioma.
+ *
+ * Por qué el libro le gana al capítulo, y no al revés: las novelas de este
+ * autor están escritas en UN idioma, a lo sumo con alguna cita, epígrafe o
+ * diálogo suelto en otro. Un capítulo importado de `.docx` (que no trae
+ * `idioma` en su `.meta.json`) con una cita larga en inglés adentro hacía
+ * que `detectLang` lo clasificara 'en' entero — y ahí rayas se salteaba
+ * (correcto para inglés) pero comillas tipográficas SÍ se le aplicaba,
+ * metiéndole comillas inglesas a un capítulo que en realidad es español:
+ * una escritura equivocada sobre el trabajo real del autor. Declarar el
+ * idioma una sola vez en `book.json` resuelve la ambigüedad de raíz — si el
+ * autor ya dijo "esta novela es en español", ninguna cita suelta en otro
+ * idioma puede contradecirlo capítulo por capítulo. Por esto la detección
+ * por contenido pasa a ser el ÚLTIMO recurso, no el segundo: no la "arregles"
+ * subiéndola de prioridad, es la fuente menos confiable de las tres.
+ */
+export function resolverIdiomaEfectivo(
+  idiomaLibro: string | null | undefined,
+  idiomaCapitulo: string | null | undefined,
+  html: string,
+): string {
+  return idiomaLibro ?? idiomaCapitulo ?? detectLang(html);
+}
+
+/**
  * Corre los cuatro detectores sobre UN capítulo. Pura: sin DOM, sin
  * `@tiptap/core`, sin Tauri — la comparten el escaneo (`revision-libro-service`)
  * y, en la Tarea 4, el apply; así el gateo de idioma vive en un solo lugar y no
  * se puede olvidar en una de las dos copias.
  *
- * `idioma` es el campo crudo persistido en el `.meta.json` del capítulo (puede
- * ser `null`/`undefined` si no está seteado) — NO el resultado de `detectLang`.
+ * `idiomaLibro` es el campo `idioma` de `book.json` (manda si está, ver
+ * `resolverIdiomaEfectivo`). `idiomaCapitulo` es el campo crudo persistido en
+ * el `.meta.json` del capítulo (puede ser `null`/`undefined` si no está
+ * seteado) — NO el resultado de `detectLang`.
  */
 export function detectarEnCapitulo(
   html: string,
-  idioma: string | null | undefined,
+  idiomaLibro: string | null | undefined,
+  idiomaCapitulo: string | null | undefined,
   opts: OpcionesDeteccion,
 ): ResultadoDeteccionCapitulo {
-  const idiomaEfectivo = idioma ?? detectLang(html);
+  const idiomaEfectivo = resolverIdiomaEfectivo(idiomaLibro, idiomaCapitulo, html);
   const esIngles = idiomaEfectivo === 'en';
   const plain = htmlToPlain(html);
 
@@ -129,10 +166,11 @@ export function detectarEnCapitulo(
  */
 export function aplicarEnCapitulo(
   html: string,
-  idioma: string | null | undefined,
+  idiomaLibro: string | null | undefined,
+  idiomaCapitulo: string | null | undefined,
   seleccion: SeleccionRevision,
 ): { html: string; salteados: number } {
-  const idiomaEfectivo = idioma ?? detectLang(html);
+  const idiomaEfectivo = resolverIdiomaEfectivo(idiomaLibro, idiomaCapitulo, html);
   const esIngles = idiomaEfectivo === 'en';
   let out = html;
   let salteados = 0;

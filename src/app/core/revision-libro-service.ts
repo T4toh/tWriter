@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { aplicarEnCapitulo, detectarEnCapitulo, SeleccionRevision } from '../revision/deteccion';
+import { BookConfigService } from './book-config-service';
 import { countWords } from './chapter-service';
 import { GitService } from './git-service';
 import { ProjectService } from './project-service';
@@ -42,6 +43,12 @@ export interface ResumenRevision {
    *  no aplicar porque el libro no tiene ningún capítulo de ese idioma. */
   capitulosEs: number;
   capitulosEn: number;
+  /** Campo `idioma` crudo de `book.json` (`null` si el libro no lo declara).
+   *  Se lo muestra tal cual en el modal para que el autor distinga "esto lo
+   *  declaré yo" (viene de acá) de "esto lo adivinó la app" (fallback a
+   *  `.meta.json` del capítulo o a `detectLang`, ver `resolverIdiomaEfectivo`
+   *  en `deteccion.ts`). */
+  idiomaLibroDeclarado: string | null;
 }
 
 /**
@@ -55,6 +62,7 @@ export class RevisionLibroService {
   private project = inject(ProjectService);
   private git = inject(GitService);
   private toast = inject(ToastService);
+  private bookConfig = inject(BookConfigService);
 
   readonly libro = signal<TreeNode | null>(null);
   readonly escaneando = signal<boolean>(false);
@@ -90,6 +98,21 @@ export class RevisionLibroService {
     }
   }
 
+  /** Idioma declarado en `book.json` del libro, o `null` si no lo declara
+   *  (o si `book.json` no se pudo leer). Una sola vez por libro, antes del
+   *  loop de capítulos — el mismo patrón que `palabrasDeLaSaga` de acá
+   *  arriba. Se lo pasa crudo a `detectarEnCapitulo`/`aplicarEnCapitulo`
+   *  para que la cadena de resolución (libro → capítulo → `detectLang`)
+   *  viva en un solo lugar: `resolverIdiomaEfectivo` en `deteccion.ts`. */
+  private async idiomaDelLibro(node: TreeNode): Promise<string | null> {
+    try {
+      const cfg = await this.bookConfig.load(node.path);
+      return cfg.idioma ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Escanea el libro capturado en `node` al arrancar. Si mientras tanto se
    *  cierra el modal o se abre otro libro (`this.libro()` cambia), los
    *  conteos calculados se descartan sin tocar `resultado`/`error` — si no,
@@ -107,16 +130,17 @@ export class RevisionLibroService {
         scopePath: node.path,
       });
       if (this.libro() !== node) return;
+      // Una sola vez para todo el libro: el idioma de `book.json` (si lo
+      // declara, manda para todos los capítulos) y el diccionario de saga.
+      const idiomaLibro = await this.idiomaDelLibro(node);
+      const diccionario = await this.palabrasDeLaSaga(node);
+      if (this.libro() !== node) return;
       const vacioCap = (): ConteoCapitulos => ({ capitulos: 0 });
       const vacio = (): ConteoDetector => ({ cambios: 0, capitulos: 0 });
       const res: ResumenRevision = {
         rayas: vacioCap(), comillas: vacioCap(), arreglosRae: vacio(), repeticiones: vacio(),
-        capitulosEs: 0, capitulosEn: 0,
+        capitulosEs: 0, capitulosEn: 0, idiomaLibroDeclarado: idiomaLibro,
       };
-      // Una sola vez para todo el libro: es el mismo diccionario de saga para
-      // todos sus capítulos.
-      const diccionario = await this.palabrasDeLaSaga(node);
-      if (this.libro() !== node) return;
       // Los nombres propios inventados del mundo. Sin esto, que `Kallai`
       // aparezca cinco veces en una escena cuenta como cinco repeticiones y el
       // número que ve el autor no significa nada. Es la misma fuente que usa
@@ -124,7 +148,7 @@ export class RevisionLibroService {
       const excepciones = this.settings.repeticionesExcepciones();
       let procesados = 0;
       for (const p of payloads) {
-        const det = detectarEnCapitulo(p.html, p.idioma, { excepciones, diccionario });
+        const det = detectarEnCapitulo(p.html, idiomaLibro, p.idioma, { excepciones, diccionario });
         if (det.esIngles) res.capitulosEn += 1; else res.capitulosEs += 1;
         if (det.rayas > 0) res.rayas.capitulos += 1;
         if (det.comillas > 0) res.comillas.capitulos += 1;
@@ -171,13 +195,14 @@ export class RevisionLibroService {
       const payloads = await invoke<ChapterPayload[]>('list_chapters_for_audit', {
         scopePath: node.path,
       });
-      // Mismo root para todos los capítulos del libro — se resuelve una sola
-      // vez, igual que `diccionario` en `escanear`.
+      // Mismo root e idioma de libro para todos los capítulos — se resuelven
+      // una sola vez, igual que `diccionario` en `escanear`.
       const root = this.project.root();
+      const idiomaLibro = await this.idiomaDelLibro(node);
       let salteados = 0;
       let procesados = 0;
       for (const p of payloads) {
-        const { html, salteados: s } = aplicarEnCapitulo(p.html, p.idioma, seleccion);
+        const { html, salteados: s } = aplicarEnCapitulo(p.html, idiomaLibro, p.idioma, seleccion);
         salteados += s;
         if (html !== p.html) {
           await invoke('write_chapter', { path: p.path, html });
