@@ -2,11 +2,34 @@
   <div class="gs-backdrop" (click)="close()"></div>
   <div class="gs-modal" (click)="$event.stopPropagation()">
     <header class="gs-header">
-      <h2>Configurar gramática</h2>
-      <p>Elegí cómo se conecta tWriter a LanguageTool para revisión ortográfica y gramatical.</p>
+      <h2>Configuración</h2>
     </header>
 
     <div class="gs-body">
+      <details class="gs-bloque" [open]="generalAbierta()" (toggle)="generalAbierta.set($any($event.target).open)">
+        <summary>General</summary>
+        <label class="gs-option">
+          <input
+            type="checkbox"
+            [checked]="debug.visible()"
+            (change)="debug.toggle()"
+          />
+          <div class="gs-option-text">
+            <strong>Panel de debug</strong>
+            <span class="muted">
+              Log de errores y snapshots del estado de la app. Sirve para
+              reportar un bug con datos en vez de “no anda”.
+            </span>
+          </div>
+        </label>
+      </details>
+
+      <details class="gs-bloque" [open]="gramaticaAbierta()" (toggle)="gramaticaAbierta.set($any($event.target).open)">
+        <summary>Gramática</summary>
+        <p class="gs-bloque-intro">
+          Elegí cómo se conecta tWriter a LanguageTool para revisión ortográfica
+          y gramatical.
+        </p>
       <label class="gs-option">
         <input
           type="radio"
@@ -481,6 +504,7 @@
           </span>
         </div>
       </label>
+      </details>
     </div>
 
     <footer class="gs-actions">

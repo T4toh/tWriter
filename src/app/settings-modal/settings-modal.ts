@@ -18,6 +18,7 @@ import {
 } from '@lucide/angular';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { DebugService } from '../core/debug-service';
 import { GrammarService, LtDockerStatus, SecretStatus } from '../core/grammar-service';
 import { SettingsService } from '../core/settings-service';
 import { Select } from '../shared/select';
@@ -38,8 +39,13 @@ interface LtProgressEvent {
   message: string;
 }
 
+/** Secciones colapsables del modal. `show()` recibe cuál abrir: el effect que
+ *  reacciona a LanguageTool caído pide `gramatica`, porque si el bloque
+ *  arrancara colapsado el remedio quedaría escondido detrás de un click. */
+export type SeccionSettings = 'general' | 'gramatica';
+
 @Component({
-  selector: 'app-grammar-settings',
+  selector: 'app-settings-modal',
   standalone: true,
   imports: [
     FormsModule, Select, CopyCommand,
@@ -47,12 +53,13 @@ interface LtProgressEvent {
     LucideLock, LucideX,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  templateUrl: './grammar-settings.html',
-  styleUrl: './grammar-settings.scss',
+  templateUrl: './settings-modal.html',
+  styleUrl: './settings-modal.scss',
 })
-export class GrammarSettings {
+export class SettingsModal {
   private grammar = inject(GrammarService);
   private settings = inject(SettingsService);
+  protected debug = inject(DebugService);
 
   protected readonly open = signal<boolean>(false);
   protected readonly mode = signal<GrammarMode>('public');
@@ -183,7 +190,15 @@ export class GrammarSettings {
     }
   }
 
-  show(): void {
+  /** Qué bloque arranca desplegado. Se recalcula en cada `show()` a propósito:
+   *  no se persiste lo que el autor colapsó a mano, porque el modal tiene que
+   *  abrirse con Gramática a la vista cada vez que LT se cae. */
+  protected readonly generalAbierta = signal<boolean>(false);
+  protected readonly gramaticaAbierta = signal<boolean>(true);
+
+  show(seccion: SeccionSettings = 'gramatica'): void {
+    this.generalAbierta.set(seccion === 'general');
+    this.gramaticaAbierta.set(seccion === 'gramatica');
     this.open.set(true);
   }
 

@@ -37,7 +37,7 @@ import { MarkdownReader } from './markdown-reader/markdown-reader';
 import { SearchPanel } from './search-panel/search-panel';
 import { RaeAuditPanel } from './rae-audit/rae-audit-panel';
 import { ToastContainer } from './toast/toast-container';
-import { GrammarSettings } from './grammar-settings/grammar-settings';
+import { SettingsModal } from './settings-modal/settings-modal';
 import { ImportJoplin } from './import-joplin/import-joplin';
 import { ImportWizard } from './import-wizard/import-wizard';
 import { UpdateBanner } from './update-banner/update-banner';
@@ -81,7 +81,7 @@ import {
   imports: [
     Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, DictionaryModal, SplitChapterModal,
     NoteFormModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, ToastContainer,
-    GrammarSettings, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, AboutModal, AutorModal, Spinner, ModalHost, ContextMenuHost,
+    SettingsModal, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, AboutModal, AutorModal, Spinner, ModalHost, ContextMenuHost,
     LucideArrowDownToLine, LucideArrowUpDown, LucideBug, LucideChevronDown, LucideChevronRight,
     LucideCircleQuestionMark, LucideDownload, LucideDynamicIcon, LucideFolder, LucideHouse, LucideMoveHorizontal,
     LucideMoveVertical, LucideNotebook, LucideNotebookPen, LucidePlus, LucideRefreshCw,
@@ -93,7 +93,7 @@ import {
 export class App {
   /** Etiquetas de atajos por plataforma (⌘ en Mac). Ver `shared/atajo.ts`. */
   protected readonly atajo = atajo;
-  @ViewChild(GrammarSettings) private grammarSettings?: GrammarSettings;
+  @ViewChild(SettingsModal) private settingsModal?: SettingsModal;
   protected importWizard = inject(ImportWizardService);
   protected importJoplin = inject(ImportJoplinService);
   protected imageViewer = inject(ImageViewerService);
@@ -219,7 +219,7 @@ export class App {
     // string en el footer.
     effect(() => {
       if (this.grammar.pedidoDeConfig() === 0) return;
-      this.openGrammarSettings();
+      this.settingsModal?.show('gramatica');
     });
     // Mutex per-pane: cuando se abre un capítulo en un pane, la nota del MISMO pane se cierra.
     effect(() => {
@@ -495,8 +495,8 @@ export class App {
     });
   }
 
-  protected openGrammarSettings(): void {
-    this.grammarSettings?.show();
+  protected openSettings(): void {
+    this.settingsModal?.show();
   }
 
   protected openAbout(): void {
