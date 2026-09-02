@@ -130,6 +130,13 @@ export const ENTITY_MAP: Record<string, string> = {
   '&ndash;': '–',
 };
 
+// `src/app/dialogos/plano-con-mapa.ts` replica esta función carácter por
+// carácter, incluido el orden de las pasadas de entidades, para poder devolver
+// además el mapa de posiciones al HTML. Si tocás algo acá — el recorrido de
+// bloques, el trim, el orden de `ENTITY_MAP` — corré
+// `node scripts/run-plano-con-mapa-smoke.mjs` (además de este archivo): si las
+// dos se desalinean, los fixes de RAE se aplican en el lugar equivocado del
+// HTML y en silencio.
 export function htmlToPlain(html: string): string {
   const blocks: string[] = [];
   const matches = Array.from(html.matchAll(P_BLOCK_RE));
