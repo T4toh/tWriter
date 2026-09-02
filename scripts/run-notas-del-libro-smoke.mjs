@@ -25,6 +25,7 @@ const r = spawnSync(
     '--esModuleInterop',
     '--outDir', outDir,
     'src/app/tree/notas-del-libro.ts',
+    'src/app/core/nombre-carpeta.ts',
     'src/app/core/types.ts',
   ],
   { cwd: repo, encoding: 'utf8' },
@@ -36,7 +37,10 @@ if (r.status !== 0) {
 }
 
 const mod = await import(pathToFileURL(join(outDir, 'tree/notas-del-libro.js')).href);
-const { notasDelLibro, calzaSaga, sinPrefijoNumerico, carpetasDeNotas, relativoAlRoot } = mod;
+const { notasDelLibro, calzaSaga, carpetasDeNotas, relativoAlRoot } = mod;
+const { sinPrefijoNumerico } = await import(
+  pathToFileURL(join(outDir, 'core/nombre-carpeta.js')).href
+);
 
 let passed = 0;
 let failed = 0;

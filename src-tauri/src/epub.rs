@@ -10,6 +10,7 @@ use crate::book_config::{
     find_back_cover_in, find_cover_in, image_field_unusable, resolver_imagen, BookConfig,
 };
 use crate::fs::is_excluded_dir;
+use crate::util::strip_numeric_prefix;
 use crate::theme::{resolve_theme, FontEmbed, ResolvedTheme};
 
 #[derive(Serialize, Debug)]
@@ -1922,17 +1923,6 @@ fn sanitize_filename(s: &str) -> String {
         .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' { c } else { '_' })
         .collect::<String>()
         .trim()
-        .to_string()
-}
-
-fn strip_numeric_prefix(s: &str) -> String {
-    let trimmed = s.trim_start();
-    let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
-    if digits.is_empty() {
-        return s.to_string();
-    }
-    let rest = &trimmed[digits.len()..];
-    rest.trim_start_matches(|c: char| c.is_whitespace() || c == '-')
         .to_string()
 }
 

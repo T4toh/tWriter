@@ -28,6 +28,7 @@ import { ChapterService } from '../core/chapter-service';
 import { MarkdownReaderService } from '../core/markdown-reader-service';
 import { NavigationService } from '../core/navigation-service';
 import { NoteService } from '../core/note-service';
+import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { ProjectService } from '../core/project-service';
 import { findAllMatchesInPlain, tokenize } from '../core/search-highlight';
 import { SearchHit, SearchService } from '../core/search-service';
@@ -117,8 +118,8 @@ export class SearchPanel implements AfterViewInit {
     const parts = hit.path.split('/');
     const file = parts.pop() || '';
     const stem = file.replace(/\.html$/i, '') || raw;
-    const parent = stripOrderPrefix(parts.pop() || '');
-    const grand = stripOrderPrefix(parts.pop() || '');
+    const parent = sinPrefijoNumerico(parts.pop() || '').trim();
+    const grand = sinPrefijoNumerico(parts.pop() || '').trim();
     if (parent && /^\d+$/.test(parent) && grand) {
       return `${grand} · ${parent} — ${stem}`;
     }
@@ -347,11 +348,6 @@ export class SearchPanel implements AfterViewInit {
     out += escapeHtml(snippet.slice(cursor));
     return out;
   }
-}
-
-/** "07 - Vuelta" → "Vuelta". Mantiene el nombre limpio para el header. */
-function stripOrderPrefix(name: string): string {
-  return name.replace(/^\d+\s*[-·]\s*/, '').trim();
 }
 
 function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {

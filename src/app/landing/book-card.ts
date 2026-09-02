@@ -11,6 +11,7 @@ import { LucideArrowDownToLine, LucideSettings } from '@lucide/angular';
 import { BookConfig, BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { CoverCache } from '../core/cover-cache';
+import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { TreeNode } from '../core/types';
 import { Spinner } from '../shared/spinner';
 
@@ -36,7 +37,7 @@ export class BookCard {
   protected readonly displayTitle = computed(() => {
     const cfg = this.config();
     if (cfg?.titulo) return cfg.titulo;
-    return this.node().name.replace(/^\d+\s*-\s*/, '');
+    return sinPrefijoNumerico(this.node().name);
   });
 
   protected readonly subtitle = computed(() => {

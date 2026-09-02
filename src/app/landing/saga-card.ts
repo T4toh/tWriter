@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { BookConfigService } from '../core/book-config-service';
 import { CoverCache } from '../core/cover-cache';
+import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { TreeNode } from '../core/types';
 
 interface BookThumb {
@@ -35,7 +36,7 @@ export class SagaCard {
   protected readonly thumbs = signal<BookThumb[]>([]);
 
   protected readonly displayName = computed(() =>
-    this.node().name.replace(/^\d+\s*-\s*/, ''),
+    sinPrefijoNumerico(this.node().name),
   );
 
   protected readonly bookCount = computed(
@@ -85,7 +86,7 @@ export class SagaCard {
     const version = this.cfgService.savedAt();
     const out = await Promise.all(
       books.map(async (book): Promise<BookThumb> => {
-        const title = book.name.replace(/^\d+\s*-\s*/, '');
+        const title = sinPrefijoNumerico(book.name);
         let cover: string | null = null;
         try {
           const cfg = await this.cfgService.load(book.path);

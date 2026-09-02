@@ -2,6 +2,7 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { NavigationService } from '../core/navigation-service';
+import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { ProjectService } from '../core/project-service';
 import { SagaConfigService } from '../core/saga-config-service';
 import { SettingsService } from '../core/settings-service';
@@ -71,7 +72,7 @@ export class Landing {
     const chain = pathChain(root, path);
     for (const n of chain) {
       const label = n.kind === 'saga'
-        ? n.name.replace(/^\d+\s*-\s*/, '')
+        ? sinPrefijoNumerico(n.name)
         : n.name;
       list.push({ label, node: n });
     }

@@ -21,6 +21,7 @@ import { FontEntry, ThemeMeta, TreeNode } from '../core/types';
 import { ModalService } from '../shared/modal-service';
 import { ContextMenuService } from '../shared/context-menu-service';
 import { NodeActionsService } from '../shared/node-actions-service';
+import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { formatAbsoluteTime, formatRelativeTime } from '../core/relative-time';
 import { NotasDelLibro, notasDelLibro } from './notas-del-libro';
 import {
@@ -699,7 +700,7 @@ export class Tree implements OnDestroy {
 
   protected displayName(node: TreeNode): string {
     return node.kind === 'saga'
-      ? node.name.replace(/^\d+\s*-\s*/, '')
+      ? sinPrefijoNumerico(node.name)
       : node.name;
   }
 

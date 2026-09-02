@@ -24,6 +24,7 @@ import { QuotesFixService } from '../core/quotes-fix-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
 import { NavigationService } from '../core/navigation-service';
 import { NoteService, NoteTarget } from '../core/note-service';
+import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { ProjectService } from '../core/project-service';
 import { DictionaryService } from '../core/dictionary-service';
 import { SagaConfigService } from '../core/saga-config-service';
@@ -1091,7 +1092,7 @@ function isMarkdownExt(ext: string | null | undefined): boolean {
 }
 
 export function isEpilogoName(name: string): boolean {
-  const stripped = name.replace(/^\d+\s*-\s*/, '').trim().toLowerCase();
+  const stripped = sinPrefijoNumerico(name).trim().toLowerCase();
   const flat = stripped.normalize('NFD').replace(/\p{M}/gu, '');
   return flat === 'epilogo' || flat === 'epilogue';
 }

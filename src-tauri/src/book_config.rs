@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::theme::ThemeRef;
+use crate::util::strip_numeric_prefix;
 
 // Sin "webp"/"gif" a propósito: `image` se compila con `features = ["png", "jpeg"]`
 // nomás (Cargo.toml), así que `embebido_reescalado` no puede decodificarlas — ver
@@ -390,17 +391,6 @@ fn mark_as_epilogo_impl(section_path: &str) -> Result<String, String> {
     out.push('\n');
     fs::write(&book_json, out).map_err(|e| e.to_string())?;
     Ok(final_path.to_string_lossy().into_owned())
-}
-
-fn strip_numeric_prefix(s: &str) -> String {
-    let trimmed = s.trim_start();
-    let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
-    if digits.is_empty() {
-        return s.to_string();
-    }
-    let rest = &trimmed[digits.len()..];
-    rest.trim_start_matches(|c: char| c.is_whitespace() || c == '-')
-        .to_string()
 }
 
 #[cfg(test)]

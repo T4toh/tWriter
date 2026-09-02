@@ -15,6 +15,7 @@ fn should_skip_dir(name: &str) -> bool {
 }
 use crate::import::clean_html;
 use crate::saga_config::SagaConfig;
+use crate::util::strip_numeric_prefix;
 
 // ─────────── Scan: estructura propuesta del source ───────────
 
@@ -445,17 +446,6 @@ fn leading_number(s: &str) -> Option<u32> {
     let t = s.trim_start();
     let digits: String = t.chars().take_while(|c| c.is_ascii_digit()).collect();
     digits.parse().ok()
-}
-
-fn strip_numeric_prefix(s: &str) -> String {
-    let trimmed = s.trim_start();
-    let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
-    if digits.is_empty() {
-        return s.to_string();
-    }
-    let rest = &trimmed[digits.len()..];
-    rest.trim_start_matches(|c: char| c.is_whitespace() || c == '-')
-        .to_string()
 }
 
 // ─────────── Apply: ejecutar el plan ───────────
