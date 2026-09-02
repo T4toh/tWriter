@@ -2,6 +2,31 @@
 
 Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos van a GitHub Issues; acá quedan ideas, refactors abiertos y diseño en discusión.
 
+## Urgente
+
+- **Editar el CSS del EPUB no se ve hasta recompilar Rust — y nada lo avisa**
+  (encontrado el 2026-09-02, después de perder un rato buscando un bug de CSS
+  que no existía). `epub_style.css` se incrusta con
+  `const CSS_TEMPLATE: &str = include_str!("epub_style.css")` (`epub.rs:85`),
+  o sea en tiempo de compilación. El watcher de `pnpm tauri dev` mira archivos
+  `.rs`, así que tocar la hoja **no dispara nada**: la app sigue corriendo con
+  el CSS viejo adentro del binario.
+  Por qué es grave y no una molestia: el ciclo es editás → exportás → no ves
+  ningún cambio → concluís que el CSS está mal → lo "arreglás" de nuevo. Ya
+  pasó: se editó el CSS, se exportó, el QR seguía a la derecha y el link
+  seguía azul, y parecía que el arreglo no funcionaba cuando en realidad ni
+  se había cargado. Cualquiera que toque esa hoja cae en la misma trampa, y
+  no hay ninguna señal que lo diga.
+  Opciones, de menos a más:
+  1. Sumar `src/epub_style.css` a lo que el watcher de `tauri.conf.json`
+     vigila, si el `beforeDevCommand` lo permite. Arregla el síntoma en dev.
+  2. `build.rs` con `cargo:rerun-if-changed=src/epub_style.css`. Ayuda a
+     `cargo build`, pero **no** al watcher, así que sola no alcanza.
+  3. Mover la hoja a `resources` y leerla en runtime, como ya se hace con el
+     tesauro. Desaparece el problema —no hay nada que recompilar— y de yapa la
+     hoja queda inspeccionable en la app empaquetada. Es la más invasiva y la
+     única que lo cierra de verdad.
+
 ## Editor / UX
 
 - Más variantes de divisor de escena (más allá del `* * *`).
