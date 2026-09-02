@@ -22,12 +22,12 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Verificado con `pnpm tauri dev` corriendo: editar la hoja y exportar de
   nuevo, sin tocar nada de Rust, alcanza para ver el cambio en el EPUB.
 
-- **No hay forma directa de volver a la raíz** (pedido del autor, 2026-09-02).
+- [x] **No hay forma directa de volver a la raíz**
+  (`feat/inicio-y-settings`, verificado a mano por el autor el 2026-09-02).
   Para llegar a la vista raíz —la que lista las sagas y donde vive la carta
   del autor— había que hacer doble click en una saga y después tocar
   "Inicio". El camino a la pantalla de más arriba pasaba por bajar primero.
-  **Arreglado en `feat/inicio-y-settings`, falta que el autor lo verifique a
-  mano.** El diagnóstico original apuntaba al breadcrumb, pero el breadcrumb
+  El diagnóstico original apuntaba al breadcrumb, pero el breadcrumb
   estaba bien: `crumbs()` siempre arranca con `Inicio` y ya era clickeable.
   El problema es que el landing entero —breadcrumb incluido— vive detrás de
   un `@if (!active())` en `editor.html`, así que con un capítulo abierto no
@@ -37,13 +37,11 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   a `NavigationService.goRoot()`, que ya existía sin llamadores), un botón de
   casita primero en la fila de acciones del panel izquierdo, y el atajo
   `Cmd/Ctrl+Shift+H` porque el modo focus esconde ese panel.
-  **Verificar**: con un capítulo abierto, tocar la casita y confirmar que
-  cae en la galería de sagas sin perder cambios; después lo mismo con el
-  atajo en modo focus.
+  Verificado con capítulo abierto (casita) y en modo focus (atajo).
 
-- **Configuración de verdad en vez de "Configurar gramática"** (pedido del
-  autor, 2026-09-02). **Hecho en `feat/inicio-y-settings`, falta verificación
-  a mano.** El engranaje abría un modal que solo configuraba LanguageTool.
+- [x] **Configuración de verdad en vez de "Configurar gramática"**
+  (`feat/inicio-y-settings`, verificado a mano por el autor el 2026-09-02).
+  El engranaje abría un modal que solo configuraba LanguageTool.
   Ahora es `settings-modal/` con bloques colapsables (`<details>` nativo):
   General —que estrena el toggle del panel de debug, sacado del header— y
   Gramática, con las tres secciones que ya estaban. `show()` recibe qué
@@ -51,8 +49,8 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   `gramatica` para que el remedio no quede detrás de un click. El estado
   colapsado no se persiste, por lo mismo.
   Pendiente, para cuando haya con qué llenarlo: un bloque de temas de UI.
-  **Verificar**: bajar LT, disparar un chequeo, y confirmar que el modal
-  abre con Gramática desplegada y General cerrada.
+  Verificado bajando LT y disparando un chequeo: el modal abre con Gramática
+  desplegada y General cerrada.
 
 ## Editor / UX
 
