@@ -491,7 +491,10 @@ export class App {
   }
 
   protected openSettings(): void {
-    this.settingsModal?.show();
+    // General abierto y Gramática colapsada: es el bloque corto y el que
+    // estrena contenido. La apertura automática por LT caído sigue pidiendo
+    // `gramatica` explícito, que es donde está el remedio.
+    this.settingsModal?.show('general');
   }
 
   protected openAbout(): void {
