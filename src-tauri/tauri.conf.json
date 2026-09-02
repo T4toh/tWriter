@@ -29,7 +29,8 @@
   "bundle": {
     "active": true,
     "resources": [
-      "resources/tesauro/*"
+      "resources/tesauro/*",
+      "resources/epub_style.css"
     ],
     "targets": ["deb", "nsis", "app", "dmg"],
     "createUpdaterArtifacts": true,

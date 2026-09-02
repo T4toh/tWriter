@@ -4,28 +4,23 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Urgente
 
-- **Editar el CSS del EPUB no se ve hasta recompilar Rust — y nada lo avisa**
-  (encontrado el 2026-09-02, después de perder un rato buscando un bug de CSS
-  que no existía). `epub_style.css` se incrusta con
-  `const CSS_TEMPLATE: &str = include_str!("epub_style.css")` (`epub.rs:85`),
-  o sea en tiempo de compilación. El watcher de `pnpm tauri dev` mira archivos
-  `.rs`, así que tocar la hoja **no dispara nada**: la app sigue corriendo con
-  el CSS viejo adentro del binario.
-  Por qué es grave y no una molestia: el ciclo es editás → exportás → no ves
-  ningún cambio → concluís que el CSS está mal → lo "arreglás" de nuevo. Ya
-  pasó: se editó el CSS, se exportó, el QR seguía a la derecha y el link
-  seguía azul, y parecía que el arreglo no funcionaba cuando en realidad ni
-  se había cargado. Cualquiera que toque esa hoja cae en la misma trampa, y
-  no hay ninguna señal que lo diga.
-  Opciones, de menos a más:
-  1. Sumar `src/epub_style.css` a lo que el watcher de `tauri.conf.json`
-     vigila, si el `beforeDevCommand` lo permite. Arregla el síntoma en dev.
-  2. `build.rs` con `cargo:rerun-if-changed=src/epub_style.css`. Ayuda a
-     `cargo build`, pero **no** al watcher, así que sola no alcanza.
-  3. Mover la hoja a `resources` y leerla en runtime, como ya se hace con el
-     tesauro. Desaparece el problema —no hay nada que recompilar— y de yapa la
-     hoja queda inspeccionable en la app empaquetada. Es la más invasiva y la
-     única que lo cierra de verdad.
+- [x] **Editar el CSS del EPUB no se ve hasta recompilar Rust — y nada lo avisa**
+  (`fix/epub-css-runtime`, verificado a mano por el autor el 2026-09-02).
+  `epub_style.css` se incrustaba con
+  `include_str!`, o sea en tiempo de compilación, y el watcher de
+  `pnpm tauri dev` solo mira `.rs`: tocar la hoja no disparaba nada y la app
+  seguía exportando con el CSS viejo adentro del binario. El ciclo era
+  editás → exportás → no cambia nada → concluís que el CSS está mal → lo
+  "arreglás" de nuevo.
+  Se tomó la opción 3 de las tres que había acá: la hoja se mudó a
+  `src-tauri/resources/epub_style.css` y se lee en runtime, como el tesauro.
+  En debug la ruta sale de `CARGO_MANIFEST_DIR`, no de la copia que
+  `tauri-build` deja en `target/` — si no, seguiría haciendo falta recompilar
+  para que la copia se actualice. En release sale de `BaseDirectory::Resource`
+  y la hoja queda inspeccionable dentro del bundle. Si no se puede leer, el
+  export falla con la ruta que intentó en vez de generar un EPUB sin estilos.
+  Verificado con `pnpm tauri dev` corriendo: editar la hoja y exportar de
+  nuevo, sin tocar nada de Rust, alcanza para ver el cambio en el EPUB.
 
 - **No hay forma directa de volver a la raíz** (pedido del autor, 2026-09-02).
   Hoy, para llegar a la vista raíz —la que lista las sagas y donde vive la
