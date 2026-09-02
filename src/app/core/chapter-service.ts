@@ -408,6 +408,11 @@ export class ChapterService {
     let unlisten: UnlistenFn | null = null;
     try {
       unlisten = await listen<ExportProgress>('epub-export-progress', (event) => {
+        // El evento es global. Exportar dos novelas a la vez se puede —el
+        // bloqueo de `BookCard` es por tarjeta y el menú contextual no tiene
+        // ninguno—, así que sin este filtro cada toast mostraría también las
+        // fases del otro export.
+        if (event.payload.libro !== node.path) return;
         this.toast.update(toastId, textoDeFase(event.payload));
       });
       const result = await invoke<{

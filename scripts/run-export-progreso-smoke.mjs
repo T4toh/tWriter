@@ -37,15 +37,15 @@ if (r.status !== 0) {
 const { textoDeFase } = await import(pathToFileURL(join(outDir, 'export-progreso.js')).href);
 
 const casos = [
-  [{ fase: 'Leyendo capítulos', hecho: 0, total: 0 }, 'Leyendo capítulos…',
+  [{ libro: '/x/Libro', fase: 'Leyendo capítulos', hecho: 0, total: 0 }, 'Leyendo capítulos…',
     'fase sin conteo: solo el texto'],
-  [{ fase: 'Escribiendo capítulos', hecho: 0, total: 12 }, 'Escribiendo capítulos (1 de 12)',
+  [{ libro: '/x/Libro', fase: 'Escribiendo capítulos', hecho: 0, total: 12 }, 'Escribiendo capítulos (1 de 12)',
     'primer capítulo: 1 de 12, no 0 de 12'],
-  [{ fase: 'Escribiendo capítulos', hecho: 11, total: 12 }, 'Escribiendo capítulos (12 de 12)',
+  [{ libro: '/x/Libro', fase: 'Escribiendo capítulos', hecho: 11, total: 12 }, 'Escribiendo capítulos (12 de 12)',
     'último capítulo: llega justo a total'],
-  [{ fase: 'Escribiendo capítulos', hecho: 0, total: 1 }, 'Escribiendo capítulos (1 de 1)',
+  [{ libro: '/x/Libro', fase: 'Escribiendo capítulos', hecho: 0, total: 1 }, 'Escribiendo capítulos (1 de 1)',
     'libro de un solo capítulo'],
-  [{ fase: 'Armando índice y empaquetando', hecho: 0, total: 0 }, 'Armando índice y empaquetando…',
+  [{ libro: '/x/Libro', fase: 'Armando índice y empaquetando', hecho: 0, total: 0 }, 'Armando índice y empaquetando…',
     'fase final sin conteo'],
 ];
 let fallos = 0;
