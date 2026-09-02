@@ -614,24 +614,14 @@ fn apply_impl(app: AppHandle, plan: WizardPlan) -> Result<ImportSummary, String>
                 }
             }
         }
-        let mut image_copies: Vec<(PathBuf, PathBuf)> = Vec::new();
+        // Copiar tapa/contratapa ANTES de escribir el book.json: si la copia
+        // falla, el field tiene que quedar vacío en vez de persistir una
+        // referencia a un archivo que nunca llegó a estar en el book_dir.
         for (field, stem) in [(&mut book_cfg.tapa, "cover"), (&mut book_cfg.contratapa, "back-cover")] {
-            if let Some(pair) = resolve_cover_image(field, stem, &book_dir, &mut summary.failed) {
-                image_copies.push(pair);
-            }
+            resolve_cover_image(field, stem, &book_dir, &mut summary);
         }
         if let Err(e) = write_book_json(&book_dir, &book_cfg) {
             summary.failed.push(format!("book.json {}: {}", book.dir_name, e));
-        }
-        for (src, dst) in image_copies {
-            if !dst.exists() {
-                match fs::copy(&src, &dst) {
-                    Ok(_) => summary.copied_extras += 1,
-                    Err(e) => summary
-                        .failed
-                        .push(format!("copiar imagen {}: {}", src.display(), e)),
-                }
-            }
         }
 
         // direct chapters
@@ -698,19 +688,25 @@ fn emit_progress(app: &AppHandle, done: u32, total: u32, current: &str) {
 /// (ver `handle_chapter`/`handle_extra`), así que el resto del import sigue
 /// su curso y el autor ve el motivo en la misma lista al terminar.
 ///
-/// Devuelve `Some((origen, destino))` para que `apply_impl` copie el archivo,
-/// o `None` si no había nada que copiar (campo vacío/relativo) o si se
-/// rechazó por formato.
-fn resolve_cover_image(
-    field: &mut Option<String>,
-    stem: &str,
-    book_dir: &Path,
-    failed: &mut Vec<String>,
-) -> Option<(PathBuf, PathBuf)> {
-    let value = field.as_deref().filter(|s| !s.trim().is_empty())?;
+/// Copia la tapa/contratapa elegida en el wizard a `<book_dir>/<stem>.<ext>`
+/// y reescribe `field` a ese nombre relativo — pero solo si la copia salió
+/// bien. Si falla (o el formato no está soportado), `field` queda en `None`:
+/// mejor sin tapa que con un `book.json` apuntando a un archivo que no está
+/// en el book_dir. El motivo se empuja a `summary.failed`, que ya es donde
+/// el wizard junta el resto de los problemas por-archivo (ver
+/// `handle_chapter`/`handle_extra`), así que el resto del import sigue su
+/// curso y el autor ve el motivo en la misma lista al terminar.
+///
+/// No hace nada (deja `field` como está) si el campo estaba vacío o ya era
+/// relativo — nada para copiar en ese caso.
+fn resolve_cover_image(field: &mut Option<String>, stem: &str, book_dir: &Path, summary: &mut ImportSummary) {
+    let etiqueta = if stem == "cover" { "tapa" } else { "contratapa" };
+    let Some(value) = field.as_deref().filter(|s| !s.trim().is_empty()) else {
+        return;
+    };
     let candidate = PathBuf::from(value);
     if !(candidate.is_absolute() && candidate.is_file()) {
-        return None;
+        return;
     }
     let ext = candidate
         .extension()
@@ -718,19 +714,32 @@ fn resolve_cover_image(
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
     if !COVER_EXTS.contains(&ext.as_str()) {
-        let etiqueta = if stem == "cover" { "tapa" } else { "contratapa" };
         let nombre = candidate.file_name().and_then(|n| n.to_str()).unwrap_or(value);
-        failed.push(format!(
+        summary.failed.push(format!(
             "{} \"{}\": formato de imagen no soportado, usá JPG o PNG",
             etiqueta, nombre
         ));
         *field = None;
-        return None;
+        return;
     }
     let dest_name = format!("{}.{}", stem, ext);
     let dest = book_dir.join(&dest_name);
-    *field = Some(dest_name);
-    Some((candidate, dest))
+    if dest.exists() {
+        *field = Some(dest_name);
+        return;
+    }
+    match fs::copy(&candidate, &dest) {
+        Ok(_) => {
+            summary.copied_extras += 1;
+            *field = Some(dest_name);
+        }
+        Err(e) => {
+            summary
+                .failed
+                .push(format!("copiar {} {}: {}", etiqueta, candidate.display(), e));
+            *field = None;
+        }
+    }
 }
 
 fn ensure_dir(p: &Path, summary: &mut ImportSummary) -> Result<(), String> {
@@ -1037,11 +1046,9 @@ mod tests {
         fs::create_dir_all(&book_dir).expect("mkdir book_dir");
 
         let mut field = Some(source.to_string_lossy().to_string());
-        let mut failed = Vec::new();
-        let result = resolve_cover_image(&mut field, "cover", &book_dir, &mut failed);
+        let mut summary = ImportSummary::default();
+        resolve_cover_image(&mut field, "cover", &book_dir, &mut summary);
 
-        // No hay nada para copiar...
-        assert!(result.is_none(), "un .webp no debería producir una copia");
         // ...el campo queda limpio, así el book.json no referencia un archivo
         // que el EPUB no puede decodificar...
         assert_eq!(field, None, "el field no debe quedar apuntando al webp");
@@ -1052,15 +1059,15 @@ mod tests {
         );
         // ...y el autor se entera del motivo, en español, con el nombre del
         // archivo y los formatos que sí andan.
-        assert_eq!(failed.len(), 1);
-        assert!(failed[0].contains("mi tapa.webp"), "el mensaje: {}", failed[0]);
-        assert!(failed[0].contains("JPG"), "el mensaje: {}", failed[0]);
+        assert_eq!(summary.failed.len(), 1);
+        assert!(summary.failed[0].contains("mi tapa.webp"), "el mensaje: {}", summary.failed[0]);
+        assert!(summary.failed[0].contains("JPG"), "el mensaje: {}", summary.failed[0]);
 
         let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn resolve_cover_image_acepta_png_y_reescribe_el_campo_a_relativo() {
+    fn resolve_cover_image_acepta_png_copia_y_reescribe_el_campo_a_relativo() {
         let root = unique_tmp("cover-png");
         let source = root.join("mi tapa.png");
         touch(&source);
@@ -1068,14 +1075,39 @@ mod tests {
         fs::create_dir_all(&book_dir).expect("mkdir book_dir");
 
         let mut field = Some(source.to_string_lossy().to_string());
-        let mut failed = Vec::new();
-        let result = resolve_cover_image(&mut field, "cover", &book_dir, &mut failed);
+        let mut summary = ImportSummary::default();
+        resolve_cover_image(&mut field, "cover", &book_dir, &mut summary);
 
-        let (src, dst) = result.expect("un .png sí debería agendar una copia");
-        assert_eq!(src, source);
-        assert_eq!(dst, book_dir.join("cover.png"));
+        assert!(book_dir.join("cover.png").is_file(), "la copia sí debe existir en disco");
         assert_eq!(field.as_deref(), Some("cover.png"));
-        assert!(failed.is_empty());
+        assert!(summary.failed.is_empty());
+        assert_eq!(summary.copied_extras, 1);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolve_cover_image_copia_fallida_no_deja_el_campo_escrito() {
+        // Discrimina el bug del finding: si `fs::copy` falla, `field` no
+        // puede quedar apuntando a "cover.png" — ese archivo nunca llegó a
+        // existir en el book_dir, y persistir la referencia deja el
+        // book.json roto (mismo problema que un `write_book_json` corrido
+        // antes de intentar la copia).
+        let root = unique_tmp("cover-copy-fails");
+        let source = root.join("mi tapa.png");
+        touch(&source);
+        // book_dir NO se crea: fs::copy falla porque el destino no tiene
+        // directorio padre en disco.
+        let book_dir = root.join("book-inexistente");
+
+        let mut field = Some(source.to_string_lossy().to_string());
+        let mut summary = ImportSummary::default();
+        resolve_cover_image(&mut field, "cover", &book_dir, &mut summary);
+
+        assert_eq!(field, None, "una copia fallida no debe dejar el field escrito");
+        assert_eq!(summary.copied_extras, 0);
+        assert_eq!(summary.failed.len(), 1, "el fallo se reporta, no se traga");
+        assert!(summary.failed[0].contains("copiar"), "el mensaje: {}", summary.failed[0]);
 
         let _ = fs::remove_dir_all(&root);
     }

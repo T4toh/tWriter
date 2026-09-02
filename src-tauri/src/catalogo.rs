@@ -8,7 +8,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::book_config::{resolver_imagen, BookConfig};
+use crate::book_config::{find_cover_in, resolver_imagen, BookConfig};
 use crate::saga_config::SagaConfig;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -84,7 +84,11 @@ fn publicados_de(saga_dir: &Path, actual: &Path) -> Vec<LibroPublicado> {
         let Some(link) = cfg.link.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
             continue;
         };
-        let tapa = resolver_imagen(&libro_dir, cfg.tapa.as_deref());
+        // Mismo fallback que `get_book_config`: si `tapa` quedó con un path
+        // absoluto de otra PC, buscar `cover.*` al lado del book.json antes
+        // de dar el libro por sin portada.
+        let tapa = resolver_imagen(&libro_dir, cfg.tapa.as_deref())
+            .or_else(|| find_cover_in(&libro_dir).map(|nombre| libro_dir.join(nombre)));
         let libro = LibroPublicado {
             titulo: cfg.titulo.clone(),
             subtitulo: cfg.subtitulo.clone().filter(|s| !s.trim().is_empty()),
@@ -235,5 +239,27 @@ mod tests {
         assert_eq!(con_tapa.tapa.as_deref(), Some(con.join("cover.png").as_path()));
         let sin_tapa = cat.misma_saga.iter().find(|l| l.titulo == "Sin").unwrap();
         assert_eq!(sin_tapa.tapa, None);
+    }
+
+    #[test]
+    fn cae_a_cover_en_disco_cuando_la_tapa_del_json_es_un_path_muerto() {
+        // Mismo bug que get_book_config: un book.json escrito en otra PC
+        // trae un path absoluto que no existe acá, pero el cover.png viaja
+        // por git y está al lado. El catálogo tiene que encontrarlo igual
+        // que lo hace el modal de config del libro.
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let s = saga(root, "1 - Meridian");
+        let actual = libro(&s, "1 - Uno", r#"{"titulo":"Uno","link":"https://x/1"}"#);
+        let stale = libro(
+            &s,
+            "2 - Stale",
+            r#"{"titulo":"Stale","link":"https://x/2","tapa":"/Users/otra-pc/cover.png"}"#,
+        );
+        fs::write(stale.join("cover.png"), b"fake").unwrap();
+
+        let cat = escanear(root, &actual);
+        let libro = cat.misma_saga.iter().find(|l| l.titulo == "Stale").unwrap();
+        assert_eq!(libro.tapa.as_deref(), Some(stale.join("cover.png").as_path()));
     }
 }
