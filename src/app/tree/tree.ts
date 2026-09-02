@@ -240,12 +240,31 @@ export class Tree implements OnDestroy {
     });
   }
 
+  /** Paths que existen hoy en el árbol de esta variante. `root()` ya viene
+   *  podado por variante, así que sirve igual para el árbol principal y el de
+   *  notas. */
+  private pathsVivos(): Set<string> {
+    const vivos = new Set<string>();
+    const visitar = (n: TreeNode): void => {
+      vivos.add(n.path);
+      for (const c of n.children) visitar(c);
+    };
+    const r = this.root();
+    if (r) visitar(r);
+    return vivos;
+  }
+
   /** Persiste el subset del Map `explicit` con value=true como lista de paths.
-   *  Excluye paths con value=false (collapse explícito sobre default expandido). */
+   *  Excluye paths con value=false (collapse explícito sobre default expandido)
+   *  y los que ya no existen en el árbol: `explicit` se hidrata de
+   *  `settings.json`, que guarda paths absolutos, así que un rename de carpeta
+   *  hecho afuera de la app deja huérfanos que se re-persistían para siempre.
+   *  Sin árbol cargado no se filtra nada — ahí un Set vacío borraría todo. */
   private persistExpanded(): void {
+    const vivos = this.root() ? this.pathsVivos() : null;
     const expanded = new Set<string>();
     for (const [path, value] of this.explicit().entries()) {
-      if (value) expanded.add(path);
+      if (value && (!vivos || vivos.has(path))) expanded.add(path);
     }
     if (this.variant() === 'notes') {
       this.settings.setTreeNotesExpanded(expanded);
