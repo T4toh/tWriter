@@ -10,8 +10,8 @@
 
 .tree-area {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden auto;
+
   // Reserva espacio del scrollbar siempre — en WebKitGTK/Wayland el overlay
   // scrollbar flashea durante reflows (LT, refresh de badges relativos) y
   // se ve como un "salto" del borde. Con gutter estable el ancho del tree
@@ -135,7 +135,7 @@
 }
 
 .row.group.ancestor:not(.current) {
-  background: rgba(200, 168, 120, 0.12);
+  background: rgb(200 168 120 / 12%);
 }
 
 .row.chapter.disabled {
@@ -306,7 +306,7 @@
 .row.drag-target {
   outline: 2px dashed var(--accent);
   outline-offset: -2px;
-  background: rgba(200, 168, 120, 0.12);
+  background: rgb(200 168 120 / 12%);
 }
 
 .extra-badge {
@@ -402,7 +402,7 @@
   background: var(--bg-secondary, var(--bg, #1a1a1a));
   border: 1px solid var(--accent, #6cf);
   border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 30%);
   opacity: 0.92;
   padding: 0;
 

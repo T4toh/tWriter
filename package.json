@@ -8,7 +8,8 @@
     "prebuild": "node scripts/generar-licencias.mjs",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "lint:css": "stylelint \"src/**/*.scss\""
   },
   "private": true,
   "dependencies": {
@@ -39,6 +40,8 @@
     "@angular/cli": "^21.2.9",
     "@angular/compiler-cli": "^21.2.11",
     "@tauri-apps/cli": "^2",
+    "stylelint": "17.14.1",
+    "stylelint-config-standard-scss": "17.0.0",
     "typescript": "~5.9.3"
   }
 }

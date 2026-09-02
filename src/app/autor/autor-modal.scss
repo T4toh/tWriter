@@ -1,7 +1,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgb(0 0 0 / 50%);
   z-index: 200;
 }
 
@@ -12,6 +12,7 @@
   transform: translate(-50%, -50%);
   z-index: 201;
   width: min(880px, 95vw);
+
   // 90vh y no 85: con dos bios de 3 renglones el contenido entra entero en
   // una pantalla normal, y el scroll solo aparece si el autor agranda los
   // textareas o escribe una bio larga — no de arranque.
@@ -20,7 +21,7 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
   padding: 1.25rem 1.5rem;
   display: flex;
   flex-direction: column;
@@ -37,7 +38,7 @@
   align-items: start;
 }
 
-@media (max-width: 720px) {
+@media (width <= 720px) {
   .split {
     grid-template-columns: 1fr;
   }
@@ -222,7 +223,7 @@ textarea {
 .crop-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgb(0 0 0 / 60%);
   z-index: 210;
 }
 
@@ -238,10 +239,11 @@ textarea {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
   padding: 1.25rem 1.5rem;
   font-family: var(--font-ui);
   color: var(--fg);
+
   // El recuadro de la foto se dimensiona contra la ventana; el modal tiene
   // que poder crecer con él en vez de recortarlo.
   max-width: 94vw;
@@ -277,7 +279,7 @@ textarea {
 .crop-square {
   position: absolute;
   border: 2px solid var(--accent);
-  box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 2000px rgb(0 0 0 / 45%);
   cursor: move;
   touch-action: none;
 

@@ -1,7 +1,7 @@
 .iw-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgb(0 0 0 / 50%);
   z-index: 200;
 }
 
@@ -19,7 +19,7 @@
   color: var(--fg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
   overflow: hidden;
 }
 
@@ -147,7 +147,7 @@
 .iw-error {
   margin-top: 8px;
   padding: 8px;
-  background: rgba(192, 80, 80, 0.15);
+  background: rgb(192 80 80 / 15%);
   color: #c87070;
   border-radius: 4px;
   font-size: 12px;
@@ -395,7 +395,7 @@
 }
 
 .extra-row {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgb(255 255 255 / 2%);
 
   .file-source {
     font-style: italic;
@@ -516,7 +516,7 @@ option {
   }
 
   ul {
-    margin: 0.5rem 0 0 0;
+    margin: 0.5rem 0 0;
     padding-left: 1.5em;
     font-family: var(--font-mono);
     font-size: 11px;

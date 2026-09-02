@@ -33,7 +33,7 @@
 
   &:focus-visible {
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(200, 168, 120, 0.25);
+    box-shadow: 0 0 0 2px rgb(200 168 120 / 25%);
   }
 
   &.is-empty .sel-label {
@@ -80,7 +80,7 @@
   border-radius: 6px;
   background: var(--bg);
   color: var(--fg);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 35%);
   max-height: 320px;
   width: auto;
   height: auto;
@@ -106,6 +106,7 @@
     opacity: 0;
     transform: translateY(-4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);

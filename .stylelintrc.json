@@ -1,0 +1,18 @@
+{
+  "extends": "stylelint-config-standard-scss",
+  "rules": {
+    "selector-pseudo-element-no-unknown": [
+      true,
+      {
+        "ignorePseudoElements": ["ng-deep"]
+      }
+    ],
+    "selector-class-pattern": [
+      "^(ProseMirror|[a-z][a-z0-9]*(-{1,2}[a-z0-9]*)*)$",
+      {
+        "message": "Se acepta kebab-case (\"algo-asi\") o modificador BEM (\"algo--asi\"); \"ProseMirror\" queda permitido porque lo impone TipTap y no lo podemos renombrar."
+      }
+    ],
+    "declaration-block-single-line-max-declarations": 2
+  }
+}
