@@ -1357,15 +1357,14 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Tree / Importer
 
-- **Renombrar una carpeta fuera de la app deja estado local huérfano.**
+- [x] **Renombrar una carpeta fuera de la app deja estado local huérfano**
+  (`fix/estado-local-huerfano`, verificado a mano por el autor el
+  2026-09-02: 10 claves huérfanas de 19 pasaron a 0 al abrir el repo).
   Encontrado el 2026-08-20 numerando las sagas a mano (`Milky Way` →
   `3 - Milky Way`, `Vieja República` → `4 - Vieja República`). El rename por
   git es limpio para el contenido — 1.256 renames, 0 cambios de contenido —
   pero archivos locales quedaban apuntando a los paths viejos, y ninguno
   viaja por git porque `.twriter/` está gitignoreado.
-
-  **Arreglado en `fix/estado-local-huerfano`, falta que el autor lo verifique
-  a mano.**
 
   - `stats.json` (keyeado por path relativo, 294 de 533 claves huérfanas en
     el incidente): `stats::reconciliar_stats()` corre al armar el árbol y
@@ -1395,9 +1394,13 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
     sí puede quedar sucio son los hits stale **entre** reindexados completos,
     porque los updates incrementales van por path: si molesta, es otro item.
 
-  **Verificar**: renombrar una carpeta de saga desde Finder, abrir la app, y
-  confirmar que los capítulos de adentro conservan sus palabras y su fecha de
-  última edición en vez de mostrar 0.
+  **Ojo con el síntoma**: el item original decía que se pierden palabras y
+  última-edición, y eso estaba mal medido. `palabras` se auto-repara —
+  `palabras_for_chapter` cae a leer el HTML y contar (`stats.rs:296`), así que
+  nunca se ve un 0— y `ultima_edicion` hoy **no la lee nadie**: se escribe en
+  cada save y ningún lector la consume. Lo que el arreglo evita de verdad es
+  que cada `get_tree()` relea y recuente todos los capítulos con clave
+  huérfana. Por eso se verifica sobre `stats.json`, no sobre la UI.
 
   **Nota para quien lo toque en Mac**: el fix del typo `Notas/Buenos AIres
   2077` → `Notas/Buenos Aires 2077` es un rename **solo de caja**, y APFS es
