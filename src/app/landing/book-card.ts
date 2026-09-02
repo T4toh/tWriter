@@ -7,17 +7,18 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { LucideArrowDownToLine, LucideSettings } from '@lucide/angular';
+import { LucideArrowDownToLine, LucideListChecks, LucideSettings } from '@lucide/angular';
 import { BookConfig, BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { CoverCache } from '../core/cover-cache';
 import { sinPrefijoNumerico } from '../core/nombre-carpeta';
+import { RevisionLibroService } from '../core/revision-libro-service';
 import { TreeNode } from '../core/types';
 import { Spinner } from '../shared/spinner';
 
 @Component({
   selector: 'app-book-card',
-  imports: [Spinner, LucideArrowDownToLine, LucideSettings],
+  imports: [Spinner, LucideArrowDownToLine, LucideListChecks, LucideSettings],
   templateUrl: './book-card.html',
   styleUrl: './book-card.scss',
 })
@@ -25,6 +26,7 @@ export class BookCard {
   private cfgService = inject(BookConfigService);
   private chapter = inject(ChapterService);
   private coverCache = inject(CoverCache);
+  private revision = inject(RevisionLibroService);
 
   readonly node = input.required<TreeNode>();
   readonly select = output<TreeNode>();
@@ -118,6 +120,11 @@ export class BookCard {
   protected openConfig(event: MouseEvent): void {
     event.stopPropagation();
     this.cfgService.openFor(this.node());
+  }
+
+  protected abrirRevision(event: MouseEvent): void {
+    event.stopPropagation();
+    this.revision.abrirPara(this.node());
   }
 
   protected async exportEpub(event: MouseEvent): Promise<void> {
