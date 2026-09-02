@@ -631,6 +631,21 @@ export class NodeActionsService {
     return newPath;
   }
 
+  /** Renombra la carpeta de una saga/libro preservando su prefijo numérico
+   *  de orden ("1 - ") cuando el título/nombre cambia — así el rename de
+   *  `book-config-modal`/`saga-config-modal` no descoloca el orden en disco.
+   *  No hace nada (devuelve `node.path` tal cual) si el nombre nuevo está
+   *  vacío o es igual al actual. Comparte el rename real con `renameNodeTo`,
+   *  que ya deja lanzar si `rename_node` falla — el caller decide cómo avisar. */
+  async renameFolderIfNeeded(node: TreeNode, nuevoNombre: string): Promise<string> {
+    const match = node.name.match(/^\d+\s*-\s*/);
+    const prefix = match ? match[0] : '';
+    const current = node.name.slice(prefix.length);
+    const trimmed = nuevoNombre.trim();
+    if (!trimmed || trimmed === current) return node.path;
+    return this.renameNodeTo(node, `${prefix}${trimmed}`);
+  }
+
   async markAsEpilogo(node: TreeNode): Promise<void> {
     if (node.kind !== 'section') return;
     try {

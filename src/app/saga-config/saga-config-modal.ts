@@ -228,15 +228,6 @@ export class SagaConfigModal {
    *  verdad: si el rename falla (colisión, permisos), propaga el error para
    *  que `save()` no persista un `nombre` que la carpeta no tiene.
    *  Devuelve el path nuevo, o el original si no hizo falta renombrar. */
-  private async renameFolderIfNeeded(node: TreeNode, nombre: string): Promise<string> {
-    const match = node.name.match(/^\d+\s*-\s*/);
-    const prefix = match ? match[0] : '';
-    const current = node.name.slice(prefix.length);
-    const trimmed = nombre.trim();
-    if (!trimmed || trimmed === current) return node.path;
-    return this.nodeActions.renameNodeTo(node, `${prefix}${trimmed}`);
-  }
-
   protected async save(): Promise<void> {
     const path = this.sagaPath();
     const cfg = this.config();
@@ -265,7 +256,7 @@ export class SagaConfigModal {
         finalizada: cfg.finalizada ?? null,
         theme: this.buildThemeRef(),
       };
-      const finalPath = await this.renameFolderIfNeeded(node, cleaned.nombre);
+      const finalPath = await this.nodeActions.renameFolderIfNeeded(node, cleaned.nombre);
       await this.svc.save(finalPath, cleaned);
       this.svc.close();
     } catch (err) {
