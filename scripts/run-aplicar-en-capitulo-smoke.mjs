@@ -45,8 +45,11 @@ if (r.status !== 0) {
   process.exit(r.status ?? 1);
 }
 
-const { aplicarEnCapitulo } = await import(
+const { aplicarEnCapitulo, detectarEnCapitulo } = await import(
   pathToFileURL(join(outDir, 'revision/deteccion.js')).href
+);
+const { EXCEPCIONES_DEFAULT } = await import(
+  pathToFileURL(join(outDir, 'repeticiones/detector.js')).href
 );
 
 let passed = 0;
@@ -104,13 +107,23 @@ console.log('aplicarEnCapitulo');
   check('nada tildado: html sin cambios', res.html === html, res.html);
 }
 {
-  // Fix de `pending-conversion` que cruza un tag (cursiva adentro de la
-  // comilla): aplicarFixesHtml lo saltea en vez de comerse el `</em>`, y
-  // aplicarEnCapitulo tiene que devolver ese salteo, no tragárselo.
-  const html = '<p>"No <em>sé,</em>" dijo ella.</p>';
-  const res = aplicarEnCapitulo(html, 'es', { rayas: false, comillas: false, arreglosRae: true });
-  check('fix que cruza tag: se contabiliza como salteado', res.salteados > 0, res);
-  check('fix que cruza tag: el html no se toca', res.html === html, res.html);
+  // Fix round 1: `pending-conversion` (autoFix = salida de convert()) es
+  // EXACTAMENTE la misma transformación que ya hace `rayas` — si arreglosRae
+  // la contara, las dos casillas dejarían de ser independientes (tildar solo
+  // arreglosRae convertía el diálogo igual, sin que el autor lo pidiera).
+  const html = '<p>"No sé," dijo ella. "De verdad."</p>';
+  {
+    const res = aplicarEnCapitulo(html, 'es', { rayas: false, comillas: false, arreglosRae: true });
+    check('solo arreglosRae: NO convierte a raya', res.html === html, res.html);
+  }
+  {
+    const res = aplicarEnCapitulo(html, 'es', { rayas: true, comillas: false, arreglosRae: false });
+    check('solo rayas: sí convierte a raya', res.html.includes('—'), res.html);
+  }
+  {
+    const det = detectarEnCapitulo(html, 'es', { excepciones: EXCEPCIONES_DEFAULT, diccionario: [] });
+    check('detectarEnCapitulo: arreglosRae no cuenta la conversión pendiente', det.arreglosRae === 0, det);
+  }
 }
 
 rmSync(outDir, { recursive: true, force: true });

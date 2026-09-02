@@ -78,9 +78,16 @@ export function detectarEnCapitulo(
 
   // arreglosRae: `validateRae` ya se auto-gatea a `lang === 'es'` exacto, así
   // que capítulos en inglés o sin idioma detectado como 'es' quedan en 0 sin
-  // gate adicional acá.
+  // gate adicional acá. `pending-conversion` se excluye a propósito: su
+  // autoFix ES la salida de `convert()` (ver `validator.ts`), la misma
+  // transformación que ya cuenta `rayas` arriba. Sin este filtro el mismo
+  // cambio aparecía duplicado en dos filas del modal, y "arreglos RAE" dejaba
+  // de ser independiente de "rayas" — tildar solo arreglosRae convertía el
+  // diálogo igual.
   const violaciones = validateRae(plain, idiomaEfectivo);
-  const arreglosRae = violaciones.filter((v) => v.autoFix !== undefined).length;
+  const arreglosRae = violaciones.filter(
+    (v) => v.autoFix !== undefined && v.category !== 'pending-conversion',
+  ).length;
 
   const reps = detectRepeticiones(plain, esIngles ? 'en' : 'es', {
     ...REP_DEFAULTS,
@@ -100,12 +107,12 @@ export function detectarEnCapitulo(
  * en un segundo lugar y no coincidía con el de detectar).
  *
  * `rayas` y `comillas` son mutuamente excluyentes por idioma, así que el orden
- * entre ellas no importa. `arreglosRae` sí tiene que ir DESPUÉS: si el capítulo
- * ya pasó por `convert()` acá mismo, `validateRae` (que corre `convert()` por
- * párrafo para detectar `pending-conversion`) ve texto ya convertido y no
- * vuelve a proponer el mismo fix — sin este orden, un capítulo con `rayas` y
- * `arreglosRae` tildados a la vez terminaría con dos pasadas de conversión
- * pisándose.
+ * entre ellas no importa. `arreglosRae` va después y sobre el HTML que resulte
+ * de las anteriores, para que un capítulo con las tres tildadas sea una sola
+ * pasada consistente. Los fixes de `arreglosRae` excluyen la categoría
+ * `pending-conversion` — esa violación es la conversión de diálogo, que ya es
+ * responsabilidad exclusiva de `rayas` (mismo motivo que en
+ * `detectarEnCapitulo`, ver ahí).
  */
 export function aplicarEnCapitulo(
   html: string,
@@ -121,6 +128,7 @@ export function aplicarEnCapitulo(
   if (seleccion.comillas && esIngles) out = educateQuotes(out).text;
   if (seleccion.arreglosRae) {
     const fixes = validateRae(htmlToPlain(out), idiomaEfectivo)
+      .filter((v) => v.category !== 'pending-conversion')
       .map((v) => v.autoFix)
       .filter((f): f is RaeAutoFix => f !== undefined);
     const r = aplicarFixesHtml(out, fixes);

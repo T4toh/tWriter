@@ -126,11 +126,14 @@ export class RevisionLibroService {
     this.aplicando.set(true);
     this.error.set(null);
     const toastId = this.toast.progreso('Aplicando correcciones…');
+    // Fuera del try: si `write_chapter` falla a mitad de libro, el catch
+    // necesita saber cuántos capítulos ya quedaron escritos en disco (con su
+    // auto-commit ya disparado) para decírselo al autor y refrescar árbol/git.
+    let modificados = 0;
     try {
       const payloads = await invoke<ChapterPayload[]>('list_chapters_for_audit', {
         scopePath: node.path,
       });
-      let modificados = 0;
       let salteados = 0;
       let procesados = 0;
       for (const p of payloads) {
@@ -143,10 +146,6 @@ export class RevisionLibroService {
         procesados += 1;
         this.toast.update(toastId, `Aplicando correcciones (${procesados} de ${payloads.length})`);
         if (procesados % 5 === 0) await new Promise((r) => setTimeout(r, 0));
-      }
-      if (modificados > 0) {
-        await this.project.loadTree();
-        void this.git.refreshStatus();
       }
       this.toast.success(
         `${modificados} capítulo${modificados === 1 ? '' : 's'} modificado${modificados === 1 ? '' : 's'}.`,
@@ -162,9 +161,23 @@ export class RevisionLibroService {
       }
       await this.escanear();
     } catch (e) {
-      this.error.set(String(e));
-      this.toast.error(`Revisión: ${e}`);
+      // Si ya se escribieron capítulos antes del error, decirlo: el autor
+      // necesita saber que el libro quedó a medio aplicar para decidir si
+      // revierte con git, no solo ver el error crudo.
+      const prefijo =
+        modificados > 0
+          ? `Se modificaron ${modificados} capítulo${modificados === 1 ? '' : 's'} antes del error. `
+          : '';
+      this.error.set(`${prefijo}${e}`);
+      this.toast.error(`Revisión: ${prefijo}${e}`);
     } finally {
+      // El refresco corre en el finally (no solo en el camino feliz): si
+      // `modificados > 0` el árbol y el git status quedaron desincronizados
+      // aunque haya fallado a mitad de libro.
+      if (modificados > 0) {
+        await this.project.loadTree();
+        void this.git.refreshStatus();
+      }
       this.toast.dismiss(toastId);
       this.aplicando.set(false);
     }
