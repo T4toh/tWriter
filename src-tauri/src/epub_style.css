@@ -156,7 +156,15 @@ body.about-author-body {
   box-sizing: border-box;
 }
 
+/* width: 100% (no solo max-width) es la parte que importa: es flex item de
+   body.about-author-body sin stretch (align-items: center), así que sin un
+   width explícito su ancho lo fija el contenido (shrink-to-fit) y queda
+   "no definido" — y un max-width en % sobre un hijo (.about-author-photo)
+   no resuelve contra un ancho no definido, así que la foto ignoraba el 22%
+   y salía a su tamaño real. Con width:100% el ancho de este bloque queda
+   fijo (capado por max-width) y el % de la foto sí tiene contra qué medirse. */
 .about-author {
+  width: 100%;
   max-width: 28em;
   margin: 0 auto;
 }
@@ -170,13 +178,17 @@ h1.about-author-title {
   text-align: center;
 }
 
+/* Sin object-fit: no hace nada útil sin un height explícito con el que
+   recortar — con solo max-width + height:auto la imagen ya respeta su
+   propio aspect ratio, y evita depender de una propiedad con soporte
+   parejo en lectores EPUB viejos. Nada de border-radius: 50%, cuadrada
+   como el resto del diseño (la proporción de la imagen en sí la resuelve
+   quien la carga, no este CSS). */
 .about-author-photo {
   display: block;
   margin: 0 auto 1em;
   max-width: 22%;
   height: auto;
-  border-radius: 50%;
-  object-fit: cover;
 }
 
 .about-author-bio p {
@@ -186,7 +198,10 @@ h1.about-author-title {
   max-width: 28em;
 }
 
-.autor-web { margin-top: 1.6em; text-align: right; }
+/* Centrado sobre el eje de la página, como una firma al pie — el resto de
+   la página (foto, título, bio) ya está centrado, no tiene sentido que este
+   bloque cuelgue del margen derecho. */
+.autor-web { margin-top: 1.6em; text-align: center; }
 img.autor-qr { width: 150px; max-width: 40%; }
 p.autor-web-url { margin: 0.3em 0 0 0; font-size: 0.9em; }
 
@@ -194,11 +209,18 @@ p.autor-web-url { margin: 0.3em 0 0 0; font-size: 0.9em; }
    y el resultado queda peor que el apilado simple con float. */
 .otros-libros h2 { margin-top: 1.6em; text-align: center; }
 ul.libro-list { list-style: none; margin: 0; padding: 0; }
-li.libro { margin: 0 0 1.4em 0; }
+/* padding + regla arriba en vez de margin-bottom: la tapa suele ser más alta
+   que el título+subtítulo, así que un margin-bottom del <li> se suma a ese
+   sobrante y el espacio entre entradas queda irregular (grande si la tapa es
+   alta, apenas nada si el texto es largo). padding simétrico da un espacio
+   fijo pase lo que pase, y la línea separa una entrada de la próxima sin
+   dejarlas "a la deriva". */
+li.libro { margin: 0; padding: 1em 0; }
+li.libro + li.libro { border-top: 1px solid; }
 li.libro:after { content: ""; display: block; clear: both; }
-img.libro-tapa { float: left; width: 25%; max-width: 110px; margin: 0 1em 0.5em 0; }
-p.libro-titulo { margin: 0; font-weight: bold; }
-p.libro-subtitulo { margin: 0.2em 0 0 0; font-size: 0.9em; }
+img.libro-tapa { float: left; width: 25%; max-width: 100px; margin: 0 0.8em 0 0; }
+p.libro-titulo { margin: 0; font-weight: bold; line-height: 1.3; }
+p.libro-subtitulo { margin: 0.2em 0 0 0; font-size: 0.9em; line-height: 1.3; }
 
 /* ─────────────────── Title page elementos ─────────────────── */
 .title-page-author {
@@ -321,8 +343,13 @@ i, em { font-style: italic; }
 u { text-decoration: underline; }
 .underline { text-decoration: underline; }
 
+/* Los links dentro del cuerpo (web del autor, catálogo) tienen que leerse
+   como tipografía impresa, no como un link de navegador: heredan el color
+   del texto (funciona en tema claro y oscuro) y se quedan con el subrayado
+   como única marca de que son tocables — sigue siendo la señal que un
+   lector de ebook espera para saber dónde tocar. */
 a {
-  color: #0057ad;
+  color: inherit;
   text-decoration: underline;
 }
 
