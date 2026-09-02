@@ -250,11 +250,45 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   backdrop, aplicar fixes desde los dos popovers, y los tres del select (borde
   derecho sin salirse, borde inferior abriendo hacia arriba, ventana chica
   scrolleando adentro sin scrollbar espurio) — y da el comportamiento por bueno.
-- **Performance en archivos grandes**: lag/scroll pesado en capítulos
-  largos. Puede ser el scroll nativo de Windows/Linux, pero medir primero:
-  si es el render de ProseMirror, evaluar virtualización o paginar el
-  documento. Confirmar si el costo está en el editor o en el repintado del
-  árbol/status.
+- **Performance en archivos grandes**: lag/scroll pesado en capítulos largos.
+
+  **Analizado el 2026-09-02 leyendo el código, no midiendo.** Se armó un
+  banco de pruebas (`3 - Banco de Pruebas` del repo de prueba: 5k / 25k /
+  100k / 300k palabras) y en la M5 del autor **hasta el de 300k va liso**, o
+  sea que en este hardware no hay nada que medir. Perseguir un número que no
+  se reproduce es cómo se termina virtualizando de gusto. Así que el criterio
+  pasa a ser: arreglar lo que es **algorítmicamente incorrecto** —eso no
+  depende de la máquina, solo del tamaño del documento— y dejar el resto para
+  cuando haya una queja real en hardware más lento.
+
+  Lo que corre por tecla tipeada, relevado sobre `editor.ts`:
+
+  - `refreshState()` (en `onTransaction` **y** `onSelectionUpdate`) llamaba a
+    `computeCursorPos`, que recorría `doc.descendants()` entero para contar
+    bloques. **Arreglado** en `20dc294`: `$from.index(0)` da el mismo número
+    en O(1). Era O(bloques) por tecla y por movimiento de cursor.
+  - **`onUpdate` hace `editor.getHTML()` en cada tecla** (`editor.ts:1836`) y
+    mete el string en `pane.content`. Eso serializa el documento **entero**
+    por cada carácter: en el capítulo de 300k palabras es armar 1,7 MB de
+    string por tecla. Es el costo O(n) por tecla que queda, y el que
+    explicaría el síntoma en una máquina lenta.
+
+    **No se toca todavía**, a propósito. El arreglo es marcar sucio (barato) y
+    debouncear la serialización, pero `content()` se lee en 16 lugares y el
+    save tendría que forzar un flush antes de escribir. Es un cambio de
+    contrato, no una optimización local: sin un número que muestre que hace
+    falta, el riesgo de romper un save supera al beneficio. **Disparador para
+    hacerlo**: que aparezca lag reportado en hardware más lento.
+  - El resto de lo que corre por tecla ya está debounceado y no acumula:
+    gramática 2000 ms, RAE 1500 ms, repeticiones 1500 ms, autosave 1500 ms.
+    Cuando disparan son O(n), pero una vez por pausa, no por tecla.
+
+  Del lado del árbol: `chapter_word_count` cae a leer y contar el HTML cuando
+  la clave no está en `stats.json` (`stats.rs:296`), o sea que **cada
+  `get_tree()` releía todos los capítulos con la clave huérfana**. Eso lo
+  arregla la reconciliación de stats del item de Tree/Importer. Queda como
+  costo estructural que un capítulo nunca guardado por la app se recuente en
+  cada carga del árbol; si alguna vez molesta, cachear por mtime.
 - [x] **Educador de comillas tipográficas (inglés)** (`feat/comillas-tipograficas-en`,
   PR #60): contraparte en inglés del conversor a rayas RAE, para novelas
   importadas que quedaron con comillas rectas ASCII. `quotes/educate.ts`
