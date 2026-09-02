@@ -603,21 +603,31 @@ export class NodeActionsService {
     if (!input) return;
     const trimmed = input.trim();
     if (!trimmed || trimmed === current) return;
-    const wasActive = this.chapter.active()?.path === node.path;
     try {
-      const newPath = await invoke<string>('rename_node', {
-        path: node.path,
-        newName: trimmed,
-      });
-      await this.project.loadTree();
-      if (wasActive) {
-        const newNode = findNodeByPath(this.project.tree(), newPath);
-        if (newNode) await this.chapter.open(newNode);
-      }
+      await this.renameNodeTo(node, trimmed);
       this.toast.success(`Renombrado a "${trimmed}"`);
     } catch (err) {
       this.toast.error(`Renombrar: ${err}`);
     }
+  }
+
+  /** Núcleo del rename: pega en disco, recarga el tree y, si el capítulo
+   *  activo era justo ese nodo, lo reabre en su nueva ruta. Lo usan tanto el
+   *  prompt F2 del árbol (`renameNode`) como los modals de config de
+   *  saga/libro, que ya conocen el nombre nuevo y no necesitan el prompt.
+   *  Lanza si `rename_node` falla — el caller decide cómo avisar. */
+  async renameNodeTo(node: TreeNode, newName: string): Promise<string> {
+    const wasActive = this.chapter.active()?.path === node.path;
+    const newPath = await invoke<string>('rename_node', {
+      path: node.path,
+      newName,
+    });
+    await this.project.loadTree();
+    if (wasActive) {
+      const newNode = findNodeByPath(this.project.tree(), newPath);
+      if (newNode) await this.chapter.open(newNode);
+    }
+    return newPath;
   }
 
   async markAsEpilogo(node: TreeNode): Promise<void> {

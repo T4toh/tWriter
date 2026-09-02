@@ -12,7 +12,8 @@ import { FontsService } from '../core/fonts-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
 import { SagaConfigService } from '../core/saga-config-service';
 import { ThemesService } from '../core/themes-service';
-import { Theme, ThemeRef } from '../core/types';
+import { Theme, ThemeRef, TreeNode } from '../core/types';
+import { NodeActionsService } from '../shared/node-actions-service';
 import { Select, SelectOption } from '../shared/select';
 
 /** Espejo de `epub.rs::texto_inciso_default`. Si cambia allá, cambia acá:
@@ -50,6 +51,7 @@ export class BookConfigModal {
   private sagaCfg = inject(SagaConfigService);
   private fontsSvc = inject(FontsService);
   private dialogs = inject(NativeDialogsService);
+  private nodeActions = inject(NodeActionsService);
 
   protected readonly editing = this.svc.editing;
   protected readonly config = signal<BookConfig | null>(null);
@@ -351,16 +353,28 @@ export class BookConfigModal {
     });
   }
 
+  /** Ver el gemelo en `saga-config-modal.ts`: mismo criterio, la carpeta del
+   *  libro es la fuente de verdad y `titulo` no puede divergir de ella. */
+  private async renameFolderIfNeeded(node: TreeNode, titulo: string): Promise<string> {
+    const match = node.name.match(/^\d+\s*-\s*/);
+    const prefix = match ? match[0] : '';
+    const current = node.name.slice(prefix.length);
+    const trimmed = titulo.trim();
+    if (!trimmed || trimmed === current) return node.path;
+    return this.nodeActions.renameNodeTo(node, `${prefix}${trimmed}`);
+  }
+
   protected async save(): Promise<void> {
     const path = this.bookPath();
     const cfg = this.config();
-    if (!path || !cfg) return;
+    const node = this.editing();
+    if (!path || !cfg || !node) return;
     this.saving.set(true);
     this.error.set(null);
     try {
       // Normalizar: vacíos a null
       const cleaned: BookConfig = {
-        titulo: cfg.titulo,
+        titulo: cfg.titulo.trim(),
         subtitulo: blank(cfg.subtitulo),
         autor: blank(cfg.autor),
         idioma: cfg.idioma,
@@ -389,7 +403,8 @@ export class BookConfigModal {
         sobre_el_autor: blank(cfg.sobre_el_autor),
         foto_autor: blank(cfg.foto_autor),
       };
-      await this.svc.save(path, cleaned);
+      const finalPath = await this.renameFolderIfNeeded(node, cleaned.titulo);
+      await this.svc.save(finalPath, cleaned);
       this.svc.close();
     } catch (err) {
       this.error.set(String(err));
