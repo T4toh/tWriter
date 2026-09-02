@@ -141,11 +141,14 @@ body.nav-body {
   padding: 0;
 }
 
-/* About the author: heading arriba, foto centrada, bio en bloque */
+/* About the author: heading arriba, foto chica, bio en bloque. El bloque
+   arranca cerca del techo de la página (flex-start) en vez de centrado
+   verticalmente: la bio suele ser un párrafo corto y centrarla dejaba la
+   foto flotando muy abajo. */
 body.about-author-body {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   min-height: 100vh;
   text-align: center;
@@ -169,8 +172,8 @@ h1.about-author-title {
 
 .about-author-photo {
   display: block;
-  margin: 0 auto 1.5em;
-  max-width: 40%;
+  margin: 0 auto 1em;
+  max-width: 22%;
   height: auto;
   border-radius: 50%;
   object-fit: cover;

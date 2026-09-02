@@ -144,8 +144,11 @@ textarea {
 }
 
 .preview-photo {
-  width: 84px;
-  height: 84px;
+  // Mismo achique que .about-author-photo en epub_style.css (40% → 22%
+  // del ancho del bloque): la previa tiene que mostrar el mismo tamaño
+  // relativo que va a salir en el EPUB.
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   object-fit: cover;
   border: 1px solid var(--border);
