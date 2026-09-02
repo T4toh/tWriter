@@ -1568,6 +1568,15 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   porque "embebiendo tapas" y "escribiendo capítulos" tardan distinto y ver el
   paso convierte la espera en información.
 
+- **Plantillas para el back matter** (idea del autor, 2026-09-02, no para ahora).
+  Hoy la página "Otros libros" y la de "Sobre el autor" tienen un solo diseño
+  cableado en `epub_style.css`. La idea es ofrecer un par de variantes —tapa
+  centrada contra tapa al costado, con sinopsis o sin ella, una columna o
+  dos— igual que ya existen plantillas de tamaño de página para el EPUB.
+  Cruza con el ítem de blurb y sinopsis: recién cuando esos campos existan hay
+  material suficiente para que las variantes se diferencien en algo más que el
+  espaciado.
+
 ## EPUB
 
 - [x] **Copyright editable en ambos idiomas** (ES/EN): hoy el texto de la

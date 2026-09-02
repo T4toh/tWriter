@@ -221,10 +221,13 @@ ul.libro-list { list-style: none; margin: 0; padding: 0; }
    alta, apenas nada si el texto es largo). padding simétrico da un espacio
    fijo pase lo que pase, y la línea separa una entrada de la próxima sin
    dejarlas "a la deriva". */
-li.libro { margin: 0; padding: 1em 0; }
+/* Entrada centrada, no con la tapa flotada a la izquierda: con uno o dos
+   libros por bloque el float dejaba el texto pegado al costado y media
+   página vacía a la derecha. Centrado acompaña al resto del back matter,
+   que ya está centrado. */
+li.libro { margin: 0; padding: 1em 0; text-align: center; }
 li.libro + li.libro { border-top: 1px solid; }
-li.libro:after { content: ""; display: block; clear: both; }
-img.libro-tapa { float: left; width: 25%; max-width: 100px; margin: 0 0.8em 0 0; }
+img.libro-tapa { display: block; margin: 0 auto 0.6em; width: 100px; max-width: 40%; }
 p.libro-titulo { margin: 0; font-weight: bold; line-height: 1.3; }
 p.libro-subtitulo { margin: 0.2em 0 0 0; font-size: 0.9em; line-height: 1.3; }
 
@@ -354,7 +357,11 @@ u { text-decoration: underline; }
    del texto (funciona en tema claro y oscuro) y se quedan con el subrayado
    como única marca de que son tocables — sigue siendo la señal que un
    lector de ebook espera para saber dónde tocar. */
-a {
+a,
+p.libro-titulo a,
+p.autor-web-url a,
+.otros-libros a,
+.about-author a {
   color: inherit;
   text-decoration: underline;
 }
