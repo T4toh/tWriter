@@ -1618,20 +1618,34 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   cayó. Las secciones con `excluded: true` suman 0 — Rust las manda con
   `children: []` y además no van al EPUB, que es lo correcto acá.
 
-- **El export no dice que está trabajando** (pedido del autor, 2026-09-02).
-  Generar un EPUB tarda un par de segundos —medido en una M5, o sea que en
-  máquinas más lentas es peor— y en ese rato la app no muestra nada: no se
-  sabe si está haciendo algo o si el click no agarró. Hoy es la única
-  operación de la app con espera perceptible, así que es la única que
-  necesita esto.
-  Dónde vive: `chapter-service.ts::exportEpub` hace `invoke('export_book')` y
-  no muestra nada hasta el toast final. El backend sí sabe cuánto falta —
-  `export_impl` recorre capítulos, embebe imágenes y arma el zip en pasos
-  contables— así que puede emitir eventos de progreso por el bus de Tauri en
-  vez de que el frontend adivine con un spinner ciego.
-  Mínimo aceptable: que se vea que está trabajando. Mejor: en qué paso está,
-  porque "embebiendo tapas" y "escribiendo capítulos" tardan distinto y ver el
-  paso convierte la espera en información.
+- [x] **El export no dice que está trabajando** (`feat/export-progreso`,
+  verificado a mano por el autor el 2026-09-02). Generar un EPUB tarda un par
+  de segundos y en ese rato la app no mostraba nada hasta el toast final: no
+  se sabía si estaba trabajando o si el click no había agarrado.
+
+  **El item exageraba**: la tarjeta del libro ya tenía spinner propio
+  (`book-card.ts::exporting`). El que no mostraba **nada** era el otro camino,
+  exportar desde el menú contextual (`node-actions-service.ts:333`).
+
+  `export_impl` recibe un callback de progreso, igual que
+  `search::full_reindex`, así el impl sigue sin tipos de Tauri y los tests no
+  necesitan `AppHandle`. `export_book` lo traduce a `epub-export-progress`.
+  Fases: leyendo capítulos, embebiendo tapas e imágenes, escribiendo capítulos
+  (con `hecho`/`total`) y armando índice. Del lado del frontend `ToastService`
+  estrena `progreso()` (sin auto-dismiss) + `update()`, y el cierre va en
+  `finally` para que valga también cuando el export falla.
+
+  El `+1` del contador no es cosmético: el backend avisa **antes** de escribir
+  cada capítulo, así que `hecho` es 0-based y sin él el primero se lee
+  "0 de 12". `textoDeFase` vive aparte en `core/export-progreso.ts` con smoke
+  runner, según el criterio del CLAUDE.md.
+
+  **Lo que no se hizo**: barra de progreso, panel dedicado, y pasar la fase al
+  tooltip de la tarjeta — con el toast en pantalla mostrando el mismo texto,
+  el tooltip era duplicación que además pedía hover.
+
+  Nota del autor al verificarlo: en su M5 el cartel se ve **un segundo**. La
+  feature apunta a máquinas más lentas; acá el export ya es casi instantáneo.
 
 - **Plantillas para el back matter** (idea del autor, 2026-09-02, no para ahora).
   Hoy la página "Otros libros" y la de "Sobre el autor" tienen un solo diseño
