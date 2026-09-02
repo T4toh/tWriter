@@ -1815,8 +1815,17 @@ fn read_or_default_config(book_dir: &Path) -> BookConfig {
             book_dir.file_name().and_then(|s| s.to_str()).unwrap_or("Sin título"),
         );
     }
-    // Fallback autor desde saga.json
-    if cfg.autor.as_deref().unwrap_or("").is_empty() {
+    // Autor: autor.json (perfil global) pisa a book.json, que pisa al
+    // fallback de saga.json. El perfil es la fuente de verdad del nombre
+    // desde que existe `autor.json`; el campo en book.json queda solo como
+    // fallback para repos que todavía no lo cargaron.
+    let (_, root_dir) = find_saga_and_root(book_dir);
+    let nombre_perfil = crate::autor::leer(&root_dir)
+        .nombre
+        .filter(|s| !s.trim().is_empty());
+    if let Some(nombre) = nombre_perfil {
+        cfg.autor = Some(nombre);
+    } else if cfg.autor.as_deref().unwrap_or("").is_empty() {
         if let Some(parent) = book_dir.parent() {
             let saga_json = parent.join("saga.json");
             if let Ok(raw) = fs::read_to_string(&saga_json) {
@@ -2190,6 +2199,89 @@ mod tests {
         // Activa "Publisher Font" en Apple Books / Kindle KFX.
         assert!(opf.contains("ibooks:specified-fonts"));
         assert!(opf.contains("vocabulary.itunes.apple.com"));
+    }
+
+    /// Arma `root/Saga/Book/Cap1/1.html` con los tres niveles de la cadena de
+    /// autor (`autor.json`, `book.json`, `saga.json`) cargados a mano, cada
+    /// uno con `.autor_json`/`.book_autor`/`.saga_autor` opcionales. Cada
+    /// nivel recibe un nombre distinto en los tests de abajo para poder
+    /// discriminar cuál ganó.
+    fn armar_libro_con_autores(
+        autor_json: Option<&str>,
+        book_autor: Option<&str>,
+        saga_autor: Option<&str>,
+    ) -> std::path::PathBuf {
+        let tmp = tempdir();
+        if let Some(nombre) = autor_json {
+            std::fs::write(
+                tmp.join("autor.json"),
+                format!(r#"{{"nombre":"{}"}}"#, nombre),
+            )
+            .unwrap();
+        }
+        let saga = tmp.join("Saga");
+        let book = saga.join("Book");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        let saga_json = match saga_autor {
+            Some(a) => format!(r#"{{"nombre":"Saga","autor":"{}"}}"#, a),
+            None => r#"{"nombre":"Saga"}"#.to_string(),
+        };
+        std::fs::write(saga.join("saga.json"), saga_json).unwrap();
+        let book_json = match book_autor {
+            Some(a) => format!(r#"{{"titulo":"Test","autor":"{}"}}"#, a),
+            None => r#"{"titulo":"Test"}"#.to_string(),
+        };
+        std::fs::write(book.join("book.json"), book_json).unwrap();
+        std::fs::write(book.join("Cap1").join("1.html"), "<p>Hello.</p>").unwrap();
+        book
+    }
+
+    fn copyright_xhtml_de(book: &std::path::Path) -> String {
+        let result = export_impl(book.to_str().unwrap()).expect("export ok");
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        String::from_utf8(entries.get("OEBPS/2_copyright.xhtml").unwrap().clone()).unwrap()
+    }
+
+    #[test]
+    fn autor_json_pisa_a_book_json_y_a_saga_json() {
+        let book = armar_libro_con_autores(
+            Some("Perfil Nombre"),
+            Some("Book Autor"),
+            Some("Saga Autor"),
+        );
+        let copyright = copyright_xhtml_de(&book);
+        assert!(copyright.contains("Perfil Nombre"));
+        assert!(!copyright.contains("Book Autor"));
+        assert!(!copyright.contains("Saga Autor"));
+    }
+
+    #[test]
+    fn sin_perfil_global_usa_el_autor_de_book_json() {
+        let book = armar_libro_con_autores(None, Some("Book Autor"), Some("Saga Autor"));
+        let copyright = copyright_xhtml_de(&book);
+        assert!(copyright.contains("Book Autor"));
+        assert!(!copyright.contains("Saga Autor"));
+    }
+
+    #[test]
+    fn sin_perfil_ni_autor_en_book_json_cae_a_saga_json() {
+        let book = armar_libro_con_autores(None, None, Some("Saga Autor"));
+        let copyright = copyright_xhtml_de(&book);
+        assert!(copyright.contains("Saga Autor"));
+    }
+
+    #[test]
+    fn perfil_global_sin_nombre_no_pisa_el_autor_de_book_json() {
+        // autor.json existe (para probar bio u otro campo) pero sin `nombre`:
+        // no debe ganarle al autor de book.json.
+        let tmp_marker = "Book Autor";
+        let book = armar_libro_con_autores(None, Some(tmp_marker), Some("Saga Autor"));
+        // Reescribe autor.json con bio pero sin nombre, simulando el perfil
+        // configurado sin ese campo.
+        let root = book.parent().unwrap().parent().unwrap();
+        std::fs::write(root.join("autor.json"), r#"{"bio":{"es":"hola"}}"#).unwrap();
+        let copyright = copyright_xhtml_de(&book);
+        assert!(copyright.contains(tmp_marker));
     }
 
     #[test]
