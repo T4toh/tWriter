@@ -316,39 +316,6 @@
           }
         }
 
-        <div class="row section-divider">
-          <span class="section-label">Sobre el autor</span>
-        </div>
-        <p class="hint-soft">
-          Si dejás la bio vacía, no se genera la página "Sobre el autor" en el
-          EPUB.
-        </p>
-        <div class="row">
-          <label>
-            <span>Bio (una línea = un párrafo)</span>
-            <textarea
-              [ngModel]="c.sobre_el_autor"
-              (ngModelChange)="update('sobre_el_autor', $event)"
-              rows="5"
-              placeholder="Nací en Cipolletti. Vivo escribiendo."
-            ></textarea>
-          </label>
-        </div>
-        <div class="row">
-          <label>
-            <span>Foto del autor (imagen)</span>
-            <div class="cover-row">
-              <input
-                type="text"
-                [ngModel]="c.foto_autor"
-                (ngModelChange)="update('foto_autor', $event)"
-                placeholder="ej: author.jpg o ruta absoluta"
-              />
-              <button type="button" (click)="pickAuthorPhoto()">Buscar…</button>
-            </div>
-          </label>
-        </div>
-
         @if (error(); as err) {
           <p class="error">{{ err }}</p>
         }

@@ -270,19 +270,6 @@ export class BookConfigModal {
     if (cur) this.config.set({ ...cur, contratapa: rel });
   }
 
-  protected async pickAuthorPhoto(): Promise<void> {
-    const result = await this.dialogs.pickSingleFile({
-      title: 'Seleccionar foto del autor',
-      filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg'] }],
-      defaultPath: this.bookPath() ?? undefined,
-    });
-    if (!result) return;
-    const rel = await this.adoptImage(result, 'author');
-    if (!rel) return;
-    const cur = this.config();
-    if (cur) this.config.set({ ...cur, foto_autor: rel });
-  }
-
   /**
    * Deja la imagen dentro de la carpeta del libro y devuelve el nombre
    * relativo. El path absoluto del file dialog no sirve: la imagen no viaja
