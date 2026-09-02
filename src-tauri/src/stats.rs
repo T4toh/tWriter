@@ -9,7 +9,7 @@
 //! Keys son paths relativos al root, separador `/` siempre (cross-platform).
 
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -114,34 +114,44 @@ pub fn reconciliar_stats(root: &Path) -> usize {
     // ponytail: O(huérfanas × capítulos sin stat). Con el corpus real son
     // 294 × 533 de comparaciones de Vec<&str> cortos y solo en el camino de
     // error; si alguna vez molesta, indexar `reales` por nombre de archivo.
-    let mut tomados: HashSet<&str> = HashSet::new();
-    let mut movidas: Vec<(String, String)> = Vec::new();
+    //
+    // La correspondencia tiene que ser única en LOS DOS sentidos. Con "el
+    // primero que llega se lo lleva" alcanzaba que dos huérfanas —`A/L/3.html`
+    // y `B/L/3.html`— apuntaran al mismo `C/L/3.html`: una se lo quedaba y la
+    // otra no, sin forma de saber cuál era el rename de verdad. Y como
+    // `huerfanas` sale de las claves de un HashMap, ni siquiera era estable
+    // entre corridas: la misma situación podía darle las palabras a una o a
+    // otra. Antes que asignarle el histórico al capítulo equivocado, no se
+    // toca ninguna de las dos.
+    let mut candidata_de: Vec<(&str, &str)> = Vec::new();
     for vieja in &huerfanas {
         let segs_v: Vec<&str> = vieja.split('/').collect();
-        let mut candidata: Option<&str> = None;
-        let mut ambigua = false;
+        let mut unica: Option<&str> = None;
         for real in &reales {
-            if tomados.contains(real.as_str()) {
-                continue;
-            }
             let segs_r: Vec<&str> = real.split('/').collect();
             if !difiere_en_una_carpeta(&segs_v, &segs_r) {
                 continue;
             }
-            if candidata.is_some() {
-                ambigua = true;
+            if unica.is_some() {
+                unica = None;
                 break;
             }
-            candidata = Some(real.as_str());
+            unica = Some(real.as_str());
         }
-        if ambigua {
-            continue;
-        }
-        if let Some(nueva) = candidata {
-            tomados.insert(nueva);
-            movidas.push((vieja.clone(), nueva.to_string()));
+        if let Some(nueva) = unica {
+            candidata_de.push((vieja.as_str(), nueva));
         }
     }
+    // Descartar los destinos reclamados por más de una huérfana.
+    let mut reclamos: HashMap<&str, u32> = HashMap::new();
+    for (_, nueva) in &candidata_de {
+        *reclamos.entry(nueva).or_insert(0) += 1;
+    }
+    let movidas: Vec<(String, String)> = candidata_de
+        .into_iter()
+        .filter(|(_, nueva)| reclamos.get(nueva) == Some(&1))
+        .map(|(vieja, nueva)| (vieja.to_string(), nueva.to_string()))
+        .collect();
 
     if movidas.is_empty() {
         return 0;
@@ -377,6 +387,20 @@ mod tests {
         let tmp = root_con(&["Saga/Libro/1.html"], &["Otra Saga/Otro/9.html"]);
         assert_eq!(reconciliar_stats(tmp.path()), 0);
         assert!(read_stats(tmp.path()).contains_key("Otra Saga/Otro/9.html"));
+    }
+
+    #[test]
+    fn reconciliar_no_adivina_cuando_dos_huerfanas_se_pelean_el_mismo_destino() {
+        // `A/L/3.html` y `B/L/3.html` cumplen las dos la firma de rename contra
+        // el único `C/L/3.html`. Quedarse con la primera es elegir por orden de
+        // iteración de un HashMap, o sea al azar: le daría el histórico al
+        // capítulo equivocado la mitad de las veces.
+        let tmp = root_con(&["C/L/3.html"], &["A/L/3.html", "B/L/3.html"]);
+        assert_eq!(reconciliar_stats(tmp.path()), 0);
+        let stats = read_stats(tmp.path());
+        assert!(stats.contains_key("A/L/3.html"));
+        assert!(stats.contains_key("B/L/3.html"));
+        assert!(!stats.contains_key("C/L/3.html"));
     }
 
     #[test]
