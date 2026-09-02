@@ -96,14 +96,89 @@ pub fn adopt_image(dir: &Path, source: &Path, stem: &str) -> Result<String, Stri
     Ok(dest_name)
 }
 
-/// Wrapper de `adopt_image` para los modales de config (libro y saga).
+/// Rectángulo de recorte cuadrado, en píxeles de la imagen original elegida
+/// por el autor. Lo arma el cropper a mano de `autor-modal.ts` — no hay
+/// detección de cara, el autor mueve el cuadro.
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct CropRect {
+    pub x: u32,
+    pub y: u32,
+    pub side: u32,
+}
+
+/// Wrapper de `adopt_image`/`adopt_image_cropped` para los modales de config
+/// (libro, saga y autor). `crop` es `None` para los tres llamadores viejos
+/// (tapa/contratapa/QR) — el comportamiento no cambia. El modal del autor lo
+/// manda cuando la foto no es cuadrada y hubo que recortarla a mano.
 #[tauri::command]
 pub fn adopt_config_image(
     dir_path: String,
     source_path: String,
     stem: String,
+    crop: Option<CropRect>,
 ) -> Result<String, String> {
-    adopt_image(Path::new(&dir_path), Path::new(&source_path), &stem)
+    let dir = Path::new(&dir_path);
+    let source = Path::new(&source_path);
+    match crop {
+        None => adopt_image(dir, source, &stem),
+        Some(rect) => adopt_image_cropped(dir, source, &stem, rect),
+    }
+}
+
+/// Como `adopt_image`, pero recorta `source` al cuadrado `rect` antes de
+/// escribir. A diferencia de `adopt_image`, siempre reescribe el archivo aunque
+/// `source` ya viva adentro de `dir`: el contenido cambia, no solo la
+/// ubicación, así que el atajo "ya está adentro, no copiar nada" no aplica acá.
+pub fn adopt_image_cropped(
+    dir: &Path,
+    source: &Path,
+    stem: &str,
+    rect: CropRect,
+) -> Result<String, String> {
+    if !IMAGE_STEMS.contains(&stem) {
+        return Err(format!("stem no permitido: {}", stem));
+    }
+    if !dir.is_dir() {
+        return Err(format!("no es carpeta: {}", dir.display()));
+    }
+    if !source.is_file() {
+        return Err(format!("la imagen no existe: {}", source.display()));
+    }
+    let ext = source
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+    if !COVER_EXTS.contains(&ext.as_str()) {
+        return Err(format!(
+            "formato no soportado: .{} (usar {})",
+            ext,
+            COVER_EXTS.join(", ")
+        ));
+    }
+    let bytes = fs::read(source).map_err(|e| format!("leer imagen: {}", e))?;
+    let img = ::image::load_from_memory(&bytes).map_err(|e| e.to_string())?;
+    let recortada = img.crop_imm(rect.x, rect.y, rect.side, rect.side);
+    let dest_name = format!("{}.{}", stem, ext);
+    let dest_path = dir.join(&dest_name);
+    if ext == "png" {
+        recortada
+            .save_with_format(&dest_path, ::image::ImageFormat::Png)
+            .map_err(|e| format!("guardar imagen: {}", e))?;
+    } else {
+        // jpg/jpeg: mismo encoder y calidad que `reescalar_jpeg` en image.rs.
+        let mut out = fs::File::create(&dest_path).map_err(|e| format!("guardar imagen: {}", e))?;
+        recortada
+            .to_rgb8()
+            .write_with_encoder(::image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 82))
+            .map_err(|e| format!("guardar imagen: {}", e))?;
+    }
+    // Mismo criterio que `adopt_image`: la elegida reemplaza cualquier otra
+    // extensión del mismo stem.
+    for otra in COVER_EXTS.iter().filter(|e| **e != ext) {
+        let _ = fs::remove_file(dir.join(format!("{}.{}", stem, otra)));
+    }
+    Ok(dest_name)
 }
 
 pub(crate) fn find_named_image(dir: &Path, stem: &str) -> Option<String> {
@@ -453,5 +528,81 @@ mod tests {
 
         assert_eq!(rel, "qr.png");
         assert!(root.path().join("qr.png").is_file());
+    }
+
+    #[test]
+    fn recorta_la_region_pedida_no_cualquier_cuadrado() {
+        // Apaisada 300x200: mitad izquierda roja, mitad derecha azul — un
+        // recorte que agarre la región equivocada (o que solo sea cuadrado
+        // de cualquier lado) sale con el color que no es.
+        let libro = TempDir::new().unwrap();
+        let afuera = TempDir::new().unwrap();
+        let mut img = ::image::RgbImage::from_pixel(300, 200, ::image::Rgb([200, 0, 0]));
+        for y in 0..200 {
+            for x in 150..300 {
+                img.put_pixel(x, y, ::image::Rgb([0, 0, 200]));
+            }
+        }
+        let src = afuera.path().join("foto.png");
+        ::image::DynamicImage::ImageRgb8(img).save(&src).unwrap();
+
+        let rect = CropRect { x: 160, y: 20, side: 100 };
+        let rel = adopt_image_cropped(libro.path(), &src, "autor", rect).unwrap();
+
+        assert_eq!(rel, "autor.png");
+        let out = ::image::open(libro.path().join(&rel)).unwrap();
+        assert_eq!(
+            (out.width(), out.height()),
+            (100, 100),
+            "el lado tiene que ser el pedido (100), no el lado corto de la fuente (200)"
+        );
+        let rgb = out.to_rgb8();
+        assert_eq!(
+            rgb.get_pixel(0, 0).0,
+            [0, 0, 200],
+            "x=160 cae del lado azul de la fuente; si saliera rojo el recorte agarró otra región"
+        );
+        assert_eq!(rgb.get_pixel(99, 99).0, [0, 0, 200]);
+    }
+
+    #[test]
+    fn recortar_reescribe_aunque_la_fuente_ya_viva_adentro() {
+        // A diferencia de `adopt_image`, acá el atajo "ya está adentro, no
+        // copiar" no puede aplicar: el contenido cambia con el recorte.
+        let libro = TempDir::new().unwrap();
+        let mut img = ::image::RgbImage::from_pixel(200, 100, ::image::Rgb([10, 10, 10]));
+        for y in 0..100 {
+            for x in 100..200 {
+                img.put_pixel(x, y, ::image::Rgb([250, 250, 0]));
+            }
+        }
+        let src = libro.path().join("autor.png");
+        ::image::DynamicImage::ImageRgb8(img).save(&src).unwrap();
+
+        let rect = CropRect { x: 100, y: 0, side: 100 };
+        adopt_image_cropped(libro.path(), &src, "autor", rect).unwrap();
+
+        let out = ::image::open(libro.path().join("autor.png")).unwrap();
+        assert_eq!((out.width(), out.height()), (100, 100));
+        assert_eq!(out.to_rgb8().get_pixel(0, 0).0, [250, 250, 0]);
+    }
+
+    #[test]
+    fn sin_rect_de_recorte_adopt_config_image_no_cambia_de_comportamiento() {
+        let libro = TempDir::new().unwrap();
+        let afuera = TempDir::new().unwrap();
+        let src = afuera.path().join("Mi Tapa Rev3.png");
+        png(&src);
+
+        let rel = adopt_config_image(
+            libro.path().to_string_lossy().into_owned(),
+            src.to_string_lossy().into_owned(),
+            "cover".to_string(),
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(rel, "cover.png");
+        assert!(libro.path().join("cover.png").is_file());
     }
 }
