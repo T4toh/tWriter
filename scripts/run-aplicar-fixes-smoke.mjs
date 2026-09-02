@@ -115,6 +115,12 @@ const casos = [
     fixes: [{ offset: 99, length: 0, replacement: '!' }],
     esperado: { html: '<p>Hola.</p>', aplicados: 0, salteados: 1 },
   },
+  {
+    desc: 'inserción al final del texto (offset === plain.length): cae adentro del </p>, no después',
+    html: '<p>Hola mundo</p>',
+    fixes: [{ offset: 10, length: 0, replacement: '!' }],
+    esperado: { html: '<p>Hola mundo!</p>', aplicados: 1, salteados: 0 },
+  },
 ];
 let fallos = 0;
 for (const c of casos) {

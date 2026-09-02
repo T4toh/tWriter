@@ -33,9 +33,16 @@ export function aplicarFixesHtml(
       continue;
     }
     // Sin carácter de plano en `plain.length` (insertar al final de todo):
-    // no hay nada que mirar en el mapa, así que el punto de inserción es el
-    // final del HTML entero.
-    const desde = fix.offset < plain.length ? mapa[fix.offset] : html.length;
+    // no hay nada que mirar en el mapa para ese índice, pero `html.length` a
+    // secas cae DESPUÉS del `</p>` de cierre. `finDeUltimoCaracter` sobre el
+    // último carácter real da el punto justo antes de ese cierre. Con
+    // `plain` vacío no hay carácter que mirar — ahí sí no queda otra que
+    // `html.length`.
+    const desde = fix.offset < plain.length
+      ? mapa[fix.offset]
+      : plain.length > 0
+        ? finDeUltimoCaracter(html, mapa, plain, plain.length - 1)
+        : html.length;
     // Rango vacío (inserción): nunca puede cruzar un tag.
     const hasta = fix.length === 0
       ? desde
