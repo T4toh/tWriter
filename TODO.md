@@ -1577,6 +1577,22 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   material suficiente para que las variantes se diferencien en algo más que el
   espaciado.
 
+- **Chequeo de sintaxis para `epub_style.css`** (2026-09-02). La hoja del EPUB
+  queda **fuera** de stylelint a propósito: se lee en hardware de tinta
+  electrónica y tiene sus propias reglas —`float` en vez de flexbox, nada de
+  `object-fit`, nada de anchos porcentuales—, así que un estándar pensado para
+  navegadores no aplica. Esa decisión se mantiene.
+  Lo que sí falta es otra cosa: verificar que la hoja sea **sintácticamente
+  válida**. En un EPUB una propiedad mal escrita no falla ni avisa: simplemente
+  no hace nada, y te enterás cuando ves la página rara en el Kindle. Es el modo
+  de falla más caro que tiene este archivo, porque el ciclo de descubrimiento
+  es exportar, pasar el archivo al lector y mirar.
+  Dos caminos, y el segundo me gusta más: una config de stylelint aparte con
+  solo las reglas de sintaxis y ninguna de estilo; o un test de Rust que
+  parsee la hoja y falle si no es CSS válido. El segundo no suma dependencias
+  de npm, corre con `cargo test` junto al resto, y encaja con que la hoja ya
+  vive del lado Rust y se incrusta con `include_str!`.
+
 ## EPUB
 
 - [x] **Copyright editable en ambos idiomas** (ES/EN): hoy el texto de la
