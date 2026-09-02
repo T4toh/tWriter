@@ -22,6 +22,21 @@ export class ToastService {
     setTimeout(() => this.dismiss(id), durationMs);
   }
 
+  /** Toast sin auto-dismiss, para una operación en curso: el caller lo va
+   *  actualizando con `update()` y lo cierra con `dismiss()` al terminar.
+   *  Devuelve el id. Ojo: si el caller se olvida de cerrarlo queda pegado para
+   *  siempre, así que va siempre con un `finally`. */
+  progreso(message: string): number {
+    const id = this.nextId++;
+    this.toasts.update((ts) => [...ts, { id, level: 'info' as ToastLevel, message }]);
+    return id;
+  }
+
+  /** Cambia el texto de un toast vivo. Si ya se cerró, no hace nada. */
+  update(id: number, message: string): void {
+    this.toasts.update((ts) => ts.map((t) => (t.id === id ? { ...t, message } : t)));
+  }
+
   success(message: string, durationMs?: number): void {
     this.show(message, 'success', durationMs);
   }

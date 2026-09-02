@@ -1,7 +1,9 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { detectLang } from '../dialogos/detect';
 import { DebugService } from './debug-service';
+import { ExportProgress, textoDeFase } from './export-progreso';
 import { ExportsService } from './exports-service';
 import { GitService } from './git-service';
 import { NavigationService } from './navigation-service';
@@ -392,10 +394,22 @@ export class ChapterService {
     }
   }
 
-  /** Exporta una novela a EPUB. Path debe ser un dir tipo book. */
+  /** Exporta una novela a EPUB. Path debe ser un dir tipo book.
+   *
+   *  Levanta un toast pegajoso que va contando en qué paso está el backend.
+   *  Es la única operación de la app con espera perceptible (un par de
+   *  segundos en una M5, más en máquinas lentas) y antes no mostraba nada
+   *  hasta el toast final: no se sabía si estaba trabajando o si el click no
+   *  había agarrado. El toast cubre los dos caminos de entrada —la tarjeta del
+   *  libro y el menú contextual—, y la tarjeta además tiene su spinner. */
   async exportEpub(node: TreeNode): Promise<string | null> {
     if (node.kind !== 'book') return null;
+    const toastId = this.toast.progreso('Exportando EPUB…');
+    let unlisten: UnlistenFn | null = null;
     try {
+      unlisten = await listen<ExportProgress>('epub-export-progress', (event) => {
+        this.toast.update(toastId, textoDeFase(event.payload));
+      });
       const result = await invoke<{
         epub_path: string;
         chapters: number;
@@ -424,6 +438,11 @@ export class ChapterService {
       this.toast.error(`Export falló: ${err}`);
       this.panes[0].error.set(String(err));
       return null;
+    } finally {
+      // El toast no se auto-cierra: si esto no corre queda pegado para
+      // siempre. Va en `finally` para que valga también cuando el export falla.
+      unlisten?.();
+      this.toast.dismiss(toastId);
     }
   }
 
