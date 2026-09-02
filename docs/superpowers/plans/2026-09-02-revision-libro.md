@@ -99,9 +99,23 @@ Expected: falla la compilación de `tsc` porque `src/app/dialogos/plano-con-mapa
 
 - [ ] **Step 3: Implementar `planoConMapa`**
 
-Crear `src/app/dialogos/plano-con-mapa.ts`. La estrategia: recorrer el HTML **una sola vez** replicando lo que hace `htmlToPlain`, pero acumulando en paralelo `plain` y los índices.
+Primero, en `src/app/dialogos/validator.ts`, exportar las constantes que hoy son
+privadas — duplicarlas es exactamente cómo las dos funciones se desalinean con
+el tiempo:
 
 ```typescript
+export const P_BLOCK_RE = /<p\b[^>]*>([\s\S]*?)<\/p>/gi;
+export const BR_RE = /<br\s*\/?>/i;
+export const ENTITY_MAP: Record<string, string> = { /* … sin cambios … */ };
+```
+
+Después crear `src/app/dialogos/plano-con-mapa.ts`:
+
+```typescript
+import { BR_RE, ENTITY_MAP, P_BLOCK_RE } from './validator';
+
+const BR_SOLO_RE = /^<br\s*\/?>$/i;
+
 /**
  * Igual que `htmlToPlain` de `validator.ts`, pero además devuelve el índice en
  * el HTML de cada carácter del plano.
@@ -111,25 +125,98 @@ Crear `src/app/dialogos/plano-con-mapa.ts`. La estrategia: recorrer el HTML **un
  * el HTML desde texto plano, que es como se pierden `<em>` y `<strong>`.
  *
  * `plain` DEBE salir idéntico al de `htmlToPlain`. Si las dos se desalinean los
- * fixes se aplican en el lugar equivocado y en silencio, así que el smoke runner
- * compara las dos salidas sobre HTML reales.
+ * fixes se aplican en el lugar equivocado y en silencio, así que el smoke
+ * runner compara las dos salidas sobre HTML reales.
  */
 export function planoConMapa(html: string): { plain: string; mapa: Int32Array } {
-  // Implementar replicando la estructura de `htmlToPlain`:
-  //   1. Recorrer los bloques `<p>…</p>` con la misma regex, y el texto suelto
-  //      entre ellos.
-  //   2. Partir cada chunk por `<br>`.
-  //   3. Por cada parte: recorrer carácter por carácter saltando los tags
-  //      (`<…>`) y expandiendo las entidades del `ENTITY_MAP`, empujando a un
-  //      array de chars y otro de índices HTML.
-  //   4. Aplicar el `.trim()` recortando de los DOS arrays a la vez.
-  //   5. Descartar la parte si quedó vacía, igual que `pushIfText`.
-  //   6. Unir los bloques con `\n\n`; para esos dos caracteres sintéticos usar
-  //      el índice HTML donde terminó el bloque anterior.
+  const chars: string[] = [];
+  const idx: number[] = [];
+  // Buffer de la parte en curso (un bloque, o un tramo entre dos `<br>`).
+  let parteChars: string[] = [];
+  let parteIdx: number[] = [];
+
+  const cerrarParte = (): void => {
+    // El `.trim()` de `pushIfText`, recortando los dos arrays a la vez.
+    let a = 0;
+    let b = parteChars.length;
+    while (a < b && /\s/.test(parteChars[a])) a += 1;
+    while (b > a && /\s/.test(parteChars[b - 1])) b -= 1;
+    if (b <= a) {
+      parteChars = [];
+      parteIdx = [];
+      return; // parte vacía: se descarta, igual que `pushIfText`
+    }
+    if (chars.length > 0) {
+      // El separador `\n\n` no existe en el HTML: se lo ancla al final del
+      // bloque anterior. Ningún fix cae sobre un separador, pero el mapa
+      // necesita una entrada por carácter para que los índices no se corran.
+      const ancla = idx[idx.length - 1] + 1;
+      chars.push('\n', '\n');
+      idx.push(ancla, ancla);
+    }
+    for (let k = a; k < b; k += 1) {
+      chars.push(parteChars[k]);
+      idx.push(parteIdx[k]);
+    }
+    parteChars = [];
+    parteIdx = [];
+  };
+
+  const comerChunk = (chunk: string, base: number): void => {
+    let i = 0;
+    while (i < chunk.length) {
+      const c = chunk[i];
+      if (c === '<') {
+        const fin = chunk.indexOf('>', i);
+        if (fin === -1) {
+          // `<` suelto: es texto.
+          parteChars.push(c);
+          parteIdx.push(base + i);
+          i += 1;
+          continue;
+        }
+        const tag = chunk.slice(i, fin + 1);
+        if (BR_SOLO_RE.test(tag)) cerrarParte();
+        i = fin + 1;
+        continue;
+      }
+      if (c === '&') {
+        const entidad = Object.keys(ENTITY_MAP).find((e) => chunk.startsWith(e, i));
+        if (entidad) {
+          parteChars.push(ENTITY_MAP[entidad]);
+          parteIdx.push(base + i);
+          i += entidad.length;
+          continue;
+        }
+      }
+      parteChars.push(c);
+      parteIdx.push(base + i);
+      i += 1;
+    }
+    cerrarParte();
+  };
+
+  // Mismo recorrido de bloques que `htmlToPlain`.
+  const matches = Array.from(html.matchAll(P_BLOCK_RE));
+  if (matches.length === 0) {
+    comerChunk(html, 0);
+  } else {
+    let last = 0;
+    for (const m of matches) {
+      const start = m.index ?? 0;
+      comerChunk(html.slice(last, start), last);
+      // `m[1]` es el interior del `<p>`; su base es start + largo de la tag de
+      // apertura.
+      const apertura = m[0].length - m[1].length - '</p>'.length;
+      comerChunk(m[1], start + apertura);
+      last = start + m[0].length;
+    }
+    comerChunk(html.slice(last), last);
+  }
+
+  return { plain: chars.join(''), mapa: Int32Array.from(idx) };
 }
 ```
-
-Exportar desde `validator.ts` las constantes que hagan falta (`P_BLOCK_RE`, `BR_RE`, `TAG_RE`, `ENTITY_MAP`) en vez de duplicarlas: duplicarlas es exactamente cómo las dos funciones se desalinean con el tiempo.
 
 - [ ] **Step 4: Correr el smoke runner y verificar que pasa**
 
@@ -334,6 +421,7 @@ import { detectLang } from '../dialogos/detect';
 import { htmlToPlain, validateRae } from '../dialogos/validator';
 import { educateQuotes } from '../quotes/educate';
 import { DEFAULTS as REP_DEFAULTS, detectRepeticiones } from '../repeticiones/detector';
+import { ProjectService } from './project-service';
 import { SettingsService } from './settings-service';
 import { TreeNode } from './types';
 
@@ -358,6 +446,7 @@ export interface ResumenRevision {
 @Injectable({ providedIn: 'root' })
 export class RevisionLibroService {
   private settings = inject(SettingsService);
+  private project = inject(ProjectService);
 
   readonly libro = signal<TreeNode | null>(null);
   readonly escaneando = signal<boolean>(false);
@@ -375,6 +464,32 @@ export class RevisionLibroService {
     this.libro.set(null);
   }
 
+  /** Palabras del diccionario de la saga que contiene al libro. `pathChain` de
+   *  `landing.ts` no está exportado, así que la cadena se recorre acá; son diez
+   *  líneas y no justifican tocar landing para sacarlas. */
+  private async palabrasDeLaSaga(node: TreeNode): Promise<string[]> {
+    const root = this.project.tree();
+    if (!root) return [];
+    const buscarSaga = (n: TreeNode, ancestroSaga: TreeNode | null): TreeNode | null => {
+      const saga = n.kind === 'saga' ? n : ancestroSaga;
+      if (n.path === node.path) return saga;
+      for (const hijo of n.children) {
+        const hallado = buscarSaga(hijo, saga);
+        if (hallado) return hallado;
+      }
+      return null;
+    };
+    // El root del árbol también es kind 'saga' (ver `fs.rs::get_tree`), así que
+    // se arranca con null para no tomarlo como la saga del libro.
+    const saga = buscarSaga(root, null);
+    if (!saga || saga.path === root.path) return [];
+    try {
+      return await invoke<string[]>('get_saga_dictionary', { sagaPath: saga.path });
+    } catch {
+      return [];
+    }
+  }
+
   async escanear(): Promise<void> {
     const node = this.libro();
     if (!node) return;
@@ -388,6 +503,9 @@ export class RevisionLibroService {
       const res: ResumenRevision = {
         rayas: vacio(), comillas: vacio(), arreglosRae: vacio(), repeticiones: vacio(),
       };
+      // Una sola vez para todo el libro: es el mismo diccionario de saga para
+      // todos sus capítulos.
+      const diccionario = await this.palabrasDeLaSaga(node);
       let procesados = 0;
       for (const p of payloads) {
         const idioma = p.idioma ?? detectLang(p.html);
@@ -411,7 +529,11 @@ export class RevisionLibroService {
         const reps = detectRepeticiones(plain, idioma === 'en' ? 'en' : 'es', {
           ...REP_DEFAULTS,
           excepciones: this.settings.repeticionesExcepciones(),
-          ignorar: [],
+          // Los nombres propios inventados del mundo. Sin esto, que `Kallai`
+          // aparezca cinco veces en una escena cuenta como cinco repeticiones y
+          // el número que ve el autor no significa nada. Es la misma fuente que
+          // usa el detector inline del editor (`editor.ts:1333`).
+          ignorar: diccionario,
         });
         if (reps.length > 0) { res.repeticiones.cambios += reps.length; res.repeticiones.capitulos += 1; }
 
@@ -602,7 +724,71 @@ export class RevisionLibroModal {
 
 - [ ] **Step 2: Escribir el template**
 
-Cuatro filas con `@if`/`@for` modernos, backdrop que cierra, botón "Escanear" que llama a `svc.escanear()`, spinner mientras `svc.escaneando()`, y el botón "Aplicar lo tildado" con `[disabled]="!puedeAplicar()"`. La fila de repeticiones sin `<input type="checkbox">` y con la leyenda.
+Crear `src/app/revision-libro/revision-libro-modal.html`:
+
+```html
+@if (svc.libro(); as libro) {
+  <div class="rl-backdrop" (click)="svc.cerrar()"></div>
+  <div class="rl-modal" (click)="$event.stopPropagation()">
+    <header class="rl-header">
+      <h2>Revisar «{{ libro.name }}»</h2>
+      <button type="button" class="rl-escanear" [disabled]="svc.escaneando()" (click)="svc.escanear()">
+        @if (svc.escaneando()) { <app-spinner [size]="14" /> } @else { Escanear }
+      </button>
+    </header>
+
+    @if (svc.error(); as err) {
+      <p class="rl-error">{{ err }}</p>
+    }
+
+    @if (svc.resultado(); as r) {
+      <div class="rl-body">
+        <label class="rl-fila">
+          <input type="checkbox" [checked]="rayas()" (change)="rayas.set(!rayas())" [disabled]="r.rayas.cambios === 0" />
+          <span class="rl-nombre">Rayas RAE</span>
+          <span class="rl-conteo">{{ resumen(r.rayas) }}</span>
+        </label>
+        <label class="rl-fila">
+          <input type="checkbox" [checked]="comillas()" (change)="comillas.set(!comillas())" [disabled]="r.comillas.cambios === 0" />
+          <span class="rl-nombre">Comillas tipográficas</span>
+          <span class="rl-conteo">{{ resumen(r.comillas) }}</span>
+        </label>
+        <label class="rl-fila">
+          <input type="checkbox" [checked]="arreglosRae()" (change)="arreglosRae.set(!arreglosRae())" [disabled]="r.arreglosRae.cambios === 0" />
+          <span class="rl-nombre">Arreglos RAE</span>
+          <span class="rl-conteo">{{ resumen(r.arreglosRae) }}</span>
+        </label>
+        <div class="rl-fila rl-fila-reporte">
+          <span class="rl-nombre">Repeticiones</span>
+          <span class="rl-conteo">{{ resumen(r.repeticiones) }}</span>
+          <span class="rl-nota">no se arreglan solas: se reescriben a mano en el editor</span>
+        </div>
+      </div>
+    } @else if (!svc.escaneando()) {
+      <p class="rl-vacio">Tocá «Escanear» para ver qué se puede corregir en esta novela.</p>
+    }
+
+    <footer class="rl-actions">
+      <button type="button" class="btn btn-secondary" (click)="svc.cerrar()">Cerrar</button>
+      <button type="button" class="btn btn-primary" [disabled]="!puedeAplicar()" (click)="aplicar()">
+        @if (svc.aplicando()) { <app-spinner [size]="14" /> } @else { Aplicar lo tildado }
+      </button>
+    </footer>
+  </div>
+}
+```
+
+Y sumar el formateador al componente, que es lógica de vista y no va en el template:
+
+```typescript
+  protected resumen(c: ConteoDetector): string {
+    if (c.cambios === 0) return 'sin cambios';
+    const caps = `${c.capitulos} capítulo${c.capitulos === 1 ? '' : 's'}`;
+    return `${c.cambios} en ${caps}`;
+  }
+```
+
+Importar `ConteoDetector` desde `../core/revision-libro-service`.
 
 - [ ] **Step 3: Montar el modal en el shell**
 
