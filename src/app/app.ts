@@ -56,7 +56,6 @@ import { atajo } from './shared/atajo';
 import {
   LucideArrowDownToLine,
   LucideArrowUpDown,
-  LucideBug,
   LucideInfo,
   LucideChevronDown,
   LucideChevronRight,
@@ -82,7 +81,7 @@ import {
     Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, SagaConfigModal, DictionaryModal, SplitChapterModal,
     NoteFormModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, ToastContainer,
     SettingsModal, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, AboutModal, AutorModal, Spinner, ModalHost, ContextMenuHost,
-    LucideArrowDownToLine, LucideArrowUpDown, LucideBug, LucideChevronDown, LucideChevronRight,
+    LucideArrowDownToLine, LucideArrowUpDown, LucideChevronDown, LucideChevronRight,
     LucideCircleQuestionMark, LucideDownload, LucideDynamicIcon, LucideFolder, LucideHouse, LucideMoveHorizontal,
     LucideMoveVertical, LucideNotebook, LucideNotebookPen, LucidePlus, LucideRefreshCw,
     LucideSearch, LucideSettings, LucideX, LucideInfo,
@@ -453,10 +452,6 @@ export class App {
       return absOrRel.slice(root.length).replace(/^[\\/]+/, '');
     }
     return absOrRel;
-  }
-
-  protected toggleDebug(): void {
-    this.debug.toggle();
   }
 
   protected captureSnapshot(): void {
