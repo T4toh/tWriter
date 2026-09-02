@@ -49,6 +49,15 @@ const htmls = [
   '<p>Uno<br/>Dos</p>',
   '<p>Uno.</p><p>Dos.</p><p>Tres.</p>',
   '<h1 class="chapter-title">Título</h1><p>Cuerpo.</p>',
+  // htmlToPlain saca tags primero y recién después corre las 9 pasadas de
+  // ENTITY_MAP en orden de inserción sobre el string ya sin tags: eso da
+  // doble decodificación (una entidad literal escrita como `&amp;lt;`
+  // termina en `<`, no en `&lt;`) y hace que un `&` partido por un tag
+  // inline se una y decodifique. Los dos son comportamiento real de
+  // producción — se replican, no se corrigen acá.
+  '<p>&amp;lt;</p>',
+  '<p>&amp;mdash;</p>',
+  '<p>&<em>amp;</em>fin</p>',
 ];
 let fallos = 0;
 for (const html of htmls) {
@@ -70,6 +79,7 @@ const casos = [
   ['<p>  Con espacios.  </p>', 0, 'C', 'el trim no descoloca el mapa'],
   ['<p>Entidad &amp; fin.</p>', 8, '&', 'la entidad decodificada apunta a su inicio en el HTML'],
   ['<p></p><p>Segundo.</p>', 0, 'S', 'el bloque vacío descartado no descoloca'],
+  ['<p>&amp;lt;</p>', 0, '&', 'el carácter doble-decodificado apunta al & inicial en el HTML'],
 ];
 for (const [html, idxPlano, esperado, desc] of casos) {
   const { mapa } = planoConMapa(html);
