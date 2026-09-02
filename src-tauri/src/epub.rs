@@ -28,8 +28,15 @@ pub struct ExportResult {
 /// Un paso del export, para que la UI diga en qué anda en vez de mostrar un
 /// spinner ciego. `hecho`/`total` solo tienen sentido en la fase de capítulos;
 /// en las demás van en 0 y la UI muestra solo el texto.
+///
+/// `libro` es el path del libro que se está exportando. Va en el payload
+/// porque `AppHandle::emit` es global: exportar dos novelas a la vez —cosa que
+/// se puede, el bloqueo de `BookCard` es por tarjeta y el menú contextual no
+/// tiene ninguno— haría que cada listener viera también las fases del otro y
+/// los dos toasts contaran cualquier cosa. El frontend filtra por este campo.
 #[derive(Serialize, Clone, Debug)]
 pub struct ExportProgress {
+    pub libro: String,
     pub fase: String,
     pub hecho: u32,
     pub total: u32,
@@ -380,6 +387,7 @@ fn export_impl(
         ($fase:expr, $hecho:expr, $total:expr) => {
             if let Some(cb) = progreso.as_deref_mut() {
                 cb(ExportProgress {
+                    libro: book_path.to_string(),
                     fase: $fase.to_string(),
                     hecho: $hecho,
                     total: $total,
@@ -2280,6 +2288,10 @@ mod tests {
         super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(&mut cb))
             .expect("export ok");
 
+        assert!(
+            pasos.iter().all(|p| p.libro == book.to_str().unwrap()),
+            "cada aviso tiene que decir de qué libro es: el frontend filtra por eso"
+        );
         let fases: Vec<&str> = pasos.iter().map(|p| p.fase.as_str()).collect();
         assert_eq!(fases.first(), Some(&"Leyendo capítulos"));
         assert_eq!(fases.last(), Some(&"Armando índice y empaquetando"));

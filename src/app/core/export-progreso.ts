@@ -1,5 +1,9 @@
 /** Payload del evento `epub-export-progress` (ver `epub.rs::ExportProgress`). */
 export interface ExportProgress {
+  /** Path del libro que se está exportando. El listener filtra por acá: el
+   *  evento es global, así que exportar dos novelas a la vez cruzaría las
+   *  fases de una en el toast de la otra. */
+  libro: string;
   fase: string;
   hecho: number;
   total: number;
