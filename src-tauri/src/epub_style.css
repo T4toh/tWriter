@@ -145,12 +145,12 @@ body.nav-body {
    arranca cerca del techo de la página (flex-start) en vez de centrado
    verticalmente: la bio suele ser un párrafo corto y centrarla dejaba la
    foto flotando muy abajo. */
+/* Sin flex y sin min-height:100vh a propósito. En un lector paginado
+   (Apple Books, Kindle) el body no tiene una altura de viewport con la que
+   centrar, así que flex+vh o no hace nada o deja el ancho del bloque sin
+   definir — y entonces un max-width en % adentro no tiene contra qué medir.
+   Flujo normal: el contenido arranca arriba, que es lo que se quería. */
 body.about-author-body {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: center;
-  min-height: 100vh;
   text-align: center;
   padding: 2em 1em;
   box-sizing: border-box;
@@ -184,10 +184,16 @@ h1.about-author-title {
    parejo en lectores EPUB viejos. Nada de border-radius: 50%, cuadrada
    como el resto del diseño (la proporción de la imagen en sí la resuelve
    quien la carga, no este CSS). */
+/* Tamaño en em, no en %. Un porcentaje depende de que el ancho del padre
+   esté definido, y en un lector paginado eso no está garantizado: cuando
+   falla, la imagen sale a su tamaño real y ocupa media página. El em resuelve
+   contra el font-size, que siempre existe. El % queda solo como tope para
+   pantallas angostas. */
 .about-author-photo {
   display: block;
-  margin: 0 auto 1em;
-  max-width: 22%;
+  margin: 0 auto 1.2em;
+  width: 8em;
+  max-width: 45%;
   height: auto;
 }
 
