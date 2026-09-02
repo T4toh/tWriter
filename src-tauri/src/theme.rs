@@ -559,6 +559,7 @@ pub fn resolve_theme(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn parse_face_suffix_basic() {
@@ -656,17 +657,19 @@ mod tests {
 
     #[test]
     fn resolve_theme_unconfigured_returns_empty() {
-        let tmp = tempdir();
+        let tmp_guard = tempfile::tempdir().unwrap();
+        let tmp = tmp_guard.path();
         let book = tmp.join("book");
         fs::create_dir_all(&book).unwrap();
         fs::write(book.join("book.json"), "{\"titulo\":\"x\"}").unwrap();
-        let resolved = resolve_theme(&book, None, &tmp);
+        let resolved = resolve_theme(&book, None, tmp);
         assert!(resolved.is_empty());
     }
 
     #[test]
     fn resolve_theme_loads_base() {
-        let tmp = tempdir();
+        let tmp_guard = tempfile::tempdir().unwrap();
+        let tmp = tmp_guard.path();
         // theme
         let theme_dir = tmp.join("themes").join("classic");
         fs::create_dir_all(theme_dir.join("fonts")).unwrap();
@@ -684,14 +687,15 @@ mod tests {
         )
         .unwrap();
 
-        let resolved = resolve_theme(&book, None, &tmp);
+        let resolved = resolve_theme(&book, None, tmp);
         assert_eq!(resolved.body_font.as_deref(), Some("Merriweather"));
         assert_eq!(resolved.body_size.as_deref(), Some("11pt"));
     }
 
     #[test]
     fn resolve_theme_book_overrides_saga() {
-        let tmp = tempdir();
+        let tmp_guard = tempfile::tempdir().unwrap();
+        let tmp = tmp_guard.path();
         let theme_dir = tmp.join("themes").join("classic");
         fs::create_dir_all(theme_dir.join("fonts")).unwrap();
         fs::write(
@@ -713,7 +717,7 @@ mod tests {
         )
         .unwrap();
 
-        let resolved = resolve_theme(&book, Some(&saga), &tmp);
+        let resolved = resolve_theme(&book, Some(&saga), tmp);
         assert_eq!(resolved.body_size.as_deref(), Some("13pt"));
         assert_eq!(resolved.body_font.as_deref(), Some("Merriweather"));
         assert_eq!(resolved.heading_font.as_deref(), Some("Lato"));
@@ -721,7 +725,8 @@ mod tests {
 
     #[test]
     fn resolve_theme_collects_fonts_from_theme_dir() {
-        let tmp = tempdir();
+        let tmp_guard = tempfile::tempdir().unwrap();
+        let tmp = tmp_guard.path();
         let theme_fonts = tmp.join("themes").join("classic").join("fonts");
         fs::create_dir_all(&theme_fonts).unwrap();
         // Crear archivos vacíos con extensiones válidas.
@@ -741,7 +746,7 @@ mod tests {
         )
         .unwrap();
 
-        let resolved = resolve_theme(&book, None, &tmp);
+        let resolved = resolve_theme(&book, None, tmp);
         assert_eq!(resolved.fonts.len(), 3);
         let weights: Vec<u32> = resolved.fonts.iter().map(|f| f.weight).collect();
         assert!(weights.contains(&400));
@@ -750,7 +755,8 @@ mod tests {
 
     #[test]
     fn resolve_theme_book_fonts_override_theme_fonts() {
-        let tmp = tempdir();
+        let tmp_guard = tempfile::tempdir().unwrap();
+        let tmp = tmp_guard.path();
         let theme_fonts = tmp.join("themes").join("classic").join("fonts");
         fs::create_dir_all(&theme_fonts).unwrap();
         fs::write(theme_fonts.join("Merriweather-Regular.ttf"), b"").unwrap();
@@ -770,7 +776,7 @@ mod tests {
         )
         .unwrap();
 
-        let resolved = resolve_theme(&book, None, &tmp);
+        let resolved = resolve_theme(&book, None, tmp);
         // El libro gana: solo Bold (1 archivo).
         assert_eq!(resolved.fonts.len(), 1);
         assert_eq!(resolved.fonts[0].weight, 700);
@@ -778,7 +784,8 @@ mod tests {
 
     #[test]
     fn resolve_theme_missing_font_logs_no_crash() {
-        let tmp = tempdir();
+        let tmp_guard = tempfile::tempdir().unwrap();
+        let tmp = tmp_guard.path();
         let theme_dir = tmp.join("themes").join("classic");
         fs::create_dir_all(theme_dir.join("fonts")).unwrap();
         fs::write(
@@ -794,14 +801,15 @@ mod tests {
         )
         .unwrap();
 
-        let resolved = resolve_theme(&book, None, &tmp);
+        let resolved = resolve_theme(&book, None, tmp);
         assert_eq!(resolved.body_font.as_deref(), Some("Ghost"));
         assert_eq!(resolved.fonts.len(), 0);
     }
 
     #[test]
     fn resolve_theme_chapter_position_book_overrides_saga() {
-        let tmp = tempdir();
+        let tmp_guard = tempfile::tempdir().unwrap();
+        let tmp = tmp_guard.path();
         let theme_dir = tmp.join("themes").join("classic");
         fs::create_dir_all(theme_dir.join("fonts")).unwrap();
         fs::write(
@@ -823,13 +831,14 @@ mod tests {
         )
         .unwrap();
 
-        let resolved = resolve_theme(&book, Some(&saga), &tmp);
+        let resolved = resolve_theme(&book, Some(&saga), tmp);
         assert_eq!(resolved.chapter_title_position.as_deref(), Some("bottom"));
     }
 
     #[test]
     fn resolve_theme_chapter_position_from_base() {
-        let tmp = tempdir();
+        let tmp_guard = tempfile::tempdir().unwrap();
+        let tmp = tmp_guard.path();
         let theme_dir = tmp.join("themes").join("classic");
         fs::create_dir_all(theme_dir.join("fonts")).unwrap();
         fs::write(
@@ -845,13 +854,14 @@ mod tests {
         )
         .unwrap();
 
-        let resolved = resolve_theme(&book, None, &tmp);
+        let resolved = resolve_theme(&book, None, tmp);
         assert_eq!(resolved.chapter_title_position.as_deref(), Some("top"));
     }
 
     #[test]
     fn resolve_theme_editorial_fonts_cascade() {
-        let tmp = tempdir();
+        let tmp_guard = tempfile::tempdir().unwrap();
+        let tmp = tmp_guard.path();
         let theme_dir = tmp.join("themes").join("classic");
         fs::create_dir_all(theme_dir.join("fonts")).unwrap();
         fs::write(
@@ -873,7 +883,7 @@ mod tests {
         )
         .unwrap();
 
-        let resolved = resolve_theme(&book, Some(&saga), &tmp);
+        let resolved = resolve_theme(&book, Some(&saga), tmp);
         assert_eq!(resolved.body_font.as_deref(), Some("Merri"));
         assert_eq!(resolved.heading_font.as_deref(), Some("Lato"));
         assert_eq!(resolved.editorial_body_font.as_deref(), Some("Spectral"));
@@ -882,7 +892,8 @@ mod tests {
 
     #[test]
     fn resolve_theme_editorial_fonts_collected_in_embed_list() {
-        let tmp = tempdir();
+        let tmp_guard = tempfile::tempdir().unwrap();
+        let tmp = tmp_guard.path();
         let theme_fonts = tmp.join("themes").join("classic").join("fonts");
         fs::create_dir_all(&theme_fonts).unwrap();
         fs::write(theme_fonts.join("Cormorant-Regular.ttf"), b"").unwrap();
@@ -901,23 +912,11 @@ mod tests {
         )
         .unwrap();
 
-        let resolved = resolve_theme(&book, None, &tmp);
+        let resolved = resolve_theme(&book, None, tmp);
         assert_eq!(resolved.fonts.len(), 3);
         let families: std::collections::BTreeSet<_> =
             resolved.fonts.iter().map(|f| f.family.clone()).collect();
         assert!(families.contains("Cormorant"));
         assert!(families.contains("Playfair"));
-    }
-
-    fn tempdir() -> PathBuf {
-        let mut p = std::env::temp_dir();
-        let suffix: u128 = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        p.push(format!("twriter-theme-test-{}", suffix));
-        let _ = fs::remove_dir_all(&p);
-        fs::create_dir_all(&p).unwrap();
-        p
     }
 }

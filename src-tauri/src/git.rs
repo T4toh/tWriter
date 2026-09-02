@@ -699,18 +699,7 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
     use std::process::Command;
-
-    fn tempdir(label: &str) -> PathBuf {
-        let mut p = std::env::temp_dir();
-        let suffix: u128 = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        p.push(format!("twriter-git-test-{}-{}", label, suffix));
-        let _ = fs::remove_dir_all(&p);
-        fs::create_dir_all(&p).unwrap();
-        p
-    }
+    use tempfile::TempDir;
 
     fn run(cwd: &PathBuf, args: &[&str]) -> String {
         let out = Command::new("git")
@@ -729,8 +718,13 @@ mod tests {
         String::from_utf8_lossy(&out.stdout).to_string()
     }
 
-    fn setup_triple() -> (PathBuf, PathBuf, PathBuf) {
-        let root = tempdir("triple");
+    /// Devuelve el `TempDir` guard junto con los tres paths: quien llama
+    /// tiene que bindearlo con nombre (no `_`) para que viva hasta el final
+    /// del test — si se lo dropea acá, origin/pc_a/pc_b quedan apuntando a
+    /// un directorio ya borrado.
+    fn setup_triple() -> (TempDir, PathBuf, PathBuf, PathBuf) {
+        let root_guard = TempDir::new().unwrap();
+        let root = root_guard.path().to_path_buf();
         let origin = root.join("origin.git");
         fs::create_dir_all(&origin).unwrap();
         run(&origin, &["init", "--bare", "--initial-branch=main"]);
@@ -752,12 +746,12 @@ mod tests {
         );
         run(&pc_b, &["config", "user.email", "b@x"]);
         run(&pc_b, &["config", "user.name", "b"]);
-        (origin, pc_a, pc_b)
+        (root_guard, origin, pc_a, pc_b)
     }
 
     #[test]
     fn push_auto_rebases_on_non_ff() {
-        let (_origin, pc_a, pc_b) = setup_triple();
+        let (_root, _origin, pc_a, pc_b) = setup_triple();
         fs::write(pc_a.join("a.txt"), "from A\n").unwrap();
         run(&pc_a, &["add", "."]);
         run(&pc_a, &["commit", "-m", "from A"]);
@@ -775,7 +769,7 @@ mod tests {
 
     #[test]
     fn pull_rebase_succeeds_when_divergent_no_conflict() {
-        let (_origin, pc_a, pc_b) = setup_triple();
+        let (_root, _origin, pc_a, pc_b) = setup_triple();
         fs::write(pc_a.join("a.txt"), "from A\n").unwrap();
         run(&pc_a, &["add", "."]);
         run(&pc_a, &["commit", "-m", "A"]);
@@ -791,7 +785,7 @@ mod tests {
 
     #[test]
     fn pull_rebase_returns_conflict_and_aborts() {
-        let (_origin, pc_a, pc_b) = setup_triple();
+        let (_root, _origin, pc_a, pc_b) = setup_triple();
         fs::write(pc_a.join("README.md"), "from A\n").unwrap();
         run(&pc_a, &["add", "."]);
         run(&pc_a, &["commit", "-m", "A"]);
@@ -807,7 +801,7 @@ mod tests {
 
     #[test]
     fn push_returns_conflict_on_rebase_conflict() {
-        let (_origin, pc_a, pc_b) = setup_triple();
+        let (_root, _origin, pc_a, pc_b) = setup_triple();
         fs::write(pc_a.join("README.md"), "from A\n").unwrap();
         run(&pc_a, &["add", "."]);
         run(&pc_a, &["commit", "-m", "A"]);
@@ -827,7 +821,7 @@ mod tests {
 
     #[test]
     fn pull_sets_upstream_when_missing() {
-        let (_origin, pc_a, pc_b) = setup_triple();
+        let (_root, _origin, pc_a, pc_b) = setup_triple();
         fs::write(pc_a.join("a.txt"), "from A\n").unwrap();
         run(&pc_a, &["add", "."]);
         run(&pc_a, &["commit", "-m", "A"]);
@@ -844,7 +838,7 @@ mod tests {
 
     #[test]
     fn pull_rebase_sets_upstream_when_missing() {
-        let (_origin, pc_a, pc_b) = setup_triple();
+        let (_root, _origin, pc_a, pc_b) = setup_triple();
         fs::write(pc_a.join("a.txt"), "from A\n").unwrap();
         run(&pc_a, &["add", "."]);
         run(&pc_a, &["commit", "-m", "A"]);
@@ -864,20 +858,23 @@ mod tests {
         assert!(pc_b.join("b.txt").exists());
     }
 
-    fn init_repo() -> PathBuf {
-        let dir = tempdir("ensure");
+    /// Devuelve el guard junto con el path — quien llama tiene que bindearlo
+    /// con nombre (no `_`) para que el repo no se borre antes de terminar el test.
+    fn init_repo() -> (TempDir, PathBuf) {
+        let guard = TempDir::new().unwrap();
+        let dir = guard.path().to_path_buf();
         run(&dir, &["init", "--initial-branch=main"]);
         run(&dir, &["config", "user.email", "t@x"]);
         run(&dir, &["config", "user.name", "t"]);
         fs::write(dir.join("a.txt"), "x\n").unwrap();
         run(&dir, &["add", "."]);
         run(&dir, &["commit", "-m", "init"]);
-        dir
+        (guard, dir)
     }
 
     #[test]
     fn ensure_appends_gitignore_when_missing() {
-        let dir = init_repo();
+        let (_guard, dir) = init_repo();
         let res = git_ensure_twriter_ignored_impl(dir.to_str().unwrap()).unwrap();
         assert!(res.gitignore_updated);
         assert_eq!(res.untracked_files, 0);
@@ -887,7 +884,7 @@ mod tests {
 
     #[test]
     fn ensure_dict_union_appends_when_missing() {
-        let dir = init_repo();
+        let (_guard, dir) = init_repo();
         let touched = git_ensure_dict_union_merge_impl(dir.to_str().unwrap()).unwrap();
         assert!(touched);
         let ga = fs::read_to_string(dir.join(".gitattributes")).unwrap();
@@ -896,7 +893,7 @@ mod tests {
 
     #[test]
     fn ensure_dict_union_idempotent() {
-        let dir = init_repo();
+        let (_guard, dir) = init_repo();
         fs::write(dir.join(".gitattributes"), "diccionario.txt merge=union\n").unwrap();
         let touched = git_ensure_dict_union_merge_impl(dir.to_str().unwrap()).unwrap();
         assert!(!touched);
@@ -906,7 +903,7 @@ mod tests {
 
     #[test]
     fn ensure_idempotent_when_already_ignored() {
-        let dir = init_repo();
+        let (_guard, dir) = init_repo();
         fs::write(dir.join(".gitignore"), "node_modules/\n.twriter/\n").unwrap();
         let res = git_ensure_twriter_ignored_impl(dir.to_str().unwrap()).unwrap();
         assert!(!res.gitignore_updated);
@@ -917,7 +914,7 @@ mod tests {
 
     #[test]
     fn ensure_matches_twriter_without_slash() {
-        let dir = init_repo();
+        let (_guard, dir) = init_repo();
         fs::write(dir.join(".gitignore"), ".twriter\n").unwrap();
         let res = git_ensure_twriter_ignored_impl(dir.to_str().unwrap()).unwrap();
         assert!(!res.gitignore_updated, "bare `.twriter` should count as match");
@@ -925,7 +922,7 @@ mod tests {
 
     #[test]
     fn ensure_untracks_when_already_tracked() {
-        let dir = init_repo();
+        let (_guard, dir) = init_repo();
         fs::create_dir_all(dir.join(".twriter/search-index")).unwrap();
         fs::write(dir.join(".twriter/search-index/meta.json"), "{}\n").unwrap();
         run(&dir, &["add", ".twriter"]);
@@ -946,7 +943,7 @@ mod tests {
 
     #[test]
     fn ensure_creates_gitignore_if_missing() {
-        let dir = init_repo();
+        let (_guard, dir) = init_repo();
         let _ = fs::remove_file(dir.join(".gitignore"));
         let res = git_ensure_twriter_ignored_impl(dir.to_str().unwrap()).unwrap();
         assert!(res.gitignore_updated);
@@ -1051,7 +1048,7 @@ mod tests {
 
     #[test]
     fn status_for_populates_paths_for_modified_and_new() {
-        let dir = init_repo();
+        let (_guard, dir) = init_repo();
         // Setup: tracked file modificado + archivo nuevo untracked.
         fs::write(dir.join("tracked.html"), "v1\n").unwrap();
         run(&dir, &["add", "."]);
@@ -1072,13 +1069,13 @@ mod tests {
 
     #[test]
     fn fetch_succeeds_against_clean_remote() {
-        let (_origin, pc_a, _pc_b) = setup_triple();
+        let (_root, _origin, pc_a, _pc_b) = setup_triple();
         git_fetch_impl(pc_a.to_str().unwrap()).expect("fetch should succeed against clean remote");
     }
 
     #[test]
     fn fetch_picks_up_remote_commits() {
-        let (_origin, pc_a, pc_b) = setup_triple();
+        let (_root, _origin, pc_a, pc_b) = setup_triple();
         // pcA commitea + pushea algo nuevo; pcB hace fetch y debería ver el ref nuevo.
         fs::write(pc_a.join("from-a.txt"), "x\n").unwrap();
         run(&pc_a, &["add", "."]);
@@ -1100,7 +1097,8 @@ mod tests {
         if !std::path::Path::new("/bin/sleep").exists() {
             return;
         }
-        let dir = tempdir("timeout");
+        let dir_guard = TempDir::new().unwrap();
+        let dir = dir_guard.path();
         // `git help` termina rápido — usamos eso para verificar el path happy
         // primero (no timeout).
         let ok = run_git_with_timeout(dir.to_str().unwrap(), &["help"], Duration::from_secs(5))
