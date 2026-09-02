@@ -735,19 +735,14 @@ export class Tree implements OnDestroy {
     this.persistExpanded();
   }
 
-  /** Double-click en carpeta/grupo: cierra el archivo activo del pane primario y
-   *  navega a la vista de tarjetas (galería `app-landing`) de esa carpeta. El
-   *  single-click solo expande/colapsa (mantiene el archivo en foco). Flushea
-   *  ediciones pendientes antes de cerrar para no perder cambios. */
+  /** Double-click en carpeta/grupo: cierra los archivos abiertos y navega a la
+   *  vista de tarjetas (galería `app-landing`) de esa carpeta. El single-click
+   *  solo expande/colapsa (mantiene el archivo en foco). */
   protected async browseFolder(node: TreeNode): Promise<void> {
     // La galería de tarjetas navega el árbol principal; una ruta de notas daría
     // nodo nulo. En el árbol de notas el doble-click no hace nada extra.
     if (this.variant() === 'notes') return;
-    this.nav.setBrowsing(node.path);
-    await this.chapter.save();
-    await this.note.save();
-    this.note.close();
-    this.chapter.close();
+    await this.actions.irAGaleria(node.path);
   }
 
   protected collapseAll(): void {

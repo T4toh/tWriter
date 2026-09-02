@@ -542,6 +542,9 @@ export class App {
   @HostListener('window:keydown.control.shift.h', ['$event'])
   protected onIrAlInicio(event: Event): void {
     event.preventDefault();
+    // El botón del header está `[disabled]="!root()"`; sin esta guarda el
+    // atajo haría lo que el botón tiene prohibido.
+    if (!this.root()) return;
     this.irAlInicio();
   }
 
