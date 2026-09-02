@@ -239,6 +239,11 @@ textarea {
   padding: 1.25rem 1.5rem;
   font-family: var(--font-ui);
   color: var(--fg);
+  // El recuadro de la foto se dimensiona contra la ventana; el modal tiene
+  // que poder crecer con él en vez de recortarlo.
+  max-width: 94vw;
+  max-height: 92vh;
+  overflow: auto;
 
   h3 {
     margin: 0;

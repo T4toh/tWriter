@@ -7,7 +7,15 @@ import { NativeDialogsService } from '../core/native-dialogs-service';
 import { SettingsService } from '../core/settings-service';
 
 /** Lado máximo (en px de pantalla) del cuadro de recorte en el modal. */
-const CROP_DISPLAY_MAX = 420;
+/** Lado máximo del recuadro de recorte, en px. Se calcula contra la ventana
+ *  y no como constante fija: con un tope chico la foto se muestra diminuta en
+ *  una pantalla grande y elegir el recorte se vuelve adivinar. El 88vw/72vh
+ *  deja aire para el título, la ayuda y la botonera del modal. */
+function cropDisplayMax(): number {
+  const w = typeof window === 'undefined' ? 1200 : window.innerWidth;
+  const h = typeof window === 'undefined' ? 900 : window.innerHeight;
+  return Math.max(320, Math.min(w * 0.88, h * 0.72));
+}
 
 /** Estado del paso de recorte: la foto elegida no era cuadrada, así que se
  *  muestra con un cuadro arrastrable antes de adoptarla. Coordenadas de
@@ -225,7 +233,7 @@ export class AutorModal {
   protected readonly recorteScale = computed(() => {
     const r = this.recorte();
     if (!r) return 1;
-    return Math.min(1, CROP_DISPLAY_MAX / Math.max(r.width, r.height));
+    return Math.min(1, cropDisplayMax() / Math.max(r.width, r.height));
   });
 
   protected readonly recorteFrameSize = computed(() => {
