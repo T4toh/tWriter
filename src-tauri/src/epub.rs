@@ -7,7 +7,7 @@ use zip::write::{SimpleFileOptions, ZipWriter};
 use zip::CompressionMethod;
 
 use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::book_config::{
     find_back_cover_in, find_cover_in, image_field_unusable, resolver_imagen, BookConfig,
@@ -23,6 +23,16 @@ pub struct ExportResult {
     /// Problemas que no abortaron el export pero que el autor tiene que ver
     /// (tapas que faltan, imágenes que no se pudieron procesar).
     pub avisos: Vec<String>,
+}
+
+/// Un paso del export, para que la UI diga en qué anda en vez de mostrar un
+/// spinner ciego. `hecho`/`total` solo tienen sentido en la fase de capítulos;
+/// en las demás van en 0 y la UI muestra solo el texto.
+#[derive(Serialize, Clone, Debug)]
+pub struct ExportProgress {
+    pub fase: String,
+    pub hecho: u32,
+    pub total: u32,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -346,12 +356,37 @@ struct Item {
 #[tauri::command]
 pub async fn export_book(app: AppHandle, book_path: String) -> Result<ExportResult, String> {
     let plantilla_css = css_template(&app)?;
-    tauri::async_runtime::spawn_blocking(move || export_impl(&book_path, &plantilla_css))
-        .await
-        .map_err(|e| format!("task: {}", e))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut emit_cb = |p: ExportProgress| {
+            let _ = app.emit("epub-export-progress", p);
+        };
+        export_impl(&book_path, &plantilla_css, Some(&mut emit_cb))
+    })
+    .await
+    .map_err(|e| format!("task: {}", e))?
 }
 
-fn export_impl(book_path: &str, plantilla_css: &str) -> Result<ExportResult, String> {
+fn export_impl(
+    book_path: &str,
+    plantilla_css: &str,
+    mut progreso: Option<&mut dyn FnMut(ExportProgress)>,
+) -> Result<ExportResult, String> {
+    // Mismo patrón que `search::full_reindex`: el impl no conoce Tauri, así que
+    // sigue siendo testeable sin AppHandle.
+    macro_rules! avisar {
+        ($fase:expr) => {
+            avisar!($fase, 0, 0)
+        };
+        ($fase:expr, $hecho:expr, $total:expr) => {
+            if let Some(cb) = progreso.as_deref_mut() {
+                cb(ExportProgress {
+                    fase: $fase.to_string(),
+                    hecho: $hecho,
+                    total: $total,
+                });
+            }
+        };
+    }
     let book_dir = PathBuf::from(book_path);
     if !book_dir.is_dir() {
         tracing::error!(target: "epub", path = %book_path, "export_book: no es directorio");
@@ -360,6 +395,7 @@ fn export_impl(book_path: &str, plantilla_css: &str) -> Result<ExportResult, Str
     let cfg = read_or_default_config(&book_dir);
     tracing::info!(target: "epub", titulo = %cfg.titulo, "iniciando export");
 
+    avisar!("Leyendo capítulos");
     let (chapters, epilogo) = collect_chapters(&book_dir, cfg.epilogo.as_deref())?;
     if chapters.is_empty() && epilogo.is_none() {
         tracing::error!(target: "epub", titulo = %cfg.titulo, "libro sin capítulos .html");
@@ -438,6 +474,7 @@ fn export_impl(book_path: &str, plantilla_css: &str) -> Result<ExportResult, Str
     let mut spine_idx = 0u32;
     let mut total_chapter_files = 0u32;
 
+    avisar!("Embebiendo tapas e imágenes");
     // 1) Cover (si hay imagen). Reescalada: las tapas del repo son PNG de
     // imprenta de varios MB y KDP cobra delivery por MB. 1600 px de ancho es
     // lo que recomienda Amazon para la portada de un ebook.
@@ -534,7 +571,9 @@ fn export_impl(book_path: &str, plantilla_css: &str) -> Result<ExportResult, Str
 
     let mut toc_entries: Vec<TocEntry> = Vec::new();
     let mut file_seq = 10u32;
+    let total_caps = chapters.len() as u32;
     for (ch_idx, chapter) in chapters.iter().enumerate() {
+        avisar!("Escribiendo capítulos", ch_idx as u32, total_caps);
         // Chapter title page
         spine_idx += 1;
         file_seq += 1;
@@ -938,6 +977,7 @@ fn export_impl(book_path: &str, plantilla_css: &str) -> Result<ExportResult, Str
         properties: Some("nav".into()),
     });
 
+    avisar!("Armando índice y empaquetando");
     // 7) toc.ncx (legacy)
     let book_uuid = Uuid::new_v4().to_string();
     let ncx = build_ncx_with_entries(&cfg, &toc_entries, &book_uuid);
@@ -2016,7 +2056,7 @@ mod tests {
     }
 
     fn export_impl(book_path: &str) -> Result<ExportResult, String> {
-        super::export_impl(book_path, &plantilla_css())
+        super::export_impl(book_path, &plantilla_css(), None)
     }
 
     fn build_css(template: &str, theme: &ResolvedTheme) -> String {
@@ -2222,6 +2262,38 @@ mod tests {
             out.insert(name, buf);
         }
         out
+    }
+
+    #[test]
+    fn export_impl_reporta_las_fases_en_orden() {
+        let tmp_guard = TempDir::new().unwrap();
+        let tmp = tmp_guard.path();
+        let book = tmp.join("book");
+        std::fs::create_dir_all(book.join("Cap1")).unwrap();
+        std::fs::create_dir_all(book.join("Cap2")).unwrap();
+        std::fs::write(book.join("book.json"), r#"{"titulo":"Test"}"#).unwrap();
+        std::fs::write(book.join("Cap1").join("1.html"), "<p>Uno.</p>").unwrap();
+        std::fs::write(book.join("Cap2").join("1.html"), "<p>Dos.</p>").unwrap();
+
+        let mut pasos: Vec<ExportProgress> = Vec::new();
+        let mut cb = |p: ExportProgress| pasos.push(p);
+        super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(&mut cb))
+            .expect("export ok");
+
+        let fases: Vec<&str> = pasos.iter().map(|p| p.fase.as_str()).collect();
+        assert_eq!(fases.first(), Some(&"Leyendo capítulos"));
+        assert_eq!(fases.last(), Some(&"Armando índice y empaquetando"));
+        assert!(fases.contains(&"Embebiendo tapas e imágenes"));
+        // Un aviso por capítulo, con el total bien puesto: es lo que la UI usa
+        // para decir "3 de 12" en vez de un spinner ciego.
+        let caps: Vec<&ExportProgress> = pasos
+            .iter()
+            .filter(|p| p.fase == "Escribiendo capítulos")
+            .collect();
+        assert_eq!(caps.len(), 2);
+        assert_eq!(caps[0].hecho, 0);
+        assert_eq!(caps[1].hecho, 1);
+        assert!(caps.iter().all(|p| p.total == 2));
     }
 
     #[test]
