@@ -1795,43 +1795,113 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Verificado a mano por el autor el 2026-09-03.
 
 
-- [ ] **No hay reemplazar: corregir un nombre en todo el libro se hace a mano,
-  uno por uno** (reportado el 2026-09-03: "estuve buscando Angelica para cambiar
-  por Angélica a mano como mono")
-  El caso real es el más simple posible y el más frecuente: un nombre propio mal
-  escrito desde el principio, `Angelica` → `Angélica`, repartido en decenas de
-  capítulos. Hoy la única herramienta es buscar, abrir cada hit, corregir a mano
-  y acordarse de dónde se quedó. La búsqueda ya encuentra todo; lo que falta es
-  el otro lado.
-  **Las piezas están casi todas.** `findAllMatchesInPlain`
-  (`search-highlight.ts`) devuelve **todos** los rangos de un texto, no el
-  primero, y ya se usa para pintar las decoraciones; `offsetToPm`
-  (`grammar-extension.ts`) los ancla a posiciones PM; el índice sabe en qué
-  capítulos está el término. O sea que "reemplazar en el capítulo abierto" es
-  casi gratis: los rangos ya están calculados y aplicar el cambio es un
-  `insertContentAt` por rango, de atrás para adelante para no invalidar
-  posiciones.
-  **Lo que hay que decidir** (nada de esto está diseñado):
-  (a) **Alcance.** ¿Solo el capítulo abierto, o libro/saga entero? El primero es
-      el 20% del trabajo y el 80% del valor; el segundo obliga a escribir N
-      archivos que no están abiertos en el editor, o sea camino nuevo por Rust y
-      no por TipTap.
-  (b) **Preview y confirmación.** Reemplazar a ciegas en 40 capítulos no se puede
-      ofrecer. Lo más parecido que ya existe es el diff del conversor RAE y el
-      modal de revisión por libro; habría que ver si se reusa alguno.
-  (c) **Deshacer.** Adentro del capítulo abierto el undo de ProseMirror alcanza.
-      Cruzando archivos no hay undo — lo que sí hay es el auto-commit de git,
-      que hace del "volver atrás" un revert. Puede ser suficiente: commitear
-      antes de aplicar y decirlo en la UI.
-  (d) **Mayúsculas y palabra completa.** `Angelica` → `Angélica` necesita
-      preservar caso al principio de oración, y `casa` no debería tocar
-      `casarse`. Los toggles de la búsqueda hoy son `≈` (fuzzy) y scope; el
-      fuzzy **no** puede alimentar un reemplazo (reemplazar sobre un match
-      Levenshtein cambia palabras que no se pidieron), así que reemplazar tiene
-      que exigir modo exacto.
-  Mientras no exista, el atajo honesto para el caso `Angelica`: agregar la forma
-  correcta al diccionario de la saga no ayuda, y el conversor RAE tampoco toca
-  ortografía — así que hoy no hay atajo, es a mano.
+- [ ] **Reemplazar en lote: implementado, pendiente de verificación del autor**
+  (reportado el 2026-09-03: "estuve buscando Angelica para cambiar por
+  Angélica a mano como mono")
+  Diseño en `docs/superpowers/specs/2026-09-03-reemplazar-en-lote-design.md`,
+  plan de implementación en `docs/superpowers/plans/2026-09-03-reemplazar-en-lote.md`.
+  Vive en el panel de búsqueda, atrás del toggle `⇄` del header: reusa el
+  mismo selector de scope de la búsqueda (capítulo actual, libro, saga, todo
+  el repo), y agrega un campo "reemplazar por" con los toggles `Aa`
+  (mayúsculas) y `ab` (palabra completa) — `≈` (fuzzy) queda deshabilitado en
+  este modo, con el motivo escrito al lado: un match aproximado cambiaría
+  palabras que no se pidieron. Escribir needle + replacement dispara un
+  preview (`replace_preview` en Rust, debounce de 250ms) que enumera las
+  ocurrencias leyendo del **disco**, no del índice tantivy — así que es
+  inmune al item de arriba (el índice mudo). El preview se agrupa por
+  capítulo, con checkbox tri-estado por grupo y por ocurrencia individual
+  para destildar casos puntuales; aplicar corre `replace_apply`, que
+  snapshotea los originales antes de escribir.
+  **La pieza no obvia es el mapeo plain ↔ HTML por runs** (`src-tauri/src/replace.rs`):
+  se busca sobre el texto plano, que es lo que el autor ve, pero se escribe
+  sobre el HTML, y los offsets de los dos no coinciden (los tags no están en
+  el plain, las entidades cambian de largo). La solución es construir el
+  plain junto con una lista de **runs** — tramos que se corresponden byte a
+  byte con el HTML, cortados por cada tag, cada entidad y cada cierre de
+  bloque — y aplicar una única regla: **una ocurrencia solo es reemplazable
+  si cae entera dentro de un run**. Esa regla sola rechaza los tres casos
+  peligrosos (frase partida por una cursiva, match que abarca una entidad,
+  match que cruza dos párrafos) sin código especial para ninguno, y
+  garantiza que nunca se pise markup. Lo que no entra en ningún run se
+  muestra en el panel como salteado, con su snippet y el motivo.
+  **La red de seguridad** es un snapshot de los originales en
+  `.twriter/undo/` (uno solo, se pisa con cada apply nuevo) más un botón
+  Deshacer en el propio panel de búsqueda, no en un toast que desaparece.
+  Deshacer se niega a pisar y ofrece "Pisarlos igual" en dos casos: si algún
+  capítulo del snapshot se editó a mano **después** del reemplazo (compara
+  mtimes), o si el registro del snapshot quedó incompleto y no se puede
+  confiar en él (`suspect`) — son dos motivos distintos y el panel los explica
+  por separado, no con un mensaje genérico.
+  **Qué falta probar a mano** (con la app levantada, sobre el repo de prueba
+  no-git — nunca sobre el `Novelas/` real; `pnpm tauri dev` hay que
+  reiniciarlo porque los cambios de Rust no entran por HMR), ordenado por lo
+  que más importa:
+  1. El flujo básico: `Angelica` → `Angélica` con scope "Todo el repo", que
+     el conteo del preview coincida con lo que se ve en pantalla, y que el
+     árbol y el status de git se refresquen solos sin recargar la app.
+  2. **El bloqueo del editor durante el apply**, que es el caso que más costó
+     cerrar en la review: con un capítulo del scope abierto, disparar un
+     reemplazo que lo incluya y, apenas termine (mientras el toast todavía es
+     visible), intentar escribir de inmediato — tiene que seguir en
+     solo-lectura hasta que el rescan termina del todo. Probar también
+     abriendo un capítulo nuevo (o un split) *durante* el apply, y repetir
+     con split view abierto en los dos paneles.
+  3. Deshacer: hacer un reemplazo, editar a mano uno de los capítulos
+     tocados, y confirmar que Deshacer dice "se editaron después y no los
+     pisé" en vez de pisarlo. Si se puede forzar el otro caso (registro de
+     snapshot incompleto), confirmar que el mensaje es el otro ("no sé si es
+     seguro restaurar"), no el mismo texto para los dos motivos.
+  4. Deshacer y volver a reemplazar: que el snapshot viejo se borre (solo se
+     guarda el último).
+  5. Destildar una ocurrencia suelta (o un capítulo entero, en tri-estado) y
+     confirmar que ese párrafo o capítulo queda intacto.
+  6. Buscar un texto donde cada aparición esté cruzando una cursiva/negrita o
+     un salto de párrafo (por ejemplo, una palabra que en el libro real
+     siempre aparece partida en itálica): el panel tiene que mostrar el
+     grupo con el motivo de salteo, no quedar en blanco, y el capítulo no
+     debe tener checkbox tildable.
+  7. Reemplazo con "reemplazar por" vacío (el caso "Borrar"): el botón dice
+     "Borrar…" y el resultado/la barra de Deshacer reflejan "(borrado)".
+  8. Cerrar el panel en modo reemplazo por las cuatro vías (✕, Esc, `Ctrl/Cmd+F`,
+     y el mutex que lo cierra al abrir una nota o la auditoría RAE) y
+     reabrirlo: siempre tiene que volver a modo búsqueda normal, nunca
+     quedarse en modo reemplazo escaneando disco en el fondo.
+  9. El header con los 7 botones en un panel angosto — mirar que no quede
+     apretado — y que "Deshacer"/"Pisarlos igual"/el botón de aplicar tengan
+     pinta de botón real, no una caja apretada de ícono.
+  **Huecos conocidos y cosas deferidas** (están en el ledger de la feature,
+  no son sorpresa; ninguna es bloqueante para usarlo con cuidado):
+  - Un `<` suelto en el HTML se come el texto hasta el próximo `>` de
+    cualquier parte del archivo. Es el mismo comportamiento que ya tiene la
+    búsqueda (`search.rs`) y se dejó así a propósito: arreglar uno sin el
+    otro los desincroniza.
+  - El fold que evita pisar dos ediciones del mismo archivo no cubre
+    symlinks, la insensibilidad a mayúsculas de APFS ni NFC vs NFD en
+    nombres de carpeta acentuados — las tres son la misma clase de problema
+    (grafías distintas para el mismo path real) y se dejaron afuera porque
+    `canonicalize` toca el filesystem por cada edición y puede resolver un
+    symlink de Dropbox/iCloud a otro lado.
+  - `fs::write_chapter` sigue escribiendo con `fs::write` sin tmp+rename, así
+    que en disco lleno puede truncar un capítulo a medio escribir; el
+    snapshot lo hace recuperable, pero el arreglo de fondo es el camino de
+    guardado de **toda** la app (incluido el autosave), no solo de esto —
+    candidato a su propio item de TODO.md.
+  - El guard que protege contra pisar una edición ajena compara mtimes en
+    segundos: en discos con resolución de 1s (HFS+, exFAT, SMB) una edición
+    hecha en el mismo segundo que el reemplazo es invisible para el guard.
+  - Los contadores de la barra de Deshacer no bajan tras un Deshacer
+    parcial (siguen mostrando el total original aunque ya se restauró parte).
+  - "Archivo actual" no es el mismo scope en búsqueda que en reemplazo:
+    búsqueda usa el foco (e incluye notas), reemplazo usa el pane activo.
+  - Cambiar de carpeta raíz con el panel de reemplazo abierto no revalida el
+    scope elegido — riesgo bajo, porque cambiar de root ya cierra los
+    capítulos abiertos.
+  - El chequeo de extensión del frontend (`.html`, case-insensitive) no
+    coincide con el filtro de Rust (sensible a mayúsculas): un archivo
+    `1.HTML` pasaría el guard del frontend y daría preview vacío.
+  - Fuera de alcance por diseño, no por olvido: reemplazar dentro de notas,
+    regex, deshacer granular estilo ProseMirror, historial de reemplazos, y
+    tocar títulos de capítulo — ninguno se implementó.
 
 
 - [ ] **El índice se puede quedar mudo y no hay forma de saberlo** (encontrado
