@@ -223,14 +223,8 @@ export class SearchPanel implements AfterViewInit {
   }
 
   protected close(): void {
-    // Apagar el modo reemplazo acá, no solo ocultar el panel: el effect de
-    // `ReplaceService` sigue vivo mientras `replaceMode` esté prendido (ya no
-    // depende de que el panel esté abierto — `Editor` también inyecta el
-    // servicio), así que dejarlo prendido con el panel cerrado disparaba un
-    // `flushAllDirty` + `replace_preview` de todo el scope en disco por cada
-    // cambio de capítulo, para siempre. `lastUndo` sobrevive a `reset()`, así
-    // que el botón Deshacer sigue disponible al reabrir.
-    this.svc.replaceMode.set(false);
+    // hide() ya apaga replaceMode — es el choke point, no cada caller (ver
+    // SearchService.hide()).
     this.svc.hide();
   }
 

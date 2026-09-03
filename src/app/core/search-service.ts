@@ -200,7 +200,11 @@ export class SearchService {
   }
 
   toggle(): void {
-    this.open.update((o) => !o);
+    // Delega en show()/hide() en vez de un `update` a mano: así cerrar por
+    // Ctrl/Cmd+F pasa por el mismo choke point que el botón ✕ y Esc, y
+    // apaga `replaceMode` (ver hide()) sin que este método tenga que saberlo.
+    if (this.open()) this.hide();
+    else this.show();
   }
 
   show(): void {
@@ -209,6 +213,14 @@ export class SearchService {
 
   hide(): void {
     this.open.set(false);
+    // El modo reemplazo no puede sobrevivir al panel cerrado: su effect en
+    // ReplaceService sigue vivo (Editor también lo inyecta ahora) y depende
+    // del capítulo activo, así que dejarlo prendido dispara un
+    // flushAllDirty() + un replace_preview que camina todo el scope en disco
+    // en cada cambio de capítulo, invisible, para siempre. Apagarlo acá (y no
+    // en cada caller de hide()/toggle()) cubre el botón ✕, las dos ramas de
+    // Esc, Ctrl/Cmd+F y el mutex del md-reader de una sola vez.
+    this.replaceMode.set(false);
   }
 
   setQuery(q: string): void {
