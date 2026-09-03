@@ -1954,7 +1954,13 @@ interface ReplaceOutcome {
 
 interface UndoOutcome {
   restored: number;
+  /** Se editaron después del reemplazo: no se pisaron. El panel ofrece
+   *  "Pisarlos igual" con estos paths. */
   blocked: string[];
+  /** Falló la restauración (permisos, disco, `rel` inválido en el manifest).
+   *  Cada entrada es `"<path>: <error>"`. El snapshot NO se borra si hay
+   *  alguno, para poder reintentar. */
+  failed: string[];
 }
 
 export interface UndoInfo {
@@ -2218,7 +2224,15 @@ export class ReplaceService {
         ultimaEdicion: new Date().toISOString(),
       });
       await this.afterWrite(this.groups().map((g) => g.path));
-      if (out.blocked.length > 0) {
+      if (out.failed.length > 0) {
+        // El snapshot sobrevive, así que reintentar es posible: no limpiar
+        // `lastUndo` ni decirle al autor que terminó.
+        this.lastUndo.set({ ...info, blocked: out.blocked });
+        this.toast.error(
+          `Deshice ${out.restored}. No pude restaurar ${out.failed.length} capítulo${out.failed.length === 1 ? '' : 's'}; el snapshot sigue disponible para reintentar.`,
+        );
+        this.debug.error('replace', 'fallos al deshacer', out.failed.join('\n'));
+      } else if (out.blocked.length > 0) {
         this.lastUndo.set({ ...info, blocked: out.blocked });
         this.toast.warn(
           `Deshice ${out.restored}. ${out.blocked.length} capítulo${out.blocked.length === 1 ? '' : 's'} se editaron después del reemplazo y no los pisé.`,
