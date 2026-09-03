@@ -88,7 +88,15 @@
     <p class="sp-status sp-error">{{ err }}</p>
   }
   @if (!loading() && !error() && query() && results().length === 0) {
-    <p class="sp-status">Sin resultados para "{{ query() }}".</p>
+    @if (scattered(); as sc) {
+      <p class="sp-status sp-partial">
+        Ningún capítulo tiene "{{ query() }}". Las palabras aparecen sueltas en
+        {{ sc.docs }} capítulo{{ sc.docs === 1 ? '' : 's' }}, a más de
+        {{ sc.minSpan }} caracteres de distancia.
+      </p>
+    } @else {
+      <p class="sp-status">Sin resultados para "{{ query() }}".</p>
+    }
   }
   @if (!query() && !reindexing()) {
     <p class="sp-status sp-hint">
@@ -98,9 +106,9 @@
   @if (results().length > 0) {
     <p class="sp-count">{{ count() }} resultado{{ count() === 1 ? '' : 's' }}</p>
     @switch (matchLevel()) {
-      @case ('allWords') {
+      @case ('nearby') {
         <p class="sp-status sp-partial">
-          Ningún capítulo tiene la frase exacta. Estos tienen todas las palabras, sueltas.
+          Ningún capítulo tiene la frase exacta. En estos las palabras caen cerca.
         </p>
       }
       @case ('someWords') {

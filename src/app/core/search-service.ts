@@ -43,12 +43,20 @@ export interface SearchHit {
 /** Qué tan bien matchean los hits devueltos. El panel avisa en los dos niveles
  *  flojos: sin eso, una lista de resultados mediocres se lee igual que una
  *  buena. Ver `MatchLevel` en `search.rs`. */
-export type MatchLevel = 'phrase' | 'allWords' | 'someWords';
+export type MatchLevel = 'phrase' | 'nearby' | 'allWords' | 'someWords';
+
+/** Lo que se descartó por tener las palabras desperdigadas. Presente sólo con
+ *  `matchLevel === 'allWords'`, donde no se devuelve ningún hit. */
+export interface Scattered {
+  docs: number;
+  minSpan: number;
+}
 
 export interface SearchResult {
   hits: SearchHit[];
   total: number;
   matchLevel?: MatchLevel;
+  scattered?: Scattered;
 }
 
 /** Filtro de scope que viaja al backend. Campos vacíos / undefined no filtran. */
@@ -100,6 +108,8 @@ export class SearchService {
   readonly reindexProgress = signal<ReindexProgress | null>(null);
   /** Qué tan bien matchean los resultados actuales (ver `MatchLevel`). */
   readonly matchLevel = signal<MatchLevel>('phrase');
+  /** Docs que tenían todas las palabras pero lejos, y por eso no se muestran. */
+  readonly scattered = signal<Scattered | null>(null);
   readonly hasResults = computed(() => this.results().length > 0);
   readonly pendingHighlight = signal<PendingHighlight | null>(null);
   /** Última superficie con foco. Define qué archivo es "el actual" para el
@@ -205,6 +215,7 @@ export class SearchService {
     this.query.set('');
     this.results.set([]);
     this.matchLevel.set('phrase');
+    this.scattered.set(null);
     this.error.set(null);
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
@@ -225,6 +236,7 @@ export class SearchService {
     if (!q) {
       this.results.set([]);
       this.matchLevel.set('phrase');
+      this.scattered.set(null);
       this.error.set(null);
       this.loading.set(false);
       return;
@@ -236,6 +248,7 @@ export class SearchService {
     // tantivy. Esto incluye ediciones sin guardar.
     if (this.settings.searchScope() === 'current') {
       this.matchLevel.set('phrase');
+      this.scattered.set(null);
       this.runCurrentFileSearch(q);
       if (id === this.currentRequestId) this.loading.set(false);
       return;
@@ -253,6 +266,7 @@ export class SearchService {
       if (id !== this.currentRequestId) return;
       this.results.set(res.hits);
       this.matchLevel.set(res.matchLevel ?? 'phrase');
+      this.scattered.set(res.scattered ?? null);
     } catch (err) {
       if (id !== this.currentRequestId) return;
       this.error.set(String(err));

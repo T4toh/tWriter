@@ -35,10 +35,14 @@ const TITLE_BOOST: f32 = 2.5;
 const FUZZY_LEN_EXACT_MAX: usize = 3; // <=3 chars ⇒ distancia 0 (exacto)
 const FUZZY_LEN_ONE_MAX: usize = 7; // 4..=7 chars ⇒ distancia 1; >=8 ⇒ distancia 2
 const FUZZY_TRANSPOSITION_COST_ONE: bool = true; // swap adyacente cuesta 1 edit
-// Tope de ocurrencias que junta `best_cluster_start` antes de cortar. Un término
+// Tope de ocurrencias que junta `best_cluster` antes de cortar. Un término
 // común (`que`, `se`) aparece cientos de veces en un capítulo; la ventana que
 // cubre más términos ya se decide con las primeras.
 const CLUSTER_MAX_OCCURRENCES: usize = 400;
+// Ancho máximo, en chars, para considerar que las palabras de la query están
+// JUNTAS. Es el ancho del snippet a propósito: si no entran todas en un
+// snippet, no hay forma de mostrarlas juntas y no son lo que se buscaba.
+const NEARBY_MAX_SPAN: usize = SNIPPET_MAX_LEN;
 
 static INDEX_STATE: OnceLock<Mutex<Option<SearchIndex>>> = OnceLock::new();
 
@@ -379,7 +383,11 @@ fn resolve_matched_words(content: &str, query_terms: &[String], fuzzy: bool) -> 
 /// `lower` es el contenido ya lowercased; el offset devuelto indexa ese mismo
 /// string (y, por el supuesto que ya hacía `make_snippet`, el original).
 /// Con un solo término equivale a la primera aparición.
-fn best_cluster_start(lower: &str, query_terms: &[String]) -> Option<usize> {
+///
+/// Devuelve `(arranque, ancho, términos distintos cubiertos)`. El ancho es lo
+/// que permite decir si las palabras están JUNTAS o a veinte párrafos: el AND
+/// de tantivy es a nivel documento y no sabe nada de proximidad.
+fn best_cluster(lower: &str, query_terms: &[String]) -> Option<(usize, usize, usize)> {
     let n = query_terms.len();
     if n == 0 {
         return None;
@@ -435,7 +443,7 @@ fn best_cluster_start(lower: &str, query_terms: &[String]) -> Option<usize> {
             best = Some((distinct, span, occ[lo].0));
         }
     }
-    best.map(|(_, _, start)| start)
+    best.map(|(distinct, span, start)| (start, span, distinct))
 }
 
 /// Genera un snippet centrado en el primer match de los términos de la query.
@@ -456,7 +464,7 @@ fn make_snippet(content: &str, raw_query: &str, query_terms: &[String]) -> Strin
         }
     }
     if best.is_none() {
-        best = best_cluster_start(&lower, query_terms);
+        best = best_cluster(&lower, query_terms).map(|(start, _, _)| start);
     }
     if best.is_none() && query_terms.is_empty() && raw_trim.is_empty() {
         let cut: String = content.chars().take(SNIPPET_MAX_LEN).collect();
@@ -833,11 +841,26 @@ pub enum MatchLevel {
     /// queries con operadores, que ya matchean lo que piden.
     #[default]
     Phrase,
-    /// Ningún doc tenía la frase entera; estos tienen todas las palabras, pero
-    /// sueltas y posiblemente a párrafos de distancia.
+    /// Ningún doc tenía la frase entera, pero en estos las palabras caen cerca
+    /// —dentro de `NEARBY_MAX_SPAN` chars—, o sea se pueden ver juntas.
+    Nearby,
+    /// Ningún doc tenía las palabras ni juntas ni cerca. No se devuelve ningún
+    /// hit: las que había estaban a párrafos de distancia y son ruido. El
+    /// detalle de lo descartado va en `SearchResult::scattered`.
     AllWords,
     /// Ningún doc tenía todas las palabras; estos tienen alguna (rescate OR).
     SomeWords,
+}
+
+/// Lo que se descartó por tener las palabras desperdigadas, para que el panel
+/// pueda decir que existen en vez de mostrar "sin resultados" a secas.
+#[derive(Serialize, Clone, Copy, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Scattered {
+    /// Cuántos docs tenían todas las palabras, pero lejos.
+    pub docs: usize,
+    /// La menor distancia que se vio entre la primera y la última palabra.
+    pub min_span: usize,
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -846,6 +869,8 @@ pub struct SearchResult {
     pub hits: Vec<SearchHit>,
     pub total: usize,
     pub match_level: MatchLevel,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scattered: Option<Scattered>,
 }
 
 /// Ejecuta una búsqueda contra el índice activo, con scope/debug opcionales.
@@ -923,9 +948,10 @@ pub fn search_query_impl(
     let has_rich_form = q
         .chars()
         .any(|c| c.is_uppercase() || (!c.is_alphanumeric() && !c.is_whitespace()));
-    // `(hit, tiene la frase entera)`. El flag se resuelve acá, donde todavía
-    // está el `content` del doc, y decide el filtro de abajo.
-    let mut scored: Vec<(SearchHit, bool)> = Vec::with_capacity(top_docs.len());
+    // `(hit, tiene la frase entera, ancho del cluster)`. Los dos últimos se
+    // resuelven acá, donde todavía está el `content` del doc, y deciden los
+    // filtros de abajo. `None` en el ancho = no se pudo cubrir toda la query.
+    let mut scored: Vec<(SearchHit, bool, Option<usize>)> = Vec::with_capacity(top_docs.len());
     for (score, addr) in top_docs {
         let doc: TantivyDocument = match searcher.doc(addr) {
             Ok(d) => d,
@@ -961,6 +987,18 @@ pub fn search_query_impl(
         // términos tipeados (caso operadores/phrase, ya literales).
         let matched = resolve_matched_words(&content, &terms, fuzzy);
         let snippet_terms: &[String] = if matched.is_empty() { &terms } else { &matched };
+        // Ancho de la ventana más chica que cubre TODOS los términos. Si no los
+        // cubre todos, no hay proximidad que medir.
+        let probe: Vec<String> = snippet_terms
+            .iter()
+            .map(|t| {
+                let low = t.to_lowercase();
+                if fuzzy { fold_accents(&low) } else { low }
+            })
+            .collect();
+        let cluster_span = best_cluster(&haystack, &probe)
+            .filter(|(_, _, distinct)| *distinct == probe.len())
+            .map(|(_, span, _)| span);
         scored.push((
             SearchHit {
                 path,
@@ -972,6 +1010,7 @@ pub fn search_query_impl(
                 bm25_score: if debug { Some(score) } else { None },
             },
             phrase_hit,
+            cluster_span,
         ));
     }
     if has_rich_form {
@@ -996,37 +1035,60 @@ pub fn search_query_impl(
     // con operadores (`"..."`, `OR`, `-x`, `kind:`), que ya matchean lo que
     // piden y cuyo literal ni existe en el texto.
     let multi_word = terms.len() > 1 && is_plain_query(q);
-    let any_phrase = scored.iter().any(|(_, phrase)| *phrase);
-    let (hits, match_level): (Vec<SearchHit>, MatchLevel) = if partial_match {
-        (
-            scored.into_iter().map(|(h, _)| h).collect(),
-            MatchLevel::SomeWords,
-        )
-    } else if multi_word && any_phrase {
-        (
-            scored
-                .into_iter()
-                .filter(|(_, phrase)| *phrase)
-                .map(|(h, _)| h)
-                .collect(),
-            MatchLevel::Phrase,
-        )
-    } else if multi_word {
-        (
-            scored.into_iter().map(|(h, _)| h).collect(),
-            MatchLevel::AllWords,
-        )
-    } else {
-        (
-            scored.into_iter().map(|(h, _)| h).collect(),
-            MatchLevel::Phrase,
-        )
-    };
+    let any_phrase = scored.iter().any(|(_, phrase, _)| *phrase);
+    let any_nearby = scored
+        .iter()
+        .any(|(_, _, span)| span.is_some_and(|s| s <= NEARBY_MAX_SPAN));
+    let (hits, match_level, scattered): (Vec<SearchHit>, MatchLevel, Option<Scattered>) =
+        if partial_match {
+            (
+                scored.into_iter().map(|(h, _, _)| h).collect(),
+                MatchLevel::SomeWords,
+                None,
+            )
+        } else if !multi_word {
+            (
+                scored.into_iter().map(|(h, _, _)| h).collect(),
+                MatchLevel::Phrase,
+                None,
+            )
+        } else if any_phrase {
+            (
+                scored
+                    .into_iter()
+                    .filter(|(_, phrase, _)| *phrase)
+                    .map(|(h, _, _)| h)
+                    .collect(),
+                MatchLevel::Phrase,
+                None,
+            )
+        } else if any_nearby {
+            (
+                scored
+                    .into_iter()
+                    .filter(|(_, _, span)| span.is_some_and(|s| s <= NEARBY_MAX_SPAN))
+                    .map(|(h, _, _)| h)
+                    .collect(),
+                MatchLevel::Nearby,
+                None,
+            )
+        } else {
+            // Todas las palabras están en el doc pero a párrafos de distancia:
+            // eso no es lo que se buscó. No se devuelve ninguno, y el detalle
+            // va aparte para que el panel diga que existen.
+            let min_span = scored.iter().filter_map(|(_, _, span)| *span).min();
+            let detalle = Scattered {
+                docs: scored.len(),
+                min_span: min_span.unwrap_or(0),
+            };
+            (Vec::new(), MatchLevel::AllWords, Some(detalle))
+        };
     let total = hits.len();
     Ok(SearchResult {
         hits,
         total,
         match_level,
+        scattered,
     })
 }
 
@@ -1299,7 +1361,7 @@ mod tests {
     #[test]
     fn cluster_start_single_term_is_first_occurrence() {
         let lower = "nobles y luego otra vez nobles";
-        assert_eq!(best_cluster_start(lower, &["nobles".into()]), Some(0));
+        assert_eq!(best_cluster(lower, &["nobles".into()]).map(|(s, _, _)| s), Some(0));
     }
 
     #[test]
@@ -1416,19 +1478,47 @@ mod tests {
     }
 
     #[test]
-    fn phrase_filter_falls_back_to_all_words_and_says_so() {
+    fn nearby_filter_keeps_words_that_fall_together() {
         let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
         reset_state();
-        // Ningún doc tiene la frase, pero uno tiene las dos palabras: se
-        // devuelve, marcado como AllWords para que el panel lo aclare.
+        // Ninguno tiene la frase. En el 1 las palabras caen a pocos chars; en el
+        // 2 están a miles. Se devuelve sólo el 1, marcado Nearby.
+        let lejos = "relleno ".repeat(200);
         let dir = make_repo_chapters(&[
-            ("1", "Aedan entró. Mucho después ella venía de la torre."),
-            ("2", "Aedan durmió toda la tarde."),
+            ("1", "Aedan entró y ella venía de la torre."),
+            ("2", &format!("Aedan entró. {lejos} Ella venía de la torre.")),
         ]);
         full_reindex(dir.path(), None).unwrap();
         let res = search_query_impl("Aedan venía", 50, None, false, false).unwrap();
+        assert_eq!(res.match_level, MatchLevel::Nearby, "hits: {:?}", res.hits);
+        assert_eq!(res.hits.len(), 1, "sólo el cap con las palabras cerca: {:?}", res.hits);
+        assert!(res.hits[0].path.ends_with("1.html"));
+        assert!(res.scattered.is_none(), "no se descartó por lejanía sola");
+    }
+
+    #[test]
+    fn scattered_words_return_nothing_but_report_the_count() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        // El repro del autor: `Ambos nobles` con las dos palabras a miles de
+        // chars en cada capítulo. No se devuelve ninguno, pero el panel tiene
+        // que poder decir que existen y a qué distancia.
+        let lejos = "relleno ".repeat(300);
+        let dir = make_repo_chapters(&[
+            ("1", &format!("Ambos llegaron. {lejos} Los nobles brindaron.")),
+            ("2", &format!("Los nobles esperaban. {lejos} Ambos se fueron.")),
+        ]);
+        full_reindex(dir.path(), None).unwrap();
+        let res = search_query_impl("Ambos nobles", 50, None, false, false).unwrap();
         assert_eq!(res.match_level, MatchLevel::AllWords);
-        assert_eq!(res.hits.len(), 1, "el AND deja sólo el cap con las dos: {:?}", res.hits);
+        assert!(res.hits.is_empty(), "no debería devolver ruido: {:?}", res.hits);
+        let detalle = res.scattered.expect("tiene que reportar los descartados");
+        assert_eq!(detalle.docs, 2, "los dos capítulos tenían las dos palabras");
+        assert!(
+            detalle.min_span > NEARBY_MAX_SPAN,
+            "la distancia reportada tiene que superar el umbral: {}",
+            detalle.min_span
+        );
     }
 
     #[test]
