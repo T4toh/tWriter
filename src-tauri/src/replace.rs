@@ -17,6 +17,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Por qué un tramo de plain no se corresponde con el HTML byte a byte.
 /// Viaja al frontend para explicarle al autor qué ocurrencia se salteó.
@@ -479,8 +480,6 @@ pub fn replace_preview(
     )
 }
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 const UNDO_SUBDIR: &str = ".twriter/undo";
 
 #[derive(Deserialize, Debug, Clone)]
@@ -496,6 +495,12 @@ pub struct ReplaceOutcome {
     pub occurrences: usize,
     /// Paths que cambiaron entre el preview y el apply. No se tocaron.
     pub skipped_files: Vec<String>,
+    /// Paths cuya escritura falló (disco lleno, permisos, archivo tomado por
+    /// el servicio de sync). Distinto de `skipped_files`: esos no se tocaron
+    /// porque cambiaron desde el preview; estos se intentaron y no se
+    /// pudieron escribir. El snapshot cubre los que sí se escribieron antes
+    /// del fallo. Formato de cada entrada: `"<path>: <error>"`.
+    pub failed_files: Vec<String>,
     /// Vacío si no se escribió nada.
     pub snapshot_id: String,
 }
@@ -556,23 +561,39 @@ pub fn aplicar(
         return Ok(out);
     }
 
+    // 0. Plegar por path: dos `FileEdit` para el mismo archivo (el frontend
+    // arma uno por selección, no necesariamente uno por grupo) no pueden
+    // generar dos `Pendiente` independientes — cada uno calcularía `nuevo`
+    // desde el mismo html original y el segundo pisaría al primero.
+    // `BTreeMap` da además un orden determinístico entre archivos.
+    let mut por_path: std::collections::BTreeMap<String, Vec<(usize, usize)>> =
+        std::collections::BTreeMap::new();
+    for edit in edits {
+        por_path.entry(edit.path).or_default().extend(edit.ranges);
+    }
+
     // 1. Revalidar: cada range pedido tiene que seguir existiendo hoy.
     struct Pendiente {
         path: PathBuf,
         html: String,
         nuevo: String,
         ocurrencias: usize,
+        mtime_antes: u64,
     }
     let mut pendientes: Vec<Pendiente> = Vec::new();
-    for edit in edits {
-        if edit.ranges.is_empty() {
+    for (path_str, mut ranges) in por_path {
+        if ranges.is_empty() {
             continue;
         }
-        let path = PathBuf::from(&edit.path);
+        let path = PathBuf::from(&path_str);
         let Ok(html) = std::fs::read_to_string(&path) else {
-            out.skipped_files.push(edit.path);
+            out.skipped_files.push(path_str);
             continue;
         };
+        // Mtime al momento de leer: la fase 3 lo vuelve a chequear justo
+        // antes de escribir, para no pisar una edición que llegó en la
+        // ventana entre este read y esa escritura.
+        let mtime_antes = mtime_epoch(&path);
         let map = plain_con_runs(&html);
         let vigentes: Vec<(usize, usize)> = buscar_ocurrencias(&map.plain, needle, op)
             .into_iter()
@@ -581,16 +602,15 @@ pub fn aplicar(
                 Ubicacion::Cruza(_) => None,
             })
             .collect();
-        if !edit.ranges.iter().all(|r| vigentes.contains(r)) {
+        if !ranges.iter().all(|r| vigentes.contains(r)) {
             tracing::warn!(
                 target: "replace",
-                path = %edit.path,
+                path = %path_str,
                 "el archivo cambió desde el preview, no lo toco"
             );
-            out.skipped_files.push(edit.path);
+            out.skipped_files.push(path_str);
             continue;
         }
-        let mut ranges = edit.ranges;
         // Deduplicar antes de contar: `aplicar_ranges` colapsa los duplicados
         // a una sola escritura, así que contar los ranges PEDIDOS haría que el
         // toast le reporte al autor más reemplazos de los que hubo.
@@ -598,66 +618,153 @@ pub fn aplicar(
         ranges.dedup();
         let ocurrencias = ranges.len();
         let nuevo = aplicar_ranges(&html, ranges, replacement);
-        pendientes.push(Pendiente { path, html, nuevo, ocurrencias });
+        pendientes.push(Pendiente { path, html, nuevo, ocurrencias, mtime_antes });
     }
     if pendientes.is_empty() {
         return Ok(out);
     }
 
-    // 2. Snapshot de los sobrevivientes, antes de escribir nada.
+    // 2. Snapshot de los sobrevivientes. Nada de esto toca un capítulo real
+    // todavía, así que puede abortar con `?`/`return Err` sin dejar al autor
+    // sin red: el undo anterior (si hay) sigue intacto hasta el final de
+    // este bloque.
     let undo_root = root.join(UNDO_SUBDIR);
-    if undo_root.exists() {
-        // Solo se guarda el último: el anterior se va.
-        std::fs::remove_dir_all(&undo_root)
-            .map_err(|e| format!("limpiar {}: {}", undo_root.display(), e))?;
-    }
     let id = nuevo_snapshot_id();
     let snap_dir = undo_root.join(&id);
+    if snap_dir.exists() {
+        // Colisión de id (dos applies en el mismo milisegundo, o un reloj
+        // que retrocedió): abortar antes de escribir nada, en vez de
+        // mezclarse con lo que hubiera en esa carpeta.
+        return Err(format!("ya existe un snapshot con id {id}"));
+    }
+
+    // Resolver todos los `rel` primero: si alguno falla (capítulo fuera del
+    // root, o un `..` que sacaría la copia de `snap_dir`), abortar ACÁ, antes
+    // de tocar `undo_root` — así el snapshot anterior no se pierde por un
+    // request malformado.
     let mut manifest_files: Vec<SnapshotFile> = Vec::new();
     for p in &pendientes {
         let rel = crate::stats::relative_key(root, &p.path)
             .ok_or_else(|| format!("capítulo fuera del root: {}", p.path.display()))?;
-        let destino = snap_dir.join(&rel);
-        if let Some(parent) = destino.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| format!("mkdir {}: {}", parent.display(), e))?;
+        if rel.split('/').any(|seg| seg == "..") {
+            return Err(format!("path de capítulo inválido: {}", p.path.display()));
         }
-        std::fs::write(&destino, &p.html)
-            .map_err(|e| format!("snapshot {}: {}", destino.display(), e))?;
         manifest_files.push(SnapshotFile { rel, occurrences: p.ocurrencias, mtime_after_apply: 0 });
     }
 
-    // 3. Escribir. `fs::write_chapter` reindexa tantivy por su cuenta.
-    let mut stats = crate::stats::read_stats(root);
-    for (idx, p) in pendientes.iter().enumerate() {
-        crate::fs::write_chapter(p.path.to_string_lossy().into_owned(), p.nuevo.clone())?;
-        out.files += 1;
-        out.occurrences += p.ocurrencias;
-        manifest_files[idx].mtime_after_apply = mtime_epoch(&p.path);
-        if let Some(key) = crate::stats::relative_key(root, &p.path) {
-            stats.insert(
-                key,
-                crate::stats::ChapterStat {
-                    palabras: crate::import::count_words(&p.nuevo),
-                    ultima_edicion: Some(ultima_edicion.to_string()),
-                },
-            );
+    // Escribir los originales + el manifest inicial (mtimes en 0, se
+    // completan en la fase 3). Que el manifest exista ANTES del primer
+    // `write_chapter` es lo que evita que un snapshot quede sin él si algo
+    // falla a mitad del lote real.
+    std::fs::create_dir_all(&snap_dir)
+        .map_err(|e| format!("mkdir {}: {}", snap_dir.display(), e))?;
+    let escrito = (|| -> Result<(), String> {
+        for (p, mf) in pendientes.iter().zip(manifest_files.iter()) {
+            let destino = snap_dir.join(&mf.rel);
+            if let Some(parent) = destino.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("mkdir {}: {}", parent.display(), e))?;
+            }
+            std::fs::write(&destino, &p.html)
+                .map_err(|e| format!("snapshot {}: {}", destino.display(), e))?;
+        }
+        let manifest_inicial = SnapshotManifest {
+            id: id.clone(),
+            when: ultima_edicion.to_string(),
+            needle: needle.to_string(),
+            replacement: replacement.to_string(),
+            files: manifest_files.clone(),
+        };
+        std::fs::write(
+            snap_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&manifest_inicial).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| format!("manifest: {e}"))
+    })();
+    if let Err(e) = escrito {
+        // Nada real se tocó todavía: no dejar un snapshot a medio escribir.
+        let _ = std::fs::remove_dir_all(&snap_dir);
+        return Err(e);
+    }
+
+    // El snapshot nuevo está completo (originales + manifest inicial). Recién
+    // ahora se borran los hermanos de `<id>` en `undo_root` — si algo de
+    // arriba hubiera fallado, el undo anterior seguiría intacto.
+    if let Ok(entries) = std::fs::read_dir(&undo_root) {
+        for entry in entries.flatten() {
+            if entry.file_name() != std::ffi::OsStr::new(id.as_str()) {
+                let _ = std::fs::remove_dir_all(entry.path());
+            }
         }
     }
-    crate::stats::write_stats(root, &stats)?;
 
-    let manifest = SnapshotManifest {
+    // 3. Escribir. `fs::write_chapter` reindexa tantivy por su cuenta. Si una
+    // escritura falla a mitad de lote (disco lleno, permisos, archivo tomado
+    // por el servicio de sync), CORTAR ahí en vez de seguir con el resto: en
+    // un ENOSPC las siguientes van a fallar igual, y lo que ya se escribió
+    // queda cubierto por el snapshot y registrado en el manifest. Ninguno de
+    // los pasos de acá para abajo puede volver a un `?`/`Err`: los capítulos
+    // de arriba ya cambiaron en disco, y perder `snapshot_id` en un `Err` es
+    // exactamente lo que dejaba al autor sin red (spec: "se reporta el
+    // conteo real, no 'listo'").
+    let mut stats = crate::stats::read_stats(root);
+    for (idx, p) in pendientes.iter().enumerate() {
+        if mtime_epoch(&p.path) != p.mtime_antes {
+            // Cambió entre el read de la fase 1 y este punto (autosave, git
+            // pull, la otra PC). Mismo canal y semántica que la
+            // revalidación: "cambió desde que lo leí", no se pisa.
+            tracing::warn!(
+                target: "replace",
+                path = %p.path.display(),
+                "el archivo cambió justo antes de escribir, no lo piso"
+            );
+            out.skipped_files.push(p.path.to_string_lossy().into_owned());
+            continue;
+        }
+        match crate::fs::write_chapter(p.path.to_string_lossy().into_owned(), p.nuevo.clone()) {
+            Ok(()) => {
+                out.files += 1;
+                out.occurrences += p.ocurrencias;
+                manifest_files[idx].mtime_after_apply = mtime_epoch(&p.path);
+                stats.insert(
+                    manifest_files[idx].rel.clone(),
+                    crate::stats::ChapterStat {
+                        palabras: crate::import::count_words(&p.nuevo),
+                        ultima_edicion: Some(ultima_edicion.to_string()),
+                    },
+                );
+            }
+            Err(e) => {
+                out.failed_files.push(format!("{}: {}", p.path.display(), e));
+                break;
+            }
+        }
+    }
+
+    // Read-modify-write del mapa entero: si un autosave llama a
+    // `write_chapter_stats` justo en esta ventana, ese `insert` se pisa acá.
+    // Es cosmético (se autocura en el próximo save de ese capítulo, que
+    // vuelve a leer y reescribir el mapa) y un lock para esto no se
+    // justifica — el brief ya pide un solo read/write para todo el lote.
+    if let Err(e) = crate::stats::write_stats(root, &stats) {
+        tracing::error!(target: "replace", error = %e, "no se pudo guardar stats tras el reemplazo");
+    }
+
+    let manifest_final = SnapshotManifest {
         id: id.clone(),
         when: ultima_edicion.to_string(),
         needle: needle.to_string(),
         replacement: replacement.to_string(),
         files: manifest_files,
     };
-    std::fs::write(
-        snap_dir.join("manifest.json"),
-        serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| format!("manifest: {e}"))?;
+    match serde_json::to_string_pretty(&manifest_final) {
+        Ok(json) => {
+            if let Err(e) = std::fs::write(snap_dir.join("manifest.json"), json) {
+                tracing::error!(target: "replace", error = %e, "no se pudo reescribir el manifest final");
+            }
+        }
+        Err(e) => tracing::error!(target: "replace", error = %e, "no se pudo serializar el manifest final"),
+    }
     out.snapshot_id = id;
 
     tracing::info!(
@@ -667,6 +774,7 @@ pub fn aplicar(
         files = out.files,
         occurrences = out.occurrences,
         skipped = out.skipped_files.len(),
+        failed = out.failed_files.len(),
         snapshot = %out.snapshot_id,
         "replace_apply"
     );
@@ -1164,6 +1272,148 @@ mod tests {
     }
 
     #[test]
+    fn apply_dos_edits_del_mismo_path_se_pliegan_y_no_se_pisan() {
+        // Critical 2 de la review r1: dos `FileEdit` para el mismo archivo
+        // (uno por selección, no por grupo) no pueden generar dos
+        // `Pendiente` independientes calculados sobre el mismo html
+        // original — el segundo pisaría al primero y se perdería un
+        // reemplazo que el autor tildó.
+        let td = scope_con(&[("libro/1.html", "<p>Angelica y Angelica</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let occs = pv.groups[0].occurrences.clone();
+        assert_eq!(occs.len(), 2);
+        let edits = vec![
+            FileEdit {
+                path: pv.groups[0].path.clone(),
+                ranges: vec![(occs[0].html_start, occs[0].html_end)],
+            },
+            FileEdit {
+                path: pv.groups[0].path.clone(),
+                ranges: vec![(occs[1].html_start, occs[1].html_end)],
+            },
+        ];
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits, "Angélica").unwrap();
+        assert_eq!(out.files, 1, "un solo archivo, no dos");
+        assert_eq!(out.occurrences, 2, "los dos reemplazos, ninguno pisado");
+        let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
+        assert!(uno.contains("Angélica y Angélica"), "quedó {uno:?}");
+        let snap = td.path().join(".twriter/undo").join(&out.snapshot_id);
+        let manifest: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(snap.join("manifest.json")).unwrap()).unwrap();
+        assert_eq!(
+            manifest["files"].as_array().unwrap().len(),
+            1,
+            "una sola entrada de manifest por archivo, no una por FileEdit"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn apply_corta_al_primer_fallo_de_escritura_y_deja_registro() {
+        // Critical 1 de la review r1: un fallo de escritura a mitad de lote
+        // (acá simulado con permisos, en la realidad disco lleno / archivo
+        // tomado por el servicio de sync) no puede tirar el `ReplaceOutcome`
+        // entero por un `Err` — el spec pide el conteo real y el
+        // `snapshot_id`, que es lo único que le permite al autor deshacer lo
+        // que sí se escribió.
+        use std::os::unix::fs::PermissionsExt;
+        let td = scope_con(&[
+            ("libro/1.html", "<p>Angelica uno</p>"),
+            ("libro/2.html", "<p>Angelica dos</p>"),
+            ("libro/3.html", "<p>Angelica tres</p>"),
+        ]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let dos = td.path().join("libro/2.html");
+        fs::set_permissions(&dos, fs::Permissions::from_mode(0o444)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica");
+        // Restaurar permisos antes de cualquier assert que pueda cortar el
+        // test, para no dejar basura ilegible en el tmpdir.
+        let _ = fs::set_permissions(&dos, fs::Permissions::from_mode(0o644));
+        let out = out.expect("un fallo de escritura reporta, no aborta con Err");
+
+        assert_eq!(out.files, 1, "solo 1.html se alcanzó a escribir antes del corte");
+        assert_eq!(out.occurrences, 1);
+        assert_eq!(out.failed_files.len(), 1);
+        assert!(out.failed_files[0].contains("2.html"), "{:?}", out.failed_files);
+        assert!(!out.snapshot_id.is_empty(), "sin snapshot_id no hay cómo deshacer");
+
+        // El snapshot cubre los tres originales, incluido el que falló y el
+        // que ni se llegó a intentar.
+        let snap = td.path().join(".twriter/undo").join(&out.snapshot_id);
+        assert!(snap.join("manifest.json").exists());
+        assert!(fs::read_to_string(snap.join("libro/2.html")).unwrap().contains("Angelica dos"));
+        assert!(fs::read_to_string(snap.join("libro/3.html")).unwrap().contains("Angelica tres"));
+
+        // 1.html sí se reescribió; 2.html quedó con el contenido de siempre
+        // (los permisos bloquean la escritura, no corrompen lo que había);
+        // 3.html ni se tocó.
+        let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
+        assert!(uno.contains("Angélica uno"), "quedó {uno:?}");
+        let dos_disco = fs::read_to_string(&dos).unwrap();
+        assert!(dos_disco.contains("Angelica dos"), "no debe pisarse: {dos_disco:?}");
+        let tres = fs::read_to_string(td.path().join("libro/3.html")).unwrap();
+        assert!(tres.contains("Angelica tres"), "ni se intenta: {tres:?}");
+    }
+
+    #[test]
+    fn apply_que_aborta_no_borra_el_snapshot_anterior() {
+        // Important 3 de la review r1: el snapshot anterior no puede
+        // borrarse hasta que el nuevo esté completo. Repro: un segundo apply
+        // que pasa la revalidación (el archivo existe y el needle matchea)
+        // pero aborta al resolver `relative_key` porque el capítulo está
+        // fuera del root — el undo del primer apply tiene que seguir ahí.
+        let td = scope_con(&[("libro/1.html", "<p>uno uno</p>")]);
+        let pv1 = preview_scope(td.path(), "uno", &ops(false, true)).unwrap();
+        let a = aplicar_t(td.path(), "uno", &ops(false, true), edits_de(&pv1), "dos").unwrap();
+        assert!(!a.snapshot_id.is_empty());
+        // El id del snapshot es epoch en milisegundos: sin este margen, dos
+        // applies seguidos en el mismo test pueden caer en el mismo id y
+        // chocar con el chequeo de colisión (que es intencional — ver el
+        // Important 3 — pero no es lo que este test quiere reproducir).
+        std::thread::sleep(std::time::Duration::from_millis(5));
+
+        let afuera = TempDir::new().unwrap();
+        fs::write(afuera.path().join("x.html"), "<p>Angelica</p>").unwrap();
+        let pv_afuera = preview_scope(afuera.path(), "Angelica", &ops(false, true)).unwrap();
+        let err = aplicar_t(
+            td.path(),
+            "Angelica",
+            &ops(false, true),
+            edits_de(&pv_afuera),
+            "tres",
+        )
+        .unwrap_err();
+        assert!(err.contains("fuera del root"), "{err}");
+
+        let snap = td.path().join(".twriter/undo").join(&a.snapshot_id);
+        assert!(snap.join("manifest.json").exists(), "el undo anterior no debe desaparecer");
+        assert!(fs::read_to_string(snap.join("libro/1.html")).unwrap().contains("uno uno"));
+    }
+
+    #[test]
+    fn apply_rechaza_un_rel_con_traversal() {
+        // Minor 8 de la review r1: `relative_key` es léxico y no normaliza,
+        // así que un `..` en el path del edit se saldría de `snap_dir` al
+        // escribir el snapshot. `replace_apply` es el borde JS → Rust, y ahí
+        // la validación de input no se difiere.
+        let td = scope_con(&[("libro/1.html", "<p>Angelica</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let occ = pv.groups[0].occurrences[0].clone();
+        // Mismo archivo real (el SO lo resuelve igual al abrirlo), pero el
+        // string del path trae un `..` en el medio.
+        let con_traversal = td.path().join("libro/../libro/1.html").to_string_lossy().into_owned();
+        let edits = vec![FileEdit {
+            path: con_traversal,
+            ranges: vec![(occ.html_start, occ.html_end)],
+        }];
+        let err = aplicar_t(td.path(), "Angelica", &ops(false, true), edits, "Angélica").unwrap_err();
+        assert!(err.contains(".."), "{err}");
+        let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
+        assert!(uno.contains("Angelica"), "no debe tocarse: {uno:?}");
+        assert!(!td.path().join(".twriter/undo").exists(), "no debe quedar snapshot");
+    }
+
+    #[test]
     fn apply_deja_el_snapshot_con_los_originales() {
         let td = scope_con(&[("libro/1.html", "<p>Angelica dijo</p>")]);
         let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
@@ -1178,13 +1428,21 @@ mod tests {
     fn apply_borra_el_snapshot_anterior() {
         let td = scope_con(&[("libro/1.html", "<p>uno uno</p>")]);
         let pv1 = preview_scope(td.path(), "uno", &ops(false, true)).unwrap();
-        let a = aplicar_t(td.path(), "uno", &ops(false, true), edits_de(&pv1), "dos").unwrap();
+        let _a = aplicar_t(td.path(), "uno", &ops(false, true), edits_de(&pv1), "dos").unwrap();
+        // El id del snapshot es epoch en milisegundos: sin este margen, dos
+        // applies seguidos pueden caer en el mismo id y el segundo abortaría
+        // por la colisión intencional del Important 3 en vez de reemplazar
+        // el snapshot anterior, que es lo que este test quiere reproducir.
+        std::thread::sleep(std::time::Duration::from_millis(5));
         let pv2 = preview_scope(td.path(), "dos", &ops(false, true)).unwrap();
         let b = aplicar_t(td.path(), "dos", &ops(false, true), edits_de(&pv2), "tres").unwrap();
-        assert_ne!(a.snapshot_id, b.snapshot_id);
+        // Sin `assert_ne!` sobre los ids: alcanza con que sean distintos (lo
+        // aseguró el sleep de arriba). Lo que importa es que sobreviva
+        // exactamente el snapshot del segundo apply.
         let undo_dir = td.path().join(".twriter/undo");
         let quedan: Vec<_> = fs::read_dir(&undo_dir).unwrap().filter_map(|e| e.ok()).collect();
         assert_eq!(quedan.len(), 1, "solo se guarda el último");
+        assert_eq!(quedan[0].file_name().to_string_lossy(), b.snapshot_id);
     }
 
     #[test]
@@ -1195,7 +1453,7 @@ mod tests {
         let stats = crate::stats::read_stats(td.path());
         let stat = stats.get("libro/1.html").expect("stats para el capítulo");
         assert_eq!(stat.palabras, 4, "«dijo pero que sí» son 4 palabras");
-        assert!(stat.ultima_edicion.is_some());
+        assert_eq!(stat.ultima_edicion.as_deref(), Some(AHORA));
     }
 
     #[test]
