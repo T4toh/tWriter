@@ -1934,7 +1934,13 @@ const DEBOUNCE_MS = 250;
 interface ReplaceOutcome {
   files: number;
   occurrences: number;
+  /** Cambiaron entre el preview y el apply: no se tocaron. */
   skippedFiles: string[];
+  /** Se intentaron escribir y falló (disco lleno, permisos, archivo tomado por
+   *  el servicio de sync). Cada entrada es `"<path>: <error>"`. Los que sí se
+   *  escribieron antes del fallo están en el snapshot, así que Deshacer los
+   *  cubre — hay que decírselo al autor, no tragarse el error. */
+  failedFiles: string[];
   snapshotId: string;
 }
 
@@ -2169,6 +2175,15 @@ export class ReplaceService {
         this.toast.warn(
           `${out.skippedFiles.length} capítulo${out.skippedFiles.length === 1 ? '' : 's'} cambiaron desde el preview: no los toqué.`,
         );
+      }
+      if (out.failedFiles.length > 0) {
+        // Se escribieron algunos y otros no. El autor tiene que saberlo Y saber
+        // que Deshacer cubre los que sí se escribieron.
+        this.toast.error(
+          `No pude escribir ${out.failedFiles.length} capítulo${out.failedFiles.length === 1 ? '' : 's'}. ` +
+            `Los que sí cambiaron se pueden deshacer.`,
+        );
+        this.debug.error('replace', 'fallos de escritura', out.failedFiles.join('\n'));
       }
       this.debug.info('replace', 'apply', JSON.stringify(out));
       await this.runPreview();

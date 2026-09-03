@@ -320,7 +320,13 @@ igual que aplicar.
   cambiaron desde el preview, no los toqué". Sin esto el splice escribe basura
   en medio de una palabra.
 - **Escritura parcial.** Si falla el archivo 5 de 7, los 4 ya escritos están en
-  el snapshot ⇒ Deshacer los cubre. Se reporta el conteo real, no "listo".
+  el snapshot ⇒ Deshacer los cubre. Se reporta el conteo real, no "listo": el
+  `ReplaceOutcome` trae `failedFiles` (`"<path>: <error>"` por entrada) aparte de
+  `skippedFiles`, y `replace_apply` devuelve `Ok` con el conteo real en vez de
+  un `Err` que tiraría el conteo y el `snapshotId`. El `manifest.json` del
+  snapshot se escribe **antes** de la primera escritura y se reescribe al final
+  con los mtimes reales, para que un fallo a mitad de lote no deje el snapshot
+  huérfano y sin forma de deshacerlo.
 - **0 ocurrencias.** Mensaje que dice por qué, porque la búsqueda de arriba sí
   encuentra cosas y eso confunde: "Sin ocurrencias exactas. El reemplazo no usa
   ≈ ni pliega acentos: `Angelica` no matchea `Angélica`."
