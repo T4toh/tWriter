@@ -568,8 +568,28 @@ fn mtime_epoch(path: &Path) -> u64 {
 /// puede vivir en una carpeta de Dropbox o iCloud, así que no es teórico: esto
 /// es mitigación, no garantía, y lo que de verdad protege al autor en esos
 /// volúmenes es el snapshot.
+///
+/// El guard del undo tiene el mismo techo pero peor, y en TODO filesystem:
+/// compara `mtime_epoch` (segundos) contra `mtime_after_apply`, que es el campo
+/// en segundos del manifest, así que una edición ajena que caiga en el mismo
+/// segundo que la escritura del apply le queda invisible y el undo la pisa.
+/// Cerrarlo pide cambiar el formato del campo a `(secs, nanos)` —o sea migrar
+/// los manifests en disco— y la ventana es de un segundo: deferido.
 fn mtime_raw(path: &Path) -> Option<SystemTime> {
     std::fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
+/// Un `rel` del manifest con segmento vacío, `.` o `..` se sale del root al
+/// hacer `join`. Lo valida `aplicar` antes de crear el snapshot y `deshacer`
+/// antes de escribir: el manifest vive en `.twriter/` (local, gitignored), pero
+/// es la ÚNICA autoridad que el undo consulta para decidir qué archivo pisar, y
+/// `write_chapter` no valida ni root ni extensión.
+///
+/// También rechaza el separador de Windows: `relative_key` normaliza `\\` a
+/// `/`, así que ningún `rel` legítimo lo trae, y en Windows `..\\x` traversa
+/// igual que `../x`.
+fn rel_valido(rel: &str) -> bool {
+    !rel.split(['/', '\\']).any(|seg| seg.is_empty() || seg == "." || seg == "..")
 }
 
 /// Id de snapshot legible y ordenable. Epoch en MILISEGUNDOS: en segundos,
@@ -696,7 +716,7 @@ pub fn aplicar(
     for p in &pendientes {
         let rel = crate::stats::relative_key(root, &p.path)
             .ok_or_else(|| format!("capítulo fuera del root: {}", p.path.display()))?;
-        if rel.split('/').any(|seg| seg.is_empty() || seg == "." || seg == "..") {
+        if !rel_valido(&rel) {
             return Err(format!("path de capítulo inválido: {}", p.path.display()));
         }
         manifest_files.push(SnapshotFile { rel, occurrences: p.ocurrencias, mtime_after_apply: 0 });
@@ -768,6 +788,13 @@ pub fn aplicar(
     // conteo real, no 'listo'").
     let mut stats = crate::stats::read_stats(root);
     let mut salteados: Vec<usize> = Vec::new();
+    // Hasta dónde llegó el lote real. El `break` de abajo deja capítulos sin
+    // intentar y NO se pueden listar en el manifest: su copia es idéntica al
+    // disco hoy, pero el autor puede deshacer días después y con ediciones en
+    // el medio, y como su `mtime_after_apply` queda en el sentinel `0` —que
+    // saltea el guard del undo por diseño— restaurarlos borraría trabajo que
+    // este reemplazo nunca tocó.
+    let mut ultimo_intentado: Option<usize> = None;
     for (idx, p) in pendientes.iter().enumerate() {
         // `nuevo` se calculó en la fase 1 sobre el `html` leído ahí. Entre
         // ese read y este punto puede pasar un autosave, un `git pull` o un
@@ -799,6 +826,7 @@ pub fn aplicar(
             salteados.push(idx);
             continue;
         }
+        ultimo_intentado = Some(idx);
         match crate::fs::write_chapter(p.path.to_string_lossy().into_owned(), p.nuevo.clone()) {
             Ok(()) => {
                 out.files += 1;
@@ -896,17 +924,16 @@ pub fn aplicar(
     }
 
     // El manifest final lista solo los capítulos que este apply tocó o
-    // intentó tocar. Sin sacar los salteados, el sentinel `0` conflaría tres
-    // estados que quieren cosas distintas del undo: "escrito pero no pude
-    // registrar el mtime" y "intentado y quizás truncado" (los dos:
-    // restaurar), contra "salteado porque hay una edición ajena más nueva"
-    // (NO restaurar). Los que quedaron sin intentar después del `break` sí
-    // siguen listados: su copia es idéntica al disco, así que restaurarlos es
-    // un no-op.
+    // intentó tocar. Sin ese recorte, el sentinel `0` conflaría cuatro estados
+    // que quieren cosas distintas del undo: "escrito pero no pude registrar el
+    // mtime" y "intentado y quizás truncado" (los dos: restaurar), contra
+    // "salteado porque hay una edición ajena más nueva" y "nunca intentado,
+    // quedó después del `break`" (los dos: NO restaurar). Las copias de los
+    // dos últimos se quedan adentro del snapshot sin listar, inofensivas.
     let files: Vec<SnapshotFile> = manifest_files
         .into_iter()
         .enumerate()
-        .filter(|(idx, _)| !salteados.contains(idx))
+        .filter(|(idx, _)| ultimo_intentado.is_some_and(|u| *idx <= u) && !salteados.contains(idx))
         .map(|(_, mf)| mf)
         .collect();
     let manifest_final = SnapshotManifest {
@@ -985,6 +1012,11 @@ pub struct UndoOutcome {
     /// Paths que se editaron DESPUÉS del reemplazo. No se pisaron; el panel
     /// los muestra y pide confirmación para forzarlos.
     pub blocked: Vec<String>,
+    /// Lo que no se pudo restaurar, en formato `"<path>: <error>"` (mismo que
+    /// `ReplaceOutcome::failed_files`). Va por acá y no por un `Err` porque
+    /// perder el `UndoOutcome` entero es lo que deja al autor sin saber qué
+    /// volvió al original y qué no.
+    pub failed: Vec<String>,
 }
 
 /// Restaura el snapshot. Ver el contexto de la Task 4: el guard de mtime es lo
@@ -995,6 +1027,17 @@ pub fn deshacer(
     force_paths: &[String],
     ultima_edicion: &str,
 ) -> Result<UndoOutcome, String> {
+    // `snapshot_id` es un string crudo del frontend y abajo termina en un
+    // `remove_dir_all`. Exigir el prefijo que usa `nuevo_snapshot_id` (y que
+    // ya filtra el barrido de hermanos en `aplicar`) descarta de una los
+    // segmentos de traversal; el chequeo de separadores tapa lo que el prefijo
+    // deja pasar, tipo `undo-1/../..`.
+    if !snapshot_id.starts_with("undo-")
+        || snapshot_id.contains('/')
+        || snapshot_id.contains('\\')
+    {
+        return Err(format!("id de snapshot inválido: {snapshot_id}"));
+    }
     let snap_dir = root.join(UNDO_SUBDIR).join(snapshot_id);
     let manifest_path = snap_dir.join("manifest.json");
     if !manifest_path.exists() {
@@ -1005,13 +1048,33 @@ pub fn deshacer(
     let manifest: SnapshotManifest = serde_json::from_str(&raw)
         .map_err(|e| format!("manifest de {snapshot_id} ilegible: {e}"))?;
 
+    // Si quedó el `.tmp` del rename, el manifest que acabamos de leer puede ser
+    // el INICIAL: el que trae todos los mtimes en el sentinel `0`, o sea el que
+    // le dice al undo "restaurá todo igual" incluso lo que el guard de mtime
+    // salteó. Un `exists()` y ninguna escritura nueva: con el manifest bajo
+    // sospecha nada se restaura solo, todo sale por `blocked` y el panel pide
+    // confirmación explícita. No es airtight (si el fallo fue antes de crear el
+    // tmp no queda rastro) pero cubre el ENOSPC, que es el caso probable.
+    let manifest_sospechoso = snap_dir.join("manifest.json.tmp").exists();
+
     let mut out = UndoOutcome::default();
     let mut stats = crate::stats::read_stats(root);
     for f in &manifest.files {
+        if !rel_valido(&f.rel) {
+            out.failed.push(format!("path de capítulo inválido: {}", f.rel));
+            continue;
+        }
         let destino = root.join(&f.rel);
         let origen = snap_dir.join(&f.rel);
         let destino_str = destino.to_string_lossy().into_owned();
-        let forzado = force_paths.iter().any(|p| p == &destino_str);
+        // Normalizado de los dos lados, igual que hace `aplicar` con los edits:
+        // el frontend puede rearmar el path del botón "Pisarlos igual" con otra
+        // grafía (`<root>/./libro/1.html`) y una comparación de strings crudos
+        // dejaría el botón sin efecto.
+        let destino_norm = destino.components().collect::<PathBuf>();
+        let forzado = force_paths
+            .iter()
+            .any(|p| PathBuf::from(p).components().collect::<PathBuf>() == destino_norm);
         // `mtime_after_apply == 0` es el sentinel de "no se pudo registrar el
         // mtime" que deja `replace_apply` (ver el doc del campo en replace.rs).
         // Ahí el capítulo SÍ hay que restaurarlo: puede estar escrito, o
@@ -1020,27 +1083,59 @@ pub fn deshacer(
         // porque cualquier archivo existente tiene mtime > 0.
         let editado_despues =
             f.mtime_after_apply != 0 && mtime_epoch(&destino) > f.mtime_after_apply;
-        if !forzado && destino.exists() && editado_despues {
+        if !forzado && (manifest_sospechoso || editado_despues) {
             out.blocked.push(destino_str);
             continue;
         }
-        let contenido = std::fs::read_to_string(&origen)
-            .map_err(|e| format!("leer snapshot {}: {}", origen.display(), e))?;
-        crate::fs::write_chapter(destino_str, contenido.clone())?;
+        let contenido = match std::fs::read_to_string(&origen) {
+            Ok(c) => c,
+            Err(e) => {
+                // El errno pelado no le dice nada al autor, y acá el remedio
+                // existe y la app lo tiene a mano: los originales que sí se
+                // copiaron siguen en el snapshot, así que nombrar la carpeta de
+                // la que puede copiarlos a mano.
+                out.failed.push(format!(
+                    "{}: el registro de Deshacer está incompleto, falta la copia del original ({e}). Los originales que quedaron están en {}",
+                    destino.display(),
+                    snap_dir.display()
+                ));
+                continue;
+            }
+        };
+        let palabras = crate::import::count_words(&contenido);
+        // Ni un `?` de acá para abajo: los capítulos anteriores del lote ya
+        // volvieron al original en disco, y abortar con `Err` tira el conteo
+        // real y el `blocked` — el autor lee "no se pudo deshacer" cuando la
+        // mitad se deshizo, y el reintento queda trabado porque los ya
+        // restaurados ahora tienen mtime nuevo y salen bloqueados.
+        if let Err(e) = crate::fs::write_chapter(destino_str, contenido) {
+            out.failed.push(format!("{}: {}", destino.display(), e));
+            continue;
+        }
         out.restored += 1;
         stats.insert(
             f.rel.clone(),
             crate::stats::ChapterStat {
-                palabras: crate::import::count_words(&contenido),
+                palabras,
                 ultima_edicion: Some(ultima_edicion.to_string()),
             },
         );
     }
-    crate::stats::write_stats(root, &stats)?;
+    // Sin restauraciones el mapa quedó igual que en disco: escribirlo sería
+    // ruido, y un fallo suyo ensuciaría `failed` con algo que no le pasó a
+    // ningún capítulo.
+    if out.restored > 0 {
+        if let Err(e) = crate::stats::write_stats(root, &stats) {
+            tracing::error!(target: "replace", error = %e, "no se pudo guardar stats tras el deshacer");
+            out.failed.push(format!("{}: {}", root.join(".twriter/stats.json").display(), e));
+        }
+    }
 
-    // El snapshot se va solo si no quedó nada bloqueado: si quedó, el autor
-    // todavía puede querer forzar esos.
-    if out.blocked.is_empty() {
+    // El snapshot se va solo si no quedó NADA pendiente. `blocked` porque el
+    // autor todavía puede querer forzar esos; `failed` porque si no, el primer
+    // fallo de escritura borraría la única copia de los originales con la
+    // restauración a medias — el snapshot tiene que sobrevivir al reintento.
+    if out.blocked.is_empty() && out.failed.is_empty() {
         let _ = std::fs::remove_dir_all(&snap_dir);
     }
     tracing::info!(
@@ -1048,6 +1143,7 @@ pub fn deshacer(
         snapshot = snapshot_id,
         restored = out.restored,
         blocked = out.blocked.len(),
+        failed = out.failed.len(),
         "replace_undo"
     );
     Ok(out)
@@ -2026,6 +2122,255 @@ mod tests {
         assert!(u.blocked.is_empty());
         let actual = fs::read_to_string(&cap).unwrap();
         assert!(actual.contains("Angelica dijo"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn apply_no_lista_en_el_manifest_lo_que_no_intento_escribir() {
+        // Critical 1 de la review r1, pérdida de datos: el `break` de la fase
+        // 3 dejaba listados con el sentinel `0` los capítulos que nunca se
+        // intentaron. El `0` saltea el guard de mtime del undo por diseño, así
+        // que quedaban restaurables SIN guard para siempre — y el autor puede
+        // deshacer días después, con ediciones nuevas en el medio.
+        use std::os::unix::fs::PermissionsExt;
+        let td = scope_con(&[
+            ("libro/1.html", "<p>Angelica uno</p>"),
+            ("libro/2.html", "<p>Angelica dos</p>"),
+            ("libro/3.html", "<p>Angelica tres</p>"),
+        ]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        assert_eq!(pv.groups.len(), 3, "los tres capítulos entran al lote");
+        // El 2 falla al escribir, así que el 3 queda después del `break`.
+        let dos = td.path().join("libro/2.html");
+        fs::set_permissions(&dos, fs::Permissions::from_mode(0o444)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica");
+        let _ = fs::set_permissions(&dos, fs::Permissions::from_mode(0o644));
+        let out = out.expect("un fallo de escritura reporta, no aborta con Err");
+        assert_eq!(out.files, 1, "solo el 1 se escribió");
+        assert_eq!(out.failed_files.len(), 1, "el 2 falló: {:?}", out.failed_files);
+
+        let snap = td.path().join(".twriter/undo").join(&out.snapshot_id);
+        let manifest: SnapshotManifest =
+            serde_json::from_str(&fs::read_to_string(snap.join("manifest.json")).unwrap()).unwrap();
+        let rels: Vec<&str> = manifest.files.iter().map(|f| f.rel.as_str()).collect();
+        assert_eq!(
+            rels,
+            ["libro/1.html", "libro/2.html"],
+            "el escrito y el fallado se listan; el que no se intentó, no"
+        );
+        // La copia del no intentado se queda adentro del snapshot sin listar.
+        assert!(snap.join("libro/3.html").exists());
+
+        // El repro entero: el fallo era transitorio (un lock del sync, un
+        // ENOSPC que se resolvió), el autor edita el 3 —que el reemplazo nunca
+        // tocó— y toca Deshacer.
+        let tres = td.path().join("libro/3.html");
+        fs::write(&tres, "<p>parrafo nuevo del autor</p>\n").unwrap();
+        forzar_mtime_futuro(&tres);
+        let u = deshacer_t(td.path(), &out.snapshot_id, &[]).unwrap();
+        assert_eq!(u.restored, 2, "solo los dos listados");
+        assert!(u.blocked.is_empty() && u.failed.is_empty(), "{u:?}");
+        assert_eq!(
+            fs::read_to_string(&tres).unwrap(),
+            "<p>parrafo nuevo del autor</p>\n",
+            "el Deshacer no puede tocar un capítulo que el reemplazo nunca escribió"
+        );
+    }
+
+    #[test]
+    fn undo_con_el_sentinel_cero_restaura_igual() {
+        // Important 4: la rama del sentinel es la decisión central de la task
+        // (el borrador del plan bloqueaba siempre) y ningún test la pinneaba —
+        // borrando el `f.mtime_after_apply != 0 &&` del guard, los 5 tests de
+        // undo seguían pasando. Este falla.
+        let td = scope_con(&[("libro/1.html", "<p>Angelica dijo</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+        // Manifest con el sentinel, tal como lo deja un apply que no pudo
+        // registrar el mtime real.
+        let snap = td.path().join(".twriter/undo").join(&out.snapshot_id);
+        let mut manifest: SnapshotManifest =
+            serde_json::from_str(&fs::read_to_string(snap.join("manifest.json")).unwrap()).unwrap();
+        manifest.files[0].mtime_after_apply = 0;
+        fs::write(snap.join("manifest.json"), serde_json::to_string_pretty(&manifest).unwrap())
+            .unwrap();
+        // Y el capítulo con mtime al futuro: es exactamente el estado en que
+        // el guard, sin la rama del sentinel, bloquearía el restore.
+        let cap = td.path().join("libro/1.html");
+        forzar_mtime_futuro(&cap);
+
+        let u = deshacer_t(td.path(), &out.snapshot_id, &[]).unwrap();
+        assert_eq!(u.restored, 1, "con el sentinel se restaura igual, no se bloquea");
+        assert!(u.blocked.is_empty(), "{:?}", u.blocked);
+        assert!(fs::read_to_string(&cap).unwrap().contains("Angelica dijo"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn undo_con_fallo_parcial_reporta_y_conserva_el_snapshot() {
+        // Important 2: los `?` del camino de escritura volvían `Err` y tiraban
+        // el conteo real y el `blocked`. Y la invariante que no hay que
+        // romper: nada puede borrar el snapshot con la restauración a medias.
+        use std::os::unix::fs::PermissionsExt;
+        let td = scope_con(&[
+            ("libro/1.html", "<p>Angelica uno</p>"),
+            ("libro/2.html", "<p>Angelica dos</p>"),
+        ]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+        assert_eq!(out.files, 2);
+        let dos = td.path().join("libro/2.html");
+        fs::set_permissions(&dos, fs::Permissions::from_mode(0o444)).unwrap();
+        let u = deshacer_t(td.path(), &out.snapshot_id, &[]);
+        let _ = fs::set_permissions(&dos, fs::Permissions::from_mode(0o644));
+        let u = u.expect("un fallo parcial reporta, no aborta con Err");
+
+        assert_eq!(u.restored, 1, "el 1 sí volvió: el conteo real tiene que llegar");
+        assert_eq!(u.failed.len(), 1, "{:?}", u.failed);
+        assert!(u.failed[0].contains("2.html"), "el fallo nombra el capítulo: {:?}", u.failed);
+        assert!(fs::read_to_string(td.path().join("libro/1.html")).unwrap().contains("Angelica uno"));
+        // El snapshot sigue en disco: es la única copia del original del 2 y
+        // el reintento lo necesita.
+        let snap = td.path().join(".twriter/undo").join(&out.snapshot_id);
+        assert!(
+            snap.join("libro/2.html").exists(),
+            "el snapshot no se borra con la restauración a medias"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn undo_que_solo_falla_al_guardar_stats_no_se_come_el_outcome() {
+        // El peor de los tres `?` del Important 2: todo restaurado bien y el
+        // `write_stats` se llevaba puesto el `UndoOutcome` entero.
+        use std::os::unix::fs::PermissionsExt;
+        let td = scope_con(&[("libro/1.html", "<p>Angelica dijo</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+        let twriter = td.path().join(".twriter");
+        fs::set_permissions(&twriter, fs::Permissions::from_mode(0o555)).unwrap();
+        let u = deshacer_t(td.path(), &out.snapshot_id, &[]);
+        let _ = fs::set_permissions(&twriter, fs::Permissions::from_mode(0o755));
+        let u = u.expect("el fallo de stats no puede tirar el outcome");
+
+        assert_eq!(u.restored, 1);
+        assert_eq!(u.failed.len(), 1, "{:?}", u.failed);
+        assert!(u.failed[0].contains("stats.json"), "{:?}", u.failed);
+        assert!(fs::read_to_string(td.path().join("libro/1.html")).unwrap().contains("Angelica dijo"));
+    }
+
+    #[test]
+    fn undo_devuelve_palabras_y_ultima_edicion_a_stats() {
+        let td = scope_con(&[("libro/1.html", "<p>dijo no obstante que sí</p>")]);
+        let pv = preview_scope(td.path(), "no obstante", &ops(false, true)).unwrap();
+        let out =
+            aplicar_t(td.path(), "no obstante", &ops(false, true), edits_de(&pv), "pero").unwrap();
+        assert_eq!(
+            crate::stats::read_stats(td.path()).get("libro/1.html").unwrap().palabras,
+            4,
+            "«dijo pero que sí» son 4"
+        );
+        deshacer_t(td.path(), &out.snapshot_id, &[]).unwrap();
+        let stats = crate::stats::read_stats(td.path());
+        let stat = stats.get("libro/1.html").expect("stats para el capítulo");
+        assert_eq!(stat.palabras, 5, "«dijo no obstante que sí» son 5 palabras");
+        assert_eq!(stat.ultima_edicion.as_deref(), Some(AHORA));
+    }
+
+    #[test]
+    fn undo_con_manifest_tmp_no_restaura_nada_sin_confirmar() {
+        // El `.tmp` del rename es la señal gratis de que el manifest en disco
+        // puede ser el INICIAL, con todos los mtimes en el sentinel `0`: ahí
+        // restaurar solo pisaría lo que el guard del apply salteó a propósito.
+        let td = scope_con(&[
+            ("libro/1.html", "<p>Angelica uno</p>"),
+            ("libro/2.html", "<p>Angelica dos</p>"),
+        ]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+        let snap = td.path().join(".twriter/undo").join(&out.snapshot_id);
+        fs::write(snap.join("manifest.json.tmp"), "residuo").unwrap();
+
+        let u = deshacer_t(td.path(), &out.snapshot_id, &[]).unwrap();
+        assert_eq!(u.restored, 0, "manifest sospechoso: nada se restaura solo");
+        assert_eq!(u.blocked.len(), 2, "{:?}", u.blocked);
+        assert!(u.failed.is_empty(), "{:?}", u.failed);
+        assert!(fs::read_to_string(td.path().join("libro/1.html")).unwrap().contains("Angélica"));
+        assert!(snap.join("manifest.json").exists(), "el snapshot queda para poder forzar");
+
+        // Y el escape hatch: con la confirmación explícita del autor sí se
+        // restaura. Sin esto el bloqueo sería permanente.
+        let u = deshacer_t(td.path(), &out.snapshot_id, &u.blocked).unwrap();
+        assert_eq!(u.restored, 2);
+        assert!(u.blocked.is_empty());
+    }
+
+    #[test]
+    fn undo_no_escribe_fuera_del_root() {
+        // Important 3: `aplicar` valida los segmentos del `rel` antes de
+        // snapshotear pero `deshacer` hacía `root.join(&f.rel)` a pelo, y el
+        // manifest —que vive en `.twriter/`, local— es la única autoridad que
+        // el undo consulta para decidir qué pisar. `write_chapter` no valida
+        // ni root ni extensión.
+        let td = TempDir::new().unwrap();
+        let root = td.path().join("novelas");
+        fs::create_dir_all(&root).unwrap();
+        let victima = td.path().join("victima.html");
+        fs::write(&victima, "<p>archivo ajeno</p>\n").unwrap();
+        let snap = root.join(".twriter/undo/undo-1");
+        fs::create_dir_all(&snap).unwrap();
+        let manifest = SnapshotManifest {
+            id: "undo-1".to_string(),
+            when: AHORA.to_string(),
+            needle: "Angelica".to_string(),
+            replacement: "Angélica".to_string(),
+            files: vec![SnapshotFile {
+                rel: "../victima.html".to_string(),
+                occurrences: 1,
+                mtime_after_apply: 0,
+            }],
+        };
+        fs::write(snap.join("manifest.json"), serde_json::to_string_pretty(&manifest).unwrap())
+            .unwrap();
+
+        let u = deshacer_t(&root, "undo-1", &[]).unwrap();
+        assert_eq!(u.restored, 0);
+        assert_eq!(u.failed.len(), 1, "{:?}", u.failed);
+        assert!(u.failed[0].contains("inválido"), "{:?}", u.failed);
+        assert_eq!(
+            fs::read_to_string(&victima).unwrap(),
+            "<p>archivo ajeno</p>\n",
+            "no se toca nada afuera del root"
+        );
+    }
+
+    #[test]
+    fn undo_fuerza_aunque_el_path_venga_con_otra_grafia() {
+        // Minor 5: el match de `force_paths` era por string exacto, así que si
+        // el frontend rearma el path en vez de reenviar el de `blocked`, el
+        // botón "Pisarlos igual" no hacía nada.
+        let td = scope_con(&[("libro/1.html", "<p>Angelica dijo</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+        let cap = td.path().join("libro/1.html");
+        fs::write(&cap, "<p>Angélica dijo, y después siguió</p>").unwrap();
+        forzar_mtime_futuro(&cap);
+        let forzar = vec![td.path().join("./libro/1.html").to_string_lossy().into_owned()];
+        let u = deshacer_t(td.path(), &out.snapshot_id, &forzar).unwrap();
+        assert_eq!(u.restored, 1, "la otra grafía del mismo path también fuerza");
+        assert!(u.blocked.is_empty(), "{:?}", u.blocked);
+    }
+
+    #[test]
+    fn undo_con_snapshot_id_que_no_es_un_snapshot_es_error() {
+        // Minor 8: `snapshot_id` es un string crudo del frontend y termina en
+        // un `remove_dir_all`. Mismo criterio que el barrido de hermanos de
+        // `aplicar`, que filtra por el prefijo `undo-`.
+        let td = scope_con(&[("libro/1.html", "<p>x</p>")]);
+        for id in ["..", "../..", "undo-1/../../..", "otra-cosa", ""] {
+            let err = deshacer_t(td.path(), id, &[]).unwrap_err();
+            assert!(err.contains("inválido"), "«{id}» debe rechazarse, dijo: {err}");
+        }
     }
 
     #[test]
