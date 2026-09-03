@@ -1444,7 +1444,15 @@ pub fn deshacer(
         let origen = snap_dir.join(&f.rel);
         let destino_str = destino.to_string_lossy().into_owned();
         let forzado = force_paths.iter().any(|p| p == &destino_str);
-        if !forzado && destino.exists() && mtime_epoch(&destino) > f.mtime_after_apply {
+        // `mtime_after_apply == 0` es el sentinel de "no se pudo registrar el
+        // mtime" que deja `replace_apply` (ver el doc del campo en replace.rs).
+        // Ahí el capítulo SÍ hay que restaurarlo: puede estar escrito, o
+        // truncado por un fallo de escritura, y es justo cuando el autor más
+        // necesita deshacer. Sin esta rama el guard lo bloquearía siempre,
+        // porque cualquier archivo existente tiene mtime > 0.
+        let editado_despues =
+            f.mtime_after_apply != 0 && mtime_epoch(&destino) > f.mtime_after_apply;
+        if !forzado && destino.exists() && editado_despues {
             out.blocked.push(destino_str);
             continue;
         }
