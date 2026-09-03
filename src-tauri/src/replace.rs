@@ -506,4 +506,42 @@ mod tests {
             "<p>El niño corrió hoy</p>"
         );
     }
+
+    #[test]
+    fn offset_no_char_boundary_no_panickea() {
+        // Repro del hallazgo 1: (6,8) cae a mitad del carácter multibyte de
+        // "niño" — antes esto hacía panic en replace_range.
+        assert_eq!(aplicar_ranges("<p>niño</p>", vec![(6, 8)], "X"), "<p>niño</p>");
+    }
+
+    #[test]
+    fn rangos_solapados_se_descartan_sin_corromper() {
+        // Repro del hallazgo 2a: (3,8) y (5,10) se solapan. Antes el segundo
+        // splice corrompía el primero en vez de descartarse.
+        let out = aplicar_ranges("<p>abcdefghij</p>", vec![(3, 8), (5, 10)], "XX");
+        assert_eq!(out, "<p>abXXhij</p>");
+    }
+
+    #[test]
+    fn rangos_duplicados_se_aplican_una_sola_vez() {
+        // Repro del hallazgo 2b: el mismo range dos veces (ej. un retry que
+        // reenvía la lista). Antes el segundo splice escribía sobre basura.
+        let out = aplicar_ranges("<p>abcdefghij</p>", vec![(3, 7), (3, 7)], "ZZZZZZ");
+        assert_eq!(out, "<p>ZZZZZZefghij</p>");
+    }
+
+    #[test]
+    fn entidad_no_reconocida_no_se_puede_pisar() {
+        // Repro del hallazgo 3: "&hellip;" no es una de las 6 entidades
+        // conocidas. Antes el "&" quedaba dentro de un run reemplazable y
+        // pisarlo rompía la entidad ("&hellip;" -> "yhellip;").
+        let html = "<p>Ana &hellip; Beto</p>";
+        let m = plain_con_runs(html);
+        let hits = buscar_ocurrencias(&m.plain, "&", &ops(false, false));
+        assert_eq!(hits.len(), 1);
+        assert!(matches!(
+            ubicar(&m, hits[0].0, hits[0].1),
+            Ubicacion::Cruza(MotivoSkip::CruzaEntidad)
+        ));
+    }
 }
