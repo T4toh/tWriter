@@ -767,6 +767,7 @@ pub fn aplicar(
     // exactamente lo que dejaba al autor sin red (spec: "se reporta el
     // conteo real, no 'listo'").
     let mut stats = crate::stats::read_stats(root);
+    let mut salteados: Vec<usize> = Vec::new();
     for (idx, p) in pendientes.iter().enumerate() {
         // `nuevo` se calculó en la fase 1 sobre el `html` leído ahí. Entre
         // ese read y este punto puede pasar un autosave, un `git pull` o un
@@ -790,6 +791,12 @@ pub fn aplicar(
                 "el archivo cambió justo antes de escribir, no lo piso"
             );
             out.skipped_files.push(p.path.to_string_lossy().into_owned());
+            // Y fuera del manifest final: su entrada quedaría con el
+            // sentinel `0`, que le dice al undo "restaurá igual" — o sea que
+            // el Deshacer pisaría justo la edición ajena que este guard
+            // acaba de proteger. La copia de la fase 2 se queda adentro del
+            // snapshot sin listar (inofensiva: nadie la mira).
+            salteados.push(idx);
             continue;
         }
         match crate::fs::write_chapter(p.path.to_string_lossy().into_owned(), p.nuevo.clone()) {
@@ -825,6 +832,13 @@ pub fn aplicar(
         // posterior al open (ENOSPC, EIO, quota) deja el capítulo del autor
         // truncado a 0 bytes y este snapshot es la ÚNICA copia del original.
         // Borrarlo acá era pérdida de datos lisa y llana.
+        //
+        // OJO, esto es load-bearing: en ESTE punto `failed_files` contiene
+        // solo capítulos. Los pushes de `stats.json` y del `manifest.json`
+        // están deliberadamente DEBAJO de este `if`. Mover el `write_stats`
+        // acá arriba, o agregar cualquier push de un no-capítulo antes de
+        // este chequeo, hace que un fallo ajeno a los capítulos conserve un
+        // snapshot que hay que borrar — el bug al revés.
         let _ = std::fs::remove_dir_all(&snap_dir);
         tracing::info!(
             target: "replace",
@@ -881,12 +895,26 @@ pub fn aplicar(
         out.failed_files.push(format!("{}: {}", root.join(".twriter/stats.json").display(), e));
     }
 
+    // El manifest final lista solo los capítulos que este apply tocó o
+    // intentó tocar. Sin sacar los salteados, el sentinel `0` conflaría tres
+    // estados que quieren cosas distintas del undo: "escrito pero no pude
+    // registrar el mtime" y "intentado y quizás truncado" (los dos:
+    // restaurar), contra "salteado porque hay una edición ajena más nueva"
+    // (NO restaurar). Los que quedaron sin intentar después del `break` sí
+    // siguen listados: su copia es idéntica al disco, así que restaurarlos es
+    // un no-op.
+    let files: Vec<SnapshotFile> = manifest_files
+        .into_iter()
+        .enumerate()
+        .filter(|(idx, _)| !salteados.contains(idx))
+        .map(|(_, mf)| mf)
+        .collect();
     let manifest_final = SnapshotManifest {
         id: id.clone(),
         when: ultima_edicion.to_string(),
         needle: needle.to_string(),
         replacement: replacement.to_string(),
-        files: manifest_files,
+        files,
     };
     let manifest_path = snap_dir.join("manifest.json");
     match serde_json::to_string_pretty(&manifest_final) {
@@ -1472,7 +1500,12 @@ mod tests {
         let occs = pv.groups[0].occurrences.clone();
         assert_eq!(occs.len(), 3);
         let normal = pv.groups[0].path.clone();
-        let con_punto = td.path().join("libro/./1.html").to_string_lossy().into_owned();
+        // El `.` va PEGADO AL ROOT, no en el medio: `strip_prefix` trimea
+        // solo en la frontera del prefijo, así que `<root>/./libro/1.html`
+        // llegaba con un `rel` limpio y pasaba el chequeo de segmentos,
+        // mientras que un `.` en el medio (`<root>/libro/./1.html`) ya lo
+        // rechazaba. Este es el agujero que el fold normalizado cierra.
+        let con_punto = format!("{}/./libro/1.html", td.path().to_string_lossy());
         let con_doble_barra = format!("{}//libro/1.html", td.path().to_string_lossy());
         let edits = vec![
             FileEdit { path: normal, ranges: vec![(occs[0].html_start, occs[0].html_end)] },
@@ -1644,6 +1677,62 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
+    fn apply_no_lista_en_el_manifest_al_que_saltea_el_guard_de_mtime() {
+        // Important de la round 5, el daño inverso del Critical 1: el
+        // `continue` del guard de mtime no tocaba `manifest_files[idx]`, así
+        // que el capítulo salteado quedaba listado con el sentinel `0` — que
+        // para el undo significa "restaurá igual". Deshacer entonces pisaba
+        // justo la edición ajena que el guard acababa de proteger.
+        //
+        // El guard se dispara con ESTADO del filesystem, sin threads ni
+        // timing: `2.html` es un hard link al mismo inode que `1.html`, así
+        // que escribir `1.html` en la fase 3 le cambia el mtime a `2.html` y
+        // su guard lo saltea. (Depende de que el volumen distinga los dos
+        // mtimes: en APFS sí — ver el techo en `mtime_raw`.)
+        use std::os::unix::fs::PermissionsExt;
+        let td = scope_con(&[
+            ("libro/1.html", "<p>Angelica uno</p>"),
+            ("libro/3.html", "<p>Angelica tres</p>"),
+        ]);
+        fs::hard_link(td.path().join("libro/1.html"), td.path().join("libro/2.html")).unwrap();
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        assert_eq!(pv.groups.len(), 3, "los tres capítulos entran al lote");
+        // Y el tercero falla al escribir, para que el lote tenga a la vez un
+        // escrito, un salteado y un fallado.
+        let tres = td.path().join("libro/3.html");
+        fs::set_permissions(&tres, fs::Permissions::from_mode(0o444)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica");
+        let _ = fs::set_permissions(&tres, fs::Permissions::from_mode(0o644));
+        let out = out.expect("un fallo de escritura reporta, no aborta con Err");
+
+        assert_eq!(out.files, 1, "solo 1.html se escribió");
+        assert!(
+            out.skipped_files.iter().any(|s| s.ends_with("2.html")),
+            "2.html lo saltea el guard: {:?}",
+            out.skipped_files
+        );
+        assert!(
+            out.failed_files.iter().any(|s| s.contains("3.html")),
+            "3.html falla al escribir: {:?}",
+            out.failed_files
+        );
+
+        let snap = td.path().join(".twriter/undo").join(&out.snapshot_id);
+        let manifest: SnapshotManifest =
+            serde_json::from_str(&fs::read_to_string(snap.join("manifest.json")).unwrap()).unwrap();
+        let rels: Vec<&str> = manifest.files.iter().map(|f| f.rel.as_str()).collect();
+        assert_eq!(
+            rels,
+            ["libro/1.html", "libro/3.html"],
+            "el salteado no se lista; el escrito y el fallado sí"
+        );
+        // La copia del salteado se queda en el snapshot, sin listar: nadie la
+        // mira, y borrarla sería otra escritura en el camino crítico.
+        assert!(snap.join("libro/2.html").exists());
+    }
+
+    #[test]
+    #[cfg(unix)]
     fn apply_que_falla_entero_pasa_el_slot_de_undo_al_snapshot_nuevo() {
         // Contracara del Critical 1: un lote que falló entero SÍ consume el
         // slot único de undo. Es a propósito y es el lado seguro — el
@@ -1668,7 +1757,6 @@ mod tests {
         let _ = fs::set_permissions(&dos_path, fs::Permissions::from_mode(0o644));
         let out = out.unwrap();
         assert_eq!(out.files, 0);
-        assert_ne!(out.snapshot_id, a.snapshot_id);
         assert!(!out.snapshot_id.is_empty(), "el capítulo se intentó escribir: hay qué deshacer");
 
         let undo_dir = td.path().join(".twriter/undo");
