@@ -99,6 +99,9 @@ export class SearchService {
   private note = inject(NoteService);
   private mdReader = inject(MarkdownReaderService);
 
+  // Para cerrar el panel usar hide(), nunca `open.set(false)` directo: hay
+  // estado asociado (`replaceMode`) que tiene que bajar junto con `open`, y
+  // solo `hide()` lo hace.
   readonly open = signal<boolean>(false);
   readonly query = signal<string>('');
   /** Modo reemplazo del panel (toggle `⇄`). Vive acá y no en `ReplaceService`

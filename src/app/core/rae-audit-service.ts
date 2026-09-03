@@ -57,7 +57,7 @@ export class RaeAuditService {
   }
 
   async open(scope: AuditScope): Promise<void> {
-    this.search.open.set(false);
+    this.search.hide();
     this.imageViewer.close();
     this.fontPreview.close();
     this.markdownReader.close();
