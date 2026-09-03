@@ -95,7 +95,7 @@ interface ReplaceOccurrence {
 
 interface ReplaceSkipped {
   snippet: string;
-  reason: 'crossesTag' | 'crossesEntity' | 'crossesBlock';
+  reason: 'cruzaTag' | 'cruzaEntidad' | 'cruzaBloque';
 }
 
 interface ReplaceGroup {
