@@ -512,6 +512,14 @@ pub struct SnapshotFile {
     pub occurrences: usize,
     /// mtime en segundos epoch DESPUÉS de escribir. El undo lo usa para no
     /// pisar una edición posterior al reemplazo.
+    ///
+    /// `0` es un sentinel, NO un mtime real: significa "no se pudo
+    /// registrar" (el capítulo no llegó a escribirse, o la reescritura final
+    /// del manifest falló y quedó el manifest inicial en disco). El undo NO
+    /// puede usar `0` como gate para bloquear el restore — al revés, con `0`
+    /// tiene que restaurar igual. Bloquear ahí sería negarle el Deshacer al
+    /// autor justo en el caso en que más lo necesita: un lote que falló a
+    /// mitad de camino.
     pub mtime_after_apply: u64,
 }
 
@@ -532,6 +540,16 @@ fn mtime_epoch(path: &Path) -> u64 {
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_secs())
         .unwrap_or(0)
+}
+
+/// Mtime crudo, sin truncar a segundos. A diferencia de `mtime_epoch` (que
+/// sigue sirviendo para el campo en segundos del manifest), esto es lo que
+/// compara el guard de la fase 3: `mtime_epoch` pierde cualquier escritura
+/// ajena que caiga dentro del mismo segundo que el read de la fase 1, que es
+/// el caso común en un lote chico — la ventana entera puede caer adentro de
+/// un solo segundo.
+fn mtime_raw(path: &Path) -> Option<SystemTime> {
+    std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
 /// Id de snapshot legible y ordenable. Epoch en MILISEGUNDOS: en segundos,
@@ -578,7 +596,7 @@ pub fn aplicar(
         html: String,
         nuevo: String,
         ocurrencias: usize,
-        mtime_antes: u64,
+        mtime_antes: Option<SystemTime>,
     }
     let mut pendientes: Vec<Pendiente> = Vec::new();
     for (path_str, mut ranges) in por_path {
@@ -592,8 +610,10 @@ pub fn aplicar(
         };
         // Mtime al momento de leer: la fase 3 lo vuelve a chequear justo
         // antes de escribir, para no pisar una edición que llegó en la
-        // ventana entre este read y esa escritura.
-        let mtime_antes = mtime_epoch(&path);
+        // ventana entre este read y esa escritura. Crudo (no `mtime_epoch`,
+        // que trunca a segundos y perdería un write ajeno en el mismo
+        // segundo).
+        let mtime_antes = mtime_raw(&path);
         let map = plain_con_runs(&html);
         let vigentes: Vec<(usize, usize)> = buscar_ocurrencias(&map.plain, needle, op)
             .into_iter()
@@ -629,40 +649,48 @@ pub fn aplicar(
     // sin red: el undo anterior (si hay) sigue intacto hasta el final de
     // este bloque.
     let undo_root = root.join(UNDO_SUBDIR);
-    // Id único: si `<id>` ya existiera (dos applies en el mismo milisegundo,
-    // o un reloj que retrocedió), sufijarlo hasta encontrar uno libre en vez
-    // de abortar. La propiedad que importa —nunca escribir en un directorio
-    // que ya es de otro snapshot— se cumple igual, sin el hard-fail.
-    let base_id = nuevo_snapshot_id();
-    let mut id = base_id.clone();
-    let mut snap_dir = undo_root.join(&id);
-    let mut sufijo = 1u32;
-    while snap_dir.exists() {
-        id = format!("{base_id}-{sufijo}");
-        snap_dir = undo_root.join(&id);
-        sufijo += 1;
-    }
 
     // Resolver todos los `rel` primero: si alguno falla (capítulo fuera del
-    // root, o un `..` que sacaría la copia de `snap_dir`), abortar ACÁ, antes
-    // de tocar `undo_root` — así el snapshot anterior no se pierde por un
-    // request malformado.
+    // root, o una grafía de path que se saldría de `snap_dir` — `..`, `.` o
+    // un segmento vacío, o sea `//`), abortar ACÁ, antes de reclamar ningún
+    // directorio — así el snapshot anterior no se pierde por un request
+    // malformado.
     let mut manifest_files: Vec<SnapshotFile> = Vec::new();
     for p in &pendientes {
         let rel = crate::stats::relative_key(root, &p.path)
             .ok_or_else(|| format!("capítulo fuera del root: {}", p.path.display()))?;
-        if rel.split('/').any(|seg| seg == "..") {
+        if rel.split('/').any(|seg| seg.is_empty() || seg == "." || seg == "..") {
             return Err(format!("path de capítulo inválido: {}", p.path.display()));
         }
         manifest_files.push(SnapshotFile { rel, occurrences: p.ocurrencias, mtime_after_apply: 0 });
     }
 
+    // Reclamar el id ATÓMICAMENTE con `create_dir` (falla si ya existe, a
+    // diferencia de `create_dir_all`): un `exists()` y crear después dejaba
+    // una ventana donde dos `replace_apply` concurrentes (los comandos Tauri
+    // corren en threads propios; el guard `applying` vive en el frontend, que
+    // es justo el lado que no cubre esto) podían elegir el mismo id y
+    // terminar escribiendo los dos adentro del mismo snapshot.
+    std::fs::create_dir_all(&undo_root)
+        .map_err(|e| format!("mkdir {}: {}", undo_root.display(), e))?;
+    let base_id = nuevo_snapshot_id();
+    let (mut id, mut sufijo) = (base_id.clone(), 1u32);
+    let snap_dir = loop {
+        let d = undo_root.join(&id);
+        match std::fs::create_dir(&d) {
+            Ok(()) => break d,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                id = format!("{base_id}-{sufijo}");
+                sufijo += 1;
+            }
+            Err(e) => return Err(format!("mkdir {}: {}", d.display(), e)),
+        }
+    };
+
     // Escribir los originales + el manifest inicial (mtimes en 0, se
     // completan en la fase 3). Que el manifest exista ANTES del primer
     // `write_chapter` es lo que evita que un snapshot quede sin él si algo
     // falla a mitad del lote real.
-    std::fs::create_dir_all(&snap_dir)
-        .map_err(|e| format!("mkdir {}: {}", snap_dir.display(), e))?;
     let escrito = (|| -> Result<(), String> {
         for (p, mf) in pendientes.iter().zip(manifest_files.iter()) {
             let destino = snap_dir.join(&mf.rel);
@@ -692,17 +720,6 @@ pub fn aplicar(
         return Err(e);
     }
 
-    // El snapshot nuevo está completo (originales + manifest inicial). Recién
-    // ahora se borran los hermanos de `<id>` en `undo_root` — si algo de
-    // arriba hubiera fallado, el undo anterior seguiría intacto.
-    if let Ok(entries) = std::fs::read_dir(&undo_root) {
-        for entry in entries.flatten() {
-            if entry.file_name() != std::ffi::OsStr::new(id.as_str()) {
-                let _ = std::fs::remove_dir_all(entry.path());
-            }
-        }
-    }
-
     // 3. Escribir. `fs::write_chapter` reindexa tantivy por su cuenta. Si una
     // escritura falla a mitad de lote (disco lleno, permisos, archivo tomado
     // por el servicio de sync), CORTAR ahí en vez de seguir con el resto: en
@@ -724,9 +741,8 @@ pub fn aplicar(
         // determinística exigiría un thread compitiendo por timing contra
         // esta misma llamada, o un hook de test en el camino de escritura —
         // ninguno de los dos vale lo que cuesta un guard de tres líneas
-        // sobre un helper (`mtime_epoch`) que ya está ejercitado en el resto
-        // del archivo.
-        if mtime_epoch(&p.path) != p.mtime_antes {
+        // sobre `mtime_raw`, que ya está ejercitado en el resto del archivo.
+        if mtime_raw(&p.path) != p.mtime_antes {
             // Cambió entre el read de la fase 1 y este punto. Mismo canal y
             // semántica que la revalidación: "cambió desde que lo leí", no
             // se pisa.
@@ -758,13 +774,62 @@ pub fn aplicar(
         }
     }
 
+    if out.files == 0 {
+        // Nada que deshacer: todas las escrituras fallaron o se saltearon
+        // por el guard de mtime. `stats` no cambió (nadie llegó al insert),
+        // así que ni vale la pena reescribirlo, y dejar un snapshot sin
+        // ningún capítulo real solo ensuciaría `.twriter/undo` con un
+        // Deshacer que no debería existir.
+        let _ = std::fs::remove_dir_all(&snap_dir);
+        tracing::info!(
+            target: "replace",
+            needle,
+            replacement,
+            skipped = out.skipped_files.len(),
+            failed = out.failed_files.len(),
+            "replace_apply sin escrituras"
+        );
+        return Ok(out);
+    }
+
+    // El snapshot cubre al menos un capítulo real. Recién ahora se barren
+    // los hermanos de `id` en `undo_root` — si la fase 3 hubiera fallado
+    // entera (arriba), el undo anterior seguía intacto hasta este punto.
+    // Filtrado por el prefijo `undo-` (así el barrido no se come algo que
+    // una Task futura quiera guardar en la misma carpeta) y logueado si
+    // falla, en vez de tragarse el error: si el barrido no puede limpiar,
+    // `.twriter/undo` acumula copias de capítulos sin que nada lo diga.
+    if let Ok(entries) = std::fs::read_dir(&undo_root) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            if name == std::ffi::OsStr::new(id.as_str()) {
+                continue;
+            }
+            if !name.to_string_lossy().starts_with("undo-") {
+                continue;
+            }
+            if let Err(e) = std::fs::remove_dir_all(entry.path()) {
+                tracing::warn!(
+                    target: "replace",
+                    dir = %entry.path().display(),
+                    error = %e,
+                    "no se pudo barrer un snapshot anterior"
+                );
+            }
+        }
+    }
+
     // Read-modify-write del mapa entero: si un autosave llama a
     // `write_chapter_stats` justo en esta ventana, ese `insert` se pisa acá.
     // Es cosmético (se autocura en el próximo save de ese capítulo, que
     // vuelve a leer y reescribir el mapa) y un lock para esto no se
     // justifica — el brief ya pide un solo read/write para todo el lote.
     if let Err(e) = crate::stats::write_stats(root, &stats) {
+        // El autor no ve `tracing::error!`: si se queda solo en el log, el
+        // toast dice éxito mientras `stats.json` quedó viejo. Mismo canal
+        // que los capítulos que no se pudieron escribir.
         tracing::error!(target: "replace", error = %e, "no se pudo guardar stats tras el reemplazo");
+        out.failed_files.push(format!("{}: {}", root.join(".twriter/stats.json").display(), e));
     }
 
     let manifest_final = SnapshotManifest {
@@ -774,13 +839,22 @@ pub fn aplicar(
         replacement: replacement.to_string(),
         files: manifest_files,
     };
+    let manifest_path = snap_dir.join("manifest.json");
     match serde_json::to_string_pretty(&manifest_final) {
         Ok(json) => {
-            if let Err(e) = std::fs::write(snap_dir.join("manifest.json"), json) {
+            if let Err(e) = std::fs::write(&manifest_path, json) {
+                // Mismo motivo que arriba: si esto solo loguea, el registro
+                // de Deshacer queda con los mtimes en el sentinel `0` de
+                // todas formas (ver el doc comment del campo) y el autor no
+                // se entera de que el manifest no reflejó la escritura real.
                 tracing::error!(target: "replace", error = %e, "no se pudo reescribir el manifest final");
+                out.failed_files.push(format!("{}: {}", manifest_path.display(), e));
             }
         }
-        Err(e) => tracing::error!(target: "replace", error = %e, "no se pudo serializar el manifest final"),
+        Err(e) => {
+            tracing::error!(target: "replace", error = %e, "no se pudo serializar el manifest final");
+            out.failed_files.push(format!("{}: {}", manifest_path.display(), e));
+        }
     }
     out.snapshot_id = id;
 
@@ -1325,6 +1399,34 @@ mod tests {
     }
 
     #[test]
+    fn apply_rechaza_una_grafia_alternativa_del_mismo_path() {
+        // Critical N1 de la re-review: el Critical 2 seguía vivo por otra
+        // grafía del mismo archivo — el fold usa el string crudo como key,
+        // así que `libro/1.html` y `libro/./1.html` generaban dos
+        // `Pendiente` sobre el mismo html original (el segundo pisaba al
+        // primero). El chequeo de segmentos del Minor 8 se extiende acá
+        // para rechazar también `.` y un segmento vacío, no solo `..` — sin
+        // recurrir a `canonicalize` (toca el filesystem por edit, falla si
+        // el archivo no existe, y resuelve symlinks que en Dropbox/iCloud
+        // pueden apuntar a otro lado).
+        let td = scope_con(&[("libro/1.html", "<p>Angelica y Angelica</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let occs = pv.groups[0].occurrences.clone();
+        let normal = pv.groups[0].path.clone();
+        let con_punto = td.path().join("libro/./1.html").to_string_lossy().into_owned();
+        let edits = vec![
+            FileEdit { path: normal, ranges: vec![(occs[0].html_start, occs[0].html_end)] },
+            FileEdit { path: con_punto, ranges: vec![(occs[1].html_start, occs[1].html_end)] },
+        ];
+        let err = aplicar_t(td.path(), "Angelica", &ops(false, true), edits, "Angélica").unwrap_err();
+        assert!(err.contains("inválido"), "{err}");
+        // Nada se escribió ni quedó ningún snapshot.
+        let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
+        assert!(uno.contains("Angelica y Angelica"), "no debe tocarse: {uno:?}");
+        assert!(!td.path().join(".twriter/undo").exists());
+    }
+
+    #[test]
     #[cfg(unix)]
     fn apply_corta_al_primer_fallo_de_escritura_y_deja_registro() {
         // Critical 1 de la review r1: un fallo de escritura a mitad de lote
@@ -1423,6 +1525,90 @@ mod tests {
         let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
         assert!(uno.contains("Angelica"), "no debe tocarse: {uno:?}");
         assert!(!td.path().join(".twriter/undo").exists(), "no debe quedar snapshot");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn apply_snapshot_id_vacio_cuando_todas_las_escrituras_fallan() {
+        // Important N3 de la re-review: con `files == 0` (acá, la única
+        // escritura falla por permisos) `snapshot_id` tenía que quedar
+        // poblado igual, violando el contrato del propio campo ("Vacío si
+        // no se escribió nada") y ofreciéndole a la UI un Deshacer para un
+        // snapshot donde no cambió nada.
+        use std::os::unix::fs::PermissionsExt;
+        let td = scope_con(&[("libro/1.html", "<p>Angelica</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let uno = td.path().join("libro/1.html");
+        fs::set_permissions(&uno, fs::Permissions::from_mode(0o444)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica");
+        let _ = fs::set_permissions(&uno, fs::Permissions::from_mode(0o644));
+        let out = out.expect("un fallo de escritura reporta, no aborta con Err");
+
+        assert_eq!(out.files, 0);
+        assert_eq!(out.failed_files.len(), 1);
+        assert!(out.snapshot_id.is_empty(), "sin escrituras no hay nada que deshacer");
+        // `.twriter/undo` puede quedar creado (vacío) — eso es inofensivo.
+        // Lo que no puede quedar es un directorio de snapshot huérfano.
+        let undo_dir = td.path().join(".twriter/undo");
+        let quedan: Vec<_> = std::fs::read_dir(&undo_dir)
+            .map(|it| it.filter_map(|e| e.ok()).collect())
+            .unwrap_or_default();
+        assert!(quedan.is_empty(), "no debe quedar un snapshot huérfano: {quedan:?}");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn apply_que_falla_entero_no_borra_el_snapshot_anterior() {
+        // Important N3b de la re-review: el barrido de hermanos se movió a
+        // DESPUÉS de la fase 3 (antes corría apenas el snapshot nuevo
+        // quedaba completo, sin esperar a saber si la fase 3 iba a escribir
+        // algo). Con `files == 0` la rama de arriba borra el snapshot nuevo
+        // (vacío) y retorna antes de llegar al barrido: el snapshot de un
+        // apply anterior exitoso nunca se toca.
+        use std::os::unix::fs::PermissionsExt;
+        let td = scope_con(&[("libro/1.html", "<p>uno</p>")]);
+        let pv1 = preview_scope(td.path(), "uno", &ops(false, true)).unwrap();
+        let a = aplicar_t(td.path(), "uno", &ops(false, true), edits_de(&pv1), "dos").unwrap();
+        assert!(!a.snapshot_id.is_empty());
+
+        let dos_path = td.path().join("libro/2.html");
+        fs::write(&dos_path, "<p>Angelica</p>").unwrap();
+        let pv2 = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        fs::set_permissions(&dos_path, fs::Permissions::from_mode(0o444)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv2), "Angélica");
+        let _ = fs::set_permissions(&dos_path, fs::Permissions::from_mode(0o644));
+        let out = out.unwrap();
+        assert_eq!(out.files, 0);
+        assert!(out.snapshot_id.is_empty());
+
+        let undo_dir = td.path().join(".twriter/undo");
+        let quedan: Vec<_> = fs::read_dir(&undo_dir).unwrap().filter_map(|e| e.ok()).collect();
+        assert_eq!(quedan.len(), 1, "solo debe seguir el snapshot del primer apply");
+        assert_eq!(quedan[0].file_name().to_string_lossy(), a.snapshot_id);
+    }
+
+    #[test]
+    fn apply_no_borra_lo_que_no_es_un_snapshot() {
+        // Minor N5 de la re-review: el barrido de hermanos borraba
+        // cualquier entry de `.twriter/undo` que no fuera `<id>`, sin mirar
+        // el patrón. Se filtra por el prefijo `undo-`, así que algo ajeno
+        // plantado ahí (o que una Task futura quiera guardar en la misma
+        // carpeta) sobrevive.
+        let td = scope_con(&[("libro/1.html", "<p>Angelica</p>")]);
+        let undo_dir = td.path().join(".twriter/undo");
+        fs::create_dir_all(undo_dir.join("no-soy-un-snapshot/sub")).unwrap();
+        fs::write(undo_dir.join("no-soy-un-snapshot/sub/importante.txt"), "no tocar").unwrap();
+        fs::write(undo_dir.join("archivo-suelto.txt"), "tampoco").unwrap();
+
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+
+        assert!(
+            undo_dir.join("no-soy-un-snapshot/sub/importante.txt").exists(),
+            "un directorio que no empieza con undo- no debe tocarse"
+        );
+        assert!(undo_dir.join("archivo-suelto.txt").exists(), "un archivo suelto no debe tocarse");
+        assert!(undo_dir.join(&out.snapshot_id).exists(), "el snapshot nuevo sí queda");
     }
 
     #[test]
