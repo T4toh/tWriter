@@ -667,7 +667,7 @@ export class ChapterService {
   }
 }
 
-function countWords(html: string): number {
+export function countWords(html: string): number {
   if (!html) return 0;
   const text = html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ');
   const matches = text.match(/\S+/g);

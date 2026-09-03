@@ -1898,56 +1898,59 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Validador RAE
 
-- **Bulk auto-fix** desde el panel "Revisar RAE": hoy el panel es solo lista
-  - click-to-jump. La acción "Aplicar todos los auto-fixables (N)"
-    (replacements char/typo agrupados por archivo en orden descendente de
-    offset, un `write_chapter` por archivo) quedó fuera de v1 — el riesgo es
-    pisar inline markup (`<em>`/`<strong>`) al reconstruir HTML desde plain
-    text. Implementar con patch quirúrgico HTML-aware: encontrar el rango en
-    el HTML que corresponde al span del fix y reemplazar solo eso, sin tocar
-    el resto del párrafo.
-- [x] **Fix de `pending-conversion` desde popover inline**: hoy aplica el
-  replacement del converter como plain text sobre el rango del párrafo, lo
-  que strip-ea inline markup en ese párrafo. Para párrafos con markup, usar
-  el botón "RAE" del toolbar (modal de capítulo entero) que sí preserva
-  markup vía el path `<p>…</p>` del converter. Solución: serializar el slice
-  ProseMirror del párrafo a HTML antes de invocar `convert()`, y replazar el
-  rango con el HTML resultante en vez de `insertContent` plano.
+- [x] **Bulk auto-fix, y una vista para revisar el libro entero**
+  (`feat/revision-libro`, verificado a mano por el autor el 2026-09-02).
+  El item pedía solo el bulk auto-fix del panel "Revisar RAE"; el pedido del
+  autor lo amplió a una vista con **una acción por tipo** —explícitamente NO
+  una lista unificada de hallazgos— a nivel libro, fuera del editor.
 
-  **Estado**: implementado en `fix/rae-popover-markup` — spec en
-  `docs/superpowers/specs/2026-07-30-rae-popover-markup-design.md`.
-  `applyRaeParagraph` serializa el rango con `serializeRange`
-  (`getHTMLFromFragment` de `@tiptap/core`), lo pasa por `convertFragmentHtml` y
-  reinserta HTML con `insertContentAt` — es el rango y no el nodo, porque un
-  bloque con `<br>` cuenta como varios párrafos para el validador. De yapa,
-  `applyRaeFix` (los fixes puntuales, que tenían el mismo antipatrón con blast
-  radius más chico) pasó a una transacción que hereda con `marksAcross` las
-  marcas vivas en el span `fixFrom..fixTo`. Tests:
-  `scripts/run-rae-apply-smoke.mjs` (7 casos) + `pnpm build`; la parte con DOM
-  no es automatizable en este repo (no hay runner con DOM).
+  Spec en `docs/superpowers/specs/2026-09-02-revision-libro-design.md`, plan en
+  `docs/superpowers/plans/2026-09-02-revision-libro.md`.
 
-  El review final encontró tres cosas que el spec no había visto, arregladas en
-  la misma PR. (a) Con markup abriendo el párrafo el ancla de D1 no dispara,
-  pero la normalización `“” → ""` sí cambia el string: la transacción se
-  disparaba igual, degradaba las comillas tipográficas y no ponía la raya — el
-  caso típico de un `.docx` importado con el diálogo en cursiva. Ahora
-  `convertFragmentHtml` compara contra el input normalizado (mismo guard que
-  `pushPendingConversion`) y devuelve `null`. (b) Ese `null` era un no-op mudo;
-  ahora cierra el popover y avisa por toast. (c) `insertContentAt` con un
-  **string** toma la rama `isOnlyTextContent` de TipTap y hace
-  `tr.insertText(string)`, así que un `&nbsp;` entraba literal al documento y se
-  acumulaba en cada aplicación: se parsea a `Fragment` antes de insertar. De
-  paso se corrigió la herencia de marcas — `resolve(from).marks()` toma el lado
-  equivocado del borde, y el `insertContent` viejo ya usaba `marksAcross`, o sea
-  que el primer intento regresaba en el borde izquierdo de una cursiva.
+  **Qué es**: botón en la tarjeta del libro → modal que escanea el libro con
+  los cuatro detectores (rayas RAE, comillas tipográficas, arreglos RAE,
+  repeticiones), muestra qué encontró cada uno, y aplica los tildados.
+  Repeticiones va sin checkbox: no son auto-fixables. El panel lateral
+  "Revisar RAE" y las entradas del menú contextual quedan como estaban.
 
-  **Verificado a mano** en macOS (M5, Darwin 25.6, 2026-07-30) con la app en
-  dev: el autor probó los seis puntos del checklist — itálica en el medio del
-  diálogo sobreviviendo a la conversión, párrafo con markup de apertura cerrando
-  con el toast y sin tocar las comillas, mismo resultado por el botón "RAE" del
-  toolbar, hard breaks con un solo segmento reemplazado, fix puntual en el borde
-  izquierdo de una cursiva quedando en cursiva, y espacio duro sin `&nbsp;`
-  literal — y da el comportamiento por bueno.
+  **Lo que resolvió el riesgo que dejó esto afuera de v1**: los offsets de
+  `validateRae` son sobre texto plano y el archivo es HTML.
+  `planoConMapa` (`dialogos/plano-con-mapa.ts`) construye el plano **y** el
+  índice HTML de cada carácter en la misma pasada — incluido el doble-decode
+  de entidades de `htmlToPlain`, que se replica y **no se corrige** porque es
+  el comportamiento que vieron todas las violaciones calculadas hasta hoy.
+  `aplicarFixesHtml` (`dialogos/aplicar-fixes.ts`) aplica en orden descendente
+  y **saltea** todo fix cuyo rango HTML contenga un tag: antes de comerse un
+  `</em>` en veinte capítulos, no lo aplica y lo reporta.
+
+  **Decisiones de idioma, que fueron lo más delicado**: la cadena es
+  `book.json` → `.meta.json` del capítulo → `detectLang` del contenido, en ese
+  orden, resuelta en `resolverIdiomaEfectivo` (`revision/deteccion.ts`). El
+  libro manda porque las novelas del autor son de un idioma con citas sueltas
+  en otro: un capítulo sin idioma en su meta y con una cita en inglés se
+  clasificaba como inglés y recibía comillas tipográficas inglesas. Un idioma
+  en blanco cuenta como ausente (`??` no atrapa `""`). El gate diverge a
+  propósito del `canApplyRae` del editor: allá hay un humano mirando un diff,
+  acá se escribe un libro entero desatendido.
+
+  **`pending-conversion` salió del bucket de arreglos RAE** y quedó solo en
+  rayas: su `autoFix` ES la conversión del converter, así que tildando solo
+  "arreglos RAE" el diálogo se convertía igual, y el escaneo contaba el mismo
+  cambio en dos filas.
+
+  **Sabido y no resuelto**: aplicar rayas sobre un capítulo con diálogo real
+  también aplana comillas tipográficas de citas no dialogadas del mismo
+  capítulo. `convert()` normaliza comillas en una sola pasada sobre todo el
+  HTML y el guard solo decide si conviene invocarlo. Mismo comportamiento que
+  el botón "RAE" del toolbar, pero acá es desatendido.
+
+  **Diferido**: el conteo de arreglos RAE se calcula sobre el HTML original y
+  aplicar lo calcula sobre el ya transformado (el encadenamiento es correcto,
+  el número no es una predicción exacta); `rae-audit-service.ts:50` cuenta los
+  auto-fixables incluyendo `pending-conversion`, así que su número no coincide
+  con el del modal; y `quotes-fix-service::fixScope` no informa cuántos
+  capítulos escribió si falla a mitad de camino.
+
 - **El ancla de D1 no tolera markup inline de apertura** (limitación del
   converter, no del popover): la regla D1 ancla el diálogo con `^(\s*)"`, o sea
   que la comilla de apertura tiene que ser el primer carácter no-espacio del

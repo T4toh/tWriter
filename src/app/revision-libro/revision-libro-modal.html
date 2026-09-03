@@ -1,0 +1,75 @@
+@if (svc.libro(); as libro) {
+  <div class="rl-backdrop" (click)="svc.cerrar()"></div>
+  <div class="rl-modal" (click)="$event.stopPropagation()">
+    <header class="rl-header">
+      <h2>Revisar «{{ libro.name }}»{{ idiomaLibro() ? ' · ' + idiomaLibro() : '' }}</h2>
+      <button type="button" class="rl-escanear btn btn-secondary" [disabled]="svc.escaneando() || svc.aplicando()" (click)="svc.escanear()">
+        @if (svc.escaneando()) { <app-spinner [size]="14" /> } @else { Escanear }
+      </button>
+    </header>
+
+    @if (notaIdioma(); as nota) {
+      <p class="rl-nota-idioma">Idioma {{ nota }}.</p>
+    }
+
+    @if (svc.error(); as err) {
+      <p class="rl-error">{{ err }}</p>
+    }
+
+    @if (svc.resultado(); as r) {
+      <div class="rl-body">
+        @if (r.capitulosEs > 0) {
+          <label class="rl-fila">
+            <input type="checkbox" [checked]="rayas()" (change)="rayas.set(!rayas())" [disabled]="r.rayas.capitulos === 0" />
+            <span class="rl-nombre">Rayas RAE</span>
+            <span class="rl-conteo">{{ resumenCapitulos(r.rayas) }}</span>
+            <span class="rl-nota">también normaliza las comillas tipográficas de todo el capítulo, no solo el diálogo</span>
+          </label>
+        } @else {
+          <div class="rl-fila rl-fila-reporte">
+            <span class="rl-nombre">Rayas RAE</span>
+            <span class="rl-conteo">solo para capítulos en español</span>
+          </div>
+        }
+        @if (r.capitulosEn > 0) {
+          <label class="rl-fila">
+            <input type="checkbox" [checked]="comillas()" (change)="comillas.set(!comillas())" [disabled]="r.comillas.capitulos === 0" />
+            <span class="rl-nombre">Comillas tipográficas</span>
+            <span class="rl-conteo">{{ resumenCapitulos(r.comillas) }}</span>
+          </label>
+        } @else {
+          <div class="rl-fila rl-fila-reporte">
+            <span class="rl-nombre">Comillas tipográficas</span>
+            <span class="rl-conteo">solo para capítulos en inglés</span>
+          </div>
+        }
+        @if (r.capitulosEs > 0) {
+          <label class="rl-fila">
+            <input type="checkbox" [checked]="arreglosRae()" (change)="arreglosRae.set(!arreglosRae())" [disabled]="r.arreglosRae.cambios === 0" />
+            <span class="rl-nombre">Arreglos RAE</span>
+            <span class="rl-conteo">{{ resumen(r.arreglosRae) }}</span>
+          </label>
+        } @else {
+          <div class="rl-fila rl-fila-reporte">
+            <span class="rl-nombre">Arreglos RAE</span>
+            <span class="rl-conteo">solo para capítulos en español</span>
+          </div>
+        }
+        <div class="rl-fila rl-fila-reporte">
+          <span class="rl-nombre">Repeticiones</span>
+          <span class="rl-conteo">{{ resumen(r.repeticiones) }}</span>
+          <span class="rl-nota">no se arreglan solas: se reescriben a mano en el editor</span>
+        </div>
+      </div>
+    } @else if (!svc.escaneando()) {
+      <p class="rl-vacio">Tocá «Escanear» para ver qué se puede corregir en esta novela.</p>
+    }
+
+    <footer class="rl-actions">
+      <button type="button" class="btn btn-secondary" (click)="svc.cerrar()">Cerrar</button>
+      <button type="button" class="btn btn-primary" [disabled]="!puedeAplicar()" (click)="aplicar()">
+        @if (svc.aplicando()) { <app-spinner [size]="14" /> } @else { Aplicar lo tildado }
+      </button>
+    </footer>
+  </div>
+}

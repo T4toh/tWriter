@@ -46,6 +46,14 @@
     <button
       type="button"
       class="card-btn"
+      (click)="abrirRevision($event)"
+      title="Revisar y corregir la novela"
+    >
+      <svg lucideListChecks [size]="16"></svg>
+    </button>
+    <button
+      type="button"
+      class="card-btn"
       [disabled]="exporting()"
       (click)="exportEpub($event)"
       title="Exportar a EPUB"
