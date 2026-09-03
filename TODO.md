@@ -1869,6 +1869,16 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   9. El header con los 7 botones en un panel angosto — mirar que no quede
      apretado — y que "Deshacer"/"Pisarlos igual"/el botón de aplicar tengan
      pinta de botón real, no una caja apretada de ícono.
+  10. **El tri-estado del checkbox de capítulo**: con un grupo donde algunas
+      ocurrencias están destildadas, confirmar que el checkbox se ve
+      `indeterminate` de verdad (la rayita, no tildado ni vacío) — y sobre
+      todo, que clickearlo **no** abre ni cierra el `<details>` del grupo
+      (el checkbox vive adentro del `<summary>` con
+      `(click)="$event.stopPropagation()"` en `search-panel.html`, pero
+      según el spec el `stopPropagation` no cancela por sí solo la
+      "activation behavior" del `<summary>` — la review no lo pudo
+      certificar leyendo el código y pidió verlo andando en la WKWebView de
+      Mac y en WebKitGTK de Arch).
   **Huecos conocidos y cosas deferidas** (están en el ledger de la feature,
   no son sorpresa; ninguna es bloqueante para usarlo con cuidado):
   - Un `<` suelto en el HTML se come el texto hasta el próximo `>` de
@@ -1881,11 +1891,19 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
     (grafías distintas para el mismo path real) y se dejaron afuera porque
     `canonicalize` toca el filesystem por cada edición y puede resolver un
     symlink de Dropbox/iCloud a otro lado.
-  - `fs::write_chapter` sigue escribiendo con `fs::write` sin tmp+rename, así
-    que en disco lleno puede truncar un capítulo a medio escribir; el
-    snapshot lo hace recuperable, pero el arreglo de fondo es el camino de
-    guardado de **toda** la app (incluido el autosave), no solo de esto —
-    candidato a su propio item de TODO.md.
+  - `fs::write_chapter` sin tmp+rename es un riesgo de la app entera, no solo
+    de esto — item propio más abajo: "El guardado de capítulos puede
+    truncarlos en disco lleno".
+  - Caminos sin test automatizado en `replace.rs` (hueco de cobertura, no bug
+    conocido — el comportamiento es el correcto, lo que falta es el arnés):
+    el TOCTOU del id de snapshot y la recalibración del guard de mtime a
+    `SystemTime` piden concurrencia real o timing, y un test que pasa por
+    casualidad es peor que ninguno; el repro del fallo al reescribir el
+    manifest final no se puede forzar sin romper también la fase anterior; y
+    la variante `files == 0` del filtro de salteados (todo salteado sin
+    ningún escrito) queda sin ejercitar porque el disparador que sí se
+    encontró —un hard link entre dos capítulos— siempre incluye una
+    escritura exitosa.
   - El guard que protege contra pisar una edición ajena compara mtimes en
     segundos: en discos con resolución de 1s (HFS+, exFAT, SMB) una edición
     hecha en el mismo segundo que el reemplazo es invisible para el guard.
@@ -1902,6 +1920,30 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   - Fuera de alcance por diseño, no por olvido: reemplazar dentro de notas,
     regex, deshacer granular estilo ProseMirror, historial de reemplazos, y
     tocar títulos de capítulo — ninguno se implementó.
+
+
+- [ ] **El guardado de capítulos puede truncarlos en disco lleno**
+  (encontrado el 2026-09-03 revisando `replace_apply` para "reemplazar en
+  lote", pero es un problema de toda la app, no de esa feature)
+  `fs::write_chapter` (`src-tauri/src/fs.rs`) escribe con `fs::write` pelado:
+  abre el archivo con `O_TRUNC` y recién después vuelca el contenido nuevo.
+  Si el disco se llena o el proceso muere a mitad de la escritura (ENOSPC,
+  corte de luz, kill -9), el capítulo queda truncado a lo que alcanzó a
+  escribir — no hay ningún estado intermedio seguro. Y este es el camino que
+  usa **todo** guardado de la app: el autosave del editor, el reemplazo en
+  lote, el conversor RAE al aplicar, cualquier escritura de un capítulo.
+  El arreglo es el patrón atómico de siempre — escribir a un `.tmp` al lado y
+  `rename()` sobre el destino, que en POSIX es atómico — y **ya está en este
+  mismo repo**: `stats.rs::write_stats` lo hace exactamente así (`fn
+  write_stats`, comentario "Sobrescribe `.twriter/stats.json` de forma
+  atómica (tmp + rename)"). Es el mismo cambio, tres líneas, aplicado a
+  `write_chapter` en vez de a `write_stats`.
+  Por qué no se hizo ya: se encontró y se dejó fuera a propósito durante la
+  Task 3 de "reemplazar en lote" (el reemplazo en lote lo mitiga con su
+  propio snapshot en `.twriter/undo/`, así que ahí el peor caso es
+  recuperable), pero el autosave normal no tiene ningún snapshot — un
+  capítulo truncado por un corte de luz mientras se escribe desde el editor
+  se pierde sin red.
 
 
 - [ ] **El índice se puede quedar mudo y no hay forma de saberlo** (encontrado
