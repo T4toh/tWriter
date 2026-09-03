@@ -1784,6 +1784,15 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   `esMatchDeTermino` pide borde izquierdo siempre y palabra completa para
   términos de ≤3 chars, dejando el prefijo para los largos (`golpear` →
   `golpearon`).
+  Y un tercero, del mismo código y encontrado el 2026-09-03 usando la app:
+  buscando `Seguid` el salto caía en `seguida` de un párrafo anterior, y el
+  snippet también. El literal se buscaba con `indexOf`/`find` a secas, así que
+  ganaba el primero en aparecer. No se arregló exigiendo palabra completa —el
+  prefijo es justo lo que hace falta cuando la palabra completa no existe— sino
+  con **preferencia**: `pickBestBlock` rankea `[literal, términos completos,
+  términos con prefijo]` y el salto hace cuatro pasadas en ese orden. En Rust,
+  `make_snippet` usa `find_palabra_completa` con `find` como fallback.
+  Verificado a mano por el autor el 2026-09-03.
 
 
 - [ ] **No hay reemplazar: corregir un nombre en todo el libro se hace a mano,
