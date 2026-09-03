@@ -272,6 +272,7 @@ export class SearchService {
       this.error.set(String(err));
       this.results.set([]);
       this.matchLevel.set('phrase');
+      this.scattered.set(null);
       this.debug.error('search', String(err));
     } finally {
       if (id === this.currentRequestId) this.loading.set(false);
@@ -391,9 +392,17 @@ export class SearchService {
    *  abrir un resultado fuzzy, resaltamos `Kallai` (lo que existe) y no `kellai`
    *  (lo tipeado, que no está). En ese caso `rawQuery` va vacío para forzar el
    *  matching por token (sin la prioridad de literal-rico que no aplicaría). */
-  requestHighlight(path: string, queryOverride?: string, termsOverride?: string[]): void {
+  requestHighlight(
+    path: string,
+    queryOverride?: string,
+    termsOverride?: string[],
+    foldOverride?: boolean,
+  ): void {
     const q = (queryOverride ?? this.query()).trim();
-    const fold = this.settings.searchFuzzy();
+    // El fold sale del toggle `≈`, salvo que el caller lo fije: un ancla exacta
+    // (la auditoría RAE) no quiere que una variante sin tilde de un párrafo
+    // anterior le gane al bloque correcto.
+    const fold = foldOverride ?? this.settings.searchFuzzy();
     const override = termsOverride?.filter((t) => t.length > 0) ?? [];
     if (override.length > 0) {
       // Términos reales del doc (matchedTerms) — ya literales, sin fold.

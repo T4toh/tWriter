@@ -198,7 +198,17 @@ export function highlightBestMatch(
     rawQuery ?? '',
     fold,
   );
-  return selectFirstMatchIn(idx >= 0 ? blocks[idx] : host, terms, rawQuery, fold);
+  if (selectFirstMatchIn(idx >= 0 ? blocks[idx] : host, terms, rawQuery, fold)) return true;
+  // El bloque ganó por su `textContent`, que concatena los text nodes, pero
+  // `selectFirstMatchIn` los mira de a uno: un match partido por un `<em>` no
+  // aparece en ninguno. Llevar al párrafo correcto y flashearlo es peor que
+  // seleccionar la frase, pero muchísimo mejor que no moverse.
+  if (idx >= 0) {
+    blocks[idx].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    flashElement(blocks[idx]);
+    return true;
+  }
+  return false;
 }
 
 /**

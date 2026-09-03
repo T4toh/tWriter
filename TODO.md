@@ -1876,6 +1876,21 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   `indexed=N` del boot coincide con la cantidad de docs del repo.
 
 
+- [ ] **El salto no encuentra un match partido por una itálica** (de la review
+  de CodeRabbit en el PR #93, 2026-09-03)
+  `pickBestBlock` elige el bloque usando su `textContent`, que **concatena** los
+  text nodes, pero `selectFirstMatchIn` después los recorre **de a uno**. Una
+  frase que cruza el borde de un `<em>` —`libros de <em>Técnica Arcana</em>`—
+  puede ganar el bloque y no encontrarse adentro de ningún nodo.
+  Mitigado, no resuelto: cuando ninguna de las cuatro pasadas encuentra nada, se
+  scrollea y flashea **el bloque** ganador. O sea el salto cae en el párrafo
+  correcto, pero sin seleccionar la frase.
+  **El arreglo de verdad**: buscar sobre la concatenación de los text nodes del
+  bloque y mapear el offset de vuelta a un `Range` multi-nodo (`setStart` en un
+  nodo, `setEnd` en otro). Es la misma clase de problema que resuelve
+  `offsetToPm` para las decoraciones de PM, pero a nivel DOM.
+
+
 ## Tree / Importer
 
 - [x] **Renombrar una carpeta fuera de la app deja estado local huérfano**

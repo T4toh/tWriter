@@ -89,7 +89,10 @@ export class RaeAuditPanel {
     // dos: se recorta al bloque y el highlighter lo encuentra exacto.
     const anchor = anchorAround(chapter.plain, v.offset, v.length);
     if (anchor.length >= 2) {
-      this.search.requestHighlight(chapter.path, anchor);
+      // `fold: false` a propósito: el ancla es texto exacto del capítulo, así que
+      // plegar acentos sólo abre la puerta a que una variante sin tilde de un
+      // párrafo anterior le gane al bloque de la violación.
+      this.search.requestHighlight(chapter.path, anchor, undefined, false);
     }
     await this.chapter.open(node);
   }

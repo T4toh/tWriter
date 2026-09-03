@@ -35,10 +35,15 @@ const TITLE_BOOST: f32 = 2.5;
 const FUZZY_LEN_EXACT_MAX: usize = 3; // <=3 chars ⇒ distancia 0 (exacto)
 const FUZZY_LEN_ONE_MAX: usize = 7; // 4..=7 chars ⇒ distancia 1; >=8 ⇒ distancia 2
 const FUZZY_TRANSPOSITION_COST_ONE: bool = true; // swap adyacente cuesta 1 edit
-// Tope de ocurrencias que junta `best_cluster` antes de cortar. Un término
-// común (`que`, `se`) aparece cientos de veces en un capítulo; la ventana que
-// cubre más términos ya se decide con las primeras.
-const CLUSTER_MAX_OCCURRENCES: usize = 400;
+// Tope de ocurrencias POR TÉRMINO que junta `best_cluster` antes de cortar. Un
+// término común (`que`, `se`, `y`) aparece cientos de veces en un capítulo; la
+// ventana que cubre más términos ya se decide con las primeras.
+//
+// Tiene que ser por término y no global: con un tope compartido, el primero de
+// la query se come el presupuesto entero y los demás aportan cero ocurrencias,
+// así que `distinct` nunca llega a cubrir la query, el ancho sale `None` y
+// TODOS los docs terminan descartados como desperdigados.
+const CLUSTER_MAX_OCCURRENCES_PER_TERM: usize = 400;
 // Ancho máximo, en chars, para considerar que las palabras de la query están
 // JUNTAS. Es el ancho del snippet a propósito: si no entran todas en un
 // snippet, no hay forma de mostrarlas juntas y no son lo que se buscaba.
@@ -418,9 +423,12 @@ fn find_palabra_completa(hay: &str, needle: &str) -> Option<usize> {
 /// string (y, por el supuesto que ya hacía `make_snippet`, el original).
 /// Con un solo término equivale a la primera aparición.
 ///
-/// Devuelve `(arranque, ancho, términos distintos cubiertos)`. El ancho es lo
-/// que permite decir si las palabras están JUNTAS o a veinte párrafos: el AND
-/// de tantivy es a nivel documento y no sabe nada de proximidad.
+/// Devuelve `(arranque en bytes, ancho en CHARS, términos distintos cubiertos)`.
+/// El ancho es lo que permite decir si las palabras están JUNTAS o a veinte
+/// párrafos: el AND de tantivy es a nivel documento y no sabe nada de
+/// proximidad. Va en chars y no en bytes porque es lo que se compara contra
+/// `NEARBY_MAX_SPAN` y lo que la UI le muestra al autor — en español acentuado
+/// los bytes infl an el número y endurecen el umbral sin decirlo.
 fn best_cluster(lower: &str, query_terms: &[String]) -> Option<(usize, usize, usize)> {
     let n = query_terms.len();
     if n == 0 {
@@ -434,16 +442,15 @@ fn best_cluster(lower: &str, query_terms: &[String]) -> Option<(usize, usize, us
             continue;
         }
         let mut from = 0usize;
+        let mut vistas = 0usize;
         while let Some(rel) = lower[from..].find(&tl) {
             let at = from + rel;
             occ.push((at, ti));
             from = at + tl.len();
-            if occ.len() >= CLUSTER_MAX_OCCURRENCES {
+            vistas += 1;
+            if vistas >= CLUSTER_MAX_OCCURRENCES_PER_TERM {
                 break;
             }
-        }
-        if occ.len() >= CLUSTER_MAX_OCCURRENCES {
-            break;
         }
     }
     if occ.is_empty() {
@@ -477,7 +484,13 @@ fn best_cluster(lower: &str, query_terms: &[String]) -> Option<(usize, usize, us
             best = Some((distinct, span, occ[lo].0));
         }
     }
-    best.map(|(distinct, span, start)| (start, span, distinct))
+    // El barrido compara anchos en bytes (alcanza para elegir la ventana más
+    // corta), pero el que sale convertido a chars: es la unidad del umbral y la
+    // que se le muestra al autor.
+    best.map(|(distinct, span_bytes, start)| {
+        let span_chars = lower[start..start + span_bytes].chars().count();
+        (start, span_chars, distinct)
+    })
 }
 
 /// Genera un snippet centrado en el primer match de los términos de la query.
@@ -1390,6 +1403,39 @@ mod tests {
         let content = format!("Ambos llegaron temprano. {filler}Ambos nobles brindaron.");
         let s = make_snippet(&content, "ambos nobles", &["ambos".into(), "nobles".into()]);
         assert!(s.contains("Ambos nobles"), "got: {s:?}");
+    }
+
+    #[test]
+    fn cluster_cap_is_per_term_not_global() {
+        // Un término frecuente no debe comerse el presupuesto: con tope global,
+        // `y` (que matchea adentro de cada `y`, `ya`, `hay`...) dejaba a los
+        // demás en cero ocurrencias y el cluster nunca cubría la query.
+        let mut texto = String::new();
+        for _ in 0..(CLUSTER_MAX_OCCURRENCES_PER_TERM + 50) {
+            texto.push_str("y ");
+        }
+        texto.push_str("Ami");
+        let terms = vec!["y".to_string(), "ami".to_string()];
+        let (_, _, distinct) = best_cluster(&texto.to_lowercase(), &terms)
+            .expect("debería encontrar cluster");
+        assert_eq!(
+            distinct, 2,
+            "el término tardío tiene que aportar ocurrencias igual"
+        );
+    }
+
+    #[test]
+    fn cluster_span_is_in_chars_not_bytes() {
+        // Entre las dos palabras hay 3 chars acentuados, o sea 6 bytes. El ancho
+        // reportado tiene que contar chars: es la unidad del umbral y la que la
+        // UI le muestra al autor.
+        let lower = "ambos ñññ nobles";
+        let terms = vec!["ambos".to_string(), "nobles".to_string()];
+        let (start, span, distinct) = best_cluster(lower, &terms).unwrap();
+        assert_eq!(distinct, 2);
+        assert_eq!(start, 0);
+        assert_eq!(span, "ambos ñññ ".chars().count(), "span en chars, no bytes");
+        assert!(span < "ambos ñññ ".len(), "en bytes daría más");
     }
 
     #[test]
