@@ -1959,8 +1959,16 @@ interface UndoOutcome {
   blocked: string[];
   /** Falló la restauración (permisos, disco, `rel` inválido en el manifest).
    *  Cada entrada es `"<path>: <error>"`. El snapshot NO se borra si hay
-   *  alguno, para poder reintentar. */
+   *  alguno, para poder reintentar.
+   *  OJO al renderizar: **no son todos capítulos** — acá también cae
+   *  `.twriter/stats.json`. No los cuentes como "capítulos". */
   failed: string[];
+  /** True si el registro del snapshot quedó incompleto (`replace_apply` no
+   *  pudo reescribir el manifest final). En ese caso `blocked` NO significa
+   *  "se editó después": significa "no sé si es seguro restaurarlo". La copy
+   *  tiene que decir eso, o el autor confirma "Pisarlos igual" creyendo que
+   *  pisa sus propias ediciones recientes. */
+  suspect: boolean;
 }
 
 export interface UndoInfo {
@@ -1969,8 +1977,11 @@ export interface UndoInfo {
   replacement: string;
   files: number;
   occurrences: number;
-  /** Paths que el undo se negó a pisar por estar editados después. */
+  /** Paths que el undo se negó a pisar. Por default es "se editaron después
+   *  del reemplazo"; si `suspect` está en true, es "el registro quedó
+   *  incompleto y no sé si es seguro". La copy tiene que distinguirlos. */
   blocked: string[];
+  suspect: boolean;
 }
 
 /** Por qué el reemplazo no se puede correr con la configuración actual. */
@@ -2224,20 +2235,30 @@ export class ReplaceService {
         ultimaEdicion: new Date().toISOString(),
       });
       await this.afterWrite(this.groups().map((g) => g.path));
+      // `failed` y `blocked` pueden venir poblados los DOS. Son avisos
+      // distintos y hay que dar los dos: si solo se muestra el error de
+      // escritura, el autor nunca se entera de que hay capítulos esperando
+      // su confirmación.
       if (out.failed.length > 0) {
         // El snapshot sobrevive, así que reintentar es posible: no limpiar
-        // `lastUndo` ni decirle al autor que terminó.
+        // `lastUndo` ni decirle al autor que terminó. `failed` no son todos
+        // capítulos (puede traer `stats.json`), así que no se cuentan como
+        // tales.
         this.lastUndo.set({ ...info, blocked: out.blocked });
         this.toast.error(
-          `Deshice ${out.restored}. No pude restaurar ${out.failed.length} capítulo${out.failed.length === 1 ? '' : 's'}; el snapshot sigue disponible para reintentar.`,
+          `Deshice ${out.restored}. Fallaron ${out.failed.length} archivo${out.failed.length === 1 ? '' : 's'}; el snapshot sigue disponible para reintentar.`,
         );
         this.debug.error('replace', 'fallos al deshacer', out.failed.join('\n'));
-      } else if (out.blocked.length > 0) {
+      }
+      if (out.blocked.length > 0) {
         this.lastUndo.set({ ...info, blocked: out.blocked });
         this.toast.warn(
-          `Deshice ${out.restored}. ${out.blocked.length} capítulo${out.blocked.length === 1 ? '' : 's'} se editaron después del reemplazo y no los pisé.`,
+          out.suspect
+            ? `Deshice ${out.restored}. El registro de este reemplazo quedó incompleto, así que no toqué ${out.blocked.length} capítulo${out.blocked.length === 1 ? '' : 's'}: no puedo saber si es seguro restaurarlos.`
+            : `Deshice ${out.restored}. ${out.blocked.length} capítulo${out.blocked.length === 1 ? '' : 's'} se editaron después del reemplazo y no los pisé.`,
         );
-      } else {
+      }
+      if (out.failed.length === 0 && out.blocked.length === 0) {
         this.lastUndo.set(null);
         this.toast.success(`Deshecho: ${out.restored} capítulo${out.restored === 1 ? '' : 's'}.`);
       }
@@ -2574,7 +2595,12 @@ Y envolver el contenido de `.sp-body`: el bloque de búsqueda que ya existe va d
       </span>
       @if (u.blocked.length > 0) {
         <span class="sp-undo-blocked">
-          {{ u.blocked.length }} se editaron después y no los pisé.
+          @if (u.suspect) {
+            El registro quedó incompleto: no sé si es seguro restaurar
+            {{ u.blocked.length }}.
+          } @else {
+            {{ u.blocked.length }} se editaron después y no los pisé.
+          }
         </span>
         <button type="button" class="sp-btn" (click)="forzarDeshacer()" [disabled]="replaceApplying()">
           Pisarlos igual
