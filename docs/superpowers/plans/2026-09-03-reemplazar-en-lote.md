@@ -1605,7 +1605,7 @@ function grupo(path, n, skipped = 0) {
     })),
     skipped: Array.from({ length: skipped }, () => ({
       snippet: '…cruza…',
-      reason: 'crossesTag',
+      reason: 'cruzaTag',
     })),
   };
 }
@@ -1722,7 +1722,7 @@ Crear `src/app/core/replace-selection.ts`:
  */
 
 /** Espejo de `MotivoSkip` en `src-tauri/src/replace.rs`. */
-export type MotivoSkip = 'crossesTag' | 'crossesEntity' | 'crossesBlock';
+export type MotivoSkip = 'cruzaTag' | 'cruzaEntidad' | 'cruzaBloque';
 
 export interface ReplaceOccurrence {
   /** `<path>#<htmlStart>`, generado en Rust. */
@@ -2424,11 +2424,11 @@ import type { MotivoSkip, ReplaceGroup } from '../core/replace-selection';
 
   protected motivoSkipLabel(reason: MotivoSkip): string {
     switch (reason) {
-      case 'crossesTag':
+      case 'cruzaTag':
         return 'cruza una cursiva o negrita';
-      case 'crossesEntity':
+      case 'cruzaEntidad':
         return 'contiene un carácter escapado';
-      case 'crossesBlock':
+      case 'cruzaBloque':
         return 'cruza dos párrafos';
     }
   }
@@ -2815,7 +2815,10 @@ que el plan no puede afirmar sin leer esos archivos, y adivinarlas sería peor.
 
 **Consistencia de tipos**: `Opciones{case_sensitive, whole_word}` se usa igual
 en las cuatro tasks de Rust. `MotivoSkip` serializa `camelCase` (`crossesTag`)
-y el TS de Task 5 declara exactamente esos tres strings. `FileEdit.ranges` es
+y el TS de Task 5 declara exactamente esos tres strings. **Ojo**: las variantes
+del enum son españolas (`CruzaTag`), así que `rename_all = "camelCase"` emite
+`cruzaTag`, no `crossesTag` — el scan de preflight de este plan afirmó lo
+contrario y estaba mal. `FileEdit.ranges` es
 `Vec<(usize, usize)>` en Rust y `Array<[number, number]>` en TS, y
 `editsDesdeSeleccion` los emite en ese orden `[htmlStart, htmlEnd]`, que es lo
 que la revalidación de Task 3 compara contra `vigentes`. `ReplaceOutcome`
