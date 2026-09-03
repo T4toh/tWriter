@@ -19,6 +19,7 @@ mod import_wizard;
 mod macos_text;
 mod notes;
 mod reorder;
+mod replace;
 mod saga_config;
 mod search;
 mod secrets;
