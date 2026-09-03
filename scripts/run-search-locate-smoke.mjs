@@ -43,7 +43,8 @@ if (r.status !== 0) {
 }
 
 const mod = await import(pathToFileURL(join(outDir, 'search-highlight.js')).href);
-const { pickBestBlock, tokenize, findAllMatchesInPlain, esInicioDePalabra, esMatchDeTermino } = mod;
+const { pickBestBlock, tokenize, findAllMatchesInPlain, esInicioDePalabra, esMatchDeTermino,
+        esPalabraCompleta, buscarPalabraCompleta } = mod;
 
 let passed = 0;
 let failed = 0;
@@ -228,6 +229,50 @@ function marcados(plain, query, fold = false) {
   // tiene los términos adentro de otras palabras no debería ganar.
   const bloques = ['Yiri lo ayudó a caminar', 'y Ami ya está lista'];
   check('la cobertura no cuenta matches del medio de palabra', pick(bloques, 'y ya') === 1);
+}
+
+// ─── Palabra completa le gana al prefijo ───────────────────────────────────
+// El repro: buscando `Seguid` (el typo que el autor quería arreglar), el salto
+// caía en `seguida` de un párrafo anterior — prefijo válido, pero no lo
+// buscado. El `Seguid,` suelto de más abajo tiene que ganar.
+
+{
+  check('Seguid es palabra completa en "Seguid,"', esPalabraCompleta('seguid, se quedó', 0, 'seguid') === true);
+  check('Seguid NO es palabra completa en "seguida"', esPalabraCompleta('una hora seguida', 9, 'seguid') === false);
+  check('buscarPalabraCompleta saltea el prefijo', buscarPalabraCompleta('hora seguida y seguid, listo', 'seguid') === 15);
+  check('buscarPalabraCompleta sin palabra completa ⇒ -1', buscarPalabraCompleta('una hora seguida', 'seguid') === -1);
+}
+
+{
+  // El repro tal cual: el bloque del prefijo va PRIMERO y tiene que perder.
+  const bloques = [
+    'La caballera quería que aprendiera a bloquear, así que estuvo una hora seguida bloqueando sus ataques.',
+    'Todos tenían algún objeto mágico. Seguid, se quedó mirando un carro.',
+  ];
+  check('palabra completa gana aunque esté más abajo', pick(bloques, 'Seguid') === 1);
+}
+
+{
+  // Lo que NO hay que romper: si no existe la palabra completa, el prefijo
+  // sigue sirviendo. Es el caso del proofreading.
+  const bloques = ['nada acá', 'lo golpearon fuerte contra la pared'];
+  check('sin palabra completa, el prefijo igual encuentra', pick(bloques, 'golpear') === 1);
+}
+
+{
+  // Y a igualdad de calidad, el más temprano, como antes.
+  const bloques = ['dijo Seguid otra vez', 'y Seguid de nuevo'];
+  check('dos palabras completas: gana la más temprana', pick(bloques, 'Seguid') === 0);
+}
+
+{
+  // Multi-término: el bloque con las dos como palabra completa le gana al que
+  // las tiene como prefijo.
+  const bloques = [
+    'los caballeras y las espadas eran distintas',
+    'la caballera levantó la espada',
+  ];
+  check('multi-término: palabras completas ganan', pick(bloques, 'caballera espada') === 1);
 }
 
 rmSync(outDir, { recursive: true, force: true });

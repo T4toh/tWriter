@@ -68,6 +68,23 @@ export function esMatchDeTermino(text: string, idx: number, term: string): boole
   return esFinDePalabra(text, idx + term.length);
 }
 
+/** True si `term` matchea en `idx` como palabra COMPLETA, con borde a los dos
+ *  lados. Es lo que hace ganar a `Seguid` sobre `seguida`. */
+export function esPalabraCompleta(text: string, idx: number, term: string): boolean {
+  return esInicioDePalabra(text, idx) && esFinDePalabra(text, idx + term.length);
+}
+
+/** Primer índice donde `term` aparece como palabra completa, o -1. */
+export function buscarPalabraCompleta(text: string, term: string, from = 0): number {
+  let at = from;
+  for (;;) {
+    const idx = text.indexOf(term, at);
+    if (idx < 0) return -1;
+    if (esPalabraCompleta(text, idx, term)) return idx;
+    at = idx + 1;
+  }
+}
+
 /** Primer índice donde `term` matchea `text` según `esMatchDeTermino`, o -1. */
 export function buscarTermino(text: string, term: string, from = 0): number {
   let at = from;
@@ -117,20 +134,45 @@ export function pickBestBlock(
   if (lowerTerms.length === 0 && !hasRichForm) return -1;
 
   let best = -1;
-  let bestHits = 0;
+  // [literal, términos como palabra completa, términos incluyendo prefijos].
+  let mejor: [number, number, number] = [0, 0, 0];
   for (let i = 0; i < texts.length; i += 1) {
     const text = norm((texts[i] ?? '').toLowerCase());
-    if (hasRichForm && rawLower.length > 0 && text.includes(rawLower)) return i;
-    let hits = 0;
-    for (const t of lowerTerms) {
-      if (buscarTermino(text, t) >= 0) hits += 1;
+    // 2 = el literal aparece como palabra/frase completa, 1 = como prefijo.
+    // Buscando `Seguid`, el párrafo con `Seguid,` le gana al que tiene
+    // `seguida` — que es un prefijo válido, pero no lo que se buscaba.
+    let literal = 0;
+    if (hasRichForm && rawLower.length > 0) {
+      if (buscarPalabraCompleta(text, rawLower) >= 0) literal = 2;
+      else if (text.includes(rawLower)) literal = 1;
     }
-    if (hits > bestHits) {
-      bestHits = hits;
+    let completos = 0;
+    let conPrefijos = 0;
+    for (const t of lowerTerms) {
+      if (buscarPalabraCompleta(text, t) >= 0) {
+        completos += 1;
+        conPrefijos += 1;
+      } else if (buscarTermino(text, t) >= 0) {
+        conPrefijos += 1;
+      }
+    }
+    if (literal === 0 && conPrefijos === 0) continue;
+    const rank: [number, number, number] = [literal, completos, conPrefijos];
+    if (esMejorRank(rank, mejor)) {
+      mejor = rank;
       best = i;
     }
   }
   return best;
+}
+
+/** Compara rankings de bloque lexicográficamente. Estricto, así que a igualdad
+ *  gana el que ya estaba, o sea el más temprano en el documento. */
+function esMejorRank(a: [number, number, number], b: [number, number, number]): boolean {
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return a[i] > b[i];
+  }
+  return false;
 }
 
 /**
@@ -189,60 +231,48 @@ function selectFirstMatchIn(
     [...raw].some((c) => c !== c.toLowerCase() || /[^\p{L}\p{N}\s]/u.test(c));
   if (lowerTerms.length === 0 && !hasRichForm) return false;
 
-  const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, {
-    acceptNode: (node) =>
-      node.nodeValue && node.nodeValue.trim().length > 0
-        ? NodeFilter.FILTER_ACCEPT
-        : NodeFilter.FILTER_REJECT,
-  });
+  // Pasadas en orden de preferencia. Mismo criterio que `pickBestBlock`: la
+  // palabra completa gana sobre el prefijo, y el literal de la query gana sobre
+  // los tokens sueltos. Sin esto, buscando `Seguid` el salto cae en `seguida`.
+  const pasadas: Array<(text: string) => { idx: number; len: number } | null> = [];
+  if (hasRichForm && rawLower.length > 0) {
+    pasadas.push((text) => {
+      const idx = buscarPalabraCompleta(text, rawLower);
+      return idx >= 0 ? { idx, len: raw.length } : null;
+    });
+    pasadas.push((text) => {
+      const idx = text.indexOf(rawLower);
+      return idx >= 0 ? { idx, len: raw.length } : null;
+    });
+  }
+  if (lowerTerms.length > 0) {
+    pasadas.push((text) => primerToken(text, lowerTerms, buscarPalabraCompleta));
+    pasadas.push((text) => primerToken(text, lowerTerms, buscarTermino));
+  }
 
   let bestNode: Text | null = null;
   let bestOffset = -1;
   let bestLen = 0;
-
-  // Pasada 1: buscar el literal `rawQuery` si tiene forma rica. Walker
-  // recorre en orden documental → primer match gana.
-  if (hasRichForm) {
-    let cur: Node | null = walker.nextNode();
-    while (cur) {
-      const text = norm((cur.nodeValue ?? '').toLowerCase());
-      const idx = text.indexOf(rawLower);
-      if (idx >= 0) {
-        bestNode = cur as Text;
-        bestOffset = idx;
-        bestLen = raw.length;
-        break;
-      }
-      cur = walker.nextNode();
-    }
-  }
-
-  // Pasada 2 (fallback): primer text node que contenga algún token.
-  if (!bestNode && lowerTerms.length > 0) {
-    // Reset walker: createTreeWalker no se rebobina; nuevo.
-    const walker2 = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, {
+  for (const buscar of pasadas) {
+    // `createTreeWalker` no se rebobina: uno nuevo por pasada.
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, {
       acceptNode: (node) =>
         node.nodeValue && node.nodeValue.trim().length > 0
           ? NodeFilter.FILTER_ACCEPT
           : NodeFilter.FILTER_REJECT,
     });
-    let cur: Node | null = walker2.nextNode();
+    let cur: Node | null = walker.nextNode();
     while (cur) {
-      const text = norm((cur.nodeValue ?? '').toLowerCase());
-      for (const t of lowerTerms) {
-        // Misma guarda que el resalto: el salto no debe caer en el medio de una
-        // palabra (`ya` adentro de `ayudó`).
-        const idx = buscarTermino(text, t);
-        if (idx >= 0) {
-          bestNode = cur as Text;
-          bestOffset = idx;
-          bestLen = t.length;
-          break;
-        }
+      const found = buscar(norm((cur.nodeValue ?? '').toLowerCase()));
+      if (found) {
+        bestNode = cur as Text;
+        bestOffset = found.idx;
+        bestLen = found.len;
+        break;
       }
-      if (bestNode) break;
-      cur = walker2.nextNode();
+      cur = walker.nextNode();
     }
+    if (bestNode) break;
   }
 
   if (!bestNode) return false;
@@ -267,6 +297,22 @@ function selectFirstMatchIn(
   } catch {
     return false;
   }
+}
+
+/** Primer token de `terms` que matchea `text` con el buscador dado, en orden de
+ *  aparición en el texto (no en el orden de la query: si la query es `casa
+ *  grande` y el párrafo dice "grande la casa", salta a `grande`). */
+function primerToken(
+  text: string,
+  terms: string[],
+  buscar: (text: string, term: string) => number,
+): { idx: number; len: number } | null {
+  let best: { idx: number; len: number } | null = null;
+  for (const t of terms) {
+    const idx = buscar(text, t);
+    if (idx >= 0 && (best === null || idx < best.idx)) best = { idx, len: t.length };
+  }
+  return best;
 }
 
 /** Aplica clase `search-flash` al elemento durante 2.5s. Reusable: si se llama

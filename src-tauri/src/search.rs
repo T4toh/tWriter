@@ -373,6 +373,40 @@ fn resolve_matched_words(content: &str, query_terms: &[String], fuzzy: bool) -> 
     out
 }
 
+/// Primer offset donde `needle` aparece en `hay` como palabra COMPLETA, o sea
+/// con borde no alfanumérico a los dos lados. `None` si sólo aparece como
+/// prefijo o en el medio de otra palabra.
+///
+/// Buscando `Seguid`, el snippet se centraba en `seguida` de un párrafo
+/// anterior —prefijo válido, pero no lo que se buscó— porque `find` devuelve la
+/// primera aparición y nada más. Espejo de `esPalabraCompleta` en
+/// `search-highlight.ts`.
+fn find_palabra_completa(hay: &str, needle: &str) -> Option<usize> {
+    if needle.is_empty() {
+        return None;
+    }
+    let mut from = 0usize;
+    while from < hay.len() {
+        let rel = hay[from..].find(needle)?;
+        let at = from + rel;
+        let antes_ok = hay[..at]
+            .chars()
+            .next_back()
+            .map_or(true, |c| !c.is_alphanumeric());
+        let despues_ok = hay[at + needle.len()..]
+            .chars()
+            .next()
+            .map_or(true, |c| !c.is_alphanumeric());
+        if antes_ok && despues_ok {
+            return Some(at);
+        }
+        // Avanzar un char completo: `at + 1` puede caer en medio de un UTF-8.
+        let step = hay[at..].chars().next().map_or(1, |c| c.len_utf8());
+        from = at + step;
+    }
+    None
+}
+
 /// Arranque de la ventana que cubre MÁS términos distintos de la query con el
 /// menor span. Centrar el snippet en la primera aparición del primer término
 /// que matchea deja el recorte en cualquier lado cuando los términos están
@@ -459,9 +493,9 @@ fn make_snippet(content: &str, raw_query: &str, query_terms: &[String]) -> Strin
     let mut best: Option<usize> = None;
     if !raw_trim.is_empty() {
         let raw_lower = raw_trim.to_lowercase();
-        if let Some(idx) = lower.find(&raw_lower) {
-            best = Some(idx);
-        }
+        // Palabra completa primero, prefijo como fallback: buscando `Seguid`,
+        // el recorte tiene que caer en el `Seguid,` suelto y no en `seguida`.
+        best = find_palabra_completa(&lower, &raw_lower).or_else(|| lower.find(&raw_lower));
     }
     if best.is_none() {
         best = best_cluster(&lower, query_terms).map(|(start, _, _)| start);
@@ -1362,6 +1396,28 @@ mod tests {
     fn cluster_start_single_term_is_first_occurrence() {
         let lower = "nobles y luego otra vez nobles";
         assert_eq!(best_cluster(lower, &["nobles".into()]).map(|(s, _, _)| s), Some(0));
+    }
+
+    #[test]
+    fn snippet_prefers_whole_word_over_prefix() {
+        // El repro del autor: `seguida` aparece antes, `Seguid,` es lo buscado.
+        let filler = "relleno ".repeat(40);
+        let content = format!(
+            "estuvo una hora seguida bloqueando. {filler}algún objeto mágico. Seguid, se quedó."
+        );
+        let s = make_snippet(&content, "Seguid", &["Seguid".into()]);
+        assert!(s.contains("Seguid,"), "got: {s:?}");
+    }
+
+    #[test]
+    fn find_palabra_completa_bordes() {
+        assert_eq!(find_palabra_completa("hora seguida y seguid, ya", "seguid"), Some(15));
+        assert_eq!(find_palabra_completa("una hora seguida", "seguid"), None);
+        assert_eq!(find_palabra_completa("seguid al frente", "seguid"), Some(0));
+        // Acentos antes del match: byte multi-char, no debe romper el avance.
+        assert_eq!(find_palabra_completa("mansión seguid", "seguid"), Some(9));
+        assert_eq!(find_palabra_completa("", "seguid"), None);
+        assert_eq!(find_palabra_completa("algo", ""), None);
     }
 
     #[test]
