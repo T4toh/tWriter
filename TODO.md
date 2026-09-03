@@ -4,6 +4,39 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Urgente
 
+- [ ] **El click en un resultado nunca lleva al resultado — el buscador es
+  inútil así** (reportado el 2026-09-02: "nunca me llevó a lo que buscaba")
+  **Causa raíz, y explica el "nunca"**: la posición del match **no viaja**. El
+  `SearchHit` que devuelve Rust (`search.rs:64-80`) trae `path`, `snippet` y
+  `matchedTerms`, pero **ningún offset**. Del lado del front,
+  `openHit` (`search-panel.ts:270-305`) llama `requestHighlight(path, undefined,
+  hit.matchedTerms)` y el editor termina en `highlightFirstMatch`
+  (`search-highlight.ts:43-138`), que hace lo único que puede hacer sin offset:
+  recorre el DOM con un `TreeWalker` y salta al **primer text node en orden
+  documental** que contenga cualquiera de los términos. O sea que no salta al
+  hit: salta a la primera aparición de la palabra más común de la query, casi
+  siempre arriba de todo del capítulo.
+  Dos agravantes: (a) la pasada 1 busca el literal completo de la query, pero
+  solo si tiene "forma rica" (mayúscula o puntuación) **y** cae entero en un
+  mismo text node — con una frase partida en dos nodos falla y cae a la pasada
+  2, la del primer token; (b) cuando un capítulo tiene varios hits, el grupo
+  muestra N líneas pero todas mandan al mismo lugar, porque el offset que las
+  distingue no existe.
+  **Y no es solo el buscador**: `rae-audit-panel.openChapterAt`
+  (`rae-audit-panel.ts:76-85`) **tiene** `v.offset` en la mano y lo tira —
+  recorta el término y llama `requestHighlight(path, term)`, o sea entra al
+  mismo camino roto teniendo el dato bueno.
+  **Fix**: que el offset viaje de punta a punta — agregarlo al `SearchHit`
+  (el backend ya lo conoce: es donde centra el snippet, `search.rs:333`), meterlo
+  en `PendingHighlight` (`search-service.ts:61-96`) y que el editor mapee
+  offset → posición PM. **La maquinaria ya existe y está probada**:
+  `offsetToPm(offset, ranges)` es lo que usan `rae-extension.ts:104` y
+  `grammar-extension.ts:164` para anclar sus decoraciones. El `TreeWalker` de
+  `highlightFirstMatch` queda como fallback para los hits que no traen offset
+  (los client-side de "Archivo actual").
+  Ordenar bien esto arregla de una la mitad del ítem de matcheo en
+  `## Búsqueda` y desbloquea el de revisión por libro en `## Gramática`.
+
 - [x] **Editar el CSS del EPUB no se ve hasta recompilar Rust — y nada lo avisa**
   (`fix/epub-css-runtime`, verificado a mano por el autor el 2026-09-02).
   `epub_style.css` se incrustaba con
@@ -1327,6 +1360,261 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Dónde mostrarlo: sumarlo a la pasada del panel de auditoría RAE
   (`rae-audit-panel.ts`), que ya recorre el capítulo y lista violaciones con
   jump-to-term, en vez de inventar un panel nuevo.
+- [ ] **Tres falsos positivos de LT con id ya identificado — 0004 y 0005 son
+  bugs de regla; el tercero es una regla que cubre mal su propia construcción**
+  (encontrados escribiendo el 2026-09-02)
+  Los tres se reprodujeron contra el container local (LT **6.7**, `es-AR`) y los
+  ids salieron de ahí, así que no hay que adivinarlos:
+
+  **`TU_TILDE[5]` — `tu` seguido de puntos suspensivos.**
+  «No te disculpes, me ha sorprendido tu… conjuro.» → marca `tu` y sugiere `tú`
+  ("El pronombre personal «tú» lleva tilde"). Acá `tu` es determinante posesivo
+  y su sustantivo es `conjuro`: los puntos son **pausa, no corte**. La regla
+  toma el `…` como fin de sintagma y concluye que `tu` quedó suelto, o sea que
+  tiene que ser el pronombre.
+  Acotado con pruebas contra el container:
+  - sin los puntos, `me ha sorprendido tu conjuro` → **limpio**, o sea que el
+    disparador es el `…`;
+  - dispara igual con `…` (U+2026) y con `...`, así que no es un problema de
+    normalización de caracteres nuestro y no se arregla del lado de la app;
+  - `Vi tu… casa.` y `Me gusta tu… idea.` también disparan → es el patrón, no
+    esa oración.
+  La forma de la excepción sería: `tu` + puntos suspensivos + sustantivo ⇒ no
+  marcar. Ojo con no romper el caso legítimo (`Dame tu, dijo.` dispara y ahí
+  está bien).
+
+  **`AGREEMENT_POSTPONED_ADJ[3]` — `más seguido` como locución adverbial.**
+  El caso de arriba, «Quiero pasear sin mi armadura más seguido, Chispi.» →
+  sugiere `seguida` concordando con `armadura`. Probado contra el container:
+  `Quiero salir más seguido.` y `Quiero pasear sin mi casco más seguido.` salen
+  limpias, así que hace falta un sustantivo femenino antes — pero
+  `Salgo de mi casa más seguido.` **también sale limpia**, o sea que no alcanza
+  con "femenino contiguo" y el disparador real está sin caracterizar. Eso es la
+  primera mitad del trabajo del parche.
+  (En esa oración salta además `MORFOLOGIK_RULE_ES` por `Chispi`, que es un
+  nombre del mundo y va al diccionario de la saga, no es parte de este bug.)
+
+  **`NO_SEPARADO[5]` — el `re` intensificador rioplatense. Distinto de los dos
+  de arriba: acá LT no está equivocado, está siendo normativo.**
+  «los pollitos son re lindos» → sugiere `relindos`. La norma de la RAE dice que
+  los prefijos van pegados, así que la sugerencia es correcta *como norma* — lo
+  que no contempla es el registro: en diálogo rioplatense el `re` separado es lo
+  que se escribe, y esto es diálogo.
+  **Y la regla es arbitraria vista desde el texto**, esto sí es reportable
+  aunque la norma le dé la razón: dispara solo cuando la forma pegada existe en
+  el diccionario de LT. Probado contra el container en `es-AR`:
+  - dispara: `re lindos` → `relindos`, `re lindo` → `relindo`,
+    `re contento` → `recontento`, `re malo` → `remalo`;
+  - no dispara: `re cansado`, `re caro`, `re fácil`, `re buenos`, `re grande`.
+  O sea que la misma construcción se marca o no según si el pegado quedó
+  lexicalizado, cosa que el que escribe no tiene forma de anticipar.
+  **La variante no cambia nada**: `es-AR` y `es` devuelven exactamente el mismo
+  match, así que la sospecha de que "falta en la variante" es correcta — la
+  variante voseo no trae ninguna excepción para esto.
+  **Y hay un argumento más fuerte que "es cuestión de registro"**: el `re`
+  rioplatense es **productivo**, se le pega a cualquier adjetivo — re feo, re
+  lindo, re caro, re choto, re piola — y las formas pegadas que LT propone no
+  las dice nadie. Eso se ve en el propio diccionario de LT: `Es relindo.` y
+  `Estoy recontento.` pasan **limpias** (están como entradas), mientras que
+  `re feo`, `re choto`, `re piola`, `re bueno` separadas también pasan limpias
+  porque el pegado no existe. O sea que la regla alcanza exactamente al puñado
+  de formas que quedaron lexicalizadas, y para esas sugiere justo la grafía que
+  no se usa. El resto de la misma construcción, que es la mayoría, no se marca.
+  **Decisión tomada el 2026-09-02: acá no va PR.** Sería defendible sin discutir
+  la norma (una regla que cubre 4 casos de una construcción abierta y sugiere la
+  variante muerta), pero es la clase de discusión que termina en un hilo sobre
+  qué dice la RAE, y no hay ganas. **Se apaga y listo**: es el caso testigo del
+  `disabledRules` por saga del ítem de acá abajo — novela con diálogo argentino
+  desactiva `NO_SEPARADO`.
+  Si alguna vez cambia de idea: `node scripts/scan-regla-lt.mjs NO_SEPARADO
+  ~/novelas es-AR` da los hits sobre la obra real, que es la evidencia con la
+  que se armaría. Nada de esto bloquea a `0004`/`0005`, que sí son bugs de
+  regla y no discuten nada.
+
+  **La norma, para tenerla a mano** (buscada el 2026-09-02, para poder citarla
+  sin discutir de memoria). En esto LT tiene razón y conviene saberlo antes de
+  abrir la boca:
+  - *Ortografía de la lengua española* (RAE/ASALE 2010), §5.3, «La escritura de
+    palabras o expresiones con prefijo»: el prefijo va **unido a la base cuando
+    esta es univerbal** (`vicedecano`, `contrarreloj`); con **guion** si la base
+    es sigla, número o nombre propio (`anti-OTAN`, `sub-16`); y **separado por
+    espacio cuando la base es pluriverbal**, o sea varias palabras funcionando
+    como unidad (`anti pena de muerte`, `ex primer ministro`,
+    `pre Segunda Guerra Mundial`).
+    <https://www.rae.es/ortograf%C3%ADa-b%C3%A1sica/uni%C3%B3n-y-separaci%C3%B3n-de-palabras-y-otros-elementos-en-la-escritura/la-escritura-de-palabras-o-expresiones-con-prefijo>
+  - `re-` está en el DLE **como prefijo**, con valor intensivo equivalente a
+    "muy": `relindo`, `reloco`, `rebueno`, `rebién` — o sea que las formas que
+    sugiere LT son exactamente las que el diccionario registra.
+    <https://dle.rae.es/re->
+  - La RAE lo contestó varias veces por `#RAEconsultas` en la misma línea (el
+    prefijo `re-` se escribe unido, sin guion ni espacio).
+  **El resquicio, si el letrado quiere jugar**: la excepción de la base
+  pluriverbal. Por la misma regla, `re en serio` o `re de fiar` irían separados,
+  porque ahí la base son varias palabras. O sea que la norma **ya** admite el
+  `re` separado, solo que por otro motivo — y el hablante que escribe `re lindos`
+  no está distinguiendo esos dos casos. (Esto es deducción de la regla citada,
+  no una resolución de la RAE: verificarlo antes de usarlo como argumento.)
+  El otro flanco es de uso, no de norma: cuánto aparece cada grafía en corpus
+  argentino (CORPES XXI / CREA filtrando por Argentina) es un dato que se mide,
+  y es distinto de opinar.
+
+  **El camino ya está armado**: `docs/lt-patches/README.md` — fork
+  `T4toh/languagetool`, patch acá mientras el PR no esté mergeado, `sed` sobre
+  el `grammar.xml` del container para probarlo en vivo, y
+  `node scripts/scan-regla-lt.mjs TU_TILDE ~/novelas es-AR` (ídem
+  `AGREEMENT_POSTPONED_ADJ`) **antes y después** para contar los hits sobre la
+  obra real. Serían los parches `0004` y `0005`, ramas independientes desde
+  `master` como los otros tres.
+  Ojo con la versión: el README ancla los números de línea a **LT 6.8** y el
+  container que respondió es **6.7**. Verificar antes de aplicar cualquier `sed`.
+  Mientras los PR no estén mergeados, estos dos son exactamente los casos que
+  justifican el "ignorar esta regla" del ítem de acá abajo: `disabledRules` es
+  el paliativo, el parche es el arreglo.
+
+- [ ] **Los falsos positivos de LanguageTool no se pueden ni nombrar ni matar —
+  y no queda registro de ninguno** (reportado el 2026-09-02 mientras se escribía)
+  **Repro**: «Quiero pasear sin mi armadura más seguido, Chispi.» LT marca
+  `seguido` y sugiere `seguida` — "Revise la concordancia de «seguido» con los
+  nombres precedentes". Concuerda el participio con `armadura`, el sustantivo
+  femenino más cercano, cuando `más seguido` es una **locución adverbial** (=
+  más a menudo) y el sujeto es tácito, `yo`. LT no analiza sujeto: matchea un
+  patrón de sustantivo + participio, así que con sujeto tácito la regla no
+  tiene con qué concordar y agarra el sustantivo de al lado.
+  **No es un problema de variante**: `map_lang` (`grammar.rs:780-787`) ya manda
+  `es-AR` cuando el capítulo es español, así que la regla dispara igual con la
+  variante rioplatense declarada. Descartado ese camino.
+  **Lo que duele no es el FP puntual, es que no hay nada que hacer con él**:
+  - "Ignorar" (`grammar-popover.ts:53` → `dismissGrammarMatch`,
+    `editor.ts:1184-1188`) solo saca el match de la lista en memoria. No
+    persiste: vuelve en el próximo chequeo, en ese párrafo y en todos los demás
+    donde aparezca la misma construcción, para siempre.
+  - El popover de LT **no muestra el `ruleId`**, aunque el dato viaja entero
+    desde Rust (`grammar.rs:646-647` y `873`) hasta `GrammarMatch`
+    (`types.ts:95-103`). El popover de RAE sí lo muestra
+    (`rae-popover.ts:38`). Sin el id no se puede desactivar la regla, ni
+    reportarla upstream, ni siquiera saber si dos FP distintos son la misma
+    regla.
+  - `/v2/check` acepta `disabledRules` (lista de ids separada por comas) y el
+    request no lo manda nunca: los params son solo `text`, `language`, `level`
+    (+ auth en modo custom), `grammar.rs:899-903`.
+  **Fix de raíz, chico**: (a) mostrar el `ruleId` en el popover de LT, igual que
+  el de RAE — es un `<span>` y desbloquea todo lo demás; (b) que "Ignorar" tenga
+  una segunda opción, "esta regla nunca más", que guarde el id por saga y se
+  mande como `disabledRules` en el próximo check. La lista de reglas
+  desactivadas **es** el registro de FP que hoy no existe, sin llevar un txt
+  aparte: cada entrada queda con el id y la oración que la disparó.
+  **A decidir**: si la desactivación es por saga o global — una regla que molesta
+  en una novela rioplatense probablemente moleste en todas, pero por saga es más
+  conservador y ya hay dónde guardarlo (`saga.json` / config de saga, como el
+  diccionario). Y si conviene además un nivel intermedio "ignorar esta
+  ocurrencia" persistido por offset, que se rompe al editar el párrafo — capaz
+  no vale la pena y alcanza con las dos puntas.
+  Emparentado con `## Proofreading`: son la misma necesidad de "encontré algo
+  mientras escribía, que quede anotado sin frenar la escritura".
+
+- [ ] **El diccionario no soporta términos compuestos** (`Kun Lian` un reino,
+  `Tres Torres` un vino) — reportado el 2026-09-02
+  **Guardarlos ya funciona, usarlos no.** `validateWord` permite espacios
+  internos a propósito (`word-validator.ts:17-19`) y `diccionario.txt` se lee
+  por líneas (`saga_config.rs:160-162`), así que una entrada con espacio
+  sobrevive el round-trip entero — y después no sirve para nada, porque **todos
+  los consumidores son de a una palabra**:
+  - `isInDictionary(word)` es `Set.has(word.toLowerCase())`
+    (`saga-context-service.ts:113-118`), y lo llaman con **una palabra suelta**
+    los dos filtros de typos de LanguageTool (`editor.ts:653-657` y
+    `editor.ts:1116-1120`), que sacan la palabra del rango del match.
+  - repeticiones compara token contra token: `ignorar` se normaliza a un Set y
+    se chequea con `t.norm` (`detector.ts:227,242`).
+  O sea que `Kun Lian` en el diccionario no filtra el typo de `Kun`, ni el de
+  `Lian`, ni evita que el detector marque `Kun` como repetida.
+  **El workaround de hoy es peor que el bug**: agregar las dos palabras sueltas.
+  Para `Kun`/`Lian` pasa (son inventadas), pero `Tres Torres` obliga a meter
+  `Tres` al diccionario — y ahí se apaga la detección de repeticiones de la
+  palabra común `tres` en toda la saga, y LT deja de opinar sobre ella. Una
+  entrada del mundo termina degradando la corrección del texto normal.
+  **Dirección** (una pasada compartida, no un filtro nuevo por consumidor):
+  separar al cargar las entradas de una palabra de las de varias; las
+  compuestas se matchean **como frase sobre el texto plano** antes de tokenizar,
+  y esa pasada devuelve los rangos cubiertos. Los consumidores que ya trabajan
+  con offsets sobre el plano (el filtro de LT, el detector de repeticiones)
+  descartan lo que caiga adentro de un rango. Un solo lugar que sepa de frases;
+  el resto sigue siendo token-level como hoy.
+  **A decidir**: (a) qué pasa con las formas derivadas — `stripInflection` no
+  tiene sentido sobre una frase, lo más simple es que las compuestas no generen
+  derivadas (o que flexione solo la última palabra, `Tres Torres`/`Tres
+  Torreses` no aplica pero `Kun Lian` capaz sí en genitivos); (b) si el match de
+  frase es sensible a mayúsculas — `Tres Torres` el vino vs. `tres torres` de
+  piedra es exactamente la diferencia que hay que poder marcar, y el resto del
+  diccionario hoy es case-insensitive (`isInDictionary` hace `toLowerCase`);
+  (c) mostrar las compuestas distinto en el modal (`dictionary-modal.html`) para
+  que se vea que son otra cosa, y validar que no se cuelen por accidente al
+  pegar una lista.
+  **Segundo caso, y este muestra que no alcanza con el diccionario tal como
+  está** (encontrado escribiendo el 2026-09-02): «Amalut de las Arenas» — el
+  apellido que le queda a un esclavo que se escapó de Sa'artan. LT marca
+  `las Arenas` con `AGREEMENT_DET_NOUN[3]` (categoría `AGREEMENT_NOUNS`,
+  "Error de concordancia") y propone `el Arenas` / `la Arenas`.
+  Por qué dispara, probado contra el container: `Vino Juan de las Arenas.`
+  también dispara, y `de las Dunas` / `de los Vientos` **no**. O sea que no es
+  el nombre inventado: `Arenas` con mayúscula existe en el léxico de LT como
+  nombre propio en singular, choca con el determinante plural `las`, y la regla
+  ofrece "arreglar" la concordancia de un apellido. (En la misma oración salta
+  `MORFOLOGIK_RULE_ES` por `Amalut`, que es el caso normal de diccionario y se
+  resuelve solo agregándolo.)
+  **Lo que este caso agrega al diseño**: el match de LT cubre `las Arenas`, un
+  span que **no coincide** con la entrada del diccionario (`de las Arenas` o
+  `Amalut de las Arenas`) — está **contenido** en ella. Eso confirma que la
+  pasada de compuestas tiene que devolver **rangos** y que el filtro es por
+  contención, no por igualdad de string.
+  **Y hace falta levantar una restricción**: hoy el diccionario solo filtra
+  typos. Los dos filtros del editor arrancan con
+  `if (m.category !== 'TYPOS') return true` (`editor.ts:653` y `1116`), así que
+  una construcción de concordancia sobre un nombre propio del mundo no se
+  filtra ni aunque el término esté cargado. Adentro de un nombre propio no hay
+  nada que corregir, así que descartar cualquier match contenido en un rango de
+  término compuesto es seguro — pero es un cambio de criterio explícito, no un
+  efecto colateral.
+  **Se cruza con tres cosas ya anotadas**: el autocompletado de términos del
+  proyecto (pendiente del ítem `[x]` de `## Búsqueda`) tendría que sugerir
+  `Kun Lian` entero, no `Kun`; la búsqueda por frase del ítem de matcheo es la
+  misma primitiva vista desde el otro lado; y los falsos positivos de LT de acá
+  arriba — con la diferencia de que **este se arregla de nuestro lado**, no con
+  un parche a LT: la regla no está mal, no tiene cómo saber que `de las Arenas`
+  es un apellido inventado.
+
+- [ ] **La revisión por libro cuenta pero no muestra ni lleva: repeticiones y
+  rayas quedan en un número** (reportado el 2026-09-02)
+  Las repeticiones **dentro del editor** están bárbaras — subrayado inline sobre
+  el texto, con popover (`editor/repeticiones-extension.ts`,
+  `editor/repeticiones-popover.ts`). El problema es la versión **por libro**: el
+  modal de revisión (`revision-libro-modal.html`) es una grilla de casillas con
+  conteos y nada más. La fila de repeticiones dice literalmente "no se arreglan
+  solas: se reescriben a mano en el editor" y muestra "N en M capítulos" — pero
+  no dice **cuáles** ni **dónde**, así que para arreglarlas hay que abrir
+  capítulo por capítulo a buscarlas de nuevo a ojo. Rayas es peor todavía: solo
+  "N capítulos", sin conteo real de ocurrencias (`resumenCapitulos`, y el
+  comentario de `ConteoCapitulos` en `revision-libro-service.ts` lo dice).
+  Lo que hace falta es cualquiera de las dos (o las dos): **llevar** al lugar
+  para arreglarlo, o **mostrar la oración con contexto ahí mismo** en la lista,
+  para poder revisarlas de corrido sin salir de la vista.
+  **Precedente exacto adentro de esta misma app**: `rae-audit-panel` ya hace las
+  dos cosas — `snippet()` (`rae-audit-panel.ts:64-74`) arma el contexto ±40
+  caracteres marcando la violación con `‹…›`, y `openChapterAt` (línea 76) abre
+  el capítulo en el lugar. Copiar esa forma, no inventar otra.
+  **Lo que falta del lado del servicio**: `escanear` recorre los capítulos y
+  solo acumula (`revision-libro-service.ts:153-168`, `res.repeticiones.cambios
+  += det.repeticiones`); tiene que devolver las **ocurrencias** con `path` +
+  `offset` + `length`, que es lo que necesitan tanto el snippet como el salto.
+  Los detectores ya trabajan sobre el texto plano (`repeticiones/detector.ts`,
+  `revision/deteccion.ts`), así que el offset está ahí, se está tirando al
+  contar.
+  **Depende del ítem de `## Urgente`**: el salto a offset tiene que funcionar
+  primero, si no esta lista hereda el mismo click que no lleva a ningún lado —
+  como le pasa hoy al panel RAE, que tiene el offset y termina en el
+  `TreeWalker` igual.
+  Ojo con el volumen: un libro entero puede dar cientos de repeticiones, así
+  que la lista necesita agrupar por capítulo y colapsar (como hace el panel de
+  búsqueda con `defaultOpen` para grupos de ≤10 hits).
 
 ## Búsqueda
 
@@ -1354,6 +1642,74 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   `/v2/check` y diccionario personal Premium, no tiene API de completion.
   Hunspell (`zspell`/`hunspell-rs`) daría corrección ortográfica ES pero no
   completa nombres propios inventados, que es el caso real.
+
+- [ ] **Abrir la búsqueda destruye la nota que estabas leyendo — y volver no la trae**
+  El panel derecho es un slot único (`app.html:311-331`, cadena `@else if`:
+  rae-audit → search → image → font → md-reader) y encima hay dos efectos que se
+  matan entre sí en `app.ts`: si el reader abre, `search.hide()` (línea 258); si
+  la búsqueda abre, `markdownReader.close()` (línea 266). O sea que no es que la
+  nota quede tapada: se cierra de verdad, así que al cerrar la búsqueda no hay
+  nada que restaurar y hay que ir a buscar la nota de nuevo a mano.
+  Duele justo en el flujo real: la lista de cosas para corregir vive en una nota,
+  se busca la frase, se arregla el capítulo, y para pasar al siguiente ítem hay
+  que reabrir la nota. Ver también el ítem de proofreading en `## Proofreading`,
+  que es este mismo flujo visto desde más arriba.
+  **Fix chico**: sacar el `markdownReader.close()` del efecto de `search.open()`
+  — la cadena `@else if` ya prioriza la búsqueda, así que el reader queda oculto
+  pero vivo y reaparece solo al cerrar el panel. Queda por decidir qué pasa con
+  el `search.hide()` del efecto inverso: hoy clickear un hit de nota cierra la
+  búsqueda (querido: querés ver la nota), pero si se mantienen los dos efectos
+  destructivos el ping-pong sigue. La versión completa sería recordar el último
+  target del reader y restaurarlo, pero probablemente no haga falta si nadie lo
+  cierra.
+  Antes de tocar: `mdReader.close()` también hace flush si está dirty
+  (`app.ts:232-239`, mutex reader vs notes-editor central) — no perder eso.
+
+- [ ] **La búsqueda no lleva siempre al lugar correcto y matchea de más**
+  Reportado el 2026-09-02 con `Creo que se llamaba` en scope "Libro actual":
+  3 resultados donde el tercero (`Barracas — 3`) solo tiene `llamaba` resaltada,
+  y el primero resalta `se`, `Creo`, `que`, `llamaba` desperdigadas por párrafos
+  distintos. Ignorar mayúsculas está bien; traer un doc que matchea 1 de 5
+  palabras no.
+  **Causa**: el builder fuzzy arma `Occur::Should` por término
+  (`search.rs:948-962`), o sea OR puro — un solo término alcanza para entrar al
+  ranking. El AND completo existe pero solo como clause boosteada
+  (`FULL_MATCH_BOOST`), que ordena mejor pero no filtra. Encima el tokenizer no
+  dropea stopwords (decisión deliberada del índice v4, para poder buscar texto
+  literal), así que `que`/`se` matchean en cualquier lado. En modo exacto el
+  `QueryParser` sí usa `set_conjunction_by_default()` (`search.rs:808`), así que
+  esto es específico del toggle `≈`.
+  **Segundo repro, mismo día, y este descarta la teoría de las stopwords**:
+  `Ambos nobles` (dos palabras, ninguna vacía) en el mismo scope. Con `≈`
+  prendido, **22 resultados** y varios con una sola palabra resaltada
+  (`Descanso — 3` solo `nobles`, `Amigos — 5` solo `Ambos`), todos con el
+  **mismo BM25 (10.77)** — que un OR de dos términos empate 22 docs al décimo
+  sugiere que el clause boosteado del AND no está diferenciando nada, revisarlo
+  aparte de la decisión de abajo. Con `≈` apagado, **5 resultados**: ahí el AND
+  del `QueryParser` sí filtra, pero **el problema de "no me lleva" sigue igual**
+  — `Descanso — 2` muestra solo `nobles` resaltada y `Amigos — 5` solo `Ambos`,
+  porque el doc contiene las dos palabras pero a párrafos de distancia y el
+  snippet se centra en la primera. O sea: hay **dos bugs separados**, el
+  matcheo de más es del fuzzy, pero el snippet/salto que apunta a cualquier
+  lado pasa en los dos modos.
+  **A decidir** (ninguna es obviamente la buena):
+  (a) que el fuzzy también exija todos los términos (`Occur::Must` por término,
+      fuzzy adentro) y deje el OR solo como fallback si el AND da 0 hits;
+  (b) piso de cobertura: exigir ≥N términos o ≥X% de los términos de la query;
+  (c) proximidad — una query de varias palabras es casi siempre una frase medio
+      recordada, así que los términos deberían caer cerca (phrase query con slop)
+      en vez de a tres párrafos de distancia.
+  La (c) es la que ataca el problema de fondo, y el repro de `Ambos nobles` con
+  `≈` apagado es el argumento: el AND a nivel documento no alcanza porque lo que
+  se busca casi siempre es una frase, no dos palabras sueltas en el mismo
+  capítulo. Encima `resolve_matched_words` centra el snippet en la primera
+  palabra que matcheó (`search.rs:333`), así que con términos desperdigados el
+  snippet tampoco muestra el lugar bueno.
+  **El salto en sí es otro bug y tiene ítem propio en `## Urgente`** (el offset
+  del hit no viaja al editor). Son independientes: aunque la query filtre
+  perfecto, el click sigue cayendo en cualquier lado. Cualquier cambio acá toca
+  `matchedTerms`, que es lo que el frontend usa para resaltar (`search-panel.ts:270-305`).
+
 
 ## Tree / Importer
 
@@ -2122,3 +2478,61 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   solo la del **primer** arranque tras bajar el `.dmg` a mano, que ya está
   documentada en las notas del release.
 - Mobile (no urgente, capaz solo un exportador a EPUB para ver archivos desde gh). Tomador de notas estaría piola, pero no veo que sea posible sincronizar git en el teléfono (Capaz que sí, investigar.) Estaría re zarpado poder tomar notas sobre partes o capítulos mientras leo en la kindle y que queden resgistrados en notas del libro o algo así.
+- [ ] **Publicar en Homebrew (cask) para macOS**
+  Hoy la instalación en Mac es bajar el `.dmg` a mano del release y comerse el
+  primer arranque con Gatekeeper. En Arch ya está resuelto vía AUR
+  (`packaging/aur/PKGBUILD` + `publish.sh`); falta el equivalente Mac.
+  Las piezas ya están: el job `build-macos` de `.github/workflows/release.yml`
+  publica `.dmg` para `aarch64-apple-darwin` y `x86_64-apple-darwin` en el
+  release del tag, que es exactamente lo que un cask necesita — URL estable por
+  versión + `sha256` por arch (`on_arm` / `on_intel`).
+  **Tap propio** (`T4toh/homebrew-twriter`), no homebrew-cask oficial: el repo
+  central pide notoriedad (estrellas/forks) y la app no está notarizada, solo
+  firmada ad-hoc (`signingIdentity: "-"`). En un tap propio eso no bloquea, pero
+  el cask conviene que declare el trámite de cuarentena para que
+  `brew install --cask` no termine en el "está dañada" que ya nos comimos.
+  **Trabajo**: un `Casks/twriter.rb` con `version`, `sha256 arm/intel`, `app
+  "tWriter.app"`, `zap` de `~/Library/Application Support/tWriter`, y un paso en
+  el workflow de release que reescriba versión + hashes y commitee al tap
+  (espejo de `packaging/aur/publish.sh`). Ojo con el updater de Tauri: si la app
+  se auto-actualiza, el cask queda desfasado respecto del `.app` instalado
+  — o se documenta que en Mac gana el updater, o el cask lleva
+  `auto_updates true` para que `brew upgrade` no pelee.
+
+## Proofreading
+
+- [ ] **El ciclo de correcciones vive en un txt y es un garrón** (para pensar
+  fuerte un día, todavía no hay diseño)
+  Flujo actual: se lee en la Kindle, se anotan las frases a cambiar en un `.txt`
+  suelto, y después hay que ir una por una copiando la frase a la búsqueda,
+  encontrar el capítulo, arreglar, y acordarse de tachar la línea del txt. Nada
+  de eso lo sabe la app: no hay estado de "pendiente / arreglado", no hay link
+  entre la anotación y el lugar del texto, y el ida y vuelta entre la nota y el
+  panel de búsqueda encima se pelea con el slot único del panel derecho (ver el
+  ítem de la nota que se cierra al buscar, en `## Búsqueda`).
+  **Esto va en una app aparte, no adentro de tWriter**: la lectura pasa en la
+  Kindle y las anotaciones se toman en el celular o la tablet, lejos de la
+  compu. El punto de captura no es el escritorio, así que lo que hace falta es
+  algo para anotar en el teléfono y después poder buscar fácil, y tWriter queda
+  del otro lado como consumidor de esas anotaciones. Emparentado con el bullet
+  de Mobile al final de `## Plataformas` (tomar notas desde la Kindle/teléfono y
+  que queden registradas contra el libro) — probablemente sean la misma app.
+  **Lo no resuelto del lado móvil**: cómo llega la anotación de la tablet al
+  repo. Sincronizar git desde el teléfono es la duda vieja de ese bullet; las
+  alternativas son un formato de intercambio tonto (un archivo por sesión de
+  lectura que se copia a mano) o un backend, que es muchísimo más app.
+  **Direcciones posibles del lado tWriter**, sin elegir todavía:
+  (a) marcar desde adentro de la app — una marca de revisión sobre la selección
+      en el editor, tipo comentario/anotación anclada al texto, con estado y
+      una lista lateral para recorrerlas;
+  (b) importar la lista de correcciones — que la app resuelva cada línea a un
+      hit de búsqueda, con checkbox y salto directo. Es la que respeta cómo se
+      anota hoy y la que conecta con la app móvil;
+  (c) las dos: (b) es la que sirve mañana, (a) es más prolija pero solo cubre lo
+      que se detecta con la app abierta.
+  Ojo con anclar: si la marca guarda un offset, editar el capítulo la desancla.
+  Anclar por texto de la frase (como hace la búsqueda) es más frágil pero
+  sobrevive a las ediciones de alrededor. Decidir esto es la mitad del diseño.
+  Lo que ya está y sirve de base: el índice tantivy con `matchedTerms`, el
+  highlight/salto del editor, y las notas por saga (una lista de correcciones
+  es una nota con estado).
