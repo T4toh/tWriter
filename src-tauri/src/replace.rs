@@ -629,13 +629,18 @@ pub fn aplicar(
     // sin red: el undo anterior (si hay) sigue intacto hasta el final de
     // este bloque.
     let undo_root = root.join(UNDO_SUBDIR);
-    let id = nuevo_snapshot_id();
-    let snap_dir = undo_root.join(&id);
-    if snap_dir.exists() {
-        // Colisión de id (dos applies en el mismo milisegundo, o un reloj
-        // que retrocedió): abortar antes de escribir nada, en vez de
-        // mezclarse con lo que hubiera en esa carpeta.
-        return Err(format!("ya existe un snapshot con id {id}"));
+    // Id único: si `<id>` ya existiera (dos applies en el mismo milisegundo,
+    // o un reloj que retrocedió), sufijarlo hasta encontrar uno libre en vez
+    // de abortar. La propiedad que importa —nunca escribir en un directorio
+    // que ya es de otro snapshot— se cumple igual, sin el hard-fail.
+    let base_id = nuevo_snapshot_id();
+    let mut id = base_id.clone();
+    let mut snap_dir = undo_root.join(&id);
+    let mut sufijo = 1u32;
+    while snap_dir.exists() {
+        id = format!("{base_id}-{sufijo}");
+        snap_dir = undo_root.join(&id);
+        sufijo += 1;
     }
 
     // Resolver todos los `rel` primero: si alguno falla (capítulo fuera del
@@ -709,10 +714,22 @@ pub fn aplicar(
     // conteo real, no 'listo'").
     let mut stats = crate::stats::read_stats(root);
     for (idx, p) in pendientes.iter().enumerate() {
+        // `nuevo` se calculó en la fase 1 sobre el `html` leído ahí. Entre
+        // ese read y este punto puede pasar un autosave, un `git pull` o un
+        // write de la otra PC — la misma ventana que justifica la
+        // revalidación de la fase 1, pero más chica. Sin este chequeo,
+        // `write_chapter` de abajo pisaría esa edición ajena con `nuevo`
+        // calculado sobre el html VIEJO, perdiéndola en silencio. Cubierto
+        // por inspección, no por test: forzar la carrera de forma
+        // determinística exigiría un thread compitiendo por timing contra
+        // esta misma llamada, o un hook de test en el camino de escritura —
+        // ninguno de los dos vale lo que cuesta un guard de tres líneas
+        // sobre un helper (`mtime_epoch`) que ya está ejercitado en el resto
+        // del archivo.
         if mtime_epoch(&p.path) != p.mtime_antes {
-            // Cambió entre el read de la fase 1 y este punto (autosave, git
-            // pull, la otra PC). Mismo canal y semántica que la
-            // revalidación: "cambió desde que lo leí", no se pisa.
+            // Cambió entre el read de la fase 1 y este punto. Mismo canal y
+            // semántica que la revalidación: "cambió desde que lo leí", no
+            // se pisa.
             tracing::warn!(
                 target: "replace",
                 path = %p.path.display(),
@@ -1366,11 +1383,6 @@ mod tests {
         let pv1 = preview_scope(td.path(), "uno", &ops(false, true)).unwrap();
         let a = aplicar_t(td.path(), "uno", &ops(false, true), edits_de(&pv1), "dos").unwrap();
         assert!(!a.snapshot_id.is_empty());
-        // El id del snapshot es epoch en milisegundos: sin este margen, dos
-        // applies seguidos en el mismo test pueden caer en el mismo id y
-        // chocar con el chequeo de colisión (que es intencional — ver el
-        // Important 3 — pero no es lo que este test quiere reproducir).
-        std::thread::sleep(std::time::Duration::from_millis(5));
 
         let afuera = TempDir::new().unwrap();
         fs::write(afuera.path().join("x.html"), "<p>Angelica</p>").unwrap();
@@ -1429,19 +1441,36 @@ mod tests {
         let td = scope_con(&[("libro/1.html", "<p>uno uno</p>")]);
         let pv1 = preview_scope(td.path(), "uno", &ops(false, true)).unwrap();
         let _a = aplicar_t(td.path(), "uno", &ops(false, true), edits_de(&pv1), "dos").unwrap();
-        // El id del snapshot es epoch en milisegundos: sin este margen, dos
-        // applies seguidos pueden caer en el mismo id y el segundo abortaría
-        // por la colisión intencional del Important 3 en vez de reemplazar
-        // el snapshot anterior, que es lo que este test quiere reproducir.
-        std::thread::sleep(std::time::Duration::from_millis(5));
         let pv2 = preview_scope(td.path(), "dos", &ops(false, true)).unwrap();
         let b = aplicar_t(td.path(), "dos", &ops(false, true), edits_de(&pv2), "tres").unwrap();
-        // Sin `assert_ne!` sobre los ids: alcanza con que sean distintos (lo
-        // aseguró el sleep de arriba). Lo que importa es que sobreviva
-        // exactamente el snapshot del segundo apply.
+        // Sin `assert_ne!` sobre los ids ni sleep entre los dos applies: si
+        // caen en el mismo milisegundo, el id se sufija en vez de chocar (ver
+        // `apply_dos_applies_en_el_mismo_milisegundo_no_chocan`). Lo único
+        // que importa acá es que sobreviva exactamente el snapshot del
+        // segundo apply.
         let undo_dir = td.path().join(".twriter/undo");
         let quedan: Vec<_> = fs::read_dir(&undo_dir).unwrap().filter_map(|e| e.ok()).collect();
         assert_eq!(quedan.len(), 1, "solo se guarda el último");
+        assert_eq!(quedan[0].file_name().to_string_lossy(), b.snapshot_id);
+    }
+
+    #[test]
+    fn apply_dos_applies_en_el_mismo_milisegundo_no_chocan() {
+        // Fix round 2: un id repetido (dos applies en el mismo milisegundo,
+        // o un reloj que retrocedió) ya no aborta el segundo apply — se
+        // sufija (`undo-<ms>`, `undo-<ms>-1`, ...) hasta encontrar uno libre.
+        // Sin sleep entre los dos applies a propósito: la propiedad tiene
+        // que sostenerse choquen o no, no depender de que no choquen.
+        let td = scope_con(&[("libro/1.html", "<p>uno uno</p>")]);
+        let pv1 = preview_scope(td.path(), "uno", &ops(false, true)).unwrap();
+        let a = aplicar_t(td.path(), "uno", &ops(false, true), edits_de(&pv1), "dos").unwrap();
+        assert!(!a.snapshot_id.is_empty());
+        let pv2 = preview_scope(td.path(), "dos", &ops(false, true)).unwrap();
+        let b = aplicar_t(td.path(), "dos", &ops(false, true), edits_de(&pv2), "tres").unwrap();
+        assert!(!b.snapshot_id.is_empty(), "el segundo no debe fallar por la colisión");
+        let undo_dir = td.path().join(".twriter/undo");
+        let quedan: Vec<_> = fs::read_dir(&undo_dir).unwrap().filter_map(|e| e.ok()).collect();
+        assert_eq!(quedan.len(), 1, "solo queda un directorio de snapshot");
         assert_eq!(quedan[0].file_name().to_string_lossy(), b.snapshot_id);
     }
 
