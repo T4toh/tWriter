@@ -1817,9 +1817,21 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   `golpear` con scope "Todo el repo" devolviendo **4 resultados**, todos del
   libro `2 - Más que un trabajo`, con el índice completo. Contra una copia del
   mismo repo, la misma query en modo exacto da **23 hits**, y con scope de libro
-  los 3 capítulos correctos. Dejó de pasar después de reiniciar la app, así que
-  no se pudo aislar. Si vuelve a aparecer: mirar primero si el `≈` estaba
-  prendido, y arrancar con `RUST_LOG="search=debug"`.
+  los 3 capítulos correctos.
+  Segundo episodio el mismo día, y este es el que más pinta tiene: un término no
+  aparecía **hasta abrir el archivo**. El autor lo probó en **todos** los
+  scopes, así que no es el caso esperado de "Archivo actual" (que lee el buffer
+  del editor y por diseño solo encuentra en archivos abiertos). Abrir un
+  capítulo escribe stats/meta, eso dispara `search_apply_path_change` →
+  `index_document`, y ahí recién aparece — o sea que el doc **no estaba** en el
+  índice aunque el boot reporte `indexed=925`. Los dos episodios dejaron de
+  pasar y no hubo repro para aislarlos.
+  **Lo que haría falta para cazarlo**: un comando que diga si un path está en el
+  índice y con qué mtime, expuesto en el panel 🐛 — hoy no hay forma de
+  preguntárselo a la app, y ahí se fue toda una sesión de adivinar leyendo
+  mtimes de los archivos del índice (con una conclusión equivocada en el medio).
+  Mientras no exista: arrancar con `RUST_LOG="search=debug"` y mirar si el
+  `indexed=N` del boot coincide con la cantidad de docs del repo.
 
 
 ## Tree / Importer
