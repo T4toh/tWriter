@@ -2413,8 +2413,15 @@ import type { MotivoSkip, ReplaceGroup } from '../core/replace-selection';
         return 'El texto de reemplazo es igual al buscado.';
       case 'scopeNotas':
         return 'El reemplazo solo toca capítulos, no notas.';
-      case 'sinContexto':
+      case 'sinCapitulo':
         return 'Abrí un capítulo para usar este alcance.';
+      case 'sinAncestro':
+        // El capítulo abierto existe pero vive en una carpeta suelta, así que
+        // no cuelga de ninguna saga ni libro. Decir "abrí un capítulo" acá
+        // sería mentir: ya hay uno abierto.
+        return 'El capítulo abierto no pertenece a ese alcance. Elegí otro.';
+      case 'sinPreview':
+        return 'Buscando ocurrencias…';
       case 'sinSeleccion':
         return 'No hay ocurrencias seleccionadas.';
       default:
