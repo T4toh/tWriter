@@ -408,6 +408,15 @@ pub fn preview_scope(
         let mut occurrences = Vec::new();
         let mut skipped = Vec::new();
         for (a, b) in hits {
+            // El tope se aplica también ADENTRO del archivo: sin esto, un
+            // capítulo con miles de ocurrencias de un término corto empuja
+            // `total` muy por encima de MAX_OCURRENCIAS en una sola
+            // iteración, y el chequeo de arriba —que corre recién antes del
+            // archivo siguiente— no lo ve nunca.
+            if pv.total + occurrences.len() >= MAX_OCURRENCIAS {
+                pv.truncated = true;
+                break;
+            }
             match ubicar(&map, a, b) {
                 Ubicacion::Reemplazable { html_start, html_end } => occurrences.push(
                     ReplaceOccurrence {
@@ -434,6 +443,9 @@ pub fn preview_scope(
             occurrences,
             skipped,
         });
+        if pv.total >= MAX_OCURRENCIAS || pv.groups.len() >= MAX_ARCHIVOS {
+            pv.truncated = true;
+        }
     }
     tracing::info!(
         target: "replace",
@@ -790,5 +802,29 @@ mod tests {
         let td = scope_con(&[("libro/1.html", "<p>Angelica</p>"), ("libro/2.html", "<p>Angelica</p>")]);
         let pv = preview_scope(&td.path().join("libro/1.html"), "Angelica", &ops(false, true)).unwrap();
         assert_eq!(pv.groups.len(), 1, "scope 'archivo actual'");
+    }
+
+    #[test]
+    fn el_tope_corta_adentro_de_un_solo_archivo() {
+        // Un solo capítulo con más ocurrencias que MAX_OCURRENCIAS: el
+        // chequeo de arriba del loop (que corre entre archivos) nunca lo ve,
+        // así que el corte tiene que pasar adentro del `for (a, b) in hits`.
+        let html = format!("<p>{}</p>", "a ".repeat(MAX_OCURRENCIAS + 500));
+        let td = scope_con(&[("libro/1.html", html.as_str())]);
+        let pv = preview_scope(td.path(), "a", &ops(false, true)).unwrap();
+        assert!(pv.total <= MAX_OCURRENCIAS, "no debe pasarse del tope: {}", pv.total);
+        assert!(pv.truncated);
+    }
+
+    #[test]
+    fn el_tope_de_archivos_marca_truncated() {
+        let caps: Vec<(String, String)> = (0..MAX_ARCHIVOS + 1)
+            .map(|i| (format!("libro/{i}.html"), "<p>Angelica</p>".to_string()))
+            .collect();
+        let refs: Vec<(&str, &str)> = caps.iter().map(|(p, h)| (p.as_str(), h.as_str())).collect();
+        let td = scope_con(&refs);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        assert!(pv.truncated);
+        assert!(pv.groups.len() <= MAX_ARCHIVOS);
     }
 }
