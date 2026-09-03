@@ -1792,6 +1792,36 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   ortografía — así que hoy no hay atajo, es a mano.
 
 
+- [ ] **El índice se puede quedar mudo y no hay forma de saberlo** (encontrado
+  el 2026-09-03 persiguiendo un `golpear` que no traía resultados)
+  Tres cosas que se suman y dejan al buscador mintiendo sin una sola señal:
+  (a) **El indexado incremental es un no-op silencioso.** `with_index`
+      (`search.rs`) hace `return Ok(())` si el slot del estado está en `None`, y
+      `init_for_root` se llama desde **un solo lugar**: `full_reindex`
+      (`search.rs:660`). O sea que antes del primer reindex, cada
+      `index_document` al guardar un capítulo se descarta y devuelve Ok.
+  (b) **El reindex de boot no se ve.** Loguea `INFO` en el target `search`, y el
+      filtro por default es `EnvFilter::new("twriter_lib=info,boot=info,warn,error")`
+      (`debug_bridge.rs:33`) — el `warn` suelto pone el nivel default en WARN, así
+      que ese INFO no sale nunca. Con `RUST_LOG="search=debug" pnpm tauri dev`
+      aparece: `reindex full completo indexed=925`, un segundo después del boot.
+      Sin eso no hay manera de saber si el índice está fresco, viejo o vacío.
+  (c) **Reindexa el repo entero en cada arranque.** 925 docs en ~1s con el repo
+      de prueba, pero es O(repo) y tira el trabajo incremental de la sesión
+      anterior. Con un repo grande esto se nota.
+  **Qué haría falta**: que la UI sepa el estado del índice (cuántos docs, de
+  cuándo) y lo muestre en el panel de búsqueda, y que `with_index` logee un WARN
+  en vez de tragarse el no-op. Lo de reindexar todo en cada boot es una decisión
+  aparte: alcanzaría comparar mtimes contra el índice y tocar solo lo que cambió.
+  **Sin explicación, no reproducido**: el síntoma que arrancó todo esto fue
+  `golpear` con scope "Todo el repo" devolviendo **4 resultados**, todos del
+  libro `2 - Más que un trabajo`, con el índice completo. Contra una copia del
+  mismo repo, la misma query en modo exacto da **23 hits**, y con scope de libro
+  los 3 capítulos correctos. Dejó de pasar después de reiniciar la app, así que
+  no se pudo aislar. Si vuelve a aparecer: mirar primero si el `≈` estaba
+  prendido, y arrancar con `RUST_LOG="search=debug"`.
+
+
 ## Tree / Importer
 
 - [x] **Renombrar una carpeta fuera de la app deja estado local huérfano**
