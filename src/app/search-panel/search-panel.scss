@@ -310,11 +310,13 @@
   white-space: nowrap;
 }
 
+// Mismo padding vertical que `.sp-scope-row`, que va justo encima: sin el
+// padding de arriba el input queda pegado al borde inferior de esa fila.
 .sp-replace-row {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0 0.5rem 0.5rem;
+  padding: 6px 8px 8px;
 }
 
 .sp-check {
