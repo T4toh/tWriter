@@ -43,7 +43,7 @@ if (r.status !== 0) {
 }
 
 const mod = await import(pathToFileURL(join(outDir, 'search-highlight.js')).href);
-const { pickBestBlock, tokenize } = mod;
+const { pickBestBlock, tokenize, findAllMatchesInPlain, esInicioDePalabra, esMatchDeTermino } = mod;
 
 let passed = 0;
 let failed = 0;
@@ -144,6 +144,90 @@ function pick(bloques, query, fold = false) {
 {
   const bloques = ['duendes duendes duendes duendes', 'los duendes de la mansion'];
   check('cuenta términos distintos, no repeticiones', pick(bloques, 'duendes mansion') === 1);
+}
+
+
+// ─── Límite de palabra ─────────────────────────────────────────────────────
+// El repro: buscando `y Ami ya está`, la `y` matcheaba adentro de `ayudó` y en
+// la `Y` de `Yiri`. Regla: borde izquierdo siempre, y palabra completa para
+// términos de ≤3 chars, donde el prefijo no sirve para nada.
+
+{
+  check('inicio de string es inicio de palabra', esInicioDePalabra('ayudó', 0) === true);
+  check('letra antes ⇒ no es inicio', esInicioDePalabra('ayudó', 1) === false);
+  check('espacio antes ⇒ es inicio', esInicioDePalabra('a yudó', 2) === true);
+  check('puntuación antes ⇒ es inicio', esInicioDePalabra('—ya', 1) === true);
+  check('número antes ⇒ no es inicio', esInicioDePalabra('3ya', 1) === false);
+}
+
+{
+  // Término corto ⇒ palabra completa. La `y` de `yiri` arranca palabra pero no
+  // la termina, así que no vale.
+  check('y en "yiri" no vale (corto, no es palabra)', esMatchDeTermino('yiri lo vio', 0, 'y') === false);
+  check('y sola vale', esMatchDeTermino('lo y ami', 3, 'y') === true);
+  check('y en "ayudó" no vale (medio de palabra)', esMatchDeTermino('ayudó', 1, 'y') === false);
+  // Término largo ⇒ prefijo permitido.
+  check('golpear en "golpearon" vale', esMatchDeTermino('lo golpearon', 3, 'golpear') === true);
+  check('esta en "estaban" vale (4 chars, prefijo)', esMatchDeTermino('estaban listos', 0, 'esta') === true);
+  // Pero nunca en el medio, por largo que sea.
+  check('golpear en "regolpearon" no vale', esMatchDeTermino('regolpearon', 2, 'golpear') === false);
+}
+
+/** Substrings resaltados por findAllMatchesInPlain, para leerlos de un vistazo. */
+function marcados(plain, query, fold = false) {
+  return findAllMatchesInPlain(plain, tokenize(query), query, fold).map((m) =>
+    plain.slice(m.start, m.end),
+  );
+}
+
+{
+  // El repro del autor, tal cual: `y Ami ya está` tiene forma rica (la `A`
+  // mayúscula), así que gana el literal completo y marca la frase entera. Un
+  // solo mark, no cuatro.
+  const plain = 'Yiri lo ayudó a terminar y Ami ya está lista';
+  const out = marcados(plain, 'y Ami ya está');
+  check('query con forma rica ⇒ un mark con la frase entera', JSON.stringify(out) === JSON.stringify(['y Ami ya está']));
+}
+
+{
+  // El camino que SÍ tenía la basura: los snippets del panel pasan
+  // `matchedTerms` como términos y `rawQuery` vacío, o sea sin forma rica que
+  // priorizar. Antes marcaba la `Y` de `Yiri` y la `y` de `ayudó`.
+  const plain = 'Yiri lo ayudó a terminar y Ami ya está lista';
+  const out = findAllMatchesInPlain(plain, ['Y', 'Ami', 'ya', 'está'], '').map((m) =>
+    plain.slice(m.start, m.end),
+  );
+  check(
+    'camino matchedTerms: solo palabras completas para los cortos',
+    JSON.stringify(out) === JSON.stringify(['y', 'Ami', 'ya', 'está']),
+  );
+  check('no marca la Y de Yiri', !out.includes('Y'));
+}
+
+{
+  // Lo que NO hay que romper: el proofreading busca prefijos.
+  check('golpear encuentra golpearon', marcados('lo golpearon fuerte', 'golpear')[0] === 'golpear');
+  check('caballera encuentra caballeras', marcados('las caballeras', 'caballera')[0] === 'caballera');
+}
+
+{
+  // Dos ocurrencias, una mala y una buena: la mala no debe tapar a la buena.
+  const out = marcados('ayudó y luego se fue', 'y');
+  check('descarta la del medio y encuentra la buena', out.length === 1);
+}
+
+{
+  // El literal de forma rica NO pasa por la guarda: sigue siendo búsqueda de
+  // literal exacto, que es lo que hace específico a `¡Duendes!`.
+  const out = marcados('gritó ¡Duendes! fuerte', '¡Duendes!');
+  check('el literal con forma rica se sigue resaltando', out[0] === '¡Duendes!');
+}
+
+{
+  // pickBestBlock cuenta cobertura con la misma guarda: un bloque que solo
+  // tiene los términos adentro de otras palabras no debería ganar.
+  const bloques = ['Yiri lo ayudó a caminar', 'y Ami ya está lista'];
+  check('la cobertura no cuenta matches del medio de palabra', pick(bloques, 'y ya') === 1);
 }
 
 rmSync(outDir, { recursive: true, force: true });

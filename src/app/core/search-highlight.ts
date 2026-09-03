@@ -30,6 +30,55 @@ export function foldAccents(s: string): string {
   return out;
 }
 
+/** Largo hasta el cual un término se exige como palabra COMPLETA. Buscar el
+ *  prefijo `ya` o `que` no sirve para nada y matchea en media novela; buscar el
+ *  prefijo `golpear` o `caballera` es justo lo que hace falta al corregir.
+ *  Mismo umbral que `FUZZY_LEN_EXACT_MAX` en `search.rs`. */
+const TERMINO_CORTO_MAX = 3;
+
+/** True si `idx` cae en el arranque de una palabra dentro de `text`, o sea si
+ *  el char anterior no es letra ni número. */
+export function esInicioDePalabra(text: string, idx: number): boolean {
+  if (idx <= 0) return true;
+  return !/[\p{L}\p{N}]/u.test(text[idx - 1]);
+}
+
+/** True si `idx` cae en el final de una palabra, o sea si el char siguiente no
+ *  es letra ni número. */
+export function esFinDePalabra(text: string, idx: number): boolean {
+  if (idx >= text.length) return true;
+  return !/[\p{L}\p{N}]/u.test(text[idx]);
+}
+
+/**
+ * True si `term` matchea en `text` arrancando en `idx` de forma aceptable.
+ *
+ * Los términos se buscan como substring para que el proofreading funcione
+ * —`golpear` tiene que encontrar `golpearon`—, pero sin guarda un término corto
+ * matchea en cualquier lado: buscando `y Ami ya está`, la `y` caía adentro de
+ * `ayudó` Y en la `Y` de `Yiri`, y el resalto quedaba lleno de basura.
+ *
+ * Regla: siempre borde izquierdo (nunca en el medio de una palabra), y para
+ * términos de hasta `TERMINO_CORTO_MAX` chars también borde derecho, o sea
+ * palabra completa.
+ */
+export function esMatchDeTermino(text: string, idx: number, term: string): boolean {
+  if (!esInicioDePalabra(text, idx)) return false;
+  if (term.length > TERMINO_CORTO_MAX) return true;
+  return esFinDePalabra(text, idx + term.length);
+}
+
+/** Primer índice donde `term` matchea `text` según `esMatchDeTermino`, o -1. */
+export function buscarTermino(text: string, term: string, from = 0): number {
+  let at = from;
+  for (;;) {
+    const idx = text.indexOf(term, at);
+    if (idx < 0) return -1;
+    if (esMatchDeTermino(text, idx, term)) return idx;
+    at = idx + 1;
+  }
+}
+
 /** Bloques donde puede caer un match. El subset XHTML del editor no tiene más
  *  contenedores de texto que estos. */
 const BLOCK_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, blockquote, li, pre';
@@ -74,7 +123,7 @@ export function pickBestBlock(
     if (hasRichForm && rawLower.length > 0 && text.includes(rawLower)) return i;
     let hits = 0;
     for (const t of lowerTerms) {
-      if (text.includes(t)) hits += 1;
+      if (buscarTermino(text, t) >= 0) hits += 1;
     }
     if (hits > bestHits) {
       bestHits = hits;
@@ -181,7 +230,9 @@ function selectFirstMatchIn(
     while (cur) {
       const text = norm((cur.nodeValue ?? '').toLowerCase());
       for (const t of lowerTerms) {
-        const idx = text.indexOf(t);
+        // Misma guarda que el resalto: el salto no debe caer en el medio de una
+        // palabra (`ya` adentro de `ayudó`).
+        const idx = buscarTermino(text, t);
         if (idx >= 0) {
           bestNode = cur as Text;
           bestOffset = idx;
@@ -281,7 +332,7 @@ export function findAllMatchesInPlain(
     const len = t.length;
     let from = 0;
     while (from <= lowerPlain.length - len) {
-      const idx = lowerPlain.indexOf(t, from);
+      const idx = buscarTermino(lowerPlain, t, from);
       if (idx < 0) break;
       all.push({ start: idx, end: idx + len });
       from = idx + len;
