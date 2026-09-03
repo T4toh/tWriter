@@ -520,13 +520,6 @@ pub struct SnapshotManifest {
     pub files: Vec<SnapshotFile>,
 }
 
-fn ahora_epoch() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
-}
-
 fn mtime_epoch(path: &Path) -> u64 {
     std::fs::metadata(path)
         .and_then(|m| m.modified())
@@ -597,8 +590,14 @@ pub fn aplicar(
             out.skipped_files.push(edit.path);
             continue;
         }
-        let ocurrencias = edit.ranges.len();
-        let nuevo = aplicar_ranges(&html, edit.ranges, replacement);
+        let mut ranges = edit.ranges;
+        // Deduplicar antes de contar: `aplicar_ranges` colapsa los duplicados
+        // a una sola escritura, así que contar los ranges PEDIDOS haría que el
+        // toast le reporte al autor más reemplazos de los que hubo.
+        ranges.sort_unstable();
+        ranges.dedup();
+        let ocurrencias = ranges.len();
+        let nuevo = aplicar_ranges(&html, ranges, replacement);
         pendientes.push(Pendiente { path, html, nuevo, ocurrencias });
     }
     if pendientes.is_empty() {
@@ -1145,6 +1144,23 @@ mod tests {
         // Y no lo pisó.
         let dos = fs::read_to_string(td.path().join("libro/2.html")).unwrap();
         assert_eq!(dos, "<p>otro texto sin el nombre</p>");
+    }
+
+    #[test]
+    fn apply_con_rango_duplicado_cuenta_una_sola_ocurrencia() {
+        // `aplicar_ranges` colapsa el duplicado a una sola escritura; el
+        // conteo tiene que coincidir con eso, no con lo pedido.
+        let td = scope_con(&[("libro/1.html", "<p>Angelica dijo</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let occ = pv.groups[0].occurrences[0].clone();
+        let edits = vec![FileEdit {
+            path: pv.groups[0].path.clone(),
+            ranges: vec![(occ.html_start, occ.html_end), (occ.html_start, occ.html_end)],
+        }];
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits, "Angélica").unwrap();
+        assert_eq!(out.occurrences, 1, "el duplicado no cuenta dos veces");
+        let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
+        assert!(uno.contains("Angélica dijo"), "quedó {uno:?}");
     }
 
     #[test]
