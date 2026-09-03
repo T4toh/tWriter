@@ -14,6 +14,9 @@ import { ChapterViolations, RaeAuditService } from '../core/rae-audit-service';
 import { RaeViolation, TreeNode } from '../core/types';
 import { SearchService } from '../core/search-service';
 
+/** Chars de contexto a cada lado de la violación para el ancla del salto. */
+const ANCHOR_MARGIN = 40;
+
 @Component({
   selector: 'app-rae-audit-panel',
   standalone: true,
@@ -78,12 +81,37 @@ export class RaeAuditPanel {
     if (!node) return;
     const parent = chapter.path.replace(/\/[^/]+$/, '');
     this.nav.setBrowsing(parent);
-    const term = chapter.plain.slice(v.offset, v.offset + v.length).trim();
-    if (term.length >= 2) {
-      this.search.requestHighlight(chapter.path, term);
+    // Ancla de texto, NO el offset: la auditoría calcula sus offsets sobre
+    // `dialogos/htmlToPlain`, que dropea los `<hr>`, mientras el editor vive en
+    // el espacio de `extractPlainText`, que mete `* * *` por cada uno. Los dos
+    // planos se desfasan 7 chars por corte de escena, así que pasar el offset
+    // crudo cae al lado. El texto de alrededor, en cambio, es idéntico en los
+    // dos: se recorta al bloque y el highlighter lo encuentra exacto.
+    const anchor = anchorAround(chapter.plain, v.offset, v.length);
+    if (anchor.length >= 2) {
+      // `fold: false` a propósito: el ancla es texto exacto del capítulo, así que
+      // plegar acentos sólo abre la puerta a que una variante sin tilde de un
+      // párrafo anterior le gane al bloque de la violación.
+      this.search.requestHighlight(chapter.path, anchor, undefined, false);
     }
     await this.chapter.open(node);
   }
+}
+
+/** Contexto alrededor de `[offset, offset+length)` sin cruzar el borde del
+ *  bloque (`\n\n`): el highlighter compara contra el texto de un párrafo del
+ *  DOM, y un literal que abarque dos párrafos no matchearía nunca. Devuelve
+ *  hasta `ANCHOR_MARGIN` chars de cada lado — cuanto más largo, más único, y
+ *  con la frase entera el bloque gana por cobertura de términos aunque el
+ *  literal se parta en un `<em>`. */
+function anchorAround(plain: string, offset: number, length: number): string {
+  const blockStart = plain.lastIndexOf('\n\n', Math.max(0, offset - 1));
+  const from = blockStart < 0 ? 0 : blockStart + 2;
+  const blockEnd = plain.indexOf('\n\n', offset + length);
+  const to = blockEnd < 0 ? plain.length : blockEnd;
+  const start = Math.max(from, offset - ANCHOR_MARGIN);
+  const end = Math.min(to, offset + length + ANCHOR_MARGIN);
+  return plain.slice(start, end).trim();
 }
 
 function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {

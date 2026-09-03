@@ -4,8 +4,10 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Urgente
 
-- [ ] **El click en un resultado nunca lleva al resultado — el buscador es
-  inútil así** (reportado el 2026-09-02: "nunca me llevó a lo que buscaba")
+- [x] **El click en un resultado nunca lleva al resultado — el buscador es
+  inútil así** (`fix/busqueda-salto-y-matcheo`, verificado a mano por el autor
+  el 2026-09-03 buscando `y Ami ya está`, el ítem 1 de su lista de arreglos:
+  cae en la frase entera, donde antes caía en el primer `ya` del capítulo)
   **Causa raíz, y explica el "nunca"**: la posición del match **no viaja**. El
   `SearchHit` que devuelve Rust (`search.rs:64-80`) trae `path`, `snippet` y
   `matchedTerms`, pero **ningún offset**. Del lado del front,
@@ -36,6 +38,27 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   (los client-side de "Archivo actual").
   Ordenar bien esto arregla de una la mitad del ítem de matcheo en
   `## Búsqueda` y desbloquea el de revisión por libro en `## Gramática`.
+  El plan de "que el offset viaje" NO se pudo seguir tal cual: el `content` que
+  guarda tantivy pasa por `html_to_text`, que colapsa todo a una línea con
+  espacios simples, mientras el editor vive en el espacio de `extractPlainText`,
+  que mete `\n\n` entre bloques y `* * *` por cada `<hr>`. Los dos planos se
+  desfasan y el offset del backend cae al lado. Alinearlos exige cambiar el
+  indexado y bumpear `INDEX_VERSION` (reindex full de todo el repo) — queda como
+  camino futuro.
+  Lo que se hizo en su lugar: el salto elige **el mejor bloque** en vez del
+  primero. `pickBestBlock` (`search-highlight.ts`) puntúa los bloques del DOM
+  por cobertura de términos distintos, con el literal de `rawQuery` ganando de
+  una si aparece; recién ahí `selectFirstMatchIn` busca el match adentro de ese
+  bloque. El `TreeWalker` sigue, pero acotado al párrafo correcto.
+  El caso del panel RAE se arregló distinto y sí exacto: `openChapterAt` ya no
+  tira el offset, pero tampoco lo manda crudo (mismo desfase, agravado por los
+  `<hr>`) — manda un **ancla de texto** recortada al bloque (`anchorAround`,
+  ±40 chars), que es idéntica en los dos planos y el highlighter la clava.
+  El salto del panel RAE también quedó verificado por el autor el 2026-09-03.
+  Sigue pendiente el agravante (b), y va a ítem propio si molesta: varios hits
+  del mismo capítulo siguen mandando todos al mejor bloque, no uno a cada
+  aparición. Para eso hace falta o el offset real del backend o navegación
+  prev/next sobre los matches.
 
 - [x] **Editar el CSS del EPUB no se ve hasta recompilar Rust — y nada lo avisa**
   (`fix/epub-css-runtime`, verificado a mano por el autor el 2026-09-02).
@@ -1643,7 +1666,9 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Hunspell (`zspell`/`hunspell-rs`) daría corrección ortográfica ES pero no
   completa nombres propios inventados, que es el caso real.
 
-- [ ] **Abrir la búsqueda destruye la nota que estabas leyendo — y volver no la trae**
+- [x] **Abrir la búsqueda destruye la nota que estabas leyendo — y volver no la trae**
+  (`fix/busqueda-salto-y-matcheo`, verificado a mano por el autor el 2026-09-03:
+  la nota vuelve sola al cerrar la búsqueda)
   El panel derecho es un slot único (`app.html:311-331`, cadena `@else if`:
   rae-audit → search → image → font → md-reader) y encima hay dos efectos que se
   matan entre sí en `app.ts`: si el reader abre, `search.hide()` (línea 258); si
@@ -1664,8 +1689,18 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   cierra.
   Antes de tocar: `mdReader.close()` también hace flush si está dirty
   (`app.ts:232-239`, mutex reader vs notes-editor central) — no perder eso.
+  Se tomó el fix chico: fuera el `markdownReader.close()` del efecto de
+  `search.open()`. El `search.hide()` del efecto inverso se queda —clickear un
+  hit de nota tiene que mostrar la nota, y sin eso quedaría tapada por la
+  búsqueda—, y no hay ping-pong porque ese efecto depende de `viewing()`, que no
+  cambia cuando la búsqueda abre. El flush no se pierde: `close()` sigue igual,
+  simplemente ya no se lo llama desde ahí.
 
-- [ ] **La búsqueda no lleva siempre al lugar correcto y matchea de más**
+- [x] **La búsqueda no lleva siempre al lugar correcto y matchea de más**
+  (`fix/busqueda-salto-y-matcheo`, verificado a mano por el autor el 2026-09-03:
+  `Aedan venía mirando` da 1 resultado donde daba 10, y `Ambos Nobles` da el
+  cartel de palabras desperdigadas en vez de 3 capítulos que no tienen nada que
+  ver)
   Reportado el 2026-09-02 con `Creo que se llamaba` en scope "Libro actual":
   3 resultados donde el tercero (`Barracas — 3`) solo tiene `llamaba` resaltada,
   y el primero resalta `se`, `Creo`, `que`, `llamaba` desperdigadas por párrafos
@@ -1709,6 +1744,151 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   del hit no viaja al editor). Son independientes: aunque la query filtre
   perfecto, el click sigue cayendo en cualquier lado. Cualquier cambio acá toca
   `matchedTerms`, que es lo que el frontend usa para resaltar (`search-panel.ts:270-305`).
+  Se eligió la (a): `build_fuzzy_or_query` pasó a ser `build_fuzzy_query(idx, q,
+  occur)` y el caller pide `Occur::Must`, o sea el fuzzy exige todos los términos
+  igual que el modo exacto. Si el AND devuelve 0 hits hay un reintento con
+  `Occur::Should` —con un typo grueso, parciales es mejor que nada—. Cayó
+  `FULL_MATCH_BOOST`: era el clause que ordenaba sin filtrar, el que dejaba 22
+  docs empatados en 10.77.
+  La (c) no se descartó por mala sino por costo: tantivy no combina fuzzy con
+  phrase query, habría que resolver cada término a sus variantes y armar la
+  frase a mano sobre posiciones.
+  Lo del snippet que apunta a cualquier lado —que pasaba en los dos modos— se
+  arregló aparte: `make_snippet` ya no se centra en la primera aparición del
+  primer término, sino en la ventana que cubre más términos distintos con el
+  menor span (`best_cluster_start`).
+  **Y la (c) terminó entrando igual**, que era la que atacaba el fondo y se había
+  descartado por costo. Salió casi gratis reusando el cluster del snippet: el AND
+  de tantivy es a nivel **documento**, así que `Aedan venía mirando` traía 10
+  capítulos y sólo uno tenía la frase — los otros nueve usan las tres palabras
+  por separado, y con un nombre propio que aparece 13 veces en un capítulo eso es
+  medio libro. `best_cluster` (antes `best_cluster_start`) ahora devuelve también
+  el **ancho** de la ventana mínima que cubre la query, y con eso se puede saber
+  si las palabras están juntas o sólo comparten capítulo. El umbral es
+  `SNIPPET_MAX_LEN` (240) y no un número a dedo: si no entran todas en un
+  snippet, no hay forma de mostrarlas juntas.
+  La cascada, de mejor a peor, y el panel avisa en los tres niveles flojos
+  (`MatchLevel` + `SearchResult::scattered`):
+  - `phrase`: sólo los que tienen la query tal cual. Sin cartel.
+  - `nearby`: ninguno tiene la frase, pero en estos las palabras caen a menos de
+    240 chars. Es el caso de la frase medio recordada, con una palabra cambiada.
+  - `allWords`: las palabras están en el doc pero a párrafos de distancia ⇒ **no
+    se devuelve nada**, y el cartel dice cuántos capítulos eran y a qué distancia
+    mínima ("sueltas en 3 capítulos, a más de 3.526 caracteres"). Sin ese detalle
+    un "sin resultados" a secas haría dudar de si el buscador anda.
+  - `someWords`: el rescate OR, cuando ni todas las palabras aparecen.
+  El caso que lo motivó, medido: `Ambos nobles` no existe en el repo, y los 3
+  capítulos que tienen las dos palabras las tienen a 3.526, 5.028 y 5.857 chars.
+  Aparte salió el matcheo de más a nivel **resalto**, que era `includes()` puro:
+  buscando `y Ami ya está` marcaba la `Y` de `Yiri` y la `y` de `ayudó`.
+  `esMatchDeTermino` pide borde izquierdo siempre y palabra completa para
+  términos de ≤3 chars, dejando el prefijo para los largos (`golpear` →
+  `golpearon`).
+  Y un tercero, del mismo código y encontrado el 2026-09-03 usando la app:
+  buscando `Seguid` el salto caía en `seguida` de un párrafo anterior, y el
+  snippet también. El literal se buscaba con `indexOf`/`find` a secas, así que
+  ganaba el primero en aparecer. No se arregló exigiendo palabra completa —el
+  prefijo es justo lo que hace falta cuando la palabra completa no existe— sino
+  con **preferencia**: `pickBestBlock` rankea `[literal, términos completos,
+  términos con prefijo]` y el salto hace cuatro pasadas en ese orden. En Rust,
+  `make_snippet` usa `find_palabra_completa` con `find` como fallback.
+  Verificado a mano por el autor el 2026-09-03.
+
+
+- [ ] **No hay reemplazar: corregir un nombre en todo el libro se hace a mano,
+  uno por uno** (reportado el 2026-09-03: "estuve buscando Angelica para cambiar
+  por Angélica a mano como mono")
+  El caso real es el más simple posible y el más frecuente: un nombre propio mal
+  escrito desde el principio, `Angelica` → `Angélica`, repartido en decenas de
+  capítulos. Hoy la única herramienta es buscar, abrir cada hit, corregir a mano
+  y acordarse de dónde se quedó. La búsqueda ya encuentra todo; lo que falta es
+  el otro lado.
+  **Las piezas están casi todas.** `findAllMatchesInPlain`
+  (`search-highlight.ts`) devuelve **todos** los rangos de un texto, no el
+  primero, y ya se usa para pintar las decoraciones; `offsetToPm`
+  (`grammar-extension.ts`) los ancla a posiciones PM; el índice sabe en qué
+  capítulos está el término. O sea que "reemplazar en el capítulo abierto" es
+  casi gratis: los rangos ya están calculados y aplicar el cambio es un
+  `insertContentAt` por rango, de atrás para adelante para no invalidar
+  posiciones.
+  **Lo que hay que decidir** (nada de esto está diseñado):
+  (a) **Alcance.** ¿Solo el capítulo abierto, o libro/saga entero? El primero es
+      el 20% del trabajo y el 80% del valor; el segundo obliga a escribir N
+      archivos que no están abiertos en el editor, o sea camino nuevo por Rust y
+      no por TipTap.
+  (b) **Preview y confirmación.** Reemplazar a ciegas en 40 capítulos no se puede
+      ofrecer. Lo más parecido que ya existe es el diff del conversor RAE y el
+      modal de revisión por libro; habría que ver si se reusa alguno.
+  (c) **Deshacer.** Adentro del capítulo abierto el undo de ProseMirror alcanza.
+      Cruzando archivos no hay undo — lo que sí hay es el auto-commit de git,
+      que hace del "volver atrás" un revert. Puede ser suficiente: commitear
+      antes de aplicar y decirlo en la UI.
+  (d) **Mayúsculas y palabra completa.** `Angelica` → `Angélica` necesita
+      preservar caso al principio de oración, y `casa` no debería tocar
+      `casarse`. Los toggles de la búsqueda hoy son `≈` (fuzzy) y scope; el
+      fuzzy **no** puede alimentar un reemplazo (reemplazar sobre un match
+      Levenshtein cambia palabras que no se pidieron), así que reemplazar tiene
+      que exigir modo exacto.
+  Mientras no exista, el atajo honesto para el caso `Angelica`: agregar la forma
+  correcta al diccionario de la saga no ayuda, y el conversor RAE tampoco toca
+  ortografía — así que hoy no hay atajo, es a mano.
+
+
+- [ ] **El índice se puede quedar mudo y no hay forma de saberlo** (encontrado
+  el 2026-09-03 persiguiendo un `golpear` que no traía resultados)
+  Tres cosas que se suman y dejan al buscador mintiendo sin una sola señal:
+  (a) **El indexado incremental es un no-op silencioso.** `with_index`
+      (`search.rs`) hace `return Ok(())` si el slot del estado está en `None`, y
+      `init_for_root` se llama desde **un solo lugar**: `full_reindex`
+      (`search.rs:660`). O sea que antes del primer reindex, cada
+      `index_document` al guardar un capítulo se descarta y devuelve Ok.
+  (b) **El reindex de boot no se ve.** Loguea `INFO` en el target `search`, y el
+      filtro por default es `EnvFilter::new("twriter_lib=info,boot=info,warn,error")`
+      (`debug_bridge.rs:33`) — el `warn` suelto pone el nivel default en WARN, así
+      que ese INFO no sale nunca. Con `RUST_LOG="search=debug" pnpm tauri dev`
+      aparece: `reindex full completo indexed=925`, un segundo después del boot.
+      Sin eso no hay manera de saber si el índice está fresco, viejo o vacío.
+  (c) **Reindexa el repo entero en cada arranque.** 925 docs en ~1s con el repo
+      de prueba, pero es O(repo) y tira el trabajo incremental de la sesión
+      anterior. Con un repo grande esto se nota.
+  **Qué haría falta**: que la UI sepa el estado del índice (cuántos docs, de
+  cuándo) y lo muestre en el panel de búsqueda, y que `with_index` logee un WARN
+  en vez de tragarse el no-op. Lo de reindexar todo en cada boot es una decisión
+  aparte: alcanzaría comparar mtimes contra el índice y tocar solo lo que cambió.
+  **Sin explicación, no reproducido**: el síntoma que arrancó todo esto fue
+  `golpear` con scope "Todo el repo" devolviendo **4 resultados**, todos del
+  libro `2 - Más que un trabajo`, con el índice completo. Contra una copia del
+  mismo repo, la misma query en modo exacto da **23 hits**, y con scope de libro
+  los 3 capítulos correctos.
+  Segundo episodio el mismo día, y este es el que más pinta tiene: un término no
+  aparecía **hasta abrir el archivo**. El autor lo probó en **todos** los
+  scopes, así que no es el caso esperado de "Archivo actual" (que lee el buffer
+  del editor y por diseño solo encuentra en archivos abiertos). Abrir un
+  capítulo escribe stats/meta, eso dispara `search_apply_path_change` →
+  `index_document`, y ahí recién aparece — o sea que el doc **no estaba** en el
+  índice aunque el boot reporte `indexed=925`. Los dos episodios dejaron de
+  pasar y no hubo repro para aislarlos.
+  **Lo que haría falta para cazarlo**: un comando que diga si un path está en el
+  índice y con qué mtime, expuesto en el panel 🐛 — hoy no hay forma de
+  preguntárselo a la app, y ahí se fue toda una sesión de adivinar leyendo
+  mtimes de los archivos del índice (con una conclusión equivocada en el medio).
+  Mientras no exista: arrancar con `RUST_LOG="search=debug"` y mirar si el
+  `indexed=N` del boot coincide con la cantidad de docs del repo.
+
+
+- [ ] **El salto no encuentra un match partido por una itálica** (de la review
+  de CodeRabbit en el PR #93, 2026-09-03)
+  `pickBestBlock` elige el bloque usando su `textContent`, que **concatena** los
+  text nodes, pero `selectFirstMatchIn` después los recorre **de a uno**. Una
+  frase que cruza el borde de un `<em>` —`libros de <em>Técnica Arcana</em>`—
+  puede ganar el bloque y no encontrarse adentro de ningún nodo.
+  Mitigado, no resuelto: cuando ninguna de las cuatro pasadas encuentra nada, se
+  scrollea y flashea **el bloque** ganador. O sea el salto cae en el párrafo
+  correcto, pero sin seleccionar la frase.
+  **El arreglo de verdad**: buscar sobre la concatenación de los text nodes del
+  bloque y mapear el offset de vuelta a un `Range` multi-nodo (`setStart` en un
+  nodo, `setEnd` en otro). Es la misma clase de problema que resuelve
+  `offsetToPm` para las decoraciones de PM, pero a nivel DOM.
 
 
 ## Tree / Importer

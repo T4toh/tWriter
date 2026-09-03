@@ -28,8 +28,8 @@ import { CursorRestoreService } from '../core/cursor-restore-service';
 import { NoteService } from '../core/note-service';
 import { SearchService } from '../core/search-service';
 import {
+  highlightBestMatch,
   findAllMatchesInPlain,
-  highlightFirstMatch,
 } from '../core/search-highlight';
 import { extractPlainText, offsetToPm } from '../editor/grammar-extension';
 import {
@@ -183,7 +183,7 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
         const pending = this.search.consumePendingHighlight(target.path);
         if (pending) {
           setTimeout(() => {
-            highlightFirstMatch(this.hostRef.nativeElement, pending.terms, pending.rawQuery, pending.fold);
+            highlightBestMatch(this.hostRef.nativeElement, pending.terms, pending.rawQuery, pending.fold);
           }, 0);
         }
       }
@@ -217,7 +217,7 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
       const consumed = this.search.consumePendingHighlight(target.path);
       if (!consumed) return;
       setTimeout(() => {
-        highlightFirstMatch(this.hostRef.nativeElement, consumed.terms, consumed.rawQuery, consumed.fold);
+        highlightBestMatch(this.hostRef.nativeElement, consumed.terms, consumed.rawQuery, consumed.fold);
       }, 0);
     });
 

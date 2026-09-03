@@ -29,6 +29,7 @@ import { MarkdownReaderService } from '../core/markdown-reader-service';
 import { NavigationService } from '../core/navigation-service';
 import { NoteService } from '../core/note-service';
 import { sinPrefijoNumerico } from '../core/nombre-carpeta';
+import { compararPorEstructura, ordenDeEstructura } from '../core/orden-estructura';
 import { ProjectService } from '../core/project-service';
 import { findAllMatchesInPlain, tokenize } from '../core/search-highlight';
 import { SearchHit, SearchService } from '../core/search-service';
@@ -66,11 +67,23 @@ export class SearchPanel implements AfterViewInit {
   protected readonly error = this.svc.error;
   protected readonly reindexing = this.svc.reindexing;
   protected readonly reindexProgress = this.svc.reindexProgress;
+  protected readonly matchLevel = this.svc.matchLevel;
+  protected readonly scattered = this.svc.scattered;
   protected readonly count = computed(() => this.results().length);
-  /** Agrupa hits por `path` preservando el orden de primera aparición. Por
-   *  archivo: 1 grupo con `hits[]`, `kind`, `title`, y `defaultOpen` (true si
-   *  el grupo tiene ≤10 hits — para 'Archivo actual' con 30+ matches por
-   *  capítulo, default colapsado evita pared de texto). */
+  /** Posición de cada path en la estructura del repo, para ordenar los grupos
+   *  por orden de lectura. Se recalcula solo cuando cambia el árbol. */
+  private readonly ordenEstructura = computed(() => ordenDeEstructura(this.project.tree()));
+  /** Agrupa hits por `path`. Por archivo: 1 grupo con `hits[]`, `kind`,
+   *  `title`, y `defaultOpen` (true si el grupo tiene ≤10 hits — para 'Archivo
+   *  actual' con 30+ matches por capítulo, default colapsado evita pared de
+   *  texto).
+   *
+   *  Los grupos salen en **orden de estructura**, no por score: buscando una
+   *  frase literal el ranking BM25 no aporta nada, y lo que se quiere es
+   *  recorrer los hits en el orden en que se lee el libro. Aplica en todos los
+   *  scopes, así el orden de la lista no cambia según el filtro. Los hits
+   *  dentro de un mismo archivo no se reordenan (comparten path, y en 'Archivo
+   *  actual' ya vienen en orden de párrafo). */
   protected readonly groups = computed<Array<{
     path: string;
     kind: string;
@@ -96,6 +109,8 @@ export class SearchPanel implements AfterViewInit {
     for (const g of byPath.values()) {
       out.push({ ...g, defaultOpen: g.hits.length <= 10 });
     }
+    const orden = this.ordenEstructura();
+    out.sort((a, b) => compararPorEstructura(orden, a.path, b.path));
     return out;
   });
 

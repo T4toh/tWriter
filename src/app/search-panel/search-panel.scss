@@ -126,6 +126,17 @@
   font-style: italic;
 }
 
+// Aviso de resultados parciales: sin todas las palabras de la query. Va pegado
+// al contador y antes de la lista, para que se lea ANTES de mirar los hits.
+.sp-partial {
+  margin: 0 12px 8px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--warning, #c99);
+  background: var(--surface-2, rgb(255 255 255 / 4%));
+  border-radius: 3px;
+  font-size: 0.78rem;
+}
+
 .sp-count {
   margin: 6px 12px 8px;
   color: var(--muted, #888);

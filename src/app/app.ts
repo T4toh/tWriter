@@ -258,12 +258,19 @@ export class App {
         this.search.hide();
       }
     });
-    // Mutex: search panel cierra image/font/md y viceversa.
+    // Mutex: search panel cierra image/font. El md-reader NO — la cadena
+    // `@else if` del panel derecho ya prioriza la búsqueda, así que la nota
+    // queda oculta pero viva y reaparece al cerrar el panel. Cerrarla acá era
+    // destructivo justo en el flujo de corrección (la lista de cosas por
+    // arreglar vive en una nota, se busca la frase, se arregla, y para el ítem
+    // siguiente había que volver a abrir la nota a mano). El `search.hide()`
+    // del efecto inverso se queda: clickear un hit de nota tiene que mostrar la
+    // nota, y sin eso quedaría tapada por la búsqueda. No hay ping-pong porque
+    // ese efecto depende de `viewing()`, que no cambia cuando la búsqueda abre.
     effect(() => {
       if (this.search.open()) {
         this.imageViewer.close();
         this.fontPreview.close();
-        this.markdownReader.close();
       }
     });
     effect(() => {

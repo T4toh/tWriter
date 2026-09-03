@@ -30,8 +30,190 @@ export function foldAccents(s: string): string {
   return out;
 }
 
+/** Largo hasta el cual un término se exige como palabra COMPLETA. Buscar el
+ *  prefijo `ya` o `que` no sirve para nada y matchea en media novela; buscar el
+ *  prefijo `golpear` o `caballera` es justo lo que hace falta al corregir.
+ *  Mismo umbral que `FUZZY_LEN_EXACT_MAX` en `search.rs`. */
+const TERMINO_CORTO_MAX = 3;
+
+/** True si `idx` cae en el arranque de una palabra dentro de `text`, o sea si
+ *  el char anterior no es letra ni número. */
+export function esInicioDePalabra(text: string, idx: number): boolean {
+  if (idx <= 0) return true;
+  return !/[\p{L}\p{N}]/u.test(text[idx - 1]);
+}
+
+/** True si `idx` cae en el final de una palabra, o sea si el char siguiente no
+ *  es letra ni número. */
+export function esFinDePalabra(text: string, idx: number): boolean {
+  if (idx >= text.length) return true;
+  return !/[\p{L}\p{N}]/u.test(text[idx]);
+}
+
 /**
- * Busca el primer text node dentro de `host` que matchee la query.
+ * True si `term` matchea en `text` arrancando en `idx` de forma aceptable.
+ *
+ * Los términos se buscan como substring para que el proofreading funcione
+ * —`golpear` tiene que encontrar `golpearon`—, pero sin guarda un término corto
+ * matchea en cualquier lado: buscando `y Ami ya está`, la `y` caía adentro de
+ * `ayudó` Y en la `Y` de `Yiri`, y el resalto quedaba lleno de basura.
+ *
+ * Regla: siempre borde izquierdo (nunca en el medio de una palabra), y para
+ * términos de hasta `TERMINO_CORTO_MAX` chars también borde derecho, o sea
+ * palabra completa.
+ */
+export function esMatchDeTermino(text: string, idx: number, term: string): boolean {
+  if (!esInicioDePalabra(text, idx)) return false;
+  if (term.length > TERMINO_CORTO_MAX) return true;
+  return esFinDePalabra(text, idx + term.length);
+}
+
+/** True si `term` matchea en `idx` como palabra COMPLETA, con borde a los dos
+ *  lados. Es lo que hace ganar a `Seguid` sobre `seguida`. */
+export function esPalabraCompleta(text: string, idx: number, term: string): boolean {
+  return esInicioDePalabra(text, idx) && esFinDePalabra(text, idx + term.length);
+}
+
+/** Primer índice donde `term` aparece como palabra completa, o -1. */
+export function buscarPalabraCompleta(text: string, term: string, from = 0): number {
+  let at = from;
+  for (;;) {
+    const idx = text.indexOf(term, at);
+    if (idx < 0) return -1;
+    if (esPalabraCompleta(text, idx, term)) return idx;
+    at = idx + 1;
+  }
+}
+
+/** Primer índice donde `term` matchea `text` según `esMatchDeTermino`, o -1. */
+export function buscarTermino(text: string, term: string, from = 0): number {
+  let at = from;
+  for (;;) {
+    const idx = text.indexOf(term, at);
+    if (idx < 0) return -1;
+    if (esMatchDeTermino(text, idx, term)) return idx;
+    at = idx + 1;
+  }
+}
+
+/** Bloques donde puede caer un match. El subset XHTML del editor no tiene más
+ *  contenedores de texto que estos. */
+const BLOCK_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, blockquote, li, pre';
+
+/**
+ * Elige el bloque que MÁS términos distintos de la query contiene, y devuelve
+ * su índice en `texts` (-1 si ninguno contiene nada).
+ *
+ * Prioridad: el literal completo de `rawQuery` (si tiene forma rica) gana de
+ * una, porque es el match más específico posible. Si no, gana la cobertura:
+ * cuántos términos distintos aparecen en el bloque. A igualdad, el más
+ * temprano.
+ *
+ * Esto es el corazón del "el click no me lleva al resultado": elegir el primer
+ * bloque que contenga CUALQUIER término manda al lector a la primera aparición
+ * de la palabra más común de la query — casi siempre arriba de todo. Buscando
+ * `Creo que se llamaba`, el primer `que` del capítulo gana sobre el párrafo que
+ * tiene la frase entera.
+ *
+ * Función pura sobre los textos de los bloques: el walk del DOM lo hace
+ * `highlightBestMatch`. Ver `scripts/run-search-locate-smoke.mjs`.
+ */
+export function pickBestBlock(
+  texts: string[],
+  terms: string[],
+  rawQuery: string,
+  fold = false,
+): number {
+  const norm = (s: string): string => (fold ? foldAccents(s) : s);
+  const raw = (rawQuery ?? '').trim();
+  const rawLower = norm(raw.toLowerCase());
+  const hasRichForm =
+    raw.length > 0 &&
+    [...raw].some((c) => c !== c.toLowerCase() || /[^\p{L}\p{N}\s]/u.test(c));
+  const lowerTerms = terms.map((t) => norm(t.toLowerCase())).filter((t) => t.length > 0);
+  if (lowerTerms.length === 0 && !hasRichForm) return -1;
+
+  let best = -1;
+  // [literal, términos como palabra completa, términos incluyendo prefijos].
+  let mejor: [number, number, number] = [0, 0, 0];
+  for (let i = 0; i < texts.length; i += 1) {
+    const text = norm((texts[i] ?? '').toLowerCase());
+    // 2 = el literal aparece como palabra/frase completa, 1 = como prefijo.
+    // Buscando `Seguid`, el párrafo con `Seguid,` le gana al que tiene
+    // `seguida` — que es un prefijo válido, pero no lo que se buscaba.
+    let literal = 0;
+    if (hasRichForm && rawLower.length > 0) {
+      if (buscarPalabraCompleta(text, rawLower) >= 0) literal = 2;
+      else if (text.includes(rawLower)) literal = 1;
+    }
+    let completos = 0;
+    let conPrefijos = 0;
+    for (const t of lowerTerms) {
+      if (buscarPalabraCompleta(text, t) >= 0) {
+        completos += 1;
+        conPrefijos += 1;
+      } else if (buscarTermino(text, t) >= 0) {
+        conPrefijos += 1;
+      }
+    }
+    if (literal === 0 && conPrefijos === 0) continue;
+    const rank: [number, number, number] = [literal, completos, conPrefijos];
+    if (esMejorRank(rank, mejor)) {
+      mejor = rank;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/** Compara rankings de bloque lexicográficamente. Estricto, así que a igualdad
+ *  gana el que ya estaba, o sea el más temprano en el documento. */
+function esMejorRank(a: [number, number, number], b: [number, number, number]): boolean {
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return a[i] > b[i];
+  }
+  return false;
+}
+
+/**
+ * Salta al mejor match de la query dentro de `host`: primero elige el bloque
+ * con más cobertura de términos (`pickBestBlock`), después el primer match
+ * dentro de ese bloque. Si ningún bloque matchea, cae al host entero.
+ */
+export function highlightBestMatch(
+  host: HTMLElement | null,
+  terms: string[],
+  rawQuery?: string,
+  fold = false,
+): boolean {
+  if (!host) return false;
+  // Sólo bloques hoja: un `<blockquote>` con `<p>` adentro aparece dos veces en
+  // el querySelectorAll y el texto del padre incluye al hijo.
+  const blocks = Array.from(host.querySelectorAll<HTMLElement>(BLOCK_SELECTOR)).filter(
+    (el) => el.querySelector(BLOCK_SELECTOR) === null,
+  );
+  const idx = pickBestBlock(
+    blocks.map((b) => b.textContent ?? ''),
+    terms,
+    rawQuery ?? '',
+    fold,
+  );
+  if (selectFirstMatchIn(idx >= 0 ? blocks[idx] : host, terms, rawQuery, fold)) return true;
+  // El bloque ganó por su `textContent`, que concatena los text nodes, pero
+  // `selectFirstMatchIn` los mira de a uno: un match partido por un `<em>` no
+  // aparece en ninguno. Llevar al párrafo correcto y flashearlo es peor que
+  // seleccionar la frase, pero muchísimo mejor que no moverse.
+  if (idx >= 0) {
+    blocks[idx].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    flashElement(blocks[idx]);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Busca el primer text node dentro de `root` que matchee la query, lo
+ * selecciona y scrollea.
  *
  * Si `rawQuery` viene con forma rica (mayúsculas o puntuación) y aparece
  * literal en algún text node, gana sobre el match de tokens — así
@@ -40,7 +222,7 @@ export function foldAccents(s: string): string {
  * Fallback al primer text node que contenga alguno de `terms` (caso
  * legacy: query sin caracteres especiales).
  */
-export function highlightFirstMatch(
+function selectFirstMatchIn(
   host: HTMLElement | null,
   terms: string[],
   rawQuery?: string,
@@ -59,58 +241,48 @@ export function highlightFirstMatch(
     [...raw].some((c) => c !== c.toLowerCase() || /[^\p{L}\p{N}\s]/u.test(c));
   if (lowerTerms.length === 0 && !hasRichForm) return false;
 
-  const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, {
-    acceptNode: (node) =>
-      node.nodeValue && node.nodeValue.trim().length > 0
-        ? NodeFilter.FILTER_ACCEPT
-        : NodeFilter.FILTER_REJECT,
-  });
+  // Pasadas en orden de preferencia. Mismo criterio que `pickBestBlock`: la
+  // palabra completa gana sobre el prefijo, y el literal de la query gana sobre
+  // los tokens sueltos. Sin esto, buscando `Seguid` el salto cae en `seguida`.
+  const pasadas: Array<(text: string) => { idx: number; len: number } | null> = [];
+  if (hasRichForm && rawLower.length > 0) {
+    pasadas.push((text) => {
+      const idx = buscarPalabraCompleta(text, rawLower);
+      return idx >= 0 ? { idx, len: raw.length } : null;
+    });
+    pasadas.push((text) => {
+      const idx = text.indexOf(rawLower);
+      return idx >= 0 ? { idx, len: raw.length } : null;
+    });
+  }
+  if (lowerTerms.length > 0) {
+    pasadas.push((text) => primerToken(text, lowerTerms, buscarPalabraCompleta));
+    pasadas.push((text) => primerToken(text, lowerTerms, buscarTermino));
+  }
 
   let bestNode: Text | null = null;
   let bestOffset = -1;
   let bestLen = 0;
-
-  // Pasada 1: buscar el literal `rawQuery` si tiene forma rica. Walker
-  // recorre en orden documental → primer match gana.
-  if (hasRichForm) {
-    let cur: Node | null = walker.nextNode();
-    while (cur) {
-      const text = norm((cur.nodeValue ?? '').toLowerCase());
-      const idx = text.indexOf(rawLower);
-      if (idx >= 0) {
-        bestNode = cur as Text;
-        bestOffset = idx;
-        bestLen = raw.length;
-        break;
-      }
-      cur = walker.nextNode();
-    }
-  }
-
-  // Pasada 2 (fallback): primer text node que contenga algún token.
-  if (!bestNode && lowerTerms.length > 0) {
-    // Reset walker: createTreeWalker no se rebobina; nuevo.
-    const walker2 = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, {
+  for (const buscar of pasadas) {
+    // `createTreeWalker` no se rebobina: uno nuevo por pasada.
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, {
       acceptNode: (node) =>
         node.nodeValue && node.nodeValue.trim().length > 0
           ? NodeFilter.FILTER_ACCEPT
           : NodeFilter.FILTER_REJECT,
     });
-    let cur: Node | null = walker2.nextNode();
+    let cur: Node | null = walker.nextNode();
     while (cur) {
-      const text = norm((cur.nodeValue ?? '').toLowerCase());
-      for (const t of lowerTerms) {
-        const idx = text.indexOf(t);
-        if (idx >= 0) {
-          bestNode = cur as Text;
-          bestOffset = idx;
-          bestLen = t.length;
-          break;
-        }
+      const found = buscar(norm((cur.nodeValue ?? '').toLowerCase()));
+      if (found) {
+        bestNode = cur as Text;
+        bestOffset = found.idx;
+        bestLen = found.len;
+        break;
       }
-      if (bestNode) break;
-      cur = walker2.nextNode();
+      cur = walker.nextNode();
     }
+    if (bestNode) break;
   }
 
   if (!bestNode) return false;
@@ -137,9 +309,25 @@ export function highlightFirstMatch(
   }
 }
 
+/** Primer token de `terms` que matchea `text` con el buscador dado, en orden de
+ *  aparición en el texto (no en el orden de la query: si la query es `casa
+ *  grande` y el párrafo dice "grande la casa", salta a `grande`). */
+function primerToken(
+  text: string,
+  terms: string[],
+  buscar: (text: string, term: string) => number,
+): { idx: number; len: number } | null {
+  let best: { idx: number; len: number } | null = null;
+  for (const t of terms) {
+    const idx = buscar(text, t);
+    if (idx >= 0 && (best === null || idx < best.idx)) best = { idx, len: t.length };
+  }
+  return best;
+}
+
 /** Aplica clase `search-flash` al elemento durante 2.5s. Reusable: si se llama
  *  con flash ya activo, lo reinicia. */
-function flashElement(el: HTMLElement): void {
+export function flashElement(el: HTMLElement): void {
   el.classList.remove('search-flash');
   // Force reflow para que la animación se reinicie si el flash ya estaba activo.
   void el.offsetWidth;
@@ -200,7 +388,7 @@ export function findAllMatchesInPlain(
     const len = t.length;
     let from = 0;
     while (from <= lowerPlain.length - len) {
-      const idx = lowerPlain.indexOf(t, from);
+      const idx = buscarTermino(lowerPlain, t, from);
       if (idx < 0) break;
       all.push({ start: idx, end: idx + len });
       from = idx + len;
