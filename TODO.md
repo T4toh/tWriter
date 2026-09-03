@@ -1696,7 +1696,11 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   cambia cuando la búsqueda abre. El flush no se pierde: `close()` sigue igual,
   simplemente ya no se lo llama desde ahí.
 
-- [ ] **La búsqueda no lleva siempre al lugar correcto y matchea de más**
+- [x] **La búsqueda no lleva siempre al lugar correcto y matchea de más**
+  (`fix/busqueda-salto-y-matcheo`, verificado a mano por el autor el 2026-09-03:
+  `Aedan venía mirando` da 1 resultado donde daba 10, y `Ambos Nobles` da el
+  cartel de palabras desperdigadas en vez de 3 capítulos que no tienen nada que
+  ver)
   Reportado el 2026-09-02 con `Creo que se llamaba` en scope "Libro actual":
   3 resultados donde el tercero (`Barracas — 3`) solo tiene `llamaba` resaltada,
   y el primero resalta `se`, `Creo`, `que`, `llamaba` desperdigadas por párrafos
@@ -1740,8 +1744,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   del hit no viaja al editor). Son independientes: aunque la query filtre
   perfecto, el click sigue cayendo en cualquier lado. Cualquier cambio acá toca
   `matchedTerms`, que es lo que el frontend usa para resaltar (`search-panel.ts:270-305`).
-  **Hecho en `fix/busqueda-salto-y-matcheo`; falta verificarlo con una frase que
-  exista.** Se eligió la (a): `build_fuzzy_or_query` pasó a ser `build_fuzzy_query(idx, q,
+  Se eligió la (a): `build_fuzzy_or_query` pasó a ser `build_fuzzy_query(idx, q,
   occur)` y el caller pide `Occur::Must`, o sea el fuzzy exige todos los términos
   igual que el modo exacto. Si el AND devuelve 0 hits hay un reintento con
   `Occur::Should` —con un typo grueso, parciales es mejor que nada—. Cayó
@@ -1754,18 +1757,33 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   arregló aparte: `make_snippet` ya no se centra en la primera aparición del
   primer término, sino en la ventana que cubre más términos distintos con el
   menor span (`best_cluster_start`).
-  **Estado de la verificación**: el AND está probado por datos, no por la UI —
-  `Ambos nobles` ya no existe en el repo (0 capítulos tienen las dos palabras;
-  7 tienen `ambos` y 8 tienen `nobles`, en el libro 2), así que el autor vio el
-  **rescate OR**, no el AND. Ese rescate era mudo y ahora el panel lo dice
-  ("Ningún resultado tiene todas las palabras"), vía `SearchResult.partial_match`.
-  Falta probarlo con una frase de varias palabras que **sí** exista, y mirar que
-  el snippet la muestre entera y no una palabra sola.
+  **Y la (c) terminó entrando igual**, que era la que atacaba el fondo y se había
+  descartado por costo. Salió casi gratis reusando el cluster del snippet: el AND
+  de tantivy es a nivel **documento**, así que `Aedan venía mirando` traía 10
+  capítulos y sólo uno tenía la frase — los otros nueve usan las tres palabras
+  por separado, y con un nombre propio que aparece 13 veces en un capítulo eso es
+  medio libro. `best_cluster` (antes `best_cluster_start`) ahora devuelve también
+  el **ancho** de la ventana mínima que cubre la query, y con eso se puede saber
+  si las palabras están juntas o sólo comparten capítulo. El umbral es
+  `SNIPPET_MAX_LEN` (240) y no un número a dedo: si no entran todas en un
+  snippet, no hay forma de mostrarlas juntas.
+  La cascada, de mejor a peor, y el panel avisa en los tres niveles flojos
+  (`MatchLevel` + `SearchResult::scattered`):
+  - `phrase`: sólo los que tienen la query tal cual. Sin cartel.
+  - `nearby`: ninguno tiene la frase, pero en estos las palabras caen a menos de
+    240 chars. Es el caso de la frase medio recordada, con una palabra cambiada.
+  - `allWords`: las palabras están en el doc pero a párrafos de distancia ⇒ **no
+    se devuelve nada**, y el cartel dice cuántos capítulos eran y a qué distancia
+    mínima ("sueltas en 3 capítulos, a más de 3.526 caracteres"). Sin ese detalle
+    un "sin resultados" a secas haría dudar de si el buscador anda.
+  - `someWords`: el rescate OR, cuando ni todas las palabras aparecen.
+  El caso que lo motivó, medido: `Ambos nobles` no existe en el repo, y los 3
+  capítulos que tienen las dos palabras las tienen a 3.526, 5.028 y 5.857 chars.
   Aparte salió el matcheo de más a nivel **resalto**, que era `includes()` puro:
   buscando `y Ami ya está` marcaba la `Y` de `Yiri` y la `y` de `ayudó`.
   `esMatchDeTermino` pide borde izquierdo siempre y palabra completa para
   términos de ≤3 chars, dejando el prefijo para los largos (`golpear` →
-  `golpearon`). También sin verificar a mano.
+  `golpearon`).
 
 
 - [ ] **No hay reemplazar: corregir un nombre en todo el libro se hace a mano,
