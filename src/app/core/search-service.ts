@@ -101,6 +101,11 @@ export class SearchService {
 
   readonly open = signal<boolean>(false);
   readonly query = signal<string>('');
+  /** Modo reemplazo del panel (toggle `⇄`). Vive acá y no en `ReplaceService`
+   *  para que ese pueda inyectar a este sin DI circular. Mientras está
+   *  prendido la query a tantivy NO corre: el panel muestra el preview del
+   *  reemplazo, que se calcula aparte y sobre el disco. */
+  readonly replaceMode = signal<boolean>(false);
   readonly results = signal<SearchHit[]>([]);
   readonly loading = signal<boolean>(false);
   readonly error = signal<string | null>(null);
@@ -172,6 +177,7 @@ export class SearchService {
     // ("saga actual" depende del cap del pane 0; "current" depende del archivo
     // resuelto por activeFile, que incluye notas y md-reader).
     effect(() => {
+      this.replaceMode();
       this.settings.searchScope();
       this.settings.searchDebug();
       this.settings.searchFuzzy();
@@ -232,6 +238,10 @@ export class SearchService {
   }
 
   private async runSearch(): Promise<void> {
+    if (this.replaceMode()) {
+      this.loading.set(false);
+      return;
+    }
     const q = this.query().trim();
     if (!q) {
       this.results.set([]);

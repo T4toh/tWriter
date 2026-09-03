@@ -110,6 +110,11 @@ interface Settings {
   /** Modo de búsqueda flojo (fuzzy + acentos): tolera typos y tildes. Off por
    *  default — el default es exacto/literal (sirve para corregir errores). */
   searchFuzzy?: boolean;
+  /** Toggle `Aa` del reemplazo: distinguir mayúsculas de minúsculas. */
+  replaceCaseSensitive?: boolean;
+  /** Toggle `ab` del reemplazo: exigir palabra completa. Default ON — sin
+   *  esto, reemplazar `golpear` convierte `golpearon` en `golpeóon`. */
+  replaceWholeWord?: boolean;
   lastSession?: LastSession;
   treeExpanded?: string[];
   treeExtrasExpanded?: string[];
@@ -157,6 +162,8 @@ export class SettingsService {
   readonly searchScope = signal<SearchScope>(SEARCH_SCOPE_DEFAULT);
   readonly searchDebug = signal<boolean>(false);
   readonly searchFuzzy = signal<boolean>(false);
+  readonly replaceCaseSensitive = signal<boolean>(false);
+  readonly replaceWholeWord = signal<boolean>(true);
   /** Última sesión del pane 0 al cerrar la app. Null si nunca se abrió un cap
    *  o si el cap se cerró sin reemplazo. */
   readonly lastSession = signal<LastSession | null>(null);
@@ -210,6 +217,8 @@ export class SettingsService {
       this.searchScope.set(s.searchScope ?? SEARCH_SCOPE_DEFAULT);
       this.searchDebug.set(s.searchDebug ?? false);
       this.searchFuzzy.set(s.searchFuzzy ?? false);
+      this.replaceCaseSensitive.set(s.replaceCaseSensitive ?? false);
+      this.replaceWholeWord.set(s.replaceWholeWord ?? true);
       this.lastSession.set(s.lastSession ?? null);
       this.treeExpanded.set(new Set(Array.isArray(s.treeExpanded) ? s.treeExpanded : []));
       this.treeExtrasExpanded.set(
@@ -427,6 +436,16 @@ export class SettingsService {
     await this.persist();
   }
 
+  async setReplaceCaseSensitive(enabled: boolean): Promise<void> {
+    this.replaceCaseSensitive.set(enabled);
+    await this.persist();
+  }
+
+  async setReplaceWholeWord(enabled: boolean): Promise<void> {
+    this.replaceWholeWord.set(enabled);
+    await this.persist();
+  }
+
   private async persist(): Promise<void> {
     const expanded = Array.from(this.treeExpanded());
     const extrasExp = Array.from(this.treeExtrasExpanded());
@@ -454,6 +473,10 @@ export class SettingsService {
       searchScope: this.searchScope(),
       searchDebug: this.searchDebug() || undefined,
       searchFuzzy: this.searchFuzzy() || undefined,
+      replaceCaseSensitive: this.replaceCaseSensitive() || undefined,
+      // OJO: wholeWord es true por default, así que el `|| undefined` de
+      // searchFuzzy NO sirve acá — borraría el false.
+      replaceWholeWord: this.replaceWholeWord(),
       lastSession: this.lastSession() ?? undefined,
       treeExpanded: expanded.length ? expanded : undefined,
       treeExtrasExpanded: extrasExp.length ? extrasExp : undefined,
