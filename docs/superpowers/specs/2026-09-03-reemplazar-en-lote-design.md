@@ -129,8 +129,12 @@ pub fn replace_preview(
 #[tauri::command]
 pub fn replace_apply(
     root: String,
+    needle: String,             // ↓ los tres se repiten para revalidar
+    case_sensitive: bool,
+    whole_word: bool,
     edits: Vec<FileEdit>,       // { path, ranges: Vec<(usize, usize)> }
     replacement: String,
+    ultima_edicion: String,     // ISO del frontend: Rust no tiene crate de fechas
 ) -> Result<ReplaceOutcome, String>;
 
 #[tauri::command]
@@ -138,6 +142,7 @@ pub fn replace_undo(
     root: String,
     snapshot_id: String,
     force_paths: Vec<String>,   // los que el usuario confirmó pisar
+    ultima_edicion: String,
 ) -> Result<UndoOutcome, String>;
 ```
 
@@ -308,11 +313,12 @@ igual que aplicar.
 ## Bordes que sí importan
 
 - **El archivo cambió entre el preview y el apply.** Son dos invokes separados,
-  y en el medio pasa el autosave, un pull o la otra PC. `replace_apply` valida
-  que en `htmlStart..htmlEnd` siga estando exactamente el needle esperado; si
-  no, saltea ese archivo entero y lo reporta: "3 de 7 capítulos cambiaron desde
-  el preview, no los toqué". Sin esto el splice escribe basura en medio de una
-  palabra.
+  y en el medio pasa el autosave, un pull o la otra PC. Por eso `replace_apply`
+  recibe de nuevo el `needle` y los dos toggles: **re-escanea cada archivo** y
+  exige que los ranges pedidos estén entre los que el re-escaneo encuentra. Si
+  alguno no está, saltea ese archivo entero y lo reporta: "3 de 7 capítulos
+  cambiaron desde el preview, no los toqué". Sin esto el splice escribe basura
+  en medio de una palabra.
 - **Escritura parcial.** Si falla el archivo 5 de 7, los 4 ya escritos están en
   el snapshot ⇒ Deshacer los cubre. Se reporta el conteo real, no "listo".
 - **0 ocurrencias.** Mensaje que dice por qué, porque la búsqueda de arriba sí
@@ -326,7 +332,10 @@ igual que aplicar.
   `.twriter/stats.json` (`stats.rs`). `QuotesFixService` no lo actualiza y por
   eso deja el conteo viejo; `replace_apply` sí, con **un** `read_stats` /
   `write_stats` para todos los archivos, no uno por archivo (`upsert_stat`
-  reescribe el mapa entero en cada llamada).
+  reescribe el mapa entero en cada llamada). El `ultima_edicion` lo manda el
+  frontend en el invoke: `src-tauri/Cargo.toml` no tiene crate de fechas y no
+  vale agregar una para formatear un string, así que se sigue el camino que ya
+  usa cada save (`chapter-service.ts:199`).
 
 ## Verificación
 
