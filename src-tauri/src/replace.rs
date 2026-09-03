@@ -28,7 +28,8 @@ pub enum MotivoSkip {
 }
 
 /// Tramo de plain que se corresponde byte a byte con el HTML.
-/// `motivo_gap_previo` es qué cortó el run anterior de este (None en el primero).
+/// `motivo_gap_previo` es qué cortó el hueco que precede a este run (el tag
+/// de apertura del bloque, en el primero).
 #[derive(Debug, Clone)]
 pub struct Run {
     pub plain_start: usize,
@@ -137,7 +138,18 @@ pub fn plain_con_runs(html: &str) -> PlainMap {
                 i += ent.len();
                 continue;
             }
-            // Entidad no reconocida: se trata como texto literal.
+            // Entidad no reconocida (ej. `&hellip;`): el `&` NO puede quedar
+            // dentro de un run — si fuera reemplazable, cambiar `&` rompería
+            // la entidad. Se lo trata como el hueco de una entidad: se cierra
+            // el run, el `&` cae afuera, y el resto del texto sigue abriendo
+            // run nuevo como de costumbre.
+            cerrar!();
+            if motivo_pendiente.is_none() {
+                motivo_pendiente = Some(MotivoSkip::CruzaEntidad);
+            }
+            plain.push('&');
+            i += 1;
+            continue;
         }
         // Char de texto normal: abre run si hacía falta y lo copia tal cual.
         let ch = html[i..].chars().next().unwrap();
@@ -249,8 +261,14 @@ pub fn ubicar(map: &PlainMap, plain_start: usize, plain_end: usize) -> Ubicacion
             .unwrap_or(MotivoSkip::CruzaTag);
         return Ubicacion::Cruza(motivo);
     }
-    // Arranca en un hueco (un `\n` de bloque, por ejemplo).
-    Ubicacion::Cruza(MotivoSkip::CruzaBloque)
+    // Arranca en un hueco (un tag, una entidad, un cierre de bloque): el
+    // motivo real es el del run que sigue al hueco, no un valor fijo.
+    map.runs
+        .iter()
+        .find(|r| r.plain_start > plain_start)
+        .and_then(|r| r.motivo_gap_previo)
+        .map(Ubicacion::Cruza)
+        .unwrap_or(Ubicacion::Cruza(MotivoSkip::CruzaBloque))
 }
 
 /// Aplica los reemplazos sobre el HTML. Ordena los ranges y hace el splice de
@@ -263,11 +281,20 @@ pub fn aplicar_ranges(
 ) -> String {
     ranges.sort_by(|a, b| b.0.cmp(&a.0));
     let mut out = html.to_string();
+    // `tope` es el `start` del último range aplicado (o el largo total, al
+    // arrancar): como se procesa de atrás para adelante, cualquier range que
+    // no termine estrictamente antes de `tope` se solapa o duplica al
+    // anterior, y se descarta de una sola pasada junto con los offsets fuera
+    // de límite o que no caen en borde de char UTF-8 (evita el panic de
+    // `replace_range`).
+    let mut tope = out.len();
     for (start, end) in ranges {
-        if start > end || end > out.len() {
+        if start > end || end > tope || !out.is_char_boundary(start) || !out.is_char_boundary(end)
+        {
             continue;
         }
         out.replace_range(start..end, replacement);
+        tope = start;
     }
     out
 }
@@ -448,5 +475,35 @@ mod tests {
     #[test]
     fn needle_vacio_no_devuelve_nada() {
         assert!(buscar_ocurrencias("cualquier texto", "", &ops(false, true)).is_empty());
+    }
+
+    #[test]
+    fn todos_los_runs_mapean_byte_a_byte() {
+        let html = "<p>El niño <em>corrió</em> — ayer &amp; hoy 😀</p>";
+        let m = plain_con_runs(html);
+        assert!(m.runs.len() >= 4);
+        for r in &m.runs {
+            let n = r.plain_end - r.plain_start;
+            assert_eq!(&html[r.html_start..r.html_start + n], &m.plain[r.plain_start..r.plain_end]);
+        }
+    }
+
+    #[test]
+    fn ubica_bien_despues_de_un_char_multibyte() {
+        let html = "<p>El niño corrió ayer</p>";
+        let m = plain_con_runs(html);
+        let h = buscar_ocurrencias(&m.plain, "ayer", &ops(false, true))[0];
+        let (html_start, html_end) = match ubicar(&m, h.0, h.1) {
+            Ubicacion::Reemplazable { html_start, html_end } => {
+                assert_eq!(&html[html_start..html_end], "ayer");
+                (html_start, html_end)
+            }
+            otro => panic!("{:?}", otro),
+        };
+        // Y el round trip completo no debe tocar los tags.
+        assert_eq!(
+            aplicar_ranges(html, vec![(html_start, html_end)], "hoy"),
+            "<p>El niño corrió hoy</p>"
+        );
     }
 }
