@@ -822,10 +822,16 @@ fn classify_dir(dir: &Path) -> Option<&'static str> {
     }
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchResult {
     pub hits: Vec<SearchHit>,
     pub total: usize,
+    /// True cuando el AND del fuzzy no encontró nada y estos hits salen del
+    /// reintento OR, o sea matchean ALGUNA palabra de la query y no todas. El
+    /// frontend lo dice en el panel: sin esto, una lista de parciales es
+    /// indistinguible de una lista de resultados buenos.
+    pub partial_match: bool,
 }
 
 /// Ejecuta una búsqueda contra el índice activo, con scope/debug opcionales.
@@ -839,19 +845,11 @@ pub fn search_query_impl(
     let slot = state().lock().map_err(|e| e.to_string())?;
     let idx = match slot.as_ref() {
         Some(i) => i,
-        None => {
-            return Ok(SearchResult {
-                hits: Vec::new(),
-                total: 0,
-            })
-        }
+        None => return Ok(SearchResult::default()),
     };
     let q = query.trim();
     if q.is_empty() {
-        return Ok(SearchResult {
-            hits: Vec::new(),
-            total: 0,
-        });
+        return Ok(SearchResult::default());
     }
     let searcher = idx.reader.searcher();
     // Modo fuzzy (opt-in) + query "plain" (sin operadores) ⇒ builder fuzzy:
@@ -863,7 +861,7 @@ pub fn search_query_impl(
     let parsed: Box<dyn Query> = if fuzzy_plain {
         match build_fuzzy_query(idx, q, Occur::Must) {
             Some(query) => query,
-            None => return Ok(SearchResult { hits: Vec::new(), total: 0 }),
+            None => return Ok(SearchResult::default()),
         }
     } else {
         let mut parser =
@@ -875,7 +873,7 @@ pub fn search_query_impl(
         parser.set_conjunction_by_default();
         match parser.parse_query(q) {
             Ok(p) => p,
-            Err(_) => return Ok(SearchResult { hits: Vec::new(), total: 0 }),
+            Err(_) => return Ok(SearchResult::default()),
         }
     };
     let final_query: Box<dyn Query> = build_scoped_query(idx, parsed, scope);
@@ -886,12 +884,14 @@ pub fn search_query_impl(
     // Rescate del fuzzy: si exigir todos los términos no encontró nada, mejor
     // devolver los parciales que una lista vacía — con un typo grueso o una
     // palabra que el autor recuerda mal, el AND puede quedarse en cero.
+    let mut partial_match = false;
     if top_docs.is_empty() && fuzzy_plain {
         if let Some(or_query) = build_fuzzy_query(idx, q, Occur::Should) {
             let scoped = build_scoped_query(idx, or_query, scope);
             top_docs = searcher
                 .search(&*scoped, &TopDocs::with_limit(limit))
                 .map_err(|e| e.to_string())?;
+            partial_match = !top_docs.is_empty();
         }
     }
     let terms: Vec<String> = q
@@ -954,7 +954,11 @@ pub fn search_query_impl(
         hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
     }
     let total = hits.len();
-    Ok(SearchResult { hits, total })
+    Ok(SearchResult {
+        hits,
+        total,
+        partial_match,
+    })
 }
 
 /// Una query es "plain" si no usa sintaxis de operadores del QueryParser.
@@ -1308,6 +1312,18 @@ mod tests {
             "el fallback OR debería traer los docs con 'duendes': {:?}",
             res.hits
         );
+        assert!(
+            res.partial_match,
+            "el rescate OR tiene que marcarse como parcial para que la UI lo diga"
+        );
+        // Una query que sí matchea entera NO es parcial.
+        let res = search_query_impl("duendes mansión", 50, None, false, true).unwrap();
+        assert!(!res.hits.is_empty());
+        assert!(!res.partial_match, "el AND que encontró no es parcial");
+        // Sin ningún hit ni por OR, tampoco: no hay nada que aclarar.
+        let res = search_query_impl("zeppelin trombón", 50, None, false, true).unwrap();
+        assert!(res.hits.is_empty(), "no debería matchear nada: {:?}", res.hits);
+        assert!(!res.partial_match, "lista vacía no es un resultado parcial");
     }
 
     #[test]

@@ -43,6 +43,10 @@ export interface SearchHit {
 export interface SearchResult {
   hits: SearchHit[];
   total: number;
+  /** True cuando ningún doc tenía todas las palabras de la query y estos hits
+   *  salen del reintento OR del backend, o sea matchean alguna. El panel lo
+   *  dice: sin el aviso, una lista de parciales se lee igual que una buena. */
+  partialMatch?: boolean;
 }
 
 /** Filtro de scope que viaja al backend. Campos vacíos / undefined no filtran. */
@@ -92,6 +96,8 @@ export class SearchService {
   readonly error = signal<string | null>(null);
   readonly reindexing = signal<boolean>(false);
   readonly reindexProgress = signal<ReindexProgress | null>(null);
+  /** Los resultados actuales son parciales (ver `SearchResult.partialMatch`). */
+  readonly partialMatch = signal<boolean>(false);
   readonly hasResults = computed(() => this.results().length > 0);
   readonly pendingHighlight = signal<PendingHighlight | null>(null);
   /** Última superficie con foco. Define qué archivo es "el actual" para el
@@ -196,6 +202,7 @@ export class SearchService {
   clear(): void {
     this.query.set('');
     this.results.set([]);
+    this.partialMatch.set(false);
     this.error.set(null);
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
@@ -215,6 +222,7 @@ export class SearchService {
     const q = this.query().trim();
     if (!q) {
       this.results.set([]);
+      this.partialMatch.set(false);
       this.error.set(null);
       this.loading.set(false);
       return;
@@ -225,6 +233,7 @@ export class SearchService {
     // Scope 'current' es client-side: lee el buffer vivo del editor, no toca
     // tantivy. Esto incluye ediciones sin guardar.
     if (this.settings.searchScope() === 'current') {
+      this.partialMatch.set(false);
       this.runCurrentFileSearch(q);
       if (id === this.currentRequestId) this.loading.set(false);
       return;
@@ -241,10 +250,12 @@ export class SearchService {
       });
       if (id !== this.currentRequestId) return;
       this.results.set(res.hits);
+      this.partialMatch.set(res.partialMatch === true);
     } catch (err) {
       if (id !== this.currentRequestId) return;
       this.error.set(String(err));
       this.results.set([]);
+      this.partialMatch.set(false);
       this.debug.error('search', String(err));
     } finally {
       if (id === this.currentRequestId) this.loading.set(false);

@@ -67,6 +67,7 @@ export class SearchPanel implements AfterViewInit {
   protected readonly error = this.svc.error;
   protected readonly reindexing = this.svc.reindexing;
   protected readonly reindexProgress = this.svc.reindexProgress;
+  protected readonly partialMatch = this.svc.partialMatch;
   protected readonly count = computed(() => this.results().length);
   /** Posición de cada path en la estructura del repo, para ordenar los grupos
    *  por orden de lectura. Se recalcula solo cuando cambia el árbol. */
