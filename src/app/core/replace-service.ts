@@ -247,17 +247,24 @@ export class ReplaceService {
     // con el scope/needle viejo.
     const id = ++this.requestId;
     const needle = this.search.query().trim();
+    // Los dos early returns apagan `previewing`: una request anterior en
+    // vuelo ya perdió la carrera del `requestId`, así que su `finally` no lo
+    // va a apagar nunca. Sin esto, vaciar la caja con un preview en camino
+    // deja el panel diciendo "Buscando ocurrencias…" para siempre y el botón
+    // deshabilitado con un motivo falso.
     if (!needle || this.scopeBloqueado()) {
       this.groups.set([]);
       this.previewSeal = null;
       this.totalSkipped.set(0);
       this.truncated.set(false);
+      this.previewing.set(false);
       return;
     }
     const scopePath = this.resolveScopePath();
     if (!scopePath) {
       this.groups.set([]);
       this.previewSeal = null;
+      this.previewing.set(false);
       return;
     }
     const caseSensitive = this.settings.replaceCaseSensitive();
@@ -397,6 +404,15 @@ export class ReplaceService {
       }
       this.debug.info('replace', 'apply', JSON.stringify(out));
       await this.runPreview();
+      // Los ids llevan el offset html, y el primer reemplazo corre los offsets
+      // de todo lo que viene después: los ids del preview nuevo NO son los del
+      // viejo, así que el filtro de `deselected` contra los vivos tira las
+      // ocurrencias que el autor había apagado a mano y vuelven prendidas. Lo
+      // que sobrevive a un apply es, por definición, lo que no quiso tocar —
+      // arrancar con nada seleccionado es la única lectura segura.
+      this.deselected.set(
+        new Set(this.groups().flatMap((g) => g.occurrences.map((o) => o.id))),
+      );
     } catch (err) {
       this.error.set(String(err));
       this.toast.error(`Reemplazo: ${err}`);

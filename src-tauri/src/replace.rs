@@ -301,6 +301,22 @@ pub fn aplicar_ranges(
     out
 }
 
+/// Escapa el texto de reemplazo antes de que entre al HTML.
+///
+/// El autor tipea TEXTO PLANO —el spec deja "regex / markup" fuera de
+/// alcance—, así que si escribe `Marks & Spencer` tiene que ver eso en su
+/// novela. Sin escapar, ese `&` suelto es un error fatal de parseo meses
+/// después, al exportar: `epub.rs::build_part_xhtml` embebe el cuerpo del
+/// capítulo verbatim adentro del shell XHTML, donde `&` desnudo no es válido.
+/// Y un `<b>` tipeado se colaría fuera del subset del schema de TipTap.
+///
+/// Solo los tres de contenido: el replacement nunca cae adentro de un
+/// atributo, así que las comillas no hacen falta. El `&` va primero o
+/// escaparía los `&` que generan los otros dos.
+fn escapar_html(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
 /// Tope de ocurrencias que se enumeran antes de cortar. Pasado esto no hay
 /// preview útil: son miles de filas que nadie revisa una por una, y la salida
 /// honesta es pedir que se acote el scope o el término.
@@ -312,8 +328,12 @@ const SNIPPET_CONTEXTO: usize = 120;
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplaceOccurrence {
-    /// `<path>#<html_start>`. Estable entre previews del mismo archivo, así
-    /// que destildar una ocurrencia sobrevive a un re-preview por debounce.
+    /// `<path>#<html_start>`. Estable entre previews del mismo archivo
+    /// MIENTRAS no se escriba en el medio, así que destildar una ocurrencia
+    /// sobrevive a un re-preview por debounce pero NO a un apply: el primer
+    /// reemplazo corre el offset de todo lo que viene después y los ids
+    /// cambian. Por eso el frontend arranca sin nada seleccionado tras
+    /// aplicar, en vez de intentar reusar la selección vieja.
     pub id: String,
     pub snippet: String,
     pub html_start: usize,
@@ -466,18 +486,29 @@ pub fn preview_scope(
     Ok(pv)
 }
 
+// Los tres comandos son `async` + `spawn_blocking` (mismo patrón que
+// `search.rs::search_reindex`): en Tauri 2 un comando sync corre en el main
+// thread, y estos tres caminan el scope entero leyendo cada `.html` a String.
+// `replace_preview` es el peor: se dispara cada 250 ms mientras se tipea, y
+// sobre Dropbox o iCloud un `read_to_string` de un archivo desmaterializado
+// bloquea hasta que baja de la red — o sea la ventana congelada y sin spinner,
+// porque el hilo que lo pintaría es el que está bloqueado.
 #[tauri::command]
-pub fn replace_preview(
+pub async fn replace_preview(
     scope_path: String,
     needle: String,
     case_sensitive: bool,
     whole_word: bool,
 ) -> Result<ReplacePreview, String> {
-    preview_scope(
-        Path::new(&scope_path),
-        needle.as_str(),
-        &Opciones { case_sensitive, whole_word },
-    )
+    tauri::async_runtime::spawn_blocking(move || {
+        preview_scope(
+            Path::new(&scope_path),
+            needle.as_str(),
+            &Opciones { case_sensitive, whole_word },
+        )
+    })
+    .await
+    .map_err(|e| format!("task: {e}"))?
 }
 
 const UNDO_SUBDIR: &str = ".twriter/undo";
@@ -664,6 +695,10 @@ pub fn aplicar(
         mtime_antes: Option<SystemTime>,
     }
     let mut pendientes: Vec<Pendiente> = Vec::new();
+    // Se escapa una sola vez acá y no adentro del loop: lo que se guarda en el
+    // manifest del snapshot sigue siendo el literal que tipeó el autor, que es
+    // lo que el panel le muestra.
+    let replacement_html = escapar_html(replacement);
     for (path, mut ranges) in por_path {
         if ranges.is_empty() {
             continue;
@@ -702,7 +737,7 @@ pub fn aplicar(
         ranges.sort_unstable();
         ranges.dedup();
         let ocurrencias = ranges.len();
-        let nuevo = aplicar_ranges(&html, ranges, replacement);
+        let nuevo = aplicar_ranges(&html, ranges, &replacement_html);
         pendientes.push(Pendiente { path, html, nuevo, ocurrencias, mtime_antes });
     }
     if pendientes.is_empty() {
@@ -1013,7 +1048,7 @@ pub fn aplicar(
 }
 
 #[tauri::command]
-pub fn replace_apply(
+pub async fn replace_apply(
     root: String,
     needle: String,
     case_sensitive: bool,
@@ -1022,14 +1057,18 @@ pub fn replace_apply(
     replacement: String,
     ultima_edicion: String,
 ) -> Result<ReplaceOutcome, String> {
-    aplicar(
-        Path::new(&root),
-        needle.as_str(),
-        &Opciones { case_sensitive, whole_word },
-        edits,
-        replacement.as_str(),
-        ultima_edicion.as_str(),
-    )
+    tauri::async_runtime::spawn_blocking(move || {
+        aplicar(
+            Path::new(&root),
+            needle.as_str(),
+            &Opciones { case_sensitive, whole_word },
+            edits,
+            replacement.as_str(),
+            ultima_edicion.as_str(),
+        )
+    })
+    .await
+    .map_err(|e| format!("task: {e}"))?
 }
 
 #[derive(Serialize, Debug, Clone, Default)]
@@ -1193,18 +1232,22 @@ pub fn deshacer(
 }
 
 #[tauri::command]
-pub fn replace_undo(
+pub async fn replace_undo(
     root: String,
     snapshot_id: String,
     force_paths: Vec<String>,
     ultima_edicion: String,
 ) -> Result<UndoOutcome, String> {
-    deshacer(
-        Path::new(&root),
-        snapshot_id.as_str(),
-        &force_paths,
-        ultima_edicion.as_str(),
-    )
+    tauri::async_runtime::spawn_blocking(move || {
+        deshacer(
+            Path::new(&root),
+            snapshot_id.as_str(),
+            &force_paths,
+            ultima_edicion.as_str(),
+        )
+    })
+    .await
+    .map_err(|e| format!("task: {e}"))?
 }
 
 #[cfg(test)]
@@ -1656,6 +1699,47 @@ mod tests {
         assert_eq!(out.occurrences, 1);
         let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
         assert!(uno.contains("Angelica y Angélica"), "quedó {uno:?}");
+    }
+
+    #[test]
+    fn apply_escapa_el_ampersand_del_replacement() {
+        let td = scope_con(&[("libro/1.html", "<p>La casa de Ana.</p>")]);
+        let pv = preview_scope(td.path(), "Ana", &ops(false, true)).unwrap();
+        aplicar_t(td.path(), "Ana", &ops(false, true), edits_de(&pv), "Ana & Co").unwrap();
+        let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
+        assert_eq!(
+            uno.trim_end(), "<p>La casa de Ana &amp; Co.</p>",
+            "un `&` crudo en el disco rompe el parseo XHTML del EPUB"
+        );
+    }
+
+    #[test]
+    fn apply_escapa_los_angulos_del_replacement() {
+        let td = scope_con(&[("libro/1.html", "<p>Dijo casa y se fue.</p>")]);
+        let pv = preview_scope(td.path(), "casa", &ops(false, true)).unwrap();
+        aplicar_t(td.path(), "casa", &ops(false, true), edits_de(&pv), "<b>casa</b>").unwrap();
+        let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
+        assert_eq!(
+            uno.trim_end(), "<p>Dijo &lt;b&gt;casa&lt;/b&gt; y se fue.</p>",
+            "el reemplazo es literal: si el autor tipea `<b>`, ve `<b>`"
+        );
+        // Y el `<` escapado no puede haberse comido el `&` de su propia entidad.
+        assert!(!uno.contains("&amp;lt;"), "doble escape, quedó {uno:?}");
+    }
+
+    #[test]
+    fn lo_reemplazado_con_ampersand_se_puede_volver_a_reemplazar() {
+        let td = scope_con(&[("libro/1.html", "<p>La casa de Ana.</p>")]);
+        let pv = preview_scope(td.path(), "Ana", &ops(false, true)).unwrap();
+        aplicar_t(td.path(), "Ana", &ops(false, true), edits_de(&pv), "Ana & Co").unwrap();
+        // Round-trip: la entidad corta el run, pero el texto de los dos lados
+        // sigue siendo reemplazable. Con el `&` crudo de antes, el run se
+        // cortaba igual pero el archivo ya estaba roto para el EPUB.
+        let pv2 = preview_scope(td.path(), "Ana", &ops(false, true)).unwrap();
+        assert_eq!(pv2.total, 1, "la ocurrencia vecina a la entidad sigue viva");
+        aplicar_t(td.path(), "Ana", &ops(false, true), edits_de(&pv2), "Beatriz").unwrap();
+        let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
+        assert_eq!(uno.trim_end(), "<p>La casa de Beatriz &amp; Co.</p>");
     }
 
     #[test]

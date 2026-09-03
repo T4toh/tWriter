@@ -14,7 +14,10 @@
 export type MotivoSkip = 'cruzaTag' | 'cruzaEntidad' | 'cruzaBloque';
 
 export interface ReplaceOccurrence {
-  /** `<path>#<htmlStart>`, generado en Rust. */
+  /** `<path>#<htmlStart>`, generado en Rust. Estable entre previews del mismo
+   *  archivo SOLO si no se escribió en el medio: el primer reemplazo de un
+   *  apply corre el offset de todas las ocurrencias posteriores, así que sus
+   *  ids cambian. Por eso `apply()` no intenta reusar la selección vieja. */
   id: string;
   snippet: string;
   htmlStart: number;
