@@ -30,8 +30,89 @@ export function foldAccents(s: string): string {
   return out;
 }
 
+/** Bloques donde puede caer un match. El subset XHTML del editor no tiene más
+ *  contenedores de texto que estos. */
+const BLOCK_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, blockquote, li, pre';
+
 /**
- * Busca el primer text node dentro de `host` que matchee la query.
+ * Elige el bloque que MÁS términos distintos de la query contiene, y devuelve
+ * su índice en `texts` (-1 si ninguno contiene nada).
+ *
+ * Prioridad: el literal completo de `rawQuery` (si tiene forma rica) gana de
+ * una, porque es el match más específico posible. Si no, gana la cobertura:
+ * cuántos términos distintos aparecen en el bloque. A igualdad, el más
+ * temprano.
+ *
+ * Esto es el corazón del "el click no me lleva al resultado": elegir el primer
+ * bloque que contenga CUALQUIER término manda al lector a la primera aparición
+ * de la palabra más común de la query — casi siempre arriba de todo. Buscando
+ * `Creo que se llamaba`, el primer `que` del capítulo gana sobre el párrafo que
+ * tiene la frase entera.
+ *
+ * Función pura sobre los textos de los bloques: el walk del DOM lo hace
+ * `highlightBestMatch`. Ver `scripts/run-search-locate-smoke.mjs`.
+ */
+export function pickBestBlock(
+  texts: string[],
+  terms: string[],
+  rawQuery: string,
+  fold = false,
+): number {
+  const norm = (s: string): string => (fold ? foldAccents(s) : s);
+  const raw = (rawQuery ?? '').trim();
+  const rawLower = norm(raw.toLowerCase());
+  const hasRichForm =
+    raw.length > 0 &&
+    [...raw].some((c) => c !== c.toLowerCase() || /[^\p{L}\p{N}\s]/u.test(c));
+  const lowerTerms = terms.map((t) => norm(t.toLowerCase())).filter((t) => t.length > 0);
+  if (lowerTerms.length === 0 && !hasRichForm) return -1;
+
+  let best = -1;
+  let bestHits = 0;
+  for (let i = 0; i < texts.length; i += 1) {
+    const text = norm((texts[i] ?? '').toLowerCase());
+    if (hasRichForm && rawLower.length > 0 && text.includes(rawLower)) return i;
+    let hits = 0;
+    for (const t of lowerTerms) {
+      if (text.includes(t)) hits += 1;
+    }
+    if (hits > bestHits) {
+      bestHits = hits;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/**
+ * Salta al mejor match de la query dentro de `host`: primero elige el bloque
+ * con más cobertura de términos (`pickBestBlock`), después el primer match
+ * dentro de ese bloque. Si ningún bloque matchea, cae al host entero.
+ */
+export function highlightBestMatch(
+  host: HTMLElement | null,
+  terms: string[],
+  rawQuery?: string,
+  fold = false,
+): boolean {
+  if (!host) return false;
+  // Sólo bloques hoja: un `<blockquote>` con `<p>` adentro aparece dos veces en
+  // el querySelectorAll y el texto del padre incluye al hijo.
+  const blocks = Array.from(host.querySelectorAll<HTMLElement>(BLOCK_SELECTOR)).filter(
+    (el) => el.querySelector(BLOCK_SELECTOR) === null,
+  );
+  const idx = pickBestBlock(
+    blocks.map((b) => b.textContent ?? ''),
+    terms,
+    rawQuery ?? '',
+    fold,
+  );
+  return selectFirstMatchIn(idx >= 0 ? blocks[idx] : host, terms, rawQuery, fold);
+}
+
+/**
+ * Busca el primer text node dentro de `root` que matchee la query, lo
+ * selecciona y scrollea.
  *
  * Si `rawQuery` viene con forma rica (mayúsculas o puntuación) y aparece
  * literal en algún text node, gana sobre el match de tokens — así
@@ -40,7 +121,7 @@ export function foldAccents(s: string): string {
  * Fallback al primer text node que contenga alguno de `terms` (caso
  * legacy: query sin caracteres especiales).
  */
-export function highlightFirstMatch(
+function selectFirstMatchIn(
   host: HTMLElement | null,
   terms: string[],
   rawQuery?: string,
@@ -139,7 +220,7 @@ export function highlightFirstMatch(
 
 /** Aplica clase `search-flash` al elemento durante 2.5s. Reusable: si se llama
  *  con flash ya activo, lo reinicia. */
-function flashElement(el: HTMLElement): void {
+export function flashElement(el: HTMLElement): void {
   el.classList.remove('search-flash');
   // Force reflow para que la animación se reinicie si el flash ya estaba activo.
   void el.offsetWidth;

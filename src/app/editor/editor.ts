@@ -39,8 +39,8 @@ import { GrammarService } from '../core/grammar-service';
 import { SearchService } from '../core/search-service';
 import { ToastService } from '../core/toast-service';
 import {
+  highlightBestMatch,
   findAllMatchesInPlain,
-  highlightFirstMatch,
 } from '../core/search-highlight';
 import { convertFragmentHtml } from './rae-convert';
 import { parseFragmentHtml, serializeRange } from './rae-apply';
@@ -559,7 +559,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         const pending = this.search.consumePendingHighlight(node.path);
         if (pending) {
           setTimeout(() => {
-            highlightFirstMatch(this.hostRef.nativeElement, pending.terms, pending.rawQuery, pending.fold);
+            highlightBestMatch(this.hostRef.nativeElement, pending.terms, pending.rawQuery, pending.fold);
           }, 0);
         }
       }
@@ -722,7 +722,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       const consumed = this.search.consumePendingHighlight(node.path);
       if (!consumed) return;
       setTimeout(() => {
-        highlightFirstMatch(this.hostRef.nativeElement, consumed.terms, consumed.rawQuery, consumed.fold);
+        highlightBestMatch(this.hostRef.nativeElement, consumed.terms, consumed.rawQuery, consumed.fold);
       }, 0);
     });
 

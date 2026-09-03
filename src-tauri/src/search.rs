@@ -35,9 +35,10 @@ const TITLE_BOOST: f32 = 2.5;
 const FUZZY_LEN_EXACT_MAX: usize = 3; // <=3 chars ⇒ distancia 0 (exacto)
 const FUZZY_LEN_ONE_MAX: usize = 7; // 4..=7 chars ⇒ distancia 1; >=8 ⇒ distancia 2
 const FUZZY_TRANSPOSITION_COST_ONE: bool = true; // swap adyacente cuesta 1 edit
-// Boost del clause "todos los términos" (AND) sobre el OR base — docs con todos
-// los términos ranquean por encima de los que matchean sólo alguno.
-const FULL_MATCH_BOOST: f32 = 3.0;
+// Tope de ocurrencias que junta `best_cluster_start` antes de cortar. Un término
+// común (`que`, `se`) aparece cientos de veces en un capítulo; la ventana que
+// cubre más términos ya se decide con las primeras.
+const CLUSTER_MAX_OCCURRENCES: usize = 400;
 
 static INDEX_STATE: OnceLock<Mutex<Option<SearchIndex>>> = OnceLock::new();
 
@@ -368,6 +369,75 @@ fn resolve_matched_words(content: &str, query_terms: &[String], fuzzy: bool) -> 
     out
 }
 
+/// Arranque de la ventana que cubre MÁS términos distintos de la query con el
+/// menor span. Centrar el snippet en la primera aparición del primer término
+/// que matchea deja el recorte en cualquier lado cuando los términos están
+/// desperdigados por el capítulo (`Ambos nobles` con `Ambos` en el párrafo 2 y
+/// `nobles` en el 40): el snippet mostraba el párrafo 2 y el salto también.
+/// Esto elige el lugar donde caen juntos, que es lo que se estaba buscando.
+///
+/// `lower` es el contenido ya lowercased; el offset devuelto indexa ese mismo
+/// string (y, por el supuesto que ya hacía `make_snippet`, el original).
+/// Con un solo término equivale a la primera aparición.
+fn best_cluster_start(lower: &str, query_terms: &[String]) -> Option<usize> {
+    let n = query_terms.len();
+    if n == 0 {
+        return None;
+    }
+    // (posición, índice del término) de cada ocurrencia.
+    let mut occ: Vec<(usize, usize)> = Vec::new();
+    for (ti, t) in query_terms.iter().enumerate() {
+        let tl = t.to_lowercase();
+        if tl.is_empty() {
+            continue;
+        }
+        let mut from = 0usize;
+        while let Some(rel) = lower[from..].find(&tl) {
+            let at = from + rel;
+            occ.push((at, ti));
+            from = at + tl.len();
+            if occ.len() >= CLUSTER_MAX_OCCURRENCES {
+                break;
+            }
+        }
+        if occ.len() >= CLUSTER_MAX_OCCURRENCES {
+            break;
+        }
+    }
+    if occ.is_empty() {
+        return None;
+    }
+    occ.sort_unstable();
+    // Ventana deslizante [lo, hi]: al entrar `hi`, encoge por izquierda mientras
+    // el término del borde esté repetido adentro. Gana más términos distintos;
+    // a igualdad, el span más corto; a igualdad, el más temprano (el barrido
+    // avanza, así que un empate posterior no reemplaza al anterior).
+    let mut counts = vec![0usize; n];
+    let mut distinct = 0usize;
+    let mut best: Option<(usize, usize, usize)> = None; // (distintos, span, start)
+    let mut lo = 0usize;
+    for hi in 0..occ.len() {
+        let ti = occ[hi].1;
+        if counts[ti] == 0 {
+            distinct += 1;
+        }
+        counts[ti] += 1;
+        while counts[occ[lo].1] > 1 {
+            counts[occ[lo].1] -= 1;
+            lo += 1;
+        }
+        let span = occ[hi].0 - occ[lo].0;
+        let better = match best {
+            None => true,
+            Some((bd, bs, _)) => distinct > bd || (distinct == bd && span < bs),
+        };
+        if better {
+            best = Some((distinct, span, occ[lo].0));
+        }
+    }
+    best.map(|(_, _, start)| start)
+}
+
 /// Genera un snippet centrado en el primer match de los términos de la query.
 /// Si `raw_query` (case-insensitive, preservando puntuación) aparece literal,
 /// gana sobre el match de tokens — así `¡Duendes!` cae en el grito y no en
@@ -386,11 +456,7 @@ fn make_snippet(content: &str, raw_query: &str, query_terms: &[String]) -> Strin
         }
     }
     if best.is_none() {
-        for t in query_terms {
-            if let Some(idx) = lower.find(&t.to_lowercase()) {
-                best = Some(best.map_or(idx, |b| b.min(idx)));
-            }
-        }
+        best = best_cluster_start(&lower, query_terms);
     }
     if best.is_none() && query_terms.is_empty() && raw_trim.is_empty() {
         let cut: String = content.chars().take(SNIPPET_MAX_LEN).collect();
@@ -788,13 +854,14 @@ pub fn search_query_impl(
         });
     }
     let searcher = idx.reader.searcher();
-    // Modo fuzzy (opt-in) + query "plain" (sin operadores) ⇒ builder fuzzy/OR:
-    // tolera typos/acentos, trae por OR con boost al match completo. En modo
-    // exacto (default) o con operadores (`"frase"`, `OR`, `-término`, `kind:`)
-    // va el QueryParser clásico (AND default), accent-sensitive ⇒ encuentra el
-    // string literal tal cual, que es lo que se busca al corregir errores.
-    let parsed: Box<dyn Query> = if fuzzy && is_plain_query(q) {
-        match build_fuzzy_or_query(idx, q) {
+    // Modo fuzzy (opt-in) + query "plain" (sin operadores) ⇒ builder fuzzy:
+    // tolera typos/acentos exigiendo todos los términos, igual que el exacto. En
+    // modo exacto (default) o con operadores (`"frase"`, `OR`, `-término`,
+    // `kind:`) va el QueryParser clásico (AND default), accent-sensitive ⇒
+    // encuentra el string literal tal cual, que es lo que se busca al corregir.
+    let fuzzy_plain = fuzzy && is_plain_query(q);
+    let parsed: Box<dyn Query> = if fuzzy_plain {
+        match build_fuzzy_query(idx, q, Occur::Must) {
             Some(query) => query,
             None => return Ok(SearchResult { hits: Vec::new(), total: 0 }),
         }
@@ -813,9 +880,20 @@ pub fn search_query_impl(
     };
     let final_query: Box<dyn Query> = build_scoped_query(idx, parsed, scope);
     let limit = limit.clamp(1, 200);
-    let top_docs = searcher
+    let mut top_docs = searcher
         .search(&*final_query, &TopDocs::with_limit(limit))
         .map_err(|e| e.to_string())?;
+    // Rescate del fuzzy: si exigir todos los términos no encontró nada, mejor
+    // devolver los parciales que una lista vacía — con un typo grueso o una
+    // palabra que el autor recuerda mal, el AND puede quedarse en cero.
+    if top_docs.is_empty() && fuzzy_plain {
+        if let Some(or_query) = build_fuzzy_query(idx, q, Occur::Should) {
+            let scoped = build_scoped_query(idx, or_query, scope);
+            top_docs = searcher
+                .search(&*scoped, &TopDocs::with_limit(limit))
+                .map_err(|e| e.to_string())?;
+        }
+    }
     let terms: Vec<String> = q
         .split_whitespace()
         .map(|t| t.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
@@ -901,16 +979,20 @@ fn fuzzy_distance_for(term_chars: usize) -> u8 {
     }
 }
 
-/// Construye una BooleanQuery fuzzy+OR para queries "plain":
-/// - cada término ⇒ `FuzzyTermQuery` contra title (boosteado ×TITLE_BOOST) OR
-///   content, como clause `Occur::Should` del outer (OR entre términos).
-/// - si hay >1 término, un clause extra `Occur::Should` boosteado
-///   (×FULL_MATCH_BOOST) que exige TODOS los términos (AND-de-fuzzy) ⇒ los docs
-///   con todos los términos ranquean por encima de los que matchean alguno.
+/// Construye una BooleanQuery fuzzy para queries "plain": cada término ⇒
+/// `FuzzyTermQuery` contra title (boosteado ×TITLE_BOOST) OR content, y esos
+/// clauses entran al outer con el `occur` que se pida.
+///
+/// `Occur::Must` (el default del caller) exige TODOS los términos, igual que el
+/// modo exacto. Antes esto era OR puro con un clause AND boosteado al lado: el
+/// boost ordenaba pero no filtraba, así que `Ambos nobles` traía 22 capítulos
+/// donde sólo aparecía una de las dos palabras. `Occur::Should` queda para el
+/// reintento de rescate cuando el AND no encuentra nada.
+///
 /// El boost de title se aplica a mano vía `BoostQuery` (`set_field_boost` es del
 /// QueryParser, no aplica acá). Normaliza igual que el indexado: alfanumérico,
 /// lowercase, fold de acentos.
-fn build_fuzzy_or_query(idx: &SearchIndex, q: &str) -> Option<Box<dyn Query>> {
+fn build_fuzzy_query(idx: &SearchIndex, q: &str, occur: Occur) -> Option<Box<dyn Query>> {
     // Lowercase para alinear con el índice (LowerCaser). NO se pliega: el índice
     // preserva acentos y el fuzzy ya absorbe á↔a como 1 edit.
     let terms: Vec<String> = q
@@ -945,21 +1027,10 @@ fn build_fuzzy_or_query(idx: &SearchIndex, q: &str) -> Option<Box<dyn Query>> {
         ]))
     };
 
-    let mut should: Vec<(Occur, Box<dyn Query>)> =
-        terms.iter().map(|t| (Occur::Should, per_term(t))).collect();
+    let clauses: Vec<(Occur, Box<dyn Query>)> =
+        terms.iter().map(|t| (occur, per_term(t))).collect();
 
-    // Clause de "full match": todos los términos requeridos, boosteado.
-    if terms.len() > 1 {
-        let all_must: Vec<(Occur, Box<dyn Query>)> =
-            terms.iter().map(|t| (Occur::Must, per_term(t))).collect();
-        let full_match: Box<dyn Query> = Box::new(BooleanQuery::new(all_must));
-        should.push((
-            Occur::Should,
-            Box::new(BoostQuery::new(full_match, FULL_MATCH_BOOST)),
-        ));
-    }
-
-    Some(Box::new(BooleanQuery::new(should)))
+    Some(Box::new(BooleanQuery::new(clauses)))
 }
 
 /// Si hay scope, combina la query parseada con term filters via BooleanQuery
@@ -1143,6 +1214,22 @@ mod tests {
     }
 
     #[test]
+    fn snippet_centers_on_term_cluster_not_first_term() {
+        // "Ambos" aparece solo al principio y de nuevo pegado a "nobles" al
+        // final: el snippet tiene que caer donde las dos palabras están juntas.
+        let filler = "relleno ".repeat(60);
+        let content = format!("Ambos llegaron temprano. {filler}Ambos nobles brindaron.");
+        let s = make_snippet(&content, "ambos nobles", &["ambos".into(), "nobles".into()]);
+        assert!(s.contains("Ambos nobles"), "got: {s:?}");
+    }
+
+    #[test]
+    fn cluster_start_single_term_is_first_occurrence() {
+        let lower = "nobles y luego otra vez nobles";
+        assert_eq!(best_cluster_start(lower, &["nobles".into()]), Some(0));
+    }
+
+    #[test]
     fn snippet_falls_back_to_tokens_when_no_exact_match() {
         let content = "Hablaban del tema de los duendes a la noche.";
         let s = make_snippet(content, "¡Duendes!", &["duendes".into()]);
@@ -1191,22 +1278,34 @@ mod tests {
     }
 
     #[test]
-    fn search_plain_multiword_or_recall_and_ranking() {
+    fn search_plain_multiword_requires_all_terms() {
         let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
         reset_state();
         let dir = make_repo();
         full_reindex(dir.path(), None).unwrap();
-        // fuzzy=true + plain ⇒ OR. Trae cap A (ambos términos) y cap B / nota
-        // (sólo "duendes"). El full-match (Saga A) ranquea primero.
+        // fuzzy=true + plain ⇒ AND. Sólo cap A tiene "duendes" Y "mansión";
+        // cap B y la nota, que sólo tienen "duendes", quedan afuera.
         let res = search_query_impl("duendes mansión", 50, None, false, true).unwrap();
+        assert!(!res.hits.is_empty(), "debería matchear cap A");
         assert!(
-            res.hits.len() >= 2,
-            "OR debería traer A + B/nota: {:?}",
+            res.hits.iter().all(|h| h.path.contains("Saga A")),
+            "el fuzzy no debería traer docs con un solo término: {:?}",
             res.hits
         );
+    }
+
+    #[test]
+    fn search_fuzzy_falls_back_to_or_when_and_empty() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        let dir = make_repo();
+        full_reindex(dir.path(), None).unwrap();
+        // "zeppelin" no está en ningún doc ⇒ el AND da 0 y entra el rescate OR,
+        // que trae los tres docs con "duendes" en vez de una lista vacía.
+        let res = search_query_impl("duendes zeppelin", 50, None, false, true).unwrap();
         assert!(
-            res.hits[0].path.contains("Saga A"),
-            "el full-match (Saga A) debería ranquear primero: {:?}",
+            res.hits.len() >= 2,
+            "el fallback OR debería traer los docs con 'duendes': {:?}",
             res.hits
         );
     }

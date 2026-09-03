@@ -36,6 +36,26 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   (los client-side de "Archivo actual").
   Ordenar bien esto arregla de una la mitad del ítem de matcheo en
   `## Búsqueda` y desbloquea el de revisión por libro en `## Gramática`.
+  **Hecho en `fix/busqueda-salto-y-matcheo`, falta la verificación a mano.**
+  El plan de "que el offset viaje" NO se pudo seguir tal cual: el `content` que
+  guarda tantivy pasa por `html_to_text`, que colapsa todo a una línea con
+  espacios simples, mientras el editor vive en el espacio de `extractPlainText`,
+  que mete `\n\n` entre bloques y `* * *` por cada `<hr>`. Los dos planos se
+  desfasan y el offset del backend cae al lado. Alinearlos exige cambiar el
+  indexado y bumpear `INDEX_VERSION` (reindex full de todo el repo) — queda como
+  camino futuro.
+  Lo que se hizo en su lugar: el salto elige **el mejor bloque** en vez del
+  primero. `pickBestBlock` (`search-highlight.ts`) puntúa los bloques del DOM
+  por cobertura de términos distintos, con el literal de `rawQuery` ganando de
+  una si aparece; recién ahí `selectFirstMatchIn` busca el match adentro de ese
+  bloque. El `TreeWalker` sigue, pero acotado al párrafo correcto.
+  El caso del panel RAE se arregló distinto y sí exacto: `openChapterAt` ya no
+  tira el offset, pero tampoco lo manda crudo (mismo desfase, agravado por los
+  `<hr>`) — manda un **ancla de texto** recortada al bloque (`anchorAround`,
+  ±40 chars), que es idéntica en los dos planos y el highlighter la clava.
+  Sigue pendiente el agravante (b): varios hits del mismo capítulo siguen
+  mandando todos al mejor bloque, no uno a cada aparición. Para eso hace falta
+  o el offset real del backend o navegación prev/next sobre los matches.
 
 - [x] **Editar el CSS del EPUB no se ve hasta recompilar Rust — y nada lo avisa**
   (`fix/epub-css-runtime`, verificado a mano por el autor el 2026-09-02).
@@ -1664,6 +1684,13 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   cierra.
   Antes de tocar: `mdReader.close()` también hace flush si está dirty
   (`app.ts:232-239`, mutex reader vs notes-editor central) — no perder eso.
+  **Hecho en `fix/busqueda-salto-y-matcheo`, falta la verificación a mano.**
+  Se tomó el fix chico: fuera el `markdownReader.close()` del efecto de
+  `search.open()`. El `search.hide()` del efecto inverso se queda —clickear un
+  hit de nota tiene que mostrar la nota, y sin eso quedaría tapada por la
+  búsqueda—, y no hay ping-pong porque ese efecto depende de `viewing()`, que no
+  cambia cuando la búsqueda abre. El flush no se pierde: `close()` sigue igual,
+  simplemente ya no se lo llama desde ahí.
 
 - [ ] **La búsqueda no lleva siempre al lugar correcto y matchea de más**
   Reportado el 2026-09-02 con `Creo que se llamaba` en scope "Libro actual":
@@ -1709,6 +1736,60 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   del hit no viaja al editor). Son independientes: aunque la query filtre
   perfecto, el click sigue cayendo en cualquier lado. Cualquier cambio acá toca
   `matchedTerms`, que es lo que el frontend usa para resaltar (`search-panel.ts:270-305`).
+  **Hecho en `fix/busqueda-salto-y-matcheo`, falta la verificación a mano.**
+  Se eligió la (a): `build_fuzzy_or_query` pasó a ser `build_fuzzy_query(idx, q,
+  occur)` y el caller pide `Occur::Must`, o sea el fuzzy exige todos los términos
+  igual que el modo exacto. Si el AND devuelve 0 hits hay un reintento con
+  `Occur::Should` —con un typo grueso, parciales es mejor que nada—. Cayó
+  `FULL_MATCH_BOOST`: era el clause que ordenaba sin filtrar, el que dejaba 22
+  docs empatados en 10.77.
+  La (c) no se descartó por mala sino por costo: tantivy no combina fuzzy con
+  phrase query, habría que resolver cada término a sus variantes y armar la
+  frase a mano sobre posiciones.
+  Lo del snippet que apunta a cualquier lado —que pasaba en los dos modos— se
+  arregló aparte: `make_snippet` ya no se centra en la primera aparición del
+  primer término, sino en la ventana que cubre más términos distintos con el
+  menor span (`best_cluster_start`). Con `Ambos nobles` el recorte cae donde las
+  dos palabras están juntas.
+
+
+- [ ] **No hay reemplazar: corregir un nombre en todo el libro se hace a mano,
+  uno por uno** (reportado el 2026-09-03: "estuve buscando Angelica para cambiar
+  por Angélica a mano como mono")
+  El caso real es el más simple posible y el más frecuente: un nombre propio mal
+  escrito desde el principio, `Angelica` → `Angélica`, repartido en decenas de
+  capítulos. Hoy la única herramienta es buscar, abrir cada hit, corregir a mano
+  y acordarse de dónde se quedó. La búsqueda ya encuentra todo; lo que falta es
+  el otro lado.
+  **Las piezas están casi todas.** `findAllMatchesInPlain`
+  (`search-highlight.ts`) devuelve **todos** los rangos de un texto, no el
+  primero, y ya se usa para pintar las decoraciones; `offsetToPm`
+  (`grammar-extension.ts`) los ancla a posiciones PM; el índice sabe en qué
+  capítulos está el término. O sea que "reemplazar en el capítulo abierto" es
+  casi gratis: los rangos ya están calculados y aplicar el cambio es un
+  `insertContentAt` por rango, de atrás para adelante para no invalidar
+  posiciones.
+  **Lo que hay que decidir** (nada de esto está diseñado):
+  (a) **Alcance.** ¿Solo el capítulo abierto, o libro/saga entero? El primero es
+      el 20% del trabajo y el 80% del valor; el segundo obliga a escribir N
+      archivos que no están abiertos en el editor, o sea camino nuevo por Rust y
+      no por TipTap.
+  (b) **Preview y confirmación.** Reemplazar a ciegas en 40 capítulos no se puede
+      ofrecer. Lo más parecido que ya existe es el diff del conversor RAE y el
+      modal de revisión por libro; habría que ver si se reusa alguno.
+  (c) **Deshacer.** Adentro del capítulo abierto el undo de ProseMirror alcanza.
+      Cruzando archivos no hay undo — lo que sí hay es el auto-commit de git,
+      que hace del "volver atrás" un revert. Puede ser suficiente: commitear
+      antes de aplicar y decirlo en la UI.
+  (d) **Mayúsculas y palabra completa.** `Angelica` → `Angélica` necesita
+      preservar caso al principio de oración, y `casa` no debería tocar
+      `casarse`. Los toggles de la búsqueda hoy son `≈` (fuzzy) y scope; el
+      fuzzy **no** puede alimentar un reemplazo (reemplazar sobre un match
+      Levenshtein cambia palabras que no se pidieron), así que reemplazar tiene
+      que exigir modo exacto.
+  Mientras no exista, el atajo honesto para el caso `Angelica`: agregar la forma
+  correcta al diccionario de la saga no ayuda, y el conversor RAE tampoco toca
+  ortografía — así que hoy no hay atajo, es a mano.
 
 
 ## Tree / Importer
