@@ -479,6 +479,221 @@ pub fn replace_preview(
     )
 }
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
+const UNDO_SUBDIR: &str = ".twriter/undo";
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct FileEdit {
+    pub path: String,
+    pub ranges: Vec<(usize, usize)>,
+}
+
+#[derive(Serialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceOutcome {
+    pub files: usize,
+    pub occurrences: usize,
+    /// Paths que cambiaron entre el preview y el apply. No se tocaron.
+    pub skipped_files: Vec<String>,
+    /// Vacío si no se escribió nada.
+    pub snapshot_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotFile {
+    pub rel: String,
+    pub occurrences: usize,
+    /// mtime en segundos epoch DESPUÉS de escribir. El undo lo usa para no
+    /// pisar una edición posterior al reemplazo.
+    pub mtime_after_apply: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotManifest {
+    pub id: String,
+    pub when: String,
+    pub needle: String,
+    pub replacement: String,
+    pub files: Vec<SnapshotFile>,
+}
+
+fn ahora_epoch() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn mtime_epoch(path: &Path) -> u64 {
+    std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Id de snapshot legible y ordenable. Epoch en MILISEGUNDOS: en segundos,
+/// dos reemplazos seguidos (o dos casos de test) caen en el mismo id y el
+/// segundo pisaría el snapshot del primero. No hace falta una dependencia de
+/// fechas para nombrar una carpeta.
+fn nuevo_snapshot_id() -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    format!("undo-{millis}")
+}
+
+/// Aplica los reemplazos. Ver el contexto de la Task 3 del plan para el orden
+/// obligatorio: revalidar todo, después snapshotear, después escribir.
+pub fn aplicar(
+    root: &Path,
+    needle: &str,
+    op: &Opciones,
+    edits: Vec<FileEdit>,
+    replacement: &str,
+    ultima_edicion: &str,
+) -> Result<ReplaceOutcome, String> {
+    let mut out = ReplaceOutcome::default();
+    if needle.is_empty() || edits.is_empty() {
+        return Ok(out);
+    }
+
+    // 1. Revalidar: cada range pedido tiene que seguir existiendo hoy.
+    struct Pendiente {
+        path: PathBuf,
+        html: String,
+        nuevo: String,
+        ocurrencias: usize,
+    }
+    let mut pendientes: Vec<Pendiente> = Vec::new();
+    for edit in edits {
+        if edit.ranges.is_empty() {
+            continue;
+        }
+        let path = PathBuf::from(&edit.path);
+        let Ok(html) = std::fs::read_to_string(&path) else {
+            out.skipped_files.push(edit.path);
+            continue;
+        };
+        let map = plain_con_runs(&html);
+        let vigentes: Vec<(usize, usize)> = buscar_ocurrencias(&map.plain, needle, op)
+            .into_iter()
+            .filter_map(|(a, b)| match ubicar(&map, a, b) {
+                Ubicacion::Reemplazable { html_start, html_end } => Some((html_start, html_end)),
+                Ubicacion::Cruza(_) => None,
+            })
+            .collect();
+        if !edit.ranges.iter().all(|r| vigentes.contains(r)) {
+            tracing::warn!(
+                target: "replace",
+                path = %edit.path,
+                "el archivo cambió desde el preview, no lo toco"
+            );
+            out.skipped_files.push(edit.path);
+            continue;
+        }
+        let ocurrencias = edit.ranges.len();
+        let nuevo = aplicar_ranges(&html, edit.ranges, replacement);
+        pendientes.push(Pendiente { path, html, nuevo, ocurrencias });
+    }
+    if pendientes.is_empty() {
+        return Ok(out);
+    }
+
+    // 2. Snapshot de los sobrevivientes, antes de escribir nada.
+    let undo_root = root.join(UNDO_SUBDIR);
+    if undo_root.exists() {
+        // Solo se guarda el último: el anterior se va.
+        std::fs::remove_dir_all(&undo_root)
+            .map_err(|e| format!("limpiar {}: {}", undo_root.display(), e))?;
+    }
+    let id = nuevo_snapshot_id();
+    let snap_dir = undo_root.join(&id);
+    let mut manifest_files: Vec<SnapshotFile> = Vec::new();
+    for p in &pendientes {
+        let rel = crate::stats::relative_key(root, &p.path)
+            .ok_or_else(|| format!("capítulo fuera del root: {}", p.path.display()))?;
+        let destino = snap_dir.join(&rel);
+        if let Some(parent) = destino.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("mkdir {}: {}", parent.display(), e))?;
+        }
+        std::fs::write(&destino, &p.html)
+            .map_err(|e| format!("snapshot {}: {}", destino.display(), e))?;
+        manifest_files.push(SnapshotFile { rel, occurrences: p.ocurrencias, mtime_after_apply: 0 });
+    }
+
+    // 3. Escribir. `fs::write_chapter` reindexa tantivy por su cuenta.
+    let mut stats = crate::stats::read_stats(root);
+    for (idx, p) in pendientes.iter().enumerate() {
+        crate::fs::write_chapter(p.path.to_string_lossy().into_owned(), p.nuevo.clone())?;
+        out.files += 1;
+        out.occurrences += p.ocurrencias;
+        manifest_files[idx].mtime_after_apply = mtime_epoch(&p.path);
+        if let Some(key) = crate::stats::relative_key(root, &p.path) {
+            stats.insert(
+                key,
+                crate::stats::ChapterStat {
+                    palabras: crate::import::count_words(&p.nuevo),
+                    ultima_edicion: Some(ultima_edicion.to_string()),
+                },
+            );
+        }
+    }
+    crate::stats::write_stats(root, &stats)?;
+
+    let manifest = SnapshotManifest {
+        id: id.clone(),
+        when: ultima_edicion.to_string(),
+        needle: needle.to_string(),
+        replacement: replacement.to_string(),
+        files: manifest_files,
+    };
+    std::fs::write(
+        snap_dir.join("manifest.json"),
+        serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| format!("manifest: {e}"))?;
+    out.snapshot_id = id;
+
+    tracing::info!(
+        target: "replace",
+        needle,
+        replacement,
+        files = out.files,
+        occurrences = out.occurrences,
+        skipped = out.skipped_files.len(),
+        snapshot = %out.snapshot_id,
+        "replace_apply"
+    );
+    Ok(out)
+}
+
+#[tauri::command]
+pub fn replace_apply(
+    root: String,
+    needle: String,
+    case_sensitive: bool,
+    whole_word: bool,
+    edits: Vec<FileEdit>,
+    replacement: String,
+    ultima_edicion: String,
+) -> Result<ReplaceOutcome, String> {
+    aplicar(
+        Path::new(&root),
+        needle.as_str(),
+        &Opciones { case_sensitive, whole_word },
+        edits,
+        replacement.as_str(),
+        ultima_edicion.as_str(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -855,5 +1070,124 @@ mod tests {
         let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
         assert_eq!(pv.groups.len(), MAX_ARCHIVOS);
         assert!(!pv.truncated, "no se descartó nada, no debe marcarse truncado");
+    }
+
+    /// `ultima_edicion` la manda el frontend (ver la nota de la Task 3 sobre
+    /// por qué no se genera en Rust). En los tests va fija.
+    const AHORA: &str = "2026-09-03T15:21:30.000Z";
+
+    fn aplicar_t(
+        root: &Path,
+        needle: &str,
+        op: &Opciones,
+        edits: Vec<FileEdit>,
+        replacement: &str,
+    ) -> Result<ReplaceOutcome, String> {
+        aplicar(root, needle, op, edits, replacement, AHORA)
+    }
+
+    fn edits_de(pv: &ReplacePreview) -> Vec<FileEdit> {
+        pv.groups
+            .iter()
+            .map(|g| FileEdit {
+                path: g.path.clone(),
+                ranges: g.occurrences.iter().map(|o| (o.html_start, o.html_end)).collect(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn apply_escribe_los_capitulos_y_cuenta() {
+        let td = scope_con(&[
+            ("libro/1.html", "<p>Angelica dijo</p>"),
+            ("libro/2.html", "<p>Angelica y Angelica</p>"),
+        ]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+        assert_eq!(out.files, 2);
+        assert_eq!(out.occurrences, 3);
+        assert!(out.skipped_files.is_empty());
+        let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
+        assert!(uno.contains("Angélica dijo"), "quedó {uno:?}");
+        let dos = fs::read_to_string(td.path().join("libro/2.html")).unwrap();
+        assert!(dos.contains("Angélica y Angélica"), "quedó {dos:?}");
+    }
+
+    #[test]
+    fn apply_respeta_la_seleccion_parcial() {
+        let td = scope_con(&[("libro/1.html", "<p>Angelica y Angelica</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        // Solo la segunda ocurrencia.
+        let segunda = pv.groups[0].occurrences[1].clone();
+        let edits = vec![FileEdit {
+            path: pv.groups[0].path.clone(),
+            ranges: vec![(segunda.html_start, segunda.html_end)],
+        }];
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits, "Angélica").unwrap();
+        assert_eq!(out.occurrences, 1);
+        let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
+        assert!(uno.contains("Angelica y Angélica"), "quedó {uno:?}");
+    }
+
+    #[test]
+    fn apply_saltea_el_archivo_que_cambio_desde_el_preview() {
+        let td = scope_con(&[
+            ("libro/1.html", "<p>Angelica dijo</p>"),
+            ("libro/2.html", "<p>Angelica calló</p>"),
+        ]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        // Alguien reescribe el 2 entre el preview y el apply.
+        fs::write(td.path().join("libro/2.html"), "<p>otro texto sin el nombre</p>").unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+        assert_eq!(out.files, 1);
+        assert_eq!(out.skipped_files.len(), 1);
+        assert!(out.skipped_files[0].ends_with("2.html"));
+        // Y no lo pisó.
+        let dos = fs::read_to_string(td.path().join("libro/2.html")).unwrap();
+        assert_eq!(dos, "<p>otro texto sin el nombre</p>");
+    }
+
+    #[test]
+    fn apply_deja_el_snapshot_con_los_originales() {
+        let td = scope_con(&[("libro/1.html", "<p>Angelica dijo</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+        let snap = td.path().join(".twriter/undo").join(&out.snapshot_id);
+        assert!(snap.join("manifest.json").exists());
+        let original = fs::read_to_string(snap.join("libro/1.html")).unwrap();
+        assert!(original.contains("Angelica dijo"), "el snapshot guarda el previo");
+    }
+
+    #[test]
+    fn apply_borra_el_snapshot_anterior() {
+        let td = scope_con(&[("libro/1.html", "<p>uno uno</p>")]);
+        let pv1 = preview_scope(td.path(), "uno", &ops(false, true)).unwrap();
+        let a = aplicar_t(td.path(), "uno", &ops(false, true), edits_de(&pv1), "dos").unwrap();
+        let pv2 = preview_scope(td.path(), "dos", &ops(false, true)).unwrap();
+        let b = aplicar_t(td.path(), "dos", &ops(false, true), edits_de(&pv2), "tres").unwrap();
+        assert_ne!(a.snapshot_id, b.snapshot_id);
+        let undo_dir = td.path().join(".twriter/undo");
+        let quedan: Vec<_> = fs::read_dir(&undo_dir).unwrap().filter_map(|e| e.ok()).collect();
+        assert_eq!(quedan.len(), 1, "solo se guarda el último");
+    }
+
+    #[test]
+    fn apply_actualiza_palabras_en_stats() {
+        let td = scope_con(&[("libro/1.html", "<p>dijo no obstante que sí</p>")]);
+        let pv = preview_scope(td.path(), "no obstante", &ops(false, true)).unwrap();
+        aplicar_t(td.path(), "no obstante", &ops(false, true), edits_de(&pv), "pero").unwrap();
+        let stats = crate::stats::read_stats(td.path());
+        let stat = stats.get("libro/1.html").expect("stats para el capítulo");
+        assert_eq!(stat.palabras, 4, "«dijo pero que sí» son 4 palabras");
+        assert!(stat.ultima_edicion.is_some());
+    }
+
+    #[test]
+    fn apply_sin_edits_no_hace_nada() {
+        let td = scope_con(&[("libro/1.html", "<p>Angelica</p>")]);
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), vec![], "Angélica").unwrap();
+        assert_eq!(out.files, 0);
+        assert!(out.snapshot_id.is_empty(), "sin escrituras no hay snapshot");
+        assert!(!td.path().join(".twriter/undo").exists());
     }
 }
