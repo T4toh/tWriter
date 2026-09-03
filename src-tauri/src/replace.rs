@@ -276,7 +276,7 @@ pub fn ubicar(map: &PlainMap, plain_start: usize, plain_end: usize) -> Ubicacion
 /// Aplica los reemplazos sobre el HTML. Ordena los ranges y hace el splice de
 /// ATRÁS PARA ADELANTE: si fuera al revés, el primer reemplazo de largo
 /// distinto desfasaría todos los ranges siguientes.
-pub fn aplicar_ranges(
+fn aplicar_ranges(
     html: &str,
     mut ranges: Vec<(usize, usize)>,
     replacement: &str,
@@ -1699,6 +1699,31 @@ mod tests {
         assert_eq!(out.occurrences, 1);
         let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
         assert!(uno.contains("Angelica y Angélica"), "quedó {uno:?}");
+    }
+
+    /// La premisa de la que depende el sembrado de `deselected` en el
+    /// frontend: el id lleva el `html_start`, así que el primer reemplazo
+    /// corre el id de TODA ocurrencia posterior. Si esto deja de ser cierto,
+    /// aquel sembrado se puede simplificar; mientras sea cierto, sacarlo
+    /// resucita prendida la ocurrencia que el autor destildó.
+    #[test]
+    fn tras_aplicar_una_los_ids_de_las_siguientes_se_corren() {
+        let td = scope_con(&[("libro/1.html", "<p>Angelica fue. La novela Angelica de otro.</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let segunda_antes = pv.groups[0].occurrences[1].id.clone();
+        // Solo la primera: "Angélica" es un byte más larga que "Angelica".
+        let primera = pv.groups[0].occurrences[0].clone();
+        let edits = vec![FileEdit {
+            path: pv.groups[0].path.clone(),
+            ranges: vec![(primera.html_start, primera.html_end)],
+        }];
+        aplicar_t(td.path(), "Angelica", &ops(false, true), edits, "Angélica").unwrap();
+        let pv2 = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        assert_eq!(pv2.total, 1, "la sobreviviente sigue ahí");
+        assert_ne!(
+            pv2.groups[0].occurrences[0].id, segunda_antes,
+            "el id de la sobreviviente tiene que haber cambiado de offset"
+        );
     }
 
     #[test]

@@ -476,6 +476,16 @@ export class ReplaceService {
       }
       this.debug.info('replace', 'undo', JSON.stringify(out));
       await this.runPreview();
+      // Mismo sembrado que en `apply()`, por el motivo espejo: `deselected`
+      // viene cargado con los ids POST-apply, que no son los que reaparecen
+      // cuando el undo devuelve los originales. El filtro contra los vivos los
+      // tira todos y el panel volvería con TODO tildado y el botón armado
+      // sobre las 22 ocurrencias, incluida la que el autor había excluido a
+      // mano. Tras deshacer, el estado de selección anterior ya no aplica:
+      // arrancar con nada seleccionado es la única lectura segura.
+      this.deselected.set(
+        new Set(this.groups().flatMap((g) => g.occurrences.map((o) => o.id))),
+      );
     } catch (err) {
       // Si el snapshot ya no existe (carpeta borrada a mano, o cambio de
       // root — `UndoInfo` no recuerda el root y acá arriba usamos el actual),
