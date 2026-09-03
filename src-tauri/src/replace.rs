@@ -978,6 +978,96 @@ pub fn replace_apply(
     )
 }
 
+#[derive(Serialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UndoOutcome {
+    pub restored: usize,
+    /// Paths que se editaron DESPUÉS del reemplazo. No se pisaron; el panel
+    /// los muestra y pide confirmación para forzarlos.
+    pub blocked: Vec<String>,
+}
+
+/// Restaura el snapshot. Ver el contexto de la Task 4: el guard de mtime es lo
+/// que evita comerse las ediciones posteriores al reemplazo.
+pub fn deshacer(
+    root: &Path,
+    snapshot_id: &str,
+    force_paths: &[String],
+    ultima_edicion: &str,
+) -> Result<UndoOutcome, String> {
+    let snap_dir = root.join(UNDO_SUBDIR).join(snapshot_id);
+    let manifest_path = snap_dir.join("manifest.json");
+    if !manifest_path.exists() {
+        return Err(format!("no encontré el snapshot {snapshot_id}"));
+    }
+    let raw = std::fs::read_to_string(&manifest_path)
+        .map_err(|e| format!("leer manifest de {snapshot_id}: {e}"))?;
+    let manifest: SnapshotManifest = serde_json::from_str(&raw)
+        .map_err(|e| format!("manifest de {snapshot_id} ilegible: {e}"))?;
+
+    let mut out = UndoOutcome::default();
+    let mut stats = crate::stats::read_stats(root);
+    for f in &manifest.files {
+        let destino = root.join(&f.rel);
+        let origen = snap_dir.join(&f.rel);
+        let destino_str = destino.to_string_lossy().into_owned();
+        let forzado = force_paths.iter().any(|p| p == &destino_str);
+        // `mtime_after_apply == 0` es el sentinel de "no se pudo registrar el
+        // mtime" que deja `replace_apply` (ver el doc del campo en replace.rs).
+        // Ahí el capítulo SÍ hay que restaurarlo: puede estar escrito, o
+        // truncado por un fallo de escritura, y es justo cuando el autor más
+        // necesita deshacer. Sin esta rama el guard lo bloquearía siempre,
+        // porque cualquier archivo existente tiene mtime > 0.
+        let editado_despues =
+            f.mtime_after_apply != 0 && mtime_epoch(&destino) > f.mtime_after_apply;
+        if !forzado && destino.exists() && editado_despues {
+            out.blocked.push(destino_str);
+            continue;
+        }
+        let contenido = std::fs::read_to_string(&origen)
+            .map_err(|e| format!("leer snapshot {}: {}", origen.display(), e))?;
+        crate::fs::write_chapter(destino_str, contenido.clone())?;
+        out.restored += 1;
+        stats.insert(
+            f.rel.clone(),
+            crate::stats::ChapterStat {
+                palabras: crate::import::count_words(&contenido),
+                ultima_edicion: Some(ultima_edicion.to_string()),
+            },
+        );
+    }
+    crate::stats::write_stats(root, &stats)?;
+
+    // El snapshot se va solo si no quedó nada bloqueado: si quedó, el autor
+    // todavía puede querer forzar esos.
+    if out.blocked.is_empty() {
+        let _ = std::fs::remove_dir_all(&snap_dir);
+    }
+    tracing::info!(
+        target: "replace",
+        snapshot = snapshot_id,
+        restored = out.restored,
+        blocked = out.blocked.len(),
+        "replace_undo"
+    );
+    Ok(out)
+}
+
+#[tauri::command]
+pub fn replace_undo(
+    root: String,
+    snapshot_id: String,
+    force_paths: Vec<String>,
+    ultima_edicion: String,
+) -> Result<UndoOutcome, String> {
+    deshacer(
+        Path::new(&root),
+        snapshot_id.as_str(),
+        &force_paths,
+        ultima_edicion.as_str(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1236,6 +1326,22 @@ mod tests {
             fs::write(&p, html).unwrap();
         }
         td
+    }
+
+    fn deshacer_t(
+        root: &Path,
+        snapshot_id: &str,
+        force_paths: &[String],
+    ) -> Result<UndoOutcome, String> {
+        deshacer(root, snapshot_id, force_paths, AHORA)
+    }
+
+    /// Empuja el mtime de un archivo 10 s al futuro. Escribir dos veces dentro
+    /// del mismo segundo deja el mtime igual y el guard no se ejercitaría.
+    fn forzar_mtime_futuro(path: &Path) {
+        let t = SystemTime::now() + std::time::Duration::from_secs(10);
+        let f = fs::File::options().write(true).open(path).unwrap();
+        f.set_modified(t).unwrap();
     }
 
     #[test]
@@ -1867,5 +1973,65 @@ mod tests {
         assert_eq!(out.files, 0);
         assert!(out.snapshot_id.is_empty(), "sin escrituras no hay snapshot");
         assert!(!td.path().join(".twriter/undo").exists());
+    }
+
+    #[test]
+    fn undo_restaura_los_originales() {
+        let td = scope_con(&[("libro/1.html", "<p>Angelica dijo</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+        let u = deshacer_t(td.path(), &out.snapshot_id, &[]).unwrap();
+        assert_eq!(u.restored, 1);
+        assert!(u.blocked.is_empty());
+        let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
+        assert!(uno.contains("Angelica dijo"), "volvió al original: {uno:?}");
+    }
+
+    #[test]
+    fn undo_borra_el_snapshot_al_terminar() {
+        let td = scope_con(&[("libro/1.html", "<p>Angelica</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+        deshacer_t(td.path(), &out.snapshot_id, &[]).unwrap();
+        assert!(!td.path().join(".twriter/undo").join(&out.snapshot_id).exists());
+    }
+
+    #[test]
+    fn undo_no_pisa_un_archivo_editado_despues() {
+        let td = scope_con(&[("libro/1.html", "<p>Angelica dijo</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+        // El autor sigue escribiendo sobre el capítulo ya reemplazado.
+        let cap = td.path().join("libro/1.html");
+        fs::write(&cap, "<p>Angélica dijo, y después siguió</p>").unwrap();
+        forzar_mtime_futuro(&cap);
+        let u = deshacer_t(td.path(), &out.snapshot_id, &[]).unwrap();
+        assert_eq!(u.restored, 0);
+        assert_eq!(u.blocked.len(), 1);
+        let actual = fs::read_to_string(&cap).unwrap();
+        assert!(actual.contains("y después siguió"), "no se pisó la edición nueva");
+    }
+
+    #[test]
+    fn undo_pisa_si_el_usuario_lo_fuerza() {
+        let td = scope_con(&[("libro/1.html", "<p>Angelica dijo</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+        let cap = td.path().join("libro/1.html");
+        fs::write(&cap, "<p>Angélica dijo, y después siguió</p>").unwrap();
+        forzar_mtime_futuro(&cap);
+        let forzar = vec![cap.to_string_lossy().into_owned()];
+        let u = deshacer_t(td.path(), &out.snapshot_id, &forzar).unwrap();
+        assert_eq!(u.restored, 1);
+        assert!(u.blocked.is_empty());
+        let actual = fs::read_to_string(&cap).unwrap();
+        assert!(actual.contains("Angelica dijo"));
+    }
+
+    #[test]
+    fn undo_de_un_snapshot_que_no_existe_es_error_claro() {
+        let td = scope_con(&[("libro/1.html", "<p>x</p>")]);
+        let err = deshacer_t(td.path(), "undo-inexistente", &[]).unwrap_err();
+        assert!(err.contains("undo-inexistente"), "el error nombra el snapshot: {err}");
     }
 }
