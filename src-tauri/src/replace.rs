@@ -392,6 +392,14 @@ pub fn preview_scope(
     }
     let paths = crate::audit::chapter_paths(scope)?;
     for path in paths {
+        // Este chequeo solo dispara cuando queda al menos un archivo sin
+        // procesar (si el tope se completa justo con el último, el `for`
+        // termina solo y nunca vuelve a evaluar esto). Caso borde aceptado:
+        // si los archivos que quedan sin escanear resultan no tener ninguna
+        // ocurrencia, esto igual marca `truncated`, porque no hay forma de
+        // saberlo sin escanearlos — que es justo lo que el tope evita. La
+        // flag sigue siendo honesta: significa "quedaron archivos sin
+        // escanear", no "se descartó una ocurrencia real".
         if pv.groups.len() >= MAX_ARCHIVOS || pv.total >= MAX_OCURRENCIAS {
             pv.truncated = true;
             break;
@@ -443,9 +451,6 @@ pub fn preview_scope(
             occurrences,
             skipped,
         });
-        if pv.total >= MAX_OCURRENCIAS || pv.groups.len() >= MAX_ARCHIVOS {
-            pv.truncated = true;
-        }
     }
     tracing::info!(
         target: "replace",
@@ -826,5 +831,29 @@ mod tests {
         let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
         assert!(pv.truncated);
         assert!(pv.groups.len() <= MAX_ARCHIVOS);
+    }
+
+    #[test]
+    fn el_tope_de_ocurrencias_exacto_no_marca_truncado() {
+        // Borde: el scope tiene JUSTO MAX_OCURRENCIAS, ni una más. No se
+        // descartó nada, así que truncated tiene que quedar en false.
+        let html = format!("<p>{}</p>", "a ".repeat(MAX_OCURRENCIAS));
+        let td = scope_con(&[("libro/1.html", html.as_str())]);
+        let pv = preview_scope(td.path(), "a", &ops(false, true)).unwrap();
+        assert_eq!(pv.total, MAX_OCURRENCIAS);
+        assert!(!pv.truncated, "no se descartó nada, no debe marcarse truncado");
+    }
+
+    #[test]
+    fn el_tope_de_archivos_exacto_no_marca_truncado() {
+        // Borde: JUSTO MAX_ARCHIVOS capítulos con match, ni uno más.
+        let caps: Vec<(String, String)> = (0..MAX_ARCHIVOS)
+            .map(|i| (format!("libro/{i}.html"), "<p>Angelica</p>".to_string()))
+            .collect();
+        let refs: Vec<(&str, &str)> = caps.iter().map(|(p, h)| (p.as_str(), h.as_str())).collect();
+        let td = scope_con(&refs);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        assert_eq!(pv.groups.len(), MAX_ARCHIVOS);
+        assert!(!pv.truncated, "no se descartó nada, no debe marcarse truncado");
     }
 }
