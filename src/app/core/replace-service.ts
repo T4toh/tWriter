@@ -58,6 +58,11 @@ export interface UndoInfo {
   replacement: string;
   files: number;
   occurrences: number;
+  /** Paths efectivamente escritos por el apply que generó este snapshot.
+   *  El undo refresca ESTOS paths (no `groups()`: para cuando el undo corre,
+   *  el needle ya no matchea nada y el preview quedó vacío — usar `groups()`
+   *  ahí deja el editor mostrando el reemplazo con `dirty=false`). */
+  paths: string[];
   /** Paths que el undo se negó a pisar. Por default es "se editaron después
    *  del reemplazo"; si `suspect` está en true, es "el registro quedó
    *  incompleto y no sé si es seguro". La copy tiene que distinguirlos. */
@@ -65,12 +70,32 @@ export interface UndoInfo {
   suspect: boolean;
 }
 
+/** Sella un preview con los parámetros que lo produjeron. `apply()` lo
+ *  compara contra los valores actuales antes de escribir: si no coinciden
+ *  (un preview viejo llegó tarde y repobló `groups` durante la ventana del
+ *  debounce), se niega — mejor que un flag `pendiente`, porque cubre
+ *  cualquier desincronización entre lo que se ve y lo que se va a escribir,
+ *  no solo la del debounce. */
+interface PreviewSeal {
+  needle: string;
+  scopePath: string;
+  caseSensitive: boolean;
+  wholeWord: boolean;
+}
+
 /** Por qué el reemplazo no se puede correr con la configuración actual. */
 export type MotivoBloqueo =
   | 'sinQuery'
   | 'sinCambio'
   | 'scopeNotas'
-  | 'sinContexto'
+  /** Scope "Archivo actual" sin capítulo abierto (o abierto algo no-.html), o
+   *  scope Saga/Libro sin ningún capítulo abierto — en los dos casos el
+   *  remedio es el mismo: abrir un capítulo. */
+  | 'sinCapitulo'
+  /** Scope Saga/Libro con un capítulo abierto que no cuelga de ese ancestro
+   *  (vive en una carpeta suelta). Distinto de `sinCapitulo`: acá SÍ hay un
+   *  capítulo, pero el scope elegido no lo puede usar. */
+  | 'sinAncestro'
   | 'sinSeleccion'
   | null;
 
@@ -110,8 +135,17 @@ export class ReplaceService {
   readonly motivoBloqueo = computed<MotivoBloqueo>(() => {
     if (!this.search.query().trim()) return 'sinQuery';
     if (this.search.query().trim() === this.replacement()) return 'sinCambio';
-    if (this.scopeBloqueado()) return 'scopeNotas';
-    if (this.search.scopeNeedsContext()) return 'sinContexto';
+    const s = this.settings.searchScope();
+    if (s === 'notes') return 'scopeNotas';
+    if (s === 'current' && this.scopeBloqueado()) return 'sinCapitulo';
+    if (s === 'saga' || s === 'book') {
+      const activo = this.chapter.panes[0].active();
+      if (activo == null) return 'sinCapitulo';
+      // Consultamos resolveScopePath() en vez de deducirlo: es la misma
+      // función que arma el path real que se manda a `replace_preview`, así
+      // que no hay forma de que este chequeo y el que realmente corre diverjan.
+      if (this.resolveScopePath() === null) return 'sinAncestro';
+    }
     if (this.counts().selected === 0) return 'sinSeleccion';
     return null;
   });
@@ -122,6 +156,9 @@ export class ReplaceService {
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private requestId = 0;
+  /** Sello del último preview que sí se aplicó a `groups`. Null mientras
+   *  `groups` está vacío o desactualizado respecto de la config actual. */
+  private previewSeal: PreviewSeal | null = null;
 
   constructor() {
     // El preview depende del needle, los toggles y el scope. NO del
@@ -147,6 +184,10 @@ export class ReplaceService {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
+    // Invalida cualquier preview en vuelo: su `id` capturado ya no va a
+    // matchear `requestId`, así que su respuesta tardía se descarta.
+    this.requestId++;
+    this.previewSeal = null;
     this.groups.set([]);
     this.deselected.set(new Set());
     this.error.set(null);
@@ -180,9 +221,16 @@ export class ReplaceService {
   }
 
   private async runPreview(): Promise<void> {
+    // `id` se toma ACÁ, antes de cualquier early return: así, aunque este
+    // llamado corte por needle vacío o scope sin resolver, invalida a
+    // cualquier preview anterior en vuelo (su `id` capturado deja de
+    // matchear `requestId`) y su respuesta tardía no puede repoblar `groups`
+    // con el scope/needle viejo.
+    const id = ++this.requestId;
     const needle = this.search.query().trim();
     if (!needle || this.scopeBloqueado()) {
       this.groups.set([]);
+      this.previewSeal = null;
       this.totalSkipped.set(0);
       this.truncated.set(false);
       return;
@@ -190,9 +238,11 @@ export class ReplaceService {
     const scopePath = this.resolveScopePath();
     if (!scopePath) {
       this.groups.set([]);
+      this.previewSeal = null;
       return;
     }
-    const id = ++this.requestId;
+    const caseSensitive = this.settings.replaceCaseSensitive();
+    const wholeWord = this.settings.replaceWholeWord();
     this.previewing.set(true);
     this.error.set(null);
     try {
@@ -202,11 +252,12 @@ export class ReplaceService {
       const pv = await invoke<ReplacePreview>('replace_preview', {
         scopePath,
         needle,
-        caseSensitive: this.settings.replaceCaseSensitive(),
-        wholeWord: this.settings.replaceWholeWord(),
+        caseSensitive,
+        wholeWord,
       });
       if (id !== this.requestId) return;
       this.groups.set(pv.groups);
+      this.previewSeal = { needle, scopePath, caseSensitive, wholeWord };
       this.totalSkipped.set(pv.totalSkipped);
       this.truncated.set(pv.truncated);
       // Las ocurrencias que ya no existen se van del set de apagadas, así el
@@ -217,6 +268,7 @@ export class ReplaceService {
       if (id !== this.requestId) return;
       this.error.set(String(err));
       this.groups.set([]);
+      this.previewSeal = null;
       this.debug.error('replace', `preview falló: ${err}`);
     } finally {
       if (id === this.requestId) this.previewing.set(false);
@@ -246,6 +298,24 @@ export class ReplaceService {
     if (!root) return;
     const needle = this.search.query().trim();
     const replacement = this.replacement();
+    const scopePath = this.resolveScopePath();
+    const caseSensitive = this.settings.replaceCaseSensitive();
+    const wholeWord = this.settings.replaceWholeWord();
+    // `groups` puede venir de un preview viejo que ganó la carrera del
+    // requestId antes de sellarse (o que el debounce todavía no reemplazó).
+    // Si lo que ve el autor no coincide con la config actual, no escribimos:
+    // mejor un click que no hace nada que escribir fuera del scope elegido.
+    const seal = this.previewSeal;
+    if (
+      !seal ||
+      seal.needle !== needle ||
+      seal.scopePath !== scopePath ||
+      seal.caseSensitive !== caseSensitive ||
+      seal.wholeWord !== wholeWord
+    ) {
+      this.debug.warn('replace', 'apply: preview desactualizado respecto de la config actual, no escribo');
+      return;
+    }
     const edits: FileEdit[] = editsDesdeSeleccion(this.groups(), this.deselected());
     if (edits.length === 0) return;
     this.applying.set(true);
@@ -254,15 +324,16 @@ export class ReplaceService {
       const out = await invoke<ReplaceOutcome>('replace_apply', {
         root,
         needle,
-        caseSensitive: this.settings.replaceCaseSensitive(),
-        wholeWord: this.settings.replaceWholeWord(),
+        caseSensitive,
+        wholeWord,
         edits,
         replacement,
         // Rust no tiene crate de fechas; el formato lo fija el frontend, igual
         // que en cada save de capítulo (`chapter-service.ts:199`).
         ultimaEdicion: new Date().toISOString(),
       });
-      await this.afterWrite(edits.map((e) => e.path));
+      const paths = edits.map((e) => e.path);
+      await this.afterWrite(paths);
       if (out.snapshotId) {
         this.lastUndo.set({
           snapshotId: out.snapshotId,
@@ -270,14 +341,17 @@ export class ReplaceService {
           replacement,
           files: out.files,
           occurrences: out.occurrences,
+          paths,
           blocked: [],
           suspect: false,
         });
       }
-      const verbo = replacement ? 'Reemplacé' : 'Borré';
-      this.toast.success(
-        `${verbo} ${out.occurrences} en ${out.files} capítulo${out.files === 1 ? '' : 's'}.`,
-      );
+      if (out.files > 0) {
+        const verbo = replacement ? 'Reemplacé' : 'Borré';
+        this.toast.success(
+          `${verbo} ${out.occurrences} en ${out.files} capítulo${out.files === 1 ? '' : 's'}.`,
+        );
+      }
       if (out.skippedFiles.length > 0) {
         this.toast.warn(
           `${out.skippedFiles.length} capítulo${out.skippedFiles.length === 1 ? '' : 's'} cambiaron desde el preview: no los toqué.`,
@@ -285,10 +359,12 @@ export class ReplaceService {
       }
       if (out.failedFiles.length > 0) {
         // Se escribieron algunos y otros no. El autor tiene que saberlo Y saber
-        // que Deshacer cubre los que sí se escribieron.
+        // que Deshacer cubre los que sí se escribieron. `failedFiles` no son
+        // todos capítulos —acá también cae `stats.json` o el manifest del
+        // snapshot— así que la copy dice "archivo", como la rama del undo.
         this.toast.error(
-          `No pude escribir ${out.failedFiles.length} capítulo${out.failedFiles.length === 1 ? '' : 's'}. ` +
-            `Los que sí cambiaron se pueden deshacer.`,
+          `No pude escribir ${out.failedFiles.length} archivo${out.failedFiles.length === 1 ? '' : 's'}. ` +
+            `Los ${out.files} capítulo${out.files === 1 ? '' : 's'} que sí se escribieron se pueden deshacer.`,
         );
         this.debug.error('replace', 'fallos de escritura', out.failedFiles.join('\n'));
       }
@@ -316,24 +392,31 @@ export class ReplaceService {
         forcePaths,
         ultimaEdicion: new Date().toISOString(),
       });
-      await this.afterWrite(this.groups().map((g) => g.path));
+      // `info.paths`, no `groups()`: para cuando el undo corre, el needle ya
+      // no matchea nada y el preview está vacío. Refrescar por `groups()`
+      // dejaba el editor mostrando el reemplazo con `dirty=false` — el
+      // próximo autosave lo reescribía y el undo se revertía solo.
+      await this.afterWrite(info.paths);
       // `failed` y `blocked` pueden venir poblados los DOS. Son avisos
       // distintos y hay que dar los dos: si solo se muestra el error de
       // escritura, el autor nunca se entera de que hay capítulos esperando
-      // su confirmación.
-      if (out.failed.length > 0) {
+      // su confirmación. Un solo `set` cubre las dos ramas — antes se pisaba
+      // dos veces con el mismo valor cuando venían juntos.
+      if (out.failed.length > 0 || out.blocked.length > 0) {
         // El snapshot sobrevive, así que reintentar es posible: no limpiar
         // `lastUndo` ni decirle al autor que terminó. `failed` no son todos
         // capítulos (puede traer `stats.json`), así que no se cuentan como
-        // tales.
-        this.lastUndo.set({ ...info, blocked: out.blocked });
+        // tales. `suspect` viaja acá porque es lo que lee el botón "Pisarlos
+        // igual" — el toast dura 6s, esto persiste.
+        this.lastUndo.set({ ...info, blocked: out.blocked, suspect: out.suspect });
+      }
+      if (out.failed.length > 0) {
         this.toast.error(
           `Deshice ${out.restored}. Fallaron ${out.failed.length} archivo${out.failed.length === 1 ? '' : 's'}; el snapshot sigue disponible para reintentar.`,
         );
         this.debug.error('replace', 'fallos al deshacer', out.failed.join('\n'));
       }
       if (out.blocked.length > 0) {
-        this.lastUndo.set({ ...info, blocked: out.blocked });
         this.toast.warn(
           out.suspect
             ? `Deshice ${out.restored}. El registro de este reemplazo quedó incompleto, así que no toqué ${out.blocked.length} capítulo${out.blocked.length === 1 ? '' : 's'}: no puedo saber si es seguro restaurarlos.`
@@ -347,6 +430,13 @@ export class ReplaceService {
       this.debug.info('replace', 'undo', JSON.stringify(out));
       await this.runPreview();
     } catch (err) {
+      // Si el snapshot ya no existe (carpeta borrada a mano, o cambio de
+      // root — `UndoInfo` no recuerda el root y acá arriba usamos el actual),
+      // no dejar el botón "Deshacer" ofrecido para siempre sobre algo
+      // inexistente.
+      if (String(err).toLowerCase().includes('no encontré el snapshot')) {
+        this.lastUndo.set(null);
+      }
       this.toast.error(`Deshacer: ${err}`);
       this.debug.error('replace', `undo falló: ${err}`);
     } finally {
@@ -354,12 +444,15 @@ export class ReplaceService {
     }
   }
 
-  /** Refresca todo lo que quedó viejo tras escribir en disco. Mismo orden que
-   *  usa `QuotesFixService` después de un fix en lote. */
+  /** Refresca lo que quedó viejo tras escribir en disco: el buffer del
+   *  editor si alguno de estos paths está abierto, el árbol (palabras /
+   *  `ultima_edicion` cambiaron) y el status de git. NO toca el índice de
+   *  búsqueda: `fs::write_chapter` ya reindexa cada path que escribe del lado
+   *  Rust, así que un segundo camino acá sería trabajo redundante — y
+   *  serializaría un invoke por archivo adentro de `applying`. */
   private async afterWrite(paths: string[]): Promise<void> {
     await this.chapter.reloadIfChanged(paths.map((path) => ({ path, kind: 'modified' as const })));
     await this.project.loadTree();
     void this.git.refreshStatus();
-    await this.search.applyPathChanges(paths.map((path) => ({ path, kind: 'modified' as const })));
   }
 }
