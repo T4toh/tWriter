@@ -96,6 +96,12 @@ export type MotivoBloqueo =
    *  (vive en una carpeta suelta). Distinto de `sinCapitulo`: acá SÍ hay un
    *  capítulo, pero el scope elegido no lo puede usar. */
   | 'sinAncestro'
+  /** Hay un preview en camino (debounce todavía corriendo, o el invoke ya en
+   *  vuelo) y `groups`/`counts` todavía no reflejan la config actual. Sin
+   *  este caso, la ventana de 250ms del debounce dejaba el botón habilitado
+   *  con `counts().selected === 0` (preview viejo o vacío) y el sello interno
+   *  de `apply()` cortaba en silencio al click. */
+  | 'sinPreview'
   | 'sinSeleccion'
   | null;
 
@@ -113,6 +119,11 @@ export class ReplaceService {
   readonly groups = signal<ReplaceGroup[]>([]);
   readonly deselected = signal<Set<string>>(new Set());
   readonly previewing = signal<boolean>(false);
+  /** True entre `schedulePreview()` y que `previewing()` se prenda: cubre la
+   *  ventana del debounce donde todavía no se disparó el invoke. Se apaga al
+   *  arrancar `runPreview()`, ya sea que siga al invoke o corte antes por
+   *  needle vacío / scope sin resolver. */
+  readonly pending = signal<boolean>(false);
   readonly applying = signal<boolean>(false);
   readonly error = signal<string | null>(null);
   readonly truncated = signal<boolean>(false);
@@ -146,6 +157,7 @@ export class ReplaceService {
       // que no hay forma de que este chequeo y el que realmente corre diverjan.
       if (this.resolveScopePath() === null) return 'sinAncestro';
     }
+    if (this.pending() || this.previewing()) return 'sinPreview';
     if (this.counts().selected === 0) return 'sinSeleccion';
     return null;
   });
@@ -194,6 +206,7 @@ export class ReplaceService {
     this.truncated.set(false);
     this.totalSkipped.set(0);
     this.previewing.set(false);
+    this.pending.set(false);
   }
 
   setReplacement(value: string): void {
@@ -214,6 +227,7 @@ export class ReplaceService {
 
   private schedulePreview(): void {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    this.pending.set(true);
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
       void this.runPreview();
@@ -221,6 +235,11 @@ export class ReplaceService {
   }
 
   private async runPreview(): Promise<void> {
+    // La ventana de "pending" termina acá, corra o no el invoke: si el
+    // needle o el scope cortan antes (ver early returns de abajo), no hay
+    // preview en camino y el guard de `motivoBloqueo` no tiene por qué seguir
+    // mostrando "Buscando ocurrencias…".
+    this.pending.set(false);
     // `id` se toma ACÁ, antes de cualquier early return: así, aunque este
     // llamado corte por needle vacío o scope sin resolver, invalida a
     // cualquier preview anterior en vuelo (su `id` capturado deja de
