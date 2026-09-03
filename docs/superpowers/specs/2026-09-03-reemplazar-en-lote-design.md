@@ -1,7 +1,7 @@
 # Reemplazar en lote: buscar y reemplazar a través del repo, sagas y libros
 
 **Fecha**: 2026-09-03
-**Estado**: diseño aprobado, pendiente de plan de implementación
+**Estado**: diseño aprobado. Plan en `docs/superpowers/plans/2026-09-03-reemplazar-en-lote.md`
 
 ## Problema
 
