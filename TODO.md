@@ -1839,37 +1839,60 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   1. El flujo básico: `Angelica` → `Angélica` con scope "Todo el repo", que
      el conteo del preview coincida con lo que se ve en pantalla, y que el
      árbol y el status de git se refresquen solos sin recargar la app.
-  2. **El bloqueo del editor durante el apply**, que es el caso que más costó
+  2. **El EPUB end-to-end**: hacer un reemplazo cuyo texto nuevo contenga un
+     `&` (por ejemplo, reemplazar algo por "Marks & Spencer"), exportar el
+     libro y confirmar que abre en Thorium. Antes el `&` se escribía crudo en
+     el HTML sin escapar — invisible en la app, pero capaz de romper el EPUB
+     con un error de parseo meses después, sin ninguna pista de dónde salió.
+     Ya se escapan `&`/`<`/`>`; esta es la única forma de cerrar el bug del
+     todo, porque no se puede verificar desde los tests.
+  3. **Que la ventana responda mientras se tipea**, con scope "Todo el repo"
+     sobre un repo grande — y sobre todo si vive en Dropbox o iCloud con
+     "optimizar almacenamiento" activado, donde leer un archivo
+     desmaterializado baja de la red. Los tres comandos de Rust corrían en
+     el hilo principal y el preview se dispara cada 250ms escaneando todo el
+     scope en disco, así que antes eso podía congelar la ventana entera sin
+     spinner y sin poder cancelar. Ya van al pool de blocking.
+  4. **El bloqueo del editor durante el apply**, que es el caso que más costó
      cerrar en la review: con un capítulo del scope abierto, disparar un
      reemplazo que lo incluya y, apenas termine (mientras el toast todavía es
      visible), intentar escribir de inmediato — tiene que seguir en
      solo-lectura hasta que el rescan termina del todo. Probar también
      abriendo un capítulo nuevo (o un split) *durante* el apply, y repetir
      con split view abierto en los dos paneles.
-  3. Deshacer: hacer un reemplazo, editar a mano uno de los capítulos
+  5. **La secuencia completa de la exclusión manual**: destildar una
+     ocurrencia → aplicar → el panel tiene que quedar con **todo destildado**
+     y el botón de aplicar muerto (no armado apuntando a lo que ya se
+     excluyó) → tocar **Deshacer** → tiene que volver **todo destildado**
+     también, no todo tildado de nuevo. Antes, el preview posterior a un
+     apply o a un undo volvía con todo tildado, y un click de más
+     re-aplicaba justo lo que el autor había excluido a propósito. Es el
+     caso que más costó cerrar en la review y no tiene test automatizado —
+     vive en un servicio que inyecta `invoke()` y otros siete servicios.
+  6. Deshacer: hacer un reemplazo, editar a mano uno de los capítulos
      tocados, y confirmar que Deshacer dice "se editaron después y no los
      pisé" en vez de pisarlo. Si se puede forzar el otro caso (registro de
      snapshot incompleto), confirmar que el mensaje es el otro ("no sé si es
      seguro restaurar"), no el mismo texto para los dos motivos.
-  4. Deshacer y volver a reemplazar: que el snapshot viejo se borre (solo se
+  7. Deshacer y volver a reemplazar: que el snapshot viejo se borre (solo se
      guarda el último).
-  5. Destildar una ocurrencia suelta (o un capítulo entero, en tri-estado) y
+  8. Destildar una ocurrencia suelta (o un capítulo entero, en tri-estado) y
      confirmar que ese párrafo o capítulo queda intacto.
-  6. Buscar un texto donde cada aparición esté cruzando una cursiva/negrita o
+  9. Buscar un texto donde cada aparición esté cruzando una cursiva/negrita o
      un salto de párrafo (por ejemplo, una palabra que en el libro real
      siempre aparece partida en itálica): el panel tiene que mostrar el
      grupo con el motivo de salteo, no quedar en blanco, y el capítulo no
      debe tener checkbox tildable.
-  7. Reemplazo con "reemplazar por" vacío (el caso "Borrar"): el botón dice
-     "Borrar…" y el resultado/la barra de Deshacer reflejan "(borrado)".
-  8. Cerrar el panel en modo reemplazo por las cuatro vías (✕, Esc, `Ctrl/Cmd+F`,
-     y el mutex que lo cierra al abrir una nota o la auditoría RAE) y
-     reabrirlo: siempre tiene que volver a modo búsqueda normal, nunca
-     quedarse en modo reemplazo escaneando disco en el fondo.
-  9. El header con los 7 botones en un panel angosto — mirar que no quede
-     apretado — y que "Deshacer"/"Pisarlos igual"/el botón de aplicar tengan
-     pinta de botón real, no una caja apretada de ícono.
-  10. **El tri-estado del checkbox de capítulo**: con un grupo donde algunas
+  10. Reemplazo con "reemplazar por" vacío (el caso "Borrar"): el botón dice
+      "Borrar…" y el resultado/la barra de Deshacer reflejan "(borrado)".
+  11. Cerrar el panel en modo reemplazo por las cuatro vías (✕, Esc, `Ctrl/Cmd+F`,
+      y el mutex que lo cierra al abrir una nota o la auditoría RAE) y
+      reabrirlo: siempre tiene que volver a modo búsqueda normal, nunca
+      quedarse en modo reemplazo escaneando disco en el fondo.
+  12. El header con los 7 botones en un panel angosto — mirar que no quede
+      apretado — y que "Deshacer"/"Pisarlos igual"/el botón de aplicar tengan
+      pinta de botón real, no una caja apretada de ícono.
+  13. **El tri-estado del checkbox de capítulo**: con un grupo donde algunas
       ocurrencias están destildadas, confirmar que el checkbox se ve
       `indeterminate` de verdad (la rayita, no tildado ni vacío) — y sobre
       todo, que clickearlo **no** abre ni cierra el `<details>` del grupo
@@ -1881,6 +1904,11 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
       Mac y en WebKitGTK de Arch).
   **Huecos conocidos y cosas deferidas** (están en el ledger de la feature,
   no son sorpresa; ninguna es bloqueante para usarlo con cuidado):
+  - Un texto de reemplazo que contenga `&`, `<` o `>` queda, en lotes
+    posteriores, no reemplazable como string entero (las partes de alrededor
+    sí siguen siéndolo) — el escape corta run igual que cualquier entidad.
+    El panel lo muestra como salteado con su motivo, así que es visible y no
+    silencioso.
   - Un `<` suelto en el HTML se come el texto hasta el próximo `>` de
     cualquier parte del archivo. Es el mismo comportamiento que ya tiene la
     búsqueda (`search.rs`) y se dejó así a propósito: arreglar uno sin el
