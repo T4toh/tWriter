@@ -97,10 +97,17 @@
   }
   @if (results().length > 0) {
     <p class="sp-count">{{ count() }} resultado{{ count() === 1 ? '' : 's' }}</p>
-    @if (partialMatch()) {
-      <p class="sp-status sp-partial">
-        Ningún resultado tiene todas las palabras. Estos tienen alguna.
-      </p>
+    @switch (matchLevel()) {
+      @case ('allWords') {
+        <p class="sp-status sp-partial">
+          Ningún capítulo tiene la frase exacta. Estos tienen todas las palabras, sueltas.
+        </p>
+      }
+      @case ('someWords') {
+        <p class="sp-status sp-partial">
+          Ningún resultado tiene todas las palabras. Estos tienen alguna.
+        </p>
+      }
     }
     <ul class="sp-list">
       @for (group of groups(); track group.path) {

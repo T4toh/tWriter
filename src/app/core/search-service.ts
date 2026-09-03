@@ -40,13 +40,15 @@ export interface SearchHit {
   bm25_score?: number;
 }
 
+/** Qué tan bien matchean los hits devueltos. El panel avisa en los dos niveles
+ *  flojos: sin eso, una lista de resultados mediocres se lee igual que una
+ *  buena. Ver `MatchLevel` en `search.rs`. */
+export type MatchLevel = 'phrase' | 'allWords' | 'someWords';
+
 export interface SearchResult {
   hits: SearchHit[];
   total: number;
-  /** True cuando ningún doc tenía todas las palabras de la query y estos hits
-   *  salen del reintento OR del backend, o sea matchean alguna. El panel lo
-   *  dice: sin el aviso, una lista de parciales se lee igual que una buena. */
-  partialMatch?: boolean;
+  matchLevel?: MatchLevel;
 }
 
 /** Filtro de scope que viaja al backend. Campos vacíos / undefined no filtran. */
@@ -96,8 +98,8 @@ export class SearchService {
   readonly error = signal<string | null>(null);
   readonly reindexing = signal<boolean>(false);
   readonly reindexProgress = signal<ReindexProgress | null>(null);
-  /** Los resultados actuales son parciales (ver `SearchResult.partialMatch`). */
-  readonly partialMatch = signal<boolean>(false);
+  /** Qué tan bien matchean los resultados actuales (ver `MatchLevel`). */
+  readonly matchLevel = signal<MatchLevel>('phrase');
   readonly hasResults = computed(() => this.results().length > 0);
   readonly pendingHighlight = signal<PendingHighlight | null>(null);
   /** Última superficie con foco. Define qué archivo es "el actual" para el
@@ -202,7 +204,7 @@ export class SearchService {
   clear(): void {
     this.query.set('');
     this.results.set([]);
-    this.partialMatch.set(false);
+    this.matchLevel.set('phrase');
     this.error.set(null);
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
@@ -222,7 +224,7 @@ export class SearchService {
     const q = this.query().trim();
     if (!q) {
       this.results.set([]);
-      this.partialMatch.set(false);
+      this.matchLevel.set('phrase');
       this.error.set(null);
       this.loading.set(false);
       return;
@@ -233,7 +235,7 @@ export class SearchService {
     // Scope 'current' es client-side: lee el buffer vivo del editor, no toca
     // tantivy. Esto incluye ediciones sin guardar.
     if (this.settings.searchScope() === 'current') {
-      this.partialMatch.set(false);
+      this.matchLevel.set('phrase');
       this.runCurrentFileSearch(q);
       if (id === this.currentRequestId) this.loading.set(false);
       return;
@@ -250,12 +252,12 @@ export class SearchService {
       });
       if (id !== this.currentRequestId) return;
       this.results.set(res.hits);
-      this.partialMatch.set(res.partialMatch === true);
+      this.matchLevel.set(res.matchLevel ?? 'phrase');
     } catch (err) {
       if (id !== this.currentRequestId) return;
       this.error.set(String(err));
       this.results.set([]);
-      this.partialMatch.set(false);
+      this.matchLevel.set('phrase');
       this.debug.error('search', String(err));
     } finally {
       if (id === this.currentRequestId) this.loading.set(false);

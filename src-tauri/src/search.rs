@@ -822,16 +822,30 @@ fn classify_dir(dir: &Path) -> Option<&'static str> {
     }
 }
 
+/// Qué tan bien matchean los hits que se devuelven. El frontend avisa en los
+/// dos niveles flojos: sin eso, una lista de resultados mediocres se lee igual
+/// que una buena.
+#[derive(Serialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum MatchLevel {
+    /// Los hits contienen la query tal cual. También el caso de una sola
+    /// palabra, donde "la frase" y "la palabra" son lo mismo, y el de las
+    /// queries con operadores, que ya matchean lo que piden.
+    #[default]
+    Phrase,
+    /// Ningún doc tenía la frase entera; estos tienen todas las palabras, pero
+    /// sueltas y posiblemente a párrafos de distancia.
+    AllWords,
+    /// Ningún doc tenía todas las palabras; estos tienen alguna (rescate OR).
+    SomeWords,
+}
+
 #[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResult {
     pub hits: Vec<SearchHit>,
     pub total: usize,
-    /// True cuando el AND del fuzzy no encontró nada y estos hits salen del
-    /// reintento OR, o sea matchean ALGUNA palabra de la query y no todas. El
-    /// frontend lo dice en el panel: sin esto, una lista de parciales es
-    /// indistinguible de una lista de resultados buenos.
-    pub partial_match: bool,
+    pub match_level: MatchLevel,
 }
 
 /// Ejecuta una búsqueda contra el índice activo, con scope/debug opcionales.
@@ -903,10 +917,15 @@ pub fn search_query_impl(
     // tokens normalizados que indexa tantivy, boostamos docs que contienen el
     // literal por encima de los que solo matchean al token plano.
     let raw_lower = q.to_lowercase();
+    // En modo fuzzy comparamos la frase plegando acentos, así `venia` encuentra
+    // `venía`. El fold es length-preserving, así que no desalinea nada.
+    let phrase_needle = if fuzzy { fold_accents(&raw_lower) } else { raw_lower.clone() };
     let has_rich_form = q
         .chars()
         .any(|c| c.is_uppercase() || (!c.is_alphanumeric() && !c.is_whitespace()));
-    let mut hits = Vec::with_capacity(top_docs.len());
+    // `(hit, tiene la frase entera)`. El flag se resuelve acá, donde todavía
+    // está el `content` del doc, y decide el filtro de abajo.
+    let mut scored: Vec<(SearchHit, bool)> = Vec::with_capacity(top_docs.len());
     for (score, addr) in top_docs {
         let doc: TantivyDocument = match searcher.doc(addr) {
             Ok(d) => d,
@@ -932,32 +951,82 @@ pub fn search_query_impl(
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        let exact_hit = has_rich_form && content.to_lowercase().contains(&raw_lower);
-        let final_score = if exact_hit { score * 2.0 } else { score };
+        let content_lower = content.to_lowercase();
+        let haystack = if fuzzy { fold_accents(&content_lower) } else { content_lower };
+        let phrase_hit = !phrase_needle.is_empty() && haystack.contains(&phrase_needle);
+        let final_score = if phrase_hit && has_rich_form { score * 2.0 } else { score };
         // Palabras reales del doc que matchearon (fold/fuzzy). Centran el snippet
         // en la palabra correcta aunque sea un match no-literal y viajan al
         // frontend para el highlight. Si no se resolvió ninguna, caemos a los
         // términos tipeados (caso operadores/phrase, ya literales).
         let matched = resolve_matched_words(&content, &terms, fuzzy);
         let snippet_terms: &[String] = if matched.is_empty() { &terms } else { &matched };
-        hits.push(SearchHit {
-            path,
-            kind,
-            title,
-            snippet: make_snippet(&content, q, snippet_terms),
-            score: final_score,
-            matched_terms: matched,
-            bm25_score: if debug { Some(score) } else { None },
-        });
+        scored.push((
+            SearchHit {
+                path,
+                kind,
+                title,
+                snippet: make_snippet(&content, q, snippet_terms),
+                score: final_score,
+                matched_terms: matched,
+                bm25_score: if debug { Some(score) } else { None },
+            },
+            phrase_hit,
+        ));
     }
     if has_rich_form {
-        hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_by(|a, b| {
+            b.0.score
+                .partial_cmp(&a.0.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
     }
+
+    // Sin hits no hay nada que aclarar: `MatchLevel` default (Phrase) y listo.
+    if scored.is_empty() {
+        return Ok(SearchResult::default());
+    }
+
+    // Filtro de frase. El AND es a nivel DOCUMENTO, así que `Aedan venía
+    // mirando` matchea cualquier capítulo que use las tres palabras por
+    // separado — y con un nombre propio que aparece 13 veces, eso es medio
+    // libro. Si algún doc tiene la frase tal cual, los demás son ruido.
+    //
+    // No aplica con una sola palabra (ahí "frase" y "palabra" son lo mismo) ni
+    // con operadores (`"..."`, `OR`, `-x`, `kind:`), que ya matchean lo que
+    // piden y cuyo literal ni existe en el texto.
+    let multi_word = terms.len() > 1 && is_plain_query(q);
+    let any_phrase = scored.iter().any(|(_, phrase)| *phrase);
+    let (hits, match_level): (Vec<SearchHit>, MatchLevel) = if partial_match {
+        (
+            scored.into_iter().map(|(h, _)| h).collect(),
+            MatchLevel::SomeWords,
+        )
+    } else if multi_word && any_phrase {
+        (
+            scored
+                .into_iter()
+                .filter(|(_, phrase)| *phrase)
+                .map(|(h, _)| h)
+                .collect(),
+            MatchLevel::Phrase,
+        )
+    } else if multi_word {
+        (
+            scored.into_iter().map(|(h, _)| h).collect(),
+            MatchLevel::AllWords,
+        )
+    } else {
+        (
+            scored.into_iter().map(|(h, _)| h).collect(),
+            MatchLevel::Phrase,
+        )
+    };
     let total = hits.len();
     Ok(SearchResult {
         hits,
         total,
-        partial_match,
+        match_level,
     })
 }
 
@@ -1312,18 +1381,88 @@ mod tests {
             "el fallback OR debería traer los docs con 'duendes': {:?}",
             res.hits
         );
-        assert!(
-            res.partial_match,
-            "el rescate OR tiene que marcarse como parcial para que la UI lo diga"
+        assert_eq!(
+            res.match_level,
+            MatchLevel::SomeWords,
+            "el rescate OR tiene que marcarse para que la UI lo diga"
         );
-        // Una query que sí matchea entera NO es parcial.
-        let res = search_query_impl("duendes mansión", 50, None, false, true).unwrap();
-        assert!(!res.hits.is_empty());
-        assert!(!res.partial_match, "el AND que encontró no es parcial");
-        // Sin ningún hit ni por OR, tampoco: no hay nada que aclarar.
+        // Sin ningún hit ni por OR: no hay nada que aclarar.
         let res = search_query_impl("zeppelin trombón", 50, None, false, true).unwrap();
         assert!(res.hits.is_empty(), "no debería matchear nada: {:?}", res.hits);
-        assert!(!res.partial_match, "lista vacía no es un resultado parcial");
+        assert_eq!(res.match_level, MatchLevel::Phrase, "lista vacía no avisa nada");
+    }
+
+    #[test]
+    fn phrase_filter_drops_docs_with_scattered_words() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        // El repro real: un nombre propio repetido hace que el AND a nivel
+        // documento traiga capítulos donde las palabras están desperdigadas.
+        let dir = make_repo_chapters(&[
+            ("1", "Aedan venía mirando a Yiri en el carruaje de los Farassi."),
+            ("2", "Aedan entró. Ella venía de la torre. Aedan salió mirando el cielo."),
+            ("3", "Aedan durmió toda la tarde sin hacer nada."),
+        ]);
+        full_reindex(dir.path(), None).unwrap();
+        let res = search_query_impl("Aedan venía mirando", 50, None, false, false).unwrap();
+        assert_eq!(res.match_level, MatchLevel::Phrase);
+        assert_eq!(
+            res.hits.len(),
+            1,
+            "sólo el cap con la frase entera: {:?}",
+            res.hits.iter().map(|h| &h.path).collect::<Vec<_>>()
+        );
+        assert!(res.hits[0].path.ends_with("1.html"));
+    }
+
+    #[test]
+    fn phrase_filter_falls_back_to_all_words_and_says_so() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        // Ningún doc tiene la frase, pero uno tiene las dos palabras: se
+        // devuelve, marcado como AllWords para que el panel lo aclare.
+        let dir = make_repo_chapters(&[
+            ("1", "Aedan entró. Mucho después ella venía de la torre."),
+            ("2", "Aedan durmió toda la tarde."),
+        ]);
+        full_reindex(dir.path(), None).unwrap();
+        let res = search_query_impl("Aedan venía", 50, None, false, false).unwrap();
+        assert_eq!(res.match_level, MatchLevel::AllWords);
+        assert_eq!(res.hits.len(), 1, "el AND deja sólo el cap con las dos: {:?}", res.hits);
+    }
+
+    #[test]
+    fn phrase_filter_skips_single_word_and_operators() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        let dir = make_repo_chapters(&[("1", "los duendes de la mansión encantada")]);
+        full_reindex(dir.path(), None).unwrap();
+        // Una palabra: no hay "frase" que filtrar, y no se avisa nada.
+        let res = search_query_impl("duendes", 50, None, false, false).unwrap();
+        assert!(!res.hits.is_empty());
+        assert_eq!(res.match_level, MatchLevel::Phrase);
+        // Con operadores el literal ni existe en el texto (las comillas no están
+        // en el doc): no se filtra ni se avisa.
+        let res = search_query_impl("\"duendes de la mansión\"", 50, None, false, false).unwrap();
+        assert!(!res.hits.is_empty(), "la phrase query debería matchear");
+        assert_eq!(res.match_level, MatchLevel::Phrase);
+    }
+
+    #[test]
+    fn phrase_filter_folds_accents_in_fuzzy() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        let dir = make_repo_chapters(&[
+            ("1", "Aedan venía mirando el cielo."),
+            ("2", "Aedan entró y mucho después venía mirando otra cosa distinta."),
+        ]);
+        full_reindex(dir.path(), None).unwrap();
+        // Sin tilde y en fuzzy: la frase se compara plegada, así que igual
+        // filtra a los que la tienen.
+        let res = search_query_impl("Aedan venia mirando", 50, None, false, true).unwrap();
+        assert_eq!(res.match_level, MatchLevel::Phrase, "hits: {:?}", res.hits);
+        assert_eq!(res.hits.len(), 1);
+        assert!(res.hits[0].path.ends_with("1.html"));
     }
 
     #[test]
