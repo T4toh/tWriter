@@ -589,7 +589,16 @@ fn mtime_raw(path: &Path) -> Option<SystemTime> {
 /// `/`, así que ningún `rel` legítimo lo trae, y en Windows `..\\x` traversa
 /// igual que `../x`.
 fn rel_valido(rel: &str) -> bool {
-    !rel.split(['/', '\\']).any(|seg| seg.is_empty() || seg == "." || seg == "..")
+    if rel.split(['/', '\\']).any(|seg| seg.is_empty() || seg == "." || seg == "..") {
+        return false;
+    }
+    // Y tiene que ser un capítulo. Sin esto el manifest podía nombrar
+    // `libro/book.json`, `.twriter/stats.json` o `.git/config` —todos ADENTRO
+    // del root, así que el chequeo de traversal no los ve— y `deshacer` los
+    // sobrescribía con el contenido del snapshot; `write_chapter` no valida
+    // extensión. Case-insensitive, aunque `audit::chapter_paths` solo devuelva
+    // `.html` en minúscula: acá el input es el manifest, no el walk.
+    Path::new(rel).extension().is_some_and(|e| e.eq_ignore_ascii_case("html"))
 }
 
 /// Id de snapshot legible y ordenable. Epoch en MILISEGUNDOS: en segundos,
@@ -841,6 +850,17 @@ pub fn aplicar(
                 );
             }
             Err(e) => {
+                // Registrar el mtime IGUAL que en el camino feliz. Dejarlo en
+                // el sentinel `0` —que saltea el guard del undo por diseño—
+                // era el agujero del Critical 1 en la otra rama: el capítulo
+                // quedaba restaurable sin red para siempre, y el Deshacer de
+                // días después le pisaba las ediciones nuevas. Con el mtime
+                // real las tres formas del fallo se resuelven solas: truncado
+                // ⇒ el mtime es el del write ⇒ restaura; intacto ⇒ mtime
+                // viejo ⇒ restaura; editado después ⇒ mtime mayor ⇒ va a
+                // `blocked` y el autor decide. El `0` queda para lo único que
+                // lo motivó: "escribí pero no pude leer el mtime".
+                manifest_files[idx].mtime_after_apply = mtime_epoch(&p.path);
                 out.failed_files.push(format!("{}: {}", p.path.display(), e));
                 break;
             }
@@ -860,6 +880,13 @@ pub fn aplicar(
         // posterior al open (ENOSPC, EIO, quota) deja el capítulo del autor
         // truncado a 0 bytes y este snapshot es la ÚNICA copia del original.
         // Borrarlo acá era pérdida de datos lisa y llana.
+        //
+        // Y de acá depende algo del undo: `deshacer` borra el snapshot cuando
+        // no queda nada bloqueado ni fallado, así que un manifest con
+        // `files: []` lo borraría sin restaurar nada. `aplicar` no puede
+        // producirlo justamente por este `return`: si no se intentó ninguna
+        // escritura sale por acá (y el snapshot se va ahora), y si se intentó
+        // alguna, el filtro del manifest final deja listada al menos esa.
         //
         // OJO, esto es load-bearing: en ESTE punto `failed_files` contiene
         // solo capítulos. Los pushes de `stats.json` y del `manifest.json`
@@ -1016,7 +1043,19 @@ pub struct UndoOutcome {
     /// `ReplaceOutcome::failed_files`). Va por acá y no por un `Err` porque
     /// perder el `UndoOutcome` entero es lo que deja al autor sin saber qué
     /// volvió al original y qué no.
+    ///
+    /// OJO al renderizar: no son todos capítulos. Acá también cae
+    /// `.twriter/stats.json` (si el conteo de palabras no se pudo guardar).
+    /// Un toast que los liste como "capítulos que no se pudieron restaurar"
+    /// miente en ese caso.
     pub failed: Vec<String>,
+    /// `true` cuando lo que hay en `blocked` se bloqueó porque el REGISTRO
+    /// quedó incompleto (residuo del rename del manifest), no porque el
+    /// capítulo se haya editado después del reemplazo. Son dos cosas
+    /// distintas y la UI tiene que decirlas distinto: con esto en `false`,
+    /// "Pisarlos igual" pisa ediciones propias y recientes del autor; con
+    /// esto en `true`, la app no sabe si restaurar es seguro.
+    pub suspect: bool,
 }
 
 /// Restaura el snapshot. Ver el contexto de la Task 4: el guard de mtime es lo
@@ -1061,7 +1100,10 @@ pub fn deshacer(
     let mut stats = crate::stats::read_stats(root);
     for f in &manifest.files {
         if !rel_valido(&f.rel) {
-            out.failed.push(format!("path de capítulo inválido: {}", f.rel));
+            // Formato `"<path>: <error>"`, igual que el resto de `failed` y
+            // que `ReplaceOutcome::failed_files`: al revés, una UI que parta
+            // por el primer `": "` muestra basura.
+            out.failed.push(format!("{}: no es un path de capítulo válido", f.rel));
             continue;
         }
         let destino = root.join(&f.rel);
@@ -1084,6 +1126,7 @@ pub fn deshacer(
         let editado_despues =
             f.mtime_after_apply != 0 && mtime_epoch(&destino) > f.mtime_after_apply;
         if !forzado && (manifest_sospechoso || editado_despues) {
+            out.suspect |= manifest_sospechoso;
             out.blocked.push(destino_str);
             continue;
         }
@@ -2104,6 +2147,7 @@ mod tests {
         let u = deshacer_t(td.path(), &out.snapshot_id, &[]).unwrap();
         assert_eq!(u.restored, 0);
         assert_eq!(u.blocked.len(), 1);
+        assert!(!u.suspect, "bloqueado por la edición del autor, no por el registro");
         let actual = fs::read_to_string(&cap).unwrap();
         assert!(actual.contains("y después siguió"), "no se pisó la edición nueva");
     }
@@ -2294,6 +2338,7 @@ mod tests {
         let u = deshacer_t(td.path(), &out.snapshot_id, &[]).unwrap();
         assert_eq!(u.restored, 0, "manifest sospechoso: nada se restaura solo");
         assert_eq!(u.blocked.len(), 2, "{:?}", u.blocked);
+        assert!(u.suspect, "la UI tiene que poder decir que el registro quedó incompleto");
         assert!(u.failed.is_empty(), "{:?}", u.failed);
         assert!(fs::read_to_string(td.path().join("libro/1.html")).unwrap().contains("Angélica"));
         assert!(snap.join("manifest.json").exists(), "el snapshot queda para poder forzar");
@@ -2336,7 +2381,7 @@ mod tests {
         let u = deshacer_t(&root, "undo-1", &[]).unwrap();
         assert_eq!(u.restored, 0);
         assert_eq!(u.failed.len(), 1, "{:?}", u.failed);
-        assert!(u.failed[0].contains("inválido"), "{:?}", u.failed);
+        assert!(u.failed[0].starts_with("../victima.html: "), "{:?}", u.failed);
         assert_eq!(
             fs::read_to_string(&victima).unwrap(),
             "<p>archivo ajeno</p>\n",
@@ -2371,6 +2416,90 @@ mod tests {
             let err = deshacer_t(td.path(), id, &[]).unwrap_err();
             assert!(err.contains("inválido"), "«{id}» debe rechazarse, dijo: {err}");
         }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn undo_no_pisa_el_capitulo_que_fallo_y_el_autor_edito() {
+        // Important de la round 2, el Critical 1 en la otra rama: el capítulo
+        // que la escritura no pudo tocar quedaba en el manifest con el
+        // sentinel `0`, que saltea el guard del undo — o sea restaurable sin
+        // red para siempre, aunque el autor lo hubiera editado después.
+        use std::os::unix::fs::PermissionsExt;
+        let td = scope_con(&[
+            ("libro/1.html", "<p>Angelica uno</p>"),
+            ("libro/2.html", "<p>Angelica dos</p>"),
+        ]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let dos = td.path().join("libro/2.html");
+        fs::set_permissions(&dos, fs::Permissions::from_mode(0o444)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica");
+        let _ = fs::set_permissions(&dos, fs::Permissions::from_mode(0o644));
+        let out = out.expect("un fallo de escritura reporta, no aborta con Err");
+        assert_eq!(out.files, 1);
+        assert_eq!(out.failed_files.len(), 1, "{:?}", out.failed_files);
+
+        let snap = td.path().join(".twriter/undo").join(&out.snapshot_id);
+        let manifest: SnapshotManifest =
+            serde_json::from_str(&fs::read_to_string(snap.join("manifest.json")).unwrap()).unwrap();
+        let mf = manifest.files.iter().find(|f| f.rel == "libro/2.html").expect("listado");
+        assert_ne!(mf.mtime_after_apply, 0, "el que falló no puede quedar con el sentinel");
+
+        // Días después: el fallo era transitorio, el capítulo quedó intacto y
+        // el autor lo siguió escribiendo.
+        fs::write(&dos, "<p>parrafo nuevo del autor</p>\n").unwrap();
+        forzar_mtime_futuro(&dos);
+        let u = deshacer_t(td.path(), &out.snapshot_id, &[]).unwrap();
+        assert_eq!(u.restored, 1, "solo el que se escribió");
+        assert_eq!(u.blocked, vec![dos.to_string_lossy().into_owned()]);
+        assert!(!u.suspect, "bloqueado por la edición del autor");
+        assert_eq!(
+            fs::read_to_string(&dos).unwrap(),
+            "<p>parrafo nuevo del autor</p>\n",
+            "el Deshacer no puede pisar lo que el autor escribió después"
+        );
+        assert!(snap.join("manifest.json").exists(), "el snapshot queda para poder forzar");
+    }
+
+    #[test]
+    fn undo_no_pisa_lo_que_no_es_un_capitulo() {
+        // Important de la round 2: el chequeo de traversal cierra el "afuera
+        // del root", pero un `rel` corrupto adentro del root sigue siendo
+        // cualquier archivo — `book.json`, `stats.json`, `.git/config`— y
+        // `write_chapter` no valida extensión.
+        let td = scope_con(&[("libro/1.html", "<p>Angelica</p>")]);
+        let book = td.path().join("libro/book.json");
+        fs::write(&book, "{\"titulo\":\"el real\"}\n").unwrap();
+        let snap = td.path().join(".twriter/undo/undo-1");
+        fs::create_dir_all(snap.join("libro")).unwrap();
+        fs::write(snap.join("libro/book.json"), "{\"titulo\":\"pisado\"}\n").unwrap();
+        let manifest = SnapshotManifest {
+            id: "undo-1".to_string(),
+            when: AHORA.to_string(),
+            needle: "Angelica".to_string(),
+            replacement: "Angélica".to_string(),
+            files: vec![SnapshotFile {
+                rel: "libro/book.json".to_string(),
+                occurrences: 1,
+                mtime_after_apply: 0,
+            }],
+        };
+        fs::write(snap.join("manifest.json"), serde_json::to_string_pretty(&manifest).unwrap())
+            .unwrap();
+
+        let u = deshacer_t(td.path(), "undo-1", &[]).unwrap();
+        assert_eq!(u.restored, 0);
+        assert_eq!(u.failed.len(), 1, "{:?}", u.failed);
+        assert!(
+            u.failed[0].starts_with("libro/book.json: "),
+            "formato «<path>: <error>»: {:?}",
+            u.failed
+        );
+        assert_eq!(
+            fs::read_to_string(&book).unwrap(),
+            "{\"titulo\":\"el real\"}\n",
+            "el book.json del autor no se toca"
+        );
     }
 
     #[test]
