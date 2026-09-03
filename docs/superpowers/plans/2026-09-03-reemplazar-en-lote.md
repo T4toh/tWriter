@@ -530,7 +530,7 @@ Agregar `mod replace;` a `src-tauri/src/lib.rs`, en orden alfabético (entre `mo
 - [ ] **Step 4: Correr los tests y verificar que pasan**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml replace::`
-Expected: PASS, 17 tests.
+Expected: PASS, 18 tests de `replace::`.
 
 - [ ] **Step 5: Commit**
 
@@ -1123,10 +1123,16 @@ fn mtime_epoch(path: &Path) -> u64 {
         .unwrap_or(0)
 }
 
-/// Id de snapshot legible y ordenable. Segundos epoch: no hace falta una
-/// dependencia de fechas para nombrar una carpeta.
+/// Id de snapshot legible y ordenable. Epoch en MILISEGUNDOS: en segundos,
+/// dos reemplazos seguidos (o dos casos de test) caen en el mismo id y el
+/// segundo pisaría el snapshot del primero. No hace falta una dependencia de
+/// fechas para nombrar una carpeta.
 fn nuevo_snapshot_id() -> String {
-    format!("undo-{}", ahora_epoch())
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    format!("undo-{millis}")
 }
 
 /// Aplica los reemplazos. Ver el contexto de la Task 3 del plan para el orden
@@ -1813,7 +1819,7 @@ export function editsDesdeSeleccion(
 - [ ] **Step 4: Correr el smoke y verificar que pasa**
 
 Run: `node scripts/run-replace-selection-smoke.mjs`
-Expected: PASS — `replace-selection: 24 aserciones OK, 0 fallaron`
+Expected: PASS — `replace-selection: 25 aserciones OK, 0 fallaron`
 
 - [ ] **Step 5: Commit**
 
