@@ -16,6 +16,7 @@
 //! código especial para cada uno, y garantiza que nunca se pise markup.
 
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 /// Por qué un tramo de plain no se corresponde con el HTML byte a byte.
 /// Viaja al frontend para explicarle al autor qué ocurrencia se salteó.
@@ -299,6 +300,168 @@ pub fn aplicar_ranges(
     out
 }
 
+/// Tope de ocurrencias que se enumeran antes de cortar. Pasado esto no hay
+/// preview útil: son miles de filas que nadie revisa una por una, y la salida
+/// honesta es pedir que se acote el scope o el término.
+const MAX_OCURRENCIAS: usize = 2000;
+const MAX_ARCHIVOS: usize = 500;
+/// Contexto a cada lado del match en el snippet.
+const SNIPPET_CONTEXTO: usize = 120;
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceOccurrence {
+    /// `<path>#<html_start>`. Estable entre previews del mismo archivo, así
+    /// que destildar una ocurrencia sobrevive a un re-preview por debounce.
+    pub id: String,
+    pub snippet: String,
+    pub html_start: usize,
+    pub html_end: usize,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceSkipped {
+    pub snippet: String,
+    pub reason: MotivoSkip,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceGroup {
+    pub path: String,
+    pub title: String,
+    pub occurrences: Vec<ReplaceOccurrence>,
+    pub skipped: Vec<ReplaceSkipped>,
+}
+
+#[derive(Serialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplacePreview {
+    pub groups: Vec<ReplaceGroup>,
+    pub total: usize,
+    pub total_skipped: usize,
+    pub truncated: bool,
+}
+
+/// Recorte del plain alrededor del match, con ellipsis y los saltos de línea
+/// aplanados a espacios (una fila del panel es una línea).
+fn snippet(plain: &str, start: usize, end: usize) -> String {
+    let desde = plain[..start]
+        .char_indices()
+        .rev()
+        .take(SNIPPET_CONTEXTO)
+        .last()
+        .map(|(i, _)| i)
+        .unwrap_or(0);
+    let hasta = plain[end..]
+        .char_indices()
+        .take(SNIPPET_CONTEXTO)
+        .last()
+        .map(|(i, c)| end + i + c.len_utf8())
+        .unwrap_or(plain.len());
+    let mut s = String::new();
+    if desde > 0 {
+        s.push('…');
+    }
+    s.push_str(plain[desde..hasta].trim());
+    if hasta < plain.len() {
+        s.push('…');
+    }
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn titulo_de(path: &Path) -> String {
+    crate::audit::read_meta_field(path, "titulo")
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .or_else(|| path.file_stem().map(|s| s.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
+/// Enumera las ocurrencias de `needle` en los capítulos del scope.
+/// Separado del comando para poder testearlo contra un `TempDir`.
+pub fn preview_scope(
+    scope: &Path,
+    needle: &str,
+    op: &Opciones,
+) -> Result<ReplacePreview, String> {
+    let mut pv = ReplacePreview::default();
+    if needle.is_empty() {
+        return Ok(pv);
+    }
+    let paths = crate::audit::chapter_paths(scope)?;
+    for path in paths {
+        if pv.groups.len() >= MAX_ARCHIVOS || pv.total >= MAX_OCURRENCIAS {
+            pv.truncated = true;
+            break;
+        }
+        let Ok(html) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let map = plain_con_runs(&html);
+        let hits = buscar_ocurrencias(&map.plain, needle, op);
+        if hits.is_empty() {
+            continue;
+        }
+        let path_str = path.to_string_lossy().into_owned();
+        let mut occurrences = Vec::new();
+        let mut skipped = Vec::new();
+        for (a, b) in hits {
+            match ubicar(&map, a, b) {
+                Ubicacion::Reemplazable { html_start, html_end } => occurrences.push(
+                    ReplaceOccurrence {
+                        id: format!("{path_str}#{html_start}"),
+                        snippet: snippet(&map.plain, a, b),
+                        html_start,
+                        html_end,
+                    },
+                ),
+                Ubicacion::Cruza(reason) => skipped.push(ReplaceSkipped {
+                    snippet: snippet(&map.plain, a, b),
+                    reason,
+                }),
+            }
+        }
+        pv.total += occurrences.len();
+        pv.total_skipped += skipped.len();
+        if occurrences.is_empty() && skipped.is_empty() {
+            continue;
+        }
+        pv.groups.push(ReplaceGroup {
+            title: titulo_de(&path),
+            path: path_str,
+            occurrences,
+            skipped,
+        });
+    }
+    tracing::info!(
+        target: "replace",
+        scope = %scope.display(),
+        needle,
+        grupos = pv.groups.len(),
+        total = pv.total,
+        skipped = pv.total_skipped,
+        truncated = pv.truncated,
+        "replace_preview"
+    );
+    Ok(pv)
+}
+
+#[tauri::command]
+pub fn replace_preview(
+    scope_path: String,
+    needle: String,
+    case_sensitive: bool,
+    whole_word: bool,
+) -> Result<ReplacePreview, String> {
+    preview_scope(
+        Path::new(&scope_path),
+        needle.as_str(),
+        &Opciones { case_sensitive, whole_word },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -543,5 +706,89 @@ mod tests {
             ubicar(&m, hits[0].0, hits[0].1),
             Ubicacion::Cruza(MotivoSkip::CruzaEntidad)
         ));
+    }
+
+    use std::fs;
+    use tempfile::TempDir;
+
+    /// Crea un scope con capítulos. `caps` es `(ruta relativa, html)`.
+    fn scope_con(caps: &[(&str, &str)]) -> TempDir {
+        let td = TempDir::new().unwrap();
+        for (rel, html) in caps {
+            let p = td.path().join(rel);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(&p, html).unwrap();
+        }
+        td
+    }
+
+    #[test]
+    fn preview_encuentra_en_varios_capitulos() {
+        let td = scope_con(&[
+            ("libro/1.html", "<p>Angelica dijo que no</p>"),
+            ("libro/2.html", "<p>para Angelica era tarde</p><p>Angelica sonrió</p>"),
+            ("libro/3.html", "<p>nada que ver</p>"),
+        ]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        assert_eq!(pv.groups.len(), 2, "el 3 no tiene ocurrencias");
+        assert_eq!(pv.total, 3);
+        assert!(!pv.truncated);
+    }
+
+    #[test]
+    fn preview_saltea_las_carpetas_que_no_son_capitulos() {
+        let td = scope_con(&[
+            ("libro/1.html", "<p>Angelica</p>"),
+            ("libro/notas/idea.html", "<p>Angelica</p>"),
+            ("libro/Exportados/viejo.html", "<p>Angelica</p>"),
+        ]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        assert_eq!(pv.groups.len(), 1);
+        assert!(pv.groups[0].path.ends_with("1.html"));
+    }
+
+    #[test]
+    fn preview_reporta_las_que_cruzan_markup_aparte() {
+        let td = scope_con(&[("libro/1.html", "<p>la <em>casa</em> grande</p>")]);
+        let pv = preview_scope(td.path(), "casa grande", &ops(false, true)).unwrap();
+        assert_eq!(pv.total, 0);
+        assert_eq!(pv.total_skipped, 1);
+        assert_eq!(pv.groups[0].skipped[0].reason, MotivoSkip::CruzaTag);
+    }
+
+    #[test]
+    fn preview_usa_el_titulo_del_meta() {
+        let td = scope_con(&[("libro/7.html", "<p>Angelica</p>")]);
+        fs::write(
+            td.path().join("libro/7.meta.json"),
+            r#"{"orden":7,"titulo":"El regreso"}"#,
+        )
+        .unwrap();
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        assert_eq!(pv.groups[0].title, "El regreso");
+    }
+
+    #[test]
+    fn preview_cae_al_nombre_del_archivo_sin_meta() {
+        let td = scope_con(&[("libro/7.html", "<p>Angelica</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        assert_eq!(pv.groups[0].title, "7");
+    }
+
+    #[test]
+    fn el_id_de_ocurrencia_incluye_el_offset() {
+        let td = scope_con(&[("libro/1.html", "<p>Angelica y Angelica</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let occ = &pv.groups[0].occurrences;
+        assert_eq!(occ.len(), 2);
+        assert_ne!(occ[0].id, occ[1].id, "dos ocurrencias, dos ids");
+        assert!(occ[0].id.ends_with(&format!("#{}", occ[0].html_start)));
+    }
+
+    #[test]
+    fn preview_de_un_archivo_suelto_como_scope() {
+        let td = scope_con(&[("libro/1.html", "<p>Angelica</p>"), ("libro/2.html", "<p>Angelica</p>")]);
+        let pv = preview_scope(&td.path().join("libro/1.html"), "Angelica", &ops(false, true)).unwrap();
+        assert_eq!(pv.groups.len(), 1, "scope 'archivo actual'");
     }
 }

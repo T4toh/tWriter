@@ -49,31 +49,44 @@ pub fn list_chapters_for_audit(scope_path: String) -> Result<Vec<ChapterPayload>
 }
 
 fn walk(path: &Path, out: &mut Vec<ChapterPayload>) -> Result<(), String> {
+    for p in chapter_paths(path)? {
+        push_chapter(&p, out)?;
+    }
+    Ok(())
+}
+
+/// Enumera los `.html` de un scope (saga / libro / sección / un archivo
+/// suelto), salteando las carpetas de `SKIP_DIRS`. Ordenado por path para que
+/// el resultado sea estable entre corridas.
+pub fn chapter_paths(scope: &Path) -> Result<Vec<PathBuf>, String> {
+    if !scope.exists() {
+        return Err(format!("scope no existe: {}", scope.display()));
+    }
+    let mut out = Vec::new();
+    walk_paths(scope, &mut out)?;
+    out.sort();
+    Ok(out)
+}
+
+fn walk_paths(path: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
     if path.is_file() {
         if path.extension().and_then(|e| e.to_str()) == Some("html") {
-            push_chapter(path, out)?;
+            out.push(path.to_path_buf());
         }
         return Ok(());
     }
-    let entries = fs::read_dir(path)
-        .map_err(|e| format!("read_dir {}: {}", path.display(), e))?;
-    let mut sorted: Vec<PathBuf> = entries
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .collect();
+    let entries = fs::read_dir(path).map_err(|e| format!("read_dir {}: {}", path.display(), e))?;
+    let mut sorted: Vec<PathBuf> = entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
     sorted.sort();
     for entry in sorted {
         if entry.is_dir() {
-            let name = entry
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("");
+            let name = entry.file_name().and_then(|s| s.to_str()).unwrap_or("");
             if SKIP_DIRS.iter().any(|skip| skip.eq_ignore_ascii_case(name)) {
                 continue;
             }
-            walk(&entry, out)?;
+            walk_paths(&entry, out)?;
         } else if entry.extension().and_then(|e| e.to_str()) == Some("html") {
-            push_chapter(&entry, out)?;
+            out.push(entry);
         }
     }
     Ok(())
@@ -82,7 +95,7 @@ fn walk(path: &Path, out: &mut Vec<ChapterPayload>) -> Result<(), String> {
 fn push_chapter(path: &Path, out: &mut Vec<ChapterPayload>) -> Result<(), String> {
     let html = fs::read_to_string(path)
         .map_err(|e| format!("read {}: {}", path.display(), e))?;
-    let idioma = read_idioma(path);
+    let idioma = read_meta_field(path, "idioma");
     out.push(ChapterPayload {
         path: path.to_string_lossy().into_owned(),
         html,
@@ -91,7 +104,9 @@ fn push_chapter(path: &Path, out: &mut Vec<ChapterPayload>) -> Result<(), String
     Ok(())
 }
 
-fn read_idioma(chapter_path: &Path) -> Option<String> {
+/// Lee un campo string de `<stem>.meta.json`. None si no existe el archivo,
+/// no parsea, o el campo no está.
+pub fn read_meta_field(chapter_path: &Path, field: &str) -> Option<String> {
     let stem = chapter_path.file_stem()?.to_str()?;
     let parent = chapter_path.parent()?;
     let meta_path = parent.join(format!("{stem}.meta.json"));
@@ -100,8 +115,5 @@ fn read_idioma(chapter_path: &Path) -> Option<String> {
     }
     let raw = fs::read_to_string(&meta_path).ok()?;
     let value: serde_json::Value = serde_json::from_str(&raw).ok()?;
-    value
-        .get("idioma")
-        .and_then(|v| v.as_str())
-        .map(String::from)
+    value.get(field).and_then(|v| v.as_str()).map(String::from)
 }
