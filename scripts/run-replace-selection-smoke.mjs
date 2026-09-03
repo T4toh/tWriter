@@ -98,6 +98,10 @@ const groups = [grupo('/a/1.html', 5), grupo('/a/2.html', 3)];
     estadoGrupo(groups[0], new Set(['/a/1.html#20'])) === 'some',
   );
   check(
+    'grupo con todas menos una destildada = some',
+    estadoGrupo(groups[0], new Set(groups[0].occurrences.slice(0, 4).map((o) => o.id))) === 'some',
+  );
+  check(
     'grupo entero destildado = none',
     estadoGrupo(groups[0], new Set(groups[0].occurrences.map((o) => o.id))) === 'none',
   );
