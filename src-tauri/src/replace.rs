@@ -500,8 +500,19 @@ pub struct ReplaceOutcome {
     /// porque cambiaron desde el preview; estos se intentaron y no se
     /// pudieron escribir. El snapshot cubre los que sí se escribieron antes
     /// del fallo. Formato de cada entrada: `"<path>: <error>"`.
+    ///
+    /// OJO al renderizar: no son todos capítulos. Acá también caen
+    /// `.twriter/stats.json` (si el conteo de palabras no se pudo guardar) y
+    /// el `manifest.json` del snapshot (si no se pudo reescribir con los
+    /// mtimes reales). Un toast que los liste como "capítulos que no se
+    /// pudieron escribir" miente en esos dos casos.
     pub failed_files: Vec<String>,
-    /// Vacío si no se escribió nada.
+    /// Vacío solo si no se INTENTÓ escribir ningún capítulo (sin edits, todo
+    /// salteado por la revalidación o por el guard de mtime): ahí no hay nada
+    /// que deshacer y el snapshot se borra. Si una escritura se intentó y
+    /// falló, esto vuelve poblado aunque `files` sea 0 — `fs::write` trunca al
+    /// abrir, así que un fallo posterior al open deja el capítulo dañado y el
+    /// snapshot es la única copia del original.
     pub snapshot_id: String,
 }
 
@@ -548,6 +559,15 @@ fn mtime_epoch(path: &Path) -> u64 {
 /// ajena que caiga dentro del mismo segundo que el read de la fase 1, que es
 /// el caso común en un lote chico — la ventana entera puede caer adentro de
 /// un solo segundo.
+///
+/// TECHO CONOCIDO: la precisión que devuelve esto es la del filesystem, no la
+/// del reloj. En APFS y ext4 el mtime tiene nanosegundos y el guard distingue
+/// dos escrituras seguidas; en HFS+, exFAT y SMB la resolución es de 1 segundo
+/// (`tv_nsec` siempre en 0, medido) y el guard queda en un no-op para
+/// cualquier edición ajena que caiga en el mismo segundo. El repo de novelas
+/// puede vivir en una carpeta de Dropbox o iCloud, así que no es teórico: esto
+/// es mitigación, no garantía, y lo que de verdad protege al autor en esos
+/// volúmenes es el snapshot.
 fn mtime_raw(path: &Path) -> Option<SystemTime> {
     std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
@@ -584,10 +604,26 @@ pub fn aplicar(
     // generar dos `Pendiente` independientes — cada uno calcularía `nuevo`
     // desde el mismo html original y el segundo pisaría al primero.
     // `BTreeMap` da además un orden determinístico entre archivos.
-    let mut por_path: std::collections::BTreeMap<String, Vec<(usize, usize)>> =
+    //
+    // La key es el path NORMALIZADO por `Components`, no el string crudo:
+    // `Components` colapsa los `.`, los separadores repetidos y la barra
+    // final, así que dos grafías del mismo archivo (`<root>/./libro/1.html`
+    // y `<root>//libro/1.html`) caen en la misma entrada en vez de plegarse
+    // por separado. El chequeo de segmentos de la fase 2 no alcanzaba para
+    // atraparlas: corre sobre el `rel` que devuelve `strip_prefix`, que ya
+    // viene normalizado por `Components` y por lo tanto limpio. `..` sí
+    // sobrevive a la normalización (a propósito: es el chequeo de traversal
+    // el que tiene que rechazarlo, no un colapso silencioso), y nada de esto
+    // toca el filesystem — `canonicalize` está descartado porque falla si el
+    // archivo no existe y resuelve symlinks que en Dropbox o iCloud apuntan a
+    // otro lado.
+    let mut por_path: std::collections::BTreeMap<PathBuf, Vec<(usize, usize)>> =
         std::collections::BTreeMap::new();
     for edit in edits {
-        por_path.entry(edit.path).or_default().extend(edit.ranges);
+        por_path
+            .entry(PathBuf::from(&edit.path).components().collect::<PathBuf>())
+            .or_default()
+            .extend(edit.ranges);
     }
 
     // 1. Revalidar: cada range pedido tiene que seguir existiendo hoy.
@@ -599,11 +635,11 @@ pub fn aplicar(
         mtime_antes: Option<SystemTime>,
     }
     let mut pendientes: Vec<Pendiente> = Vec::new();
-    for (path_str, mut ranges) in por_path {
+    for (path, mut ranges) in por_path {
         if ranges.is_empty() {
             continue;
         }
-        let path = PathBuf::from(&path_str);
+        let path_str = path.to_string_lossy().into_owned();
         let Ok(html) = std::fs::read_to_string(&path) else {
             out.skipped_files.push(path_str);
             continue;
@@ -651,10 +687,11 @@ pub fn aplicar(
     let undo_root = root.join(UNDO_SUBDIR);
 
     // Resolver todos los `rel` primero: si alguno falla (capítulo fuera del
-    // root, o una grafía de path que se saldría de `snap_dir` — `..`, `.` o
-    // un segmento vacío, o sea `//`), abortar ACÁ, antes de reclamar ningún
-    // directorio — así el snapshot anterior no se pierde por un request
-    // malformado.
+    // root, o un `rel` que se saldría de `snap_dir` al escribir el snapshot),
+    // abortar ACÁ, antes de reclamar ningún directorio — así el snapshot
+    // anterior no se pierde por un request malformado. El caso vivo es `..`:
+    // los `.` y los separadores repetidos ya los colapsó la normalización de
+    // la fase 0, y un `rel` vacío es el path del root mismo.
     let mut manifest_files: Vec<SnapshotFile> = Vec::new();
     for p in &pendientes {
         let rel = crate::stats::relative_key(root, &p.path)
@@ -740,8 +777,9 @@ pub fn aplicar(
         // por inspección, no por test: forzar la carrera de forma
         // determinística exigiría un thread compitiendo por timing contra
         // esta misma llamada, o un hook de test en el camino de escritura —
-        // ninguno de los dos vale lo que cuesta un guard de tres líneas
-        // sobre `mtime_raw`, que ya está ejercitado en el resto del archivo.
+        // ninguno de los dos vale lo que cuesta un guard de tres líneas.
+        // Sobre la resolución de mtime de la que depende el guard (y en qué
+        // filesystems es un no-op), ver el techo documentado en `mtime_raw`.
         if mtime_raw(&p.path) != p.mtime_antes {
             // Cambió entre el read de la fase 1 y este punto. Mismo canal y
             // semántica que la revalidación: "cambió desde que lo leí", no
@@ -774,12 +812,19 @@ pub fn aplicar(
         }
     }
 
-    if out.files == 0 {
-        // Nada que deshacer: todas las escrituras fallaron o se saltearon
-        // por el guard de mtime. `stats` no cambió (nadie llegó al insert),
-        // así que ni vale la pena reescribirlo, y dejar un snapshot sin
-        // ningún capítulo real solo ensuciaría `.twriter/undo` con un
-        // Deshacer que no debería existir.
+    if out.files == 0 && out.failed_files.is_empty() {
+        // Nada que deshacer: ninguna escritura se intentó siquiera, todas se
+        // saltearon por el guard de mtime. `stats` no cambió (nadie llegó al
+        // insert), y dejar un snapshot sin ningún capítulo real ensuciaría
+        // `.twriter/undo` con un Deshacer que además sería DAÑINO: restaurar
+        // pisaría justo la edición ajena que el guard acaba de proteger.
+        //
+        // `failed_files` es lo que separa este caso de "se intentó escribir y
+        // falló", que también da `files == 0` y por el que hay que pasar por
+        // el camino normal: `fs::write` abre con `O_TRUNC`, así que un fallo
+        // posterior al open (ENOSPC, EIO, quota) deja el capítulo del autor
+        // truncado a 0 bytes y este snapshot es la ÚNICA copia del original.
+        // Borrarlo acá era pérdida de datos lisa y llana.
         let _ = std::fs::remove_dir_all(&snap_dir);
         tracing::info!(
             target: "replace",
@@ -792,9 +837,13 @@ pub fn aplicar(
         return Ok(out);
     }
 
-    // El snapshot cubre al menos un capítulo real. Recién ahora se barren
-    // los hermanos de `id` en `undo_root` — si la fase 3 hubiera fallado
-    // entera (arriba), el undo anterior seguía intacto hasta este punto.
+    // El snapshot es el que hay que poder deshacer: o cubre un capítulo que
+    // se escribió, o cubre uno que la escritura pudo dejar dañado. Recién
+    // ahora se barren los hermanos de `id` en `undo_root` — si no se hubiera
+    // intentado ninguna escritura (arriba), el undo anterior seguía intacto.
+    // Que un lote fallido consuma el slot de undo es el precio de tener un
+    // solo slot: preferimos perder el Deshacer del apply anterior antes que
+    // el original del capítulo que este apply acaba de dañar.
     // Filtrado por el prefijo `undo-` (así el barrido no se come algo que
     // una Task futura quiera guardar en la misma carpeta) y logueado si
     // falla, en vez de tragarse el error: si el barrido no puede limpiar,
@@ -842,7 +891,16 @@ pub fn aplicar(
     let manifest_path = snap_dir.join("manifest.json");
     match serde_json::to_string_pretty(&manifest_final) {
         Ok(json) => {
-            if let Err(e) = std::fs::write(&manifest_path, json) {
+            // tmp + rename, igual que `stats::write_stats`: un `fs::write`
+            // pelado acá abre `manifest.json` con `O_TRUNC` y, si falla a
+            // mitad, se lleva puesto el manifest INICIAL —que estaba
+            // completo y era válido— dejando el snapshot ilegible justo
+            // cuando los capítulos ya cambiaron en disco. Un snapshot sin
+            // manifest es un snapshot que no se puede deshacer.
+            let tmp = snap_dir.join("manifest.json.tmp");
+            if let Err(e) = std::fs::write(&tmp, json)
+                .and_then(|()| std::fs::rename(&tmp, &manifest_path))
+            {
                 // Mismo motivo que arriba: si esto solo loguea, el registro
                 // de Deshacer queda con los mtimes en el sentinel `0` de
                 // todas formas (ver el doc comment del campo) y el autor no
@@ -1399,31 +1457,45 @@ mod tests {
     }
 
     #[test]
-    fn apply_rechaza_una_grafia_alternativa_del_mismo_path() {
-        // Critical N1 de la re-review: el Critical 2 seguía vivo por otra
-        // grafía del mismo archivo — el fold usa el string crudo como key,
-        // así que `libro/1.html` y `libro/./1.html` generaban dos
-        // `Pendiente` sobre el mismo html original (el segundo pisaba al
-        // primero). El chequeo de segmentos del Minor 8 se extiende acá
-        // para rechazar también `.` y un segmento vacío, no solo `..` — sin
-        // recurrir a `canonicalize` (toca el filesystem por edit, falla si
-        // el archivo no existe, y resuelve symlinks que en Dropbox/iCloud
-        // pueden apuntar a otro lado).
-        let td = scope_con(&[("libro/1.html", "<p>Angelica y Angelica</p>")]);
+    fn apply_pliega_las_grafias_alternativas_del_mismo_path() {
+        // Critical 2, tercer intento: el fold por el string crudo dejaba que
+        // dos grafías del mismo archivo generaran dos `Pendiente` sobre el
+        // mismo html original, y el segundo pisaba al primero (un reemplazo
+        // perdido, dos entradas de manifest, `files` y `skipped` contando el
+        // mismo archivo). El chequeo de segmentos sobre `rel` no las
+        // atrapaba: `strip_prefix` devuelve el path ya normalizado por
+        // `Components`, así que `<root>/./libro/1.html` y `<root>//libro/1.html`
+        // llegaban con un `rel` perfectamente limpio. Ahora la key del fold
+        // es el path normalizado, y las tres grafías son una sola entrada.
+        let td = scope_con(&[("libro/1.html", "<p>Angelica y Angelica y Angelica</p>")]);
         let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
         let occs = pv.groups[0].occurrences.clone();
+        assert_eq!(occs.len(), 3);
         let normal = pv.groups[0].path.clone();
         let con_punto = td.path().join("libro/./1.html").to_string_lossy().into_owned();
+        let con_doble_barra = format!("{}//libro/1.html", td.path().to_string_lossy());
         let edits = vec![
             FileEdit { path: normal, ranges: vec![(occs[0].html_start, occs[0].html_end)] },
             FileEdit { path: con_punto, ranges: vec![(occs[1].html_start, occs[1].html_end)] },
+            FileEdit {
+                path: con_doble_barra,
+                ranges: vec![(occs[2].html_start, occs[2].html_end)],
+            },
         ];
-        let err = aplicar_t(td.path(), "Angelica", &ops(false, true), edits, "Angélica").unwrap_err();
-        assert!(err.contains("inválido"), "{err}");
-        // Nada se escribió ni quedó ningún snapshot.
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits, "Angélica").unwrap();
+        assert_eq!(out.files, 1, "un solo archivo, no tres");
+        assert_eq!(out.occurrences, 3, "los tres reemplazos, ninguno pisado");
+        assert!(out.skipped_files.is_empty(), "nada salteado: {:?}", out.skipped_files);
         let uno = fs::read_to_string(td.path().join("libro/1.html")).unwrap();
-        assert!(uno.contains("Angelica y Angelica"), "no debe tocarse: {uno:?}");
-        assert!(!td.path().join(".twriter/undo").exists());
+        assert_eq!(uno.trim_end(), "<p>Angélica y Angélica y Angélica</p>", "quedó {uno:?}");
+        let snap = td.path().join(".twriter/undo").join(&out.snapshot_id);
+        let manifest: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(snap.join("manifest.json")).unwrap()).unwrap();
+        assert_eq!(
+            manifest["files"].as_array().unwrap().len(),
+            1,
+            "una sola entrada de manifest por archivo, no una por grafía"
+        );
     }
 
     #[test]
@@ -1529,12 +1601,21 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn apply_snapshot_id_vacio_cuando_todas_las_escrituras_fallan() {
-        // Important N3 de la re-review: con `files == 0` (acá, la única
-        // escritura falla por permisos) `snapshot_id` tenía que quedar
-        // poblado igual, violando el contrato del propio campo ("Vacío si
-        // no se escribió nada") y ofreciéndole a la UI un Deshacer para un
-        // snapshot donde no cambió nada.
+    fn apply_conserva_el_snapshot_cuando_la_escritura_falla() {
+        // Critical 1 de la round 4: la rama de `files == 0` (agregada en la
+        // ronda anterior para no ofrecer Deshacer cuando el guard de mtime
+        // saltea todo) también se comía el snapshot cuando la escritura se
+        // INTENTÓ y falló. Y ese caso es pérdida de datos: `fs::write` abre
+        // con `O_TRUNC`, así que un fallo posterior al open (ENOSPC, EIO,
+        // quota) deja el capítulo en 0 bytes y el snapshot es la única copia
+        // del original.
+        //
+        // Acá el fallo se fuerza con permisos, que rompen en el open y NO
+        // dañan el archivo — el estado observable que importa es el mismo
+        // (`files == 0` con `failed_files` poblado, la misma rama de código),
+        // y forzar un ENOSPC real necesitaría montar un RAM disk desde el
+        // test. Lo que se exige es que el snapshot sobreviva y que el
+        // llamador se vuelva con el id en la mano.
         use std::os::unix::fs::PermissionsExt;
         let td = scope_con(&[("libro/1.html", "<p>Angelica</p>")]);
         let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
@@ -1546,25 +1627,33 @@ mod tests {
 
         assert_eq!(out.files, 0);
         assert_eq!(out.failed_files.len(), 1);
-        assert!(out.snapshot_id.is_empty(), "sin escrituras no hay nada que deshacer");
-        // `.twriter/undo` puede quedar creado (vacío) — eso es inofensivo.
-        // Lo que no puede quedar es un directorio de snapshot huérfano.
-        let undo_dir = td.path().join(".twriter/undo");
-        let quedan: Vec<_> = std::fs::read_dir(&undo_dir)
-            .map(|it| it.filter_map(|e| e.ok()).collect())
-            .unwrap_or_default();
-        assert!(quedan.is_empty(), "no debe quedar un snapshot huérfano: {quedan:?}");
+        assert!(
+            !out.snapshot_id.is_empty(),
+            "una escritura intentada deja el capítulo en riesgo: el id tiene que volver"
+        );
+        // El snapshot sigue en disco, con manifest legible y el original
+        // adentro: eso es todo lo que necesita el Deshacer.
+        let snap = td.path().join(".twriter/undo").join(&out.snapshot_id);
+        let manifest: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(snap.join("manifest.json")).unwrap())
+                .expect("manifest legible");
+        assert_eq!(manifest["files"].as_array().unwrap().len(), 1);
+        let original = fs::read_to_string(snap.join("libro/1.html")).unwrap();
+        assert_eq!(original, "<p>Angelica</p>", "el original recuperable: {original:?}");
     }
 
     #[test]
     #[cfg(unix)]
-    fn apply_que_falla_entero_no_borra_el_snapshot_anterior() {
-        // Important N3b de la re-review: el barrido de hermanos se movió a
-        // DESPUÉS de la fase 3 (antes corría apenas el snapshot nuevo
-        // quedaba completo, sin esperar a saber si la fase 3 iba a escribir
-        // algo). Con `files == 0` la rama de arriba borra el snapshot nuevo
-        // (vacío) y retorna antes de llegar al barrido: el snapshot de un
-        // apply anterior exitoso nunca se toca.
+    fn apply_que_falla_entero_pasa_el_slot_de_undo_al_snapshot_nuevo() {
+        // Contracara del Critical 1: un lote que falló entero SÍ consume el
+        // slot único de undo. Es a propósito y es el lado seguro — el
+        // snapshot nuevo puede ser la única copia del capítulo que este
+        // apply acaba de truncar, mientras que el anterior solo cubre un
+        // apply que ya salió bien. Distinguir "falló en el open, archivo
+        // intacto" de "falló escribiendo, archivo dañado" exigiría confiar
+        // en la resolución del mtime, que en HFS+/SMB es de un segundo (ver
+        // el techo en `mtime_raw`): apostar ahí es volver a la pérdida de
+        // datos.
         use std::os::unix::fs::PermissionsExt;
         let td = scope_con(&[("libro/1.html", "<p>uno</p>")]);
         let pv1 = preview_scope(td.path(), "uno", &ops(false, true)).unwrap();
@@ -1579,12 +1668,16 @@ mod tests {
         let _ = fs::set_permissions(&dos_path, fs::Permissions::from_mode(0o644));
         let out = out.unwrap();
         assert_eq!(out.files, 0);
-        assert!(out.snapshot_id.is_empty());
+        assert_ne!(out.snapshot_id, a.snapshot_id);
+        assert!(!out.snapshot_id.is_empty(), "el capítulo se intentó escribir: hay qué deshacer");
 
         let undo_dir = td.path().join(".twriter/undo");
         let quedan: Vec<_> = fs::read_dir(&undo_dir).unwrap().filter_map(|e| e.ok()).collect();
-        assert_eq!(quedan.len(), 1, "solo debe seguir el snapshot del primer apply");
-        assert_eq!(quedan[0].file_name().to_string_lossy(), a.snapshot_id);
+        assert_eq!(quedan.len(), 1, "sigue habiendo un solo slot de undo");
+        assert_eq!(quedan[0].file_name().to_string_lossy(), out.snapshot_id);
+        // Y el snapshot que quedó trae el original del capítulo en riesgo.
+        let snap = undo_dir.join(&out.snapshot_id);
+        assert_eq!(fs::read_to_string(snap.join("libro/2.html")).unwrap(), "<p>Angelica</p>");
     }
 
     #[test]
@@ -1617,9 +1710,17 @@ mod tests {
         let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
         let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
         let snap = td.path().join(".twriter/undo").join(&out.snapshot_id);
-        assert!(snap.join("manifest.json").exists());
         let original = fs::read_to_string(snap.join("libro/1.html")).unwrap();
         assert!(original.contains("Angelica dijo"), "el snapshot guarda el previo");
+        // El manifest final (el que trae los mtimes reales) llegó a disco por
+        // el rename, y no quedó el tmp del Important 3 tirado en el snapshot.
+        let manifest: SnapshotManifest =
+            serde_json::from_str(&fs::read_to_string(snap.join("manifest.json")).unwrap()).unwrap();
+        assert_ne!(
+            manifest.files[0].mtime_after_apply, 0,
+            "el manifest en disco tiene que ser el final, no el inicial"
+        );
+        assert!(!snap.join("manifest.json.tmp").exists(), "el tmp del rename no queda");
     }
 
     #[test]
