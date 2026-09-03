@@ -93,6 +93,7 @@
   <div class="sp-replace-row">
     <svg class="sp-icon" lucideReplace [size]="16"></svg>
     <input
+      #replaceInput
       type="text"
       class="sp-input"
       placeholder="Reemplazar por… (vacío borra)"
@@ -122,6 +123,10 @@
       <span class="ico">ab</span>
     </button>
   </div>
+  <p class="sp-status sp-hint">
+    Solo texto exacto: ≈ no aplica al reemplazo — un match aproximado cambiaría
+    palabras que no pediste.
+  </p>
 }
 
 <div class="sp-body">
@@ -213,7 +218,7 @@
     @if (replaceError(); as err) {
       <p class="sp-status sp-error">{{ err }}</p>
     }
-    @if (replacePreviewing()) {
+    @if (replacePreviewing() || replacePending()) {
       <p class="sp-status">Buscando ocurrencias…</p>
     }
     @if (replaceTruncated()) {
@@ -221,7 +226,7 @@
         Demasiadas ocurrencias para revisar de una. Acotá el alcance o el término.
       </p>
     }
-    @if (!replacePreviewing() && replaceCounts().total === 0 && replaceSkipped() === 0) {
+    @if (!replacePreviewing() && !replacePending() && !replaceError() && replaceGroups().length === 0) {
       @if (motivoBloqueo() === 'sinQuery') {
         <p class="sp-status sp-hint">
           Escribí arriba qué buscar y acá con qué reemplazarlo. Solo toca capítulos.
@@ -238,25 +243,29 @@
       }
     }
 
-    @if (replaceCounts().total > 0) {
-      <p class="sp-count">
-        {{ replaceCounts().total }} en {{ replaceCounts().chapters }} capítulo{{ replaceCounts().chapters === 1 ? '' : 's' }}
-        · {{ replaceCounts().selected }} seleccionada{{ replaceCounts().selected === 1 ? '' : 's' }}
-      </p>
+    @if (replaceGroups().length > 0) {
+      @if (replaceCounts().total > 0) {
+        <p class="sp-count">
+          {{ replaceCounts().total }} en {{ replaceChaptersTocables() }} capítulo{{ replaceChaptersTocables() === 1 ? '' : 's' }}
+          · {{ replaceCounts().selected }} seleccionada{{ replaceCounts().selected === 1 ? '' : 's' }}
+        </p>
+      }
       <ul class="sp-list">
         @for (group of replaceGroups(); track group.path) {
           <li class="sp-group">
             <details class="sp-group-details" open>
               <summary class="sp-group-head" [title]="group.path">
-                <input
-                  type="checkbox"
-                  class="sp-check"
-                  [checked]="estadoGrupo(group) === 'all'"
-                  [indeterminate]="estadoGrupo(group) === 'some'"
-                  (click)="$event.stopPropagation()"
-                  (change)="onToggleGrupo(group)"
-                  [attr.aria-label]="'Seleccionar todas en ' + group.title"
-                />
+                @if (group.occurrences.length > 0) {
+                  <input
+                    type="checkbox"
+                    class="sp-check"
+                    [checked]="estadoGrupo(group) === 'all'"
+                    [indeterminate]="estadoGrupo(group) === 'some'"
+                    (click)="$event.stopPropagation()"
+                    (change)="onToggleGrupo(group)"
+                    [attr.aria-label]="'Seleccionar todas en ' + group.title"
+                  />
+                }
                 <span class="sp-hit-title">{{ group.title }}</span>
                 <span class="sp-group-count">
                   {{ group.occurrences.length }}
@@ -305,11 +314,11 @@
               {{ u.blocked.length }} se editaron después y no los pisé.
             }
           </span>
-          <button type="button" class="sp-btn" (click)="forzarDeshacer()" [disabled]="replaceApplying()">
+          <button type="button" class="btn btn-danger" (click)="forzarDeshacer()" [disabled]="replaceApplying()">
             Pisarlos igual
           </button>
         } @else {
-          <button type="button" class="sp-btn" (click)="deshacerReemplazo()" [disabled]="replaceApplying()">
+          <button type="button" class="btn btn-secondary" (click)="deshacerReemplazo()" [disabled]="replaceApplying()">
             Deshacer
           </button>
         }
@@ -322,7 +331,7 @@
       }
       <button
         type="button"
-        class="sp-apply"
+        class="btn btn-primary sp-apply"
         [disabled]="!puedeAplicar()"
         (click)="aplicarReemplazo()"
       >

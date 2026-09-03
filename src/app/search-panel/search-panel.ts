@@ -65,6 +65,11 @@ export class SearchPanel implements AfterViewInit {
   @ViewChild('input', { static: true })
   inputRef!: ElementRef<HTMLInputElement>;
 
+  // No `static: true`: el input de reemplazo solo existe dentro de
+  // `@if (replaceMode())`, así que puede no estar en el DOM todavía.
+  @ViewChild('replaceInput')
+  replaceInputRef?: ElementRef<HTMLInputElement>;
+
   protected readonly query = this.svc.query;
   protected readonly results = this.svc.results;
   protected readonly loading = this.svc.loading;
@@ -155,6 +160,10 @@ export class SearchPanel implements AfterViewInit {
   protected readonly replaceGroups = this.replace.groups;
   protected readonly replaceCounts = this.replace.counts;
   protected readonly replacePreviewing = this.replace.previewing;
+  /** Ventana del debounce ANTES de que `previewing` se prenda — sin esto, el
+   *  cuerpo del panel podía decir "Sin ocurrencias" mientras el botón de
+   *  aplicar decía "Buscando ocurrencias…" (mismo criterio en los dos lados). */
+  protected readonly replacePending = this.replace.pending;
   protected readonly replaceApplying = this.replace.applying;
   protected readonly replaceError = this.replace.error;
   protected readonly replaceTruncated = this.replace.truncated;
@@ -164,6 +173,13 @@ export class SearchPanel implements AfterViewInit {
   protected readonly lastUndo = this.replace.lastUndo;
   protected readonly caseSensitive = this.settings.replaceCaseSensitive;
   protected readonly wholeWord = this.settings.replaceWholeWord;
+  /** `replaceCounts().chapters` es `groups.length`, que también cuenta los
+   *  grupos que solo aportan `skipped` (nada reemplazable ahí). Para el
+   *  contador del header usamos este en cambio: capítulos con al menos una
+   *  ocurrencia tocable. */
+  protected readonly replaceChaptersTocables = computed(
+    () => this.replaceGroups().filter((g) => g.occurrences.length > 0).length,
+  );
 
   protected readonly scopeOptions: SelectOption[] = [
     { value: 'all', label: 'Todo el repo' },
@@ -207,6 +223,14 @@ export class SearchPanel implements AfterViewInit {
   }
 
   protected close(): void {
+    // Apagar el modo reemplazo acá, no solo ocultar el panel: el effect de
+    // `ReplaceService` sigue vivo mientras `replaceMode` esté prendido (ya no
+    // depende de que el panel esté abierto — `Editor` también inyecta el
+    // servicio), así que dejarlo prendido con el panel cerrado disparaba un
+    // `flushAllDirty` + `replace_preview` de todo el scope en disco por cada
+    // cambio de capítulo, para siempre. `lastUndo` sobrevive a `reset()`, así
+    // que el botón Deshacer sigue disponible al reabrir.
+    this.svc.replaceMode.set(false);
     this.svc.hide();
   }
 
@@ -283,10 +307,13 @@ export class SearchPanel implements AfterViewInit {
     void this.replace.undo(info.blocked);
   }
 
-  /** Etiqueta del botón. Replacement vacío es borrar, y hay que decirlo. */
+  /** Etiqueta del botón. Replacement vacío es borrar, y hay que decirlo.
+   *  El botón ya está deshabilitado con n=0 (ver `puedeAplicar`), pero el
+   *  texto no tiene por qué anunciar "las 0 seleccionadas". */
   protected labelAplicar(): string {
     const n = this.replaceCounts().selected;
     const verbo = this.replacement() ? 'Reemplazar' : 'Borrar';
+    if (n === 0) return verbo;
     if (n === 1) return `${verbo} 1 ocurrencia`;
     return `${verbo} las ${n} seleccionadas`;
   }
@@ -341,6 +368,18 @@ export class SearchPanel implements AfterViewInit {
     if (target === this.inputRef?.nativeElement) {
       if (this.query()) {
         this.svc.clear();
+      } else {
+        this.close();
+      }
+      event.preventDefault();
+      return;
+    }
+    // Mismo criterio para el input de reemplazo: antes cerraba el panel
+    // entero de un solo Esc en vez de limpiar primero, asimétrico con el de
+    // búsqueda arriba.
+    if (target === this.replaceInputRef?.nativeElement) {
+      if (this.replacement()) {
+        this.replace.setReplacement('');
       } else {
         this.close();
       }

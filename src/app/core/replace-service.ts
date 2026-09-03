@@ -353,6 +353,14 @@ export class ReplaceService {
       });
       const paths = edits.map((e) => e.path);
       await this.afterWrite(paths);
+      // Apagar ACÁ, no en el `finally`: lo que sigue es `loadTree()` (ya hecho
+      // por `afterWrite`) más el `runPreview()` de abajo, un rescan de disco
+      // de todo el scope. Si `applying` sigue en true durante ese rescan, el
+      // editor recién recargado por `afterWrite` queda editable de nuevo pero
+      // todavía tapado por el overlay — el autor tipearía a ciegas. El
+      // `finally` de más abajo lo vuelve a poner en false por las dudas (rutas
+      // de error antes de este punto), sin efecto visible si ya está en false.
+      this.applying.set(false);
       if (out.snapshotId) {
         this.lastUndo.set({
           snapshotId: out.snapshotId,
@@ -416,6 +424,10 @@ export class ReplaceService {
       // dejaba el editor mostrando el reemplazo con `dirty=false` — el
       // próximo autosave lo reescribía y el undo se revertía solo.
       await this.afterWrite(info.paths);
+      // Mismo motivo que en `apply()`: apagar acá, antes del `runPreview()` de
+      // abajo, para no dejar el editor recién recargado editable-y-tapado
+      // durante el rescan.
+      this.applying.set(false);
       // `failed` y `blocked` pueden venir poblados los DOS. Son avisos
       // distintos y hay que dar los dos: si solo se muestra el error de
       // escritura, el autor nunca se entera de que hay capítulos esperando

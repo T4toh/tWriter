@@ -791,12 +791,21 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
 
     // Solo-lectura mientras el reemplazo en lote aplica (ver `replaceApplying`
-    // arriba). No depende de `pane().loadedAt()`: tiene que reaccionar al
-    // toggle de `applying` sin esperar un cambio de capítulo. `emitUpdate:
-    // false` evita que este toggle por sí solo dispare onUpdate y ensucie
-    // el pane.
+    // arriba). `loadedAt()` se lee TRACKEADA (no `untracked`) a propósito: el
+    // effect de `loadedAt` de arriba hace `setEditable(true)` al recargar un
+    // capítulo, y `afterWrite()` (en ReplaceService) recarga justo los que se
+    // acaban de reemplazar mientras `applying` sigue en true — sin este
+    // re-trigger el editor volvía a ser editable, tapado por el overlay, y el
+    // autor tipeaba a ciegas. Como este effect se creó después del de
+    // `loadedAt`, corre segundo en el mismo flush y reimpone el solo-lectura.
+    // También cubre un editor CREADO durante el apply (abrir un capítulo o el
+    // split con el overlay puesto): antes nacía editable y este effect nunca
+    // volvía a correr porque `tiptap` es un campo, no una signal — leer
+    // `loadedAt()` lo dispara en cuanto ese editor nuevo carga contenido.
+    // `emitUpdate: false` evita que el toggle por sí solo ensucie el pane.
     effect(() => {
       const applying = this.replace.applying();
+      this.pane().loadedAt();
       if (!this.viewReady() || !this.tiptap) return;
       const node = untracked(() => this.active());
       this.tiptap.setEditable(!!node?.editable && !applying, false);

@@ -332,6 +332,14 @@
   text-align: left;
 }
 
+// Las filas de ocurrencia/skip del reemplazo, a diferencia de `.sp-hit`
+// (search), no traían padding propio y quedaban pegadas al borde izquierdo,
+// desalineadas con el header del grupo (`.sp-group-head` usa 8px 12px).
+.sp-item--check,
+.sp-item--skipped {
+  padding: 10px 12px 10px 24px;
+}
+
 .sp-item--skipped {
   opacity: 0.6;
 }
@@ -357,13 +365,8 @@
   font-size: 0.8rem;
 }
 
+// El resto (fondo, color, disabled) lo trae el sistema global `.btn.btn-primary`
+// de `styles.scss` — acá solo el layout que es propio de esta fila.
 .sp-apply {
   margin-left: auto;
-  padding: 0.4rem 0.8rem;
-  cursor: pointer;
-
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
 }
