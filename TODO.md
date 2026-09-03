@@ -4,8 +4,10 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Urgente
 
-- [ ] **El click en un resultado nunca lleva al resultado — el buscador es
-  inútil así** (reportado el 2026-09-02: "nunca me llevó a lo que buscaba")
+- [x] **El click en un resultado nunca lleva al resultado — el buscador es
+  inútil así** (`fix/busqueda-salto-y-matcheo`, verificado a mano por el autor
+  el 2026-09-03 buscando `y Ami ya está`, el ítem 1 de su lista de arreglos:
+  cae en la frase entera, donde antes caía en el primer `ya` del capítulo)
   **Causa raíz, y explica el "nunca"**: la posición del match **no viaja**. El
   `SearchHit` que devuelve Rust (`search.rs:64-80`) trae `path`, `snippet` y
   `matchedTerms`, pero **ningún offset**. Del lado del front,
@@ -36,7 +38,6 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   (los client-side de "Archivo actual").
   Ordenar bien esto arregla de una la mitad del ítem de matcheo en
   `## Búsqueda` y desbloquea el de revisión por libro en `## Gramática`.
-  **Hecho en `fix/busqueda-salto-y-matcheo`, falta la verificación a mano.**
   El plan de "que el offset viaje" NO se pudo seguir tal cual: el `content` que
   guarda tantivy pasa por `html_to_text`, que colapsa todo a una línea con
   espacios simples, mientras el editor vive en el espacio de `extractPlainText`,
@@ -53,9 +54,11 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   tira el offset, pero tampoco lo manda crudo (mismo desfase, agravado por los
   `<hr>`) — manda un **ancla de texto** recortada al bloque (`anchorAround`,
   ±40 chars), que es idéntica en los dos planos y el highlighter la clava.
-  Sigue pendiente el agravante (b): varios hits del mismo capítulo siguen
-  mandando todos al mejor bloque, no uno a cada aparición. Para eso hace falta
-  o el offset real del backend o navegación prev/next sobre los matches.
+  El salto del panel RAE también quedó verificado por el autor el 2026-09-03.
+  Sigue pendiente el agravante (b), y va a ítem propio si molesta: varios hits
+  del mismo capítulo siguen mandando todos al mejor bloque, no uno a cada
+  aparición. Para eso hace falta o el offset real del backend o navegación
+  prev/next sobre los matches.
 
 - [x] **Editar el CSS del EPUB no se ve hasta recompilar Rust — y nada lo avisa**
   (`fix/epub-css-runtime`, verificado a mano por el autor el 2026-09-02).
@@ -1663,7 +1666,9 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Hunspell (`zspell`/`hunspell-rs`) daría corrección ortográfica ES pero no
   completa nombres propios inventados, que es el caso real.
 
-- [ ] **Abrir la búsqueda destruye la nota que estabas leyendo — y volver no la trae**
+- [x] **Abrir la búsqueda destruye la nota que estabas leyendo — y volver no la trae**
+  (`fix/busqueda-salto-y-matcheo`, verificado a mano por el autor el 2026-09-03:
+  la nota vuelve sola al cerrar la búsqueda)
   El panel derecho es un slot único (`app.html:311-331`, cadena `@else if`:
   rae-audit → search → image → font → md-reader) y encima hay dos efectos que se
   matan entre sí en `app.ts`: si el reader abre, `search.hide()` (línea 258); si
@@ -1684,7 +1689,6 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   cierra.
   Antes de tocar: `mdReader.close()` también hace flush si está dirty
   (`app.ts:232-239`, mutex reader vs notes-editor central) — no perder eso.
-  **Hecho en `fix/busqueda-salto-y-matcheo`, falta la verificación a mano.**
   Se tomó el fix chico: fuera el `markdownReader.close()` del efecto de
   `search.open()`. El `search.hide()` del efecto inverso se queda —clickear un
   hit de nota tiene que mostrar la nota, y sin eso quedaría tapada por la
@@ -1736,8 +1740,8 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   del hit no viaja al editor). Son independientes: aunque la query filtre
   perfecto, el click sigue cayendo en cualquier lado. Cualquier cambio acá toca
   `matchedTerms`, que es lo que el frontend usa para resaltar (`search-panel.ts:270-305`).
-  **Hecho en `fix/busqueda-salto-y-matcheo`, falta la verificación a mano.**
-  Se eligió la (a): `build_fuzzy_or_query` pasó a ser `build_fuzzy_query(idx, q,
+  **Hecho en `fix/busqueda-salto-y-matcheo`; falta verificarlo con una frase que
+  exista.** Se eligió la (a): `build_fuzzy_or_query` pasó a ser `build_fuzzy_query(idx, q,
   occur)` y el caller pide `Occur::Must`, o sea el fuzzy exige todos los términos
   igual que el modo exacto. Si el AND devuelve 0 hits hay un reintento con
   `Occur::Should` —con un typo grueso, parciales es mejor que nada—. Cayó
@@ -1749,8 +1753,19 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Lo del snippet que apunta a cualquier lado —que pasaba en los dos modos— se
   arregló aparte: `make_snippet` ya no se centra en la primera aparición del
   primer término, sino en la ventana que cubre más términos distintos con el
-  menor span (`best_cluster_start`). Con `Ambos nobles` el recorte cae donde las
-  dos palabras están juntas.
+  menor span (`best_cluster_start`).
+  **Estado de la verificación**: el AND está probado por datos, no por la UI —
+  `Ambos nobles` ya no existe en el repo (0 capítulos tienen las dos palabras;
+  7 tienen `ambos` y 8 tienen `nobles`, en el libro 2), así que el autor vio el
+  **rescate OR**, no el AND. Ese rescate era mudo y ahora el panel lo dice
+  ("Ningún resultado tiene todas las palabras"), vía `SearchResult.partial_match`.
+  Falta probarlo con una frase de varias palabras que **sí** exista, y mirar que
+  el snippet la muestre entera y no una palabra sola.
+  Aparte salió el matcheo de más a nivel **resalto**, que era `includes()` puro:
+  buscando `y Ami ya está` marcaba la `Y` de `Yiri` y la `y` de `ayudó`.
+  `esMatchDeTermino` pide borde izquierdo siempre y palabra completa para
+  términos de ≤3 chars, dejando el prefijo para los largos (`golpear` →
+  `golpearon`). También sin verificar a mano.
 
 
 - [ ] **No hay reemplazar: corregir un nombre en todo el libro se hace a mano,
