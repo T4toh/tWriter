@@ -2087,9 +2087,10 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   índice y tocar solo lo que cambió — el `mtime` ya está guardado por doc y
   `search_index_status` ya lo sabe leer.
 
-- [ ] **El salto no encuentra un match partido por una itálica** (de la review
-  de CodeRabbit en el PR #93, 2026-09-03)
-  **Arreglado en `fix/salto-multinodo`, pendiente de verificación del autor.**
+- [x] **El salto no encuentra un match partido por una itálica**
+  (`fix/salto-multinodo`, verificado a mano por el autor el 2026-09-04
+  buscando `venido del Abismo` en Buenos Aires 2077; de la review de
+  CodeRabbit en el PR #93, 2026-09-03)
   `selectFirstMatchIn` ahora busca sobre la **concatenación** de los text nodes
   de cada bloque en vez de recorrerlos de a uno, y mapea el offset del match de
   vuelta a un `Range` multi-nodo (`setStart` en un nodo, `setEnd` en otro). El
