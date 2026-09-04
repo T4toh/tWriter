@@ -198,11 +198,15 @@ export function highlightBestMatch(
     rawQuery ?? '',
     fold,
   );
-  if (selectFirstMatchIn(idx >= 0 ? blocks[idx] : host, terms, rawQuery, fold)) return true;
-  // El bloque ganó por su `textContent`, que concatena los text nodes, pero
-  // `selectFirstMatchIn` los mira de a uno: un match partido por un `<em>` no
-  // aparece en ninguno. Llevar al párrafo correcto y flashearlo es peor que
-  // seleccionar la frase, pero muchísimo mejor que no moverse.
+  // Un bloque por raíz, nunca el host entero: `selectFirstMatchIn` concatena
+  // los text nodes de cada raíz, y concatenar bloques distintos pegaría el
+  // final de un párrafo con el principio del siguiente ("la casa" + "grande"
+  // ⇒ un match fantasma que no existe en el texto).
+  const roots = idx >= 0 ? [blocks[idx]] : blocks.length > 0 ? blocks : [host];
+  if (selectFirstMatchIn(roots, terms, rawQuery, fold)) return true;
+  // Queda como red por si ninguna pasada encuentra nada (ej. el bloque ganó
+  // por tokens sueltos que ninguna pasada acepta): llevar al párrafo correcto
+  // y flashearlo es peor que seleccionar la frase, pero mejor que no moverse.
   if (idx >= 0) {
     blocks[idx].scrollIntoView({ block: 'center', behavior: 'smooth' });
     flashElement(blocks[idx]);
@@ -212,23 +216,86 @@ export function highlightBestMatch(
 }
 
 /**
- * Busca el primer text node dentro de `root` que matchee la query, lo
- * selecciona y scrollea.
+ * Mapea un rango `[start, end)` sobre la concatenación de varios text nodes
+ * de vuelta a los nodos que lo contienen. `end` es exclusivo.
+ *
+ * Es la mitad pura del arreglo del salto: una frase que cruza el borde de un
+ * `<em>` —`libros de <em>Técnica Arcana</em>`— existe en la concatenación pero
+ * no dentro de ningún nodo suelto, así que hace falta un `Range` con `setStart`
+ * en un nodo y `setEnd` en otro. Devuelve índices dentro del array de nodos.
+ *
+ * Los nodos vacíos se saltean solos: su span es `[acc, acc)` y ningún offset
+ * cae adentro.
+ */
+export function mapRangeToNodes(
+  lengths: number[],
+  start: number,
+  end: number,
+): { startIndex: number; startOffset: number; endIndex: number; endOffset: number } | null {
+  if (end <= start || start < 0) return null;
+  let startIndex = -1;
+  let startOffset = 0;
+  let endIndex = -1;
+  let endOffset = 0;
+  let acc = 0;
+  for (let i = 0; i < lengths.length; i += 1) {
+    const from = acc;
+    const to = acc + lengths[i];
+    if (startIndex < 0 && start >= from && start < to) {
+      startIndex = i;
+      startOffset = start - from;
+    }
+    // `end` es exclusivo: el nodo que cierra el rango es el que contiene su
+    // último carácter, y el offset se mide desde el arranque de ESE nodo.
+    if (endIndex < 0 && end - 1 >= from && end - 1 < to) {
+      endIndex = i;
+      endOffset = end - from;
+    }
+    acc = to;
+  }
+  if (startIndex < 0 || endIndex < 0) return null;
+  return { startIndex, startOffset, endIndex, endOffset };
+}
+
+/** Todos los text nodes de `root` en orden documental, con su texto. Se toman
+ *  TODOS, whitespace incluido: la concatenación tiene que dar igual que el
+ *  `textContent` con el que `pickBestBlock` eligió el bloque, o los offsets
+ *  dejan de corresponderse. */
+function textNodesOf(root: HTMLElement): { nodos: Text[]; textos: string[] } {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodos: Text[] = [];
+  const textos: string[] = [];
+  let cur: Node | null = walker.nextNode();
+  while (cur) {
+    nodos.push(cur as Text);
+    textos.push(cur.nodeValue ?? '');
+    cur = walker.nextNode();
+  }
+  return { nodos, textos };
+}
+
+/**
+ * Busca la query en cada raíz de `roots` y selecciona el primer match, con su
+ * scroll y su flash.
+ *
+ * Dentro de cada raíz busca sobre la **concatenación** de sus text nodes, no
+ * nodo por nodo: así una frase partida por un `<em>` se encuentra igual, y el
+ * `Range` resultante puede arrancar en un nodo y terminar en otro.
  *
  * Si `rawQuery` viene con forma rica (mayúsculas o puntuación) y aparece
- * literal en algún text node, gana sobre el match de tokens — así
- * `¡Duendes!` cae sobre el grito específico, no sobre el primer `duendes`.
+ * literal, gana sobre el match de tokens — así `¡Duendes!` cae sobre el grito
+ * específico, no sobre el primer `duendes`.
  *
- * Fallback al primer text node que contenga alguno de `terms` (caso
- * legacy: query sin caracteres especiales).
+ * Fallback al primer `terms` que aparezca (caso legacy: query sin caracteres
+ * especiales).
  */
 function selectFirstMatchIn(
-  host: HTMLElement | null,
+  roots: HTMLElement[],
   terms: string[],
   rawQuery?: string,
   fold = false,
 ): boolean {
-  if (!host) return false;
+  if (roots.length === 0) return false;
   // `fold` plega acentos (modo fuzzy) para comparar accent-insensitive; en modo
   // exacto NO se plega para no resaltar variantes con tilde que no se buscaron.
   // El fold es length-preserving ⇒ los offsets siguen válidos sobre el original.
@@ -260,49 +327,57 @@ function selectFirstMatchIn(
     pasadas.push((text) => primerToken(text, lowerTerms, buscarTermino));
   }
 
-  let bestNode: Text | null = null;
-  let bestOffset = -1;
-  let bestLen = 0;
+  // Un walk del DOM por raíz, no uno por pasada: en el camino de fallback las
+  // raíces son todos los bloques del capítulo y las pasadas son cuatro.
+  const escaneadas = roots
+    .map((root) => {
+      const { nodos, textos } = textNodesOf(root);
+      return {
+        root,
+        nodos,
+        largos: textos.map((t) => t.length),
+        texto: norm(textos.join('').toLowerCase()),
+      };
+    })
+    .filter((r) => r.nodos.length > 0);
+
+  // Las pasadas van por fuera de las raíces: un literal con forma rica en el
+  // último bloque le gana a un token suelto en el primero, igual que antes.
   for (const buscar of pasadas) {
-    // `createTreeWalker` no se rebobina: uno nuevo por pasada.
-    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, {
-      acceptNode: (node) =>
-        node.nodeValue && node.nodeValue.trim().length > 0
-          ? NodeFilter.FILTER_ACCEPT
-          : NodeFilter.FILTER_REJECT,
-    });
-    let cur: Node | null = walker.nextNode();
-    while (cur) {
-      const found = buscar(norm((cur.nodeValue ?? '').toLowerCase()));
-      if (found) {
-        bestNode = cur as Text;
-        bestOffset = found.idx;
-        bestLen = found.len;
-        break;
-      }
-      cur = walker.nextNode();
+    for (const r of escaneadas) {
+      const found = buscar(r.texto);
+      if (!found) continue;
+      const span = mapRangeToNodes(r.largos, found.idx, found.idx + found.len);
+      if (!span) continue;
+      if (seleccionar(r.root, r.nodos, span)) return true;
     }
-    if (bestNode) break;
   }
+  return false;
+}
 
-  if (!bestNode) return false;
-
+/** Selecciona el rango, scrollea y flashea el párrafo. Separado para que
+ *  `selectFirstMatchIn` se lea como lo que es: elegir el match. */
+function seleccionar(
+  root: HTMLElement,
+  nodos: Text[],
+  span: { startIndex: number; startOffset: number; endIndex: number; endOffset: number },
+): boolean {
   try {
     const range = document.createRange();
-    range.setStart(bestNode, bestOffset);
-    range.setEnd(bestNode, bestOffset + bestLen);
+    range.setStart(nodos[span.startIndex], span.startOffset);
+    range.setEnd(nodos[span.endIndex], span.endOffset);
     const sel = window.getSelection();
     if (sel) {
       sel.removeAllRanges();
       sel.addRange(range);
     }
-    const parentEl = bestNode.parentElement;
-    if (parentEl) {
-      parentEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      // Flash visual del párrafo: la selección se borra cuando el usuario
-      // clickea fuera, pero el flash CSS dura 2.5s y es claramente visible.
-      flashElement(parentEl);
-    }
+    // Se flashea el bloque, no el padre del text node: con el match adentro de
+    // un `<em>` el padre es la itálica, y flashear tres palabras en bastardilla
+    // no le dice a nadie dónde está el párrafo.
+    root.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    // La selección se borra cuando el usuario clickea fuera, pero el flash CSS
+    // dura 2.5s y es claramente visible.
+    flashElement(root);
     return true;
   } catch {
     return false;
