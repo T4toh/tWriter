@@ -161,6 +161,21 @@
       Buscá texto en notas (.md) y capítulos (.html), o títulos de carpetas. {{ atajo('F') }} abre y cierra.
     </p>
   }
+  @if (activeFileMissingFromIndex()) {
+    <p class="sp-status sp-partial">
+      El archivo abierto no está en el índice: fuera de "Archivo actual" no va a
+      aparecer en ningún resultado.
+      <button type="button" class="sp-inline-btn" (click)="reindex()" [disabled]="reindexing()">
+        Reindexar
+      </button>
+    </p>
+  }
+  <!-- Sólo cuando no hay lista: con resultados a la vista el estado del índice
+       es ruido; sin ellos es la diferencia entre "no está en el texto" y "no
+       está indexado". -->
+  @if (results().length === 0 && indexSummary(); as resumen) {
+    <p class="sp-status sp-hint sp-index-summary">{{ resumen }}</p>
+  }
   @if (results().length > 0) {
     <p class="sp-count">{{ count() }} resultado{{ count() === 1 ? '' : 's' }}</p>
     @switch (matchLevel()) {

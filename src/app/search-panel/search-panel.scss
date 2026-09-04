@@ -126,6 +126,33 @@
   font-style: italic;
 }
 
+// Botón dentro de un aviso (ej. "Reindexar" cuando el archivo abierto falta
+// del índice): el remedio va al lado del diagnóstico, no en otro rincón.
+.sp-inline-btn {
+  margin-left: 6px;
+  padding: 2px 6px;
+  border: 1px solid var(--border, rgb(255 255 255 / 15%));
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--surface-2, rgb(255 255 255 / 8%));
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.sp-index-summary {
+  font-size: 0.72rem;
+}
+
 // Aviso de resultados parciales: sin todas las palabras de la query. Va pegado
 // al contador y antes de la lista, para que se lea ANTES de mirar los hits.
 .sp-partial {

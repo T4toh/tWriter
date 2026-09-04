@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::UNIX_EPOCH;
 
@@ -51,8 +52,20 @@ const NEARBY_MAX_SPAN: usize = SNIPPET_MAX_LEN;
 
 static INDEX_STATE: OnceLock<Mutex<Option<SearchIndex>>> = OnceLock::new();
 
+/// ms epoch del último write commiteado al índice, 0 si ninguno en esta
+/// sesión. Global y no por-root a propósito: cambiar de root reinicializa el
+/// índice y su primer reindex lo pisa.
+static LAST_INDEX_WRITE: AtomicU64 = AtomicU64::new(0);
+
 fn state() -> &'static Mutex<Option<SearchIndex>> {
     INDEX_STATE.get_or_init(|| Mutex::new(None))
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// Wrapper alrededor del Index tantivy + writer + reader.
@@ -87,6 +100,23 @@ pub struct SearchHit {
     /// la query llega con `debug=true`. Útil para diagnosticar resultados.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bm25_score: Option<f32>,
+}
+
+/// Foto del índice para la UI y para el panel de debug.
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexStatus {
+    /// `false` ⇒ todo write al índice se está descartando en silencio.
+    pub initialized: bool,
+    pub root: Option<String>,
+    pub docs: u64,
+    /// ms epoch del último write commiteado en esta sesión, 0 si ninguno.
+    pub last_write: u64,
+    /// Sólo si se consultó un `path`: si está en el índice, y su mtime en el
+    /// índice contra el del disco (distintos ⇒ el índice tiene una versión vieja).
+    pub path_indexed: Option<bool>,
+    pub path_mtime_index: Option<u64>,
+    pub path_mtime_disk: Option<u64>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -279,14 +309,26 @@ pub fn init_for_root(root: &Path) -> Result<(), String> {
 }
 
 /// Ejecuta `f` con acceso al SearchIndex actual. Si no hay index inicializado,
-/// devuelve `Ok(())` sin hacer nada (best-effort para hooks).
-fn with_index<F: FnOnce(&SearchIndex) -> Result<(), String>>(f: F) -> Result<(), String> {
+/// devuelve `Ok(())` sin hacer nada (best-effort para hooks) — pero lo avisa:
+/// el no-op silencioso es la forma en que el índice se queda viejo sin que
+/// nadie se entere, así que cada write descartado deja un WARN con su path.
+fn with_index<F: FnOnce(&SearchIndex) -> Result<(), String>>(
+    op: &str,
+    path: &Path,
+    f: F,
+) -> Result<(), String> {
     let slot = match state().lock() {
         Ok(g) => g,
-        Err(_) => return Ok(()),
+        Err(e) => {
+            tracing::warn!(target: "search", op, path = %path.display(), error = %e, "índice envenenado: write descartado");
+            return Ok(());
+        }
     };
-    if let Some(idx) = slot.as_ref() {
-        f(idx)?;
+    match slot.as_ref() {
+        Some(idx) => f(idx)?,
+        None => {
+            tracing::warn!(target: "search", op, path = %path.display(), "índice no inicializado: write descartado");
+        }
     }
     Ok(())
 }
@@ -664,7 +706,7 @@ fn extract_scope(root: &Path, target: &Path) -> (Option<String>, Option<String>,
 /// Agrega/actualiza un documento en el índice. `kind` espera lowercase:
 /// chapter|note|saga|book|section|folder|notes.
 pub fn index_document(path: &Path, kind: &str) -> Result<(), String> {
-    with_index(|idx| {
+    with_index("index", path, |idx| {
         let mut writer = idx.writer.lock().map_err(|e| e.to_string())?;
         let path_str = path.to_string_lossy().to_string();
         delete_doc_by_path(&mut writer, idx.path_field, &path_str);
@@ -690,18 +732,37 @@ pub fn index_document(path: &Path, kind: &str) -> Result<(), String> {
         }
         writer.add_document(document).map_err(|e| e.to_string())?;
         writer.commit().map_err(|e| e.to_string())?;
+        LAST_INDEX_WRITE.store(now_ms(), Ordering::Relaxed);
         Ok(())
     })
 }
 
 /// Borra un documento del índice por path. Mejor effort.
 pub fn remove_document(path: &Path) -> Result<(), String> {
-    with_index(|idx| {
+    with_index("remove", path, |idx| {
         let mut writer = idx.writer.lock().map_err(|e| e.to_string())?;
         delete_doc_by_path(&mut writer, idx.path_field, &path.to_string_lossy());
         writer.commit().map_err(|e| e.to_string())?;
+        LAST_INDEX_WRITE.store(now_ms(), Ordering::Relaxed);
         Ok(())
     })
+}
+
+/// Dispara un reindex completo en background, emitiendo progreso al front.
+/// Usado en el boot y cada vez que cambia el root: sin esto el índice sigue
+/// apuntando al root anterior y el buscador contesta con datos de otro repo.
+pub fn spawn_reindex(app: AppHandle, root: PathBuf) {
+    tauri::async_runtime::spawn(async move {
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            let mut emit_cb = |p: ReindexProgress| {
+                let _ = app.emit("search-reindex-progress", p);
+            };
+            if let Err(e) = full_reindex(&root, Some(&mut emit_cb)) {
+                tracing::warn!(target: "search", error = %e, "reindex falló");
+            }
+        })
+        .await;
+    });
 }
 
 /// Recorre el repo y reindexa todo. Si `progress_cb` es Some, emite progreso.
@@ -762,6 +823,7 @@ pub fn full_reindex(
     // inmediata (la latencia adicional acá es despreciable comparada al
     // recorrido del repo).
     idx.reader.reload().ok();
+    LAST_INDEX_WRITE.store(now_ms(), Ordering::Relaxed);
     tracing::info!(target: "search", indexed = done, "reindex full completo");
     Ok(done as u64)
 }
@@ -931,7 +993,10 @@ pub fn search_query_impl(
     let slot = state().lock().map_err(|e| e.to_string())?;
     let idx = match slot.as_ref() {
         Some(i) => i,
-        None => return Ok(SearchResult::default()),
+        None => {
+            tracing::warn!(target: "search", query, "índice no inicializado: la búsqueda devuelve vacío");
+            return Ok(SearchResult::default());
+        }
     };
     let q = query.trim();
     if q.is_empty() {
@@ -1266,6 +1331,43 @@ pub fn search_query(
     )
 }
 
+/// Estado del índice y, si se pasa `path`, si ese documento puntual está
+/// adentro y con qué mtime comparado al del disco. Es la única forma de
+/// preguntarle a la app si el buscador está mirando algo fresco: un índice
+/// vacío, viejo o de otro root se ve exactamente igual que "sin resultados".
+#[tauri::command]
+pub fn search_index_status(path: Option<String>) -> Result<IndexStatus, String> {
+    let slot = state().lock().map_err(|e| e.to_string())?;
+    let Some(idx) = slot.as_ref() else {
+        return Ok(IndexStatus::default());
+    };
+    let searcher = idx.reader.searcher();
+    let mut st = IndexStatus {
+        initialized: true,
+        root: Some(idx.root.to_string_lossy().to_string()),
+        docs: searcher.num_docs(),
+        last_write: LAST_INDEX_WRITE.load(Ordering::Relaxed),
+        ..Default::default()
+    };
+    if let Some(p) = path {
+        let query = TermQuery::new(
+            Term::from_field_text(idx.path_field, &p),
+            IndexRecordOption::Basic,
+        );
+        let top = searcher
+            .search(&query, &TopDocs::with_limit(1))
+            .map_err(|e| e.to_string())?;
+        st.path_indexed = Some(!top.is_empty());
+        if let Some((_, addr)) = top.first() {
+            let document: TantivyDocument = searcher.doc(*addr).map_err(|e| e.to_string())?;
+            st.path_mtime_index = document.get_first(idx.mtime_field).and_then(|v| v.as_u64());
+        }
+        let disk = mtime_ms(Path::new(&p));
+        st.path_mtime_disk = (disk != 0).then_some(disk);
+    }
+    Ok(st)
+}
+
 #[tauri::command]
 pub async fn search_reindex(app: AppHandle, root: String) -> Result<u64, String> {
     let app_clone = app.clone();
@@ -1372,6 +1474,47 @@ mod tests {
     fn reset_state() {
         let mut slot = state().lock().unwrap();
         *slot = None;
+    }
+
+    /// El caso que motivó todo: distinguir "no está en el texto" de "no está
+    /// indexado". Antes de `search_index_status` no había forma de preguntarlo.
+    #[test]
+    fn index_status_reporta_docs_y_presencia_por_path() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        let dir = make_repo();
+        let root = dir.path();
+        full_reindex(root, None).unwrap();
+
+        let global = search_index_status(None).unwrap();
+        assert!(global.initialized);
+        assert!(global.docs > 0, "docs: {}", global.docs);
+        assert!(global.last_write > 0, "el reindex tiene que marcar el write");
+        assert!(global.path_indexed.is_none(), "sin path no se reporta path");
+
+        let chapter = root.join("Saga A").join("Libro 1").join("1.html");
+        let hit = search_index_status(Some(chapter.to_string_lossy().to_string())).unwrap();
+        assert_eq!(hit.path_indexed, Some(true));
+        assert_eq!(hit.path_mtime_index, hit.path_mtime_disk);
+
+        let fuera = root.join("Saga A").join("Libro 1").join("99.html");
+        let miss = search_index_status(Some(fuera.to_string_lossy().to_string())).unwrap();
+        assert_eq!(miss.path_indexed, Some(false));
+        assert!(miss.path_mtime_disk.is_none(), "no existe en disco");
+
+        reset_state();
+    }
+
+    /// Sin índice inicializado el status lo dice en vez de mentir con ceros
+    /// indistinguibles de un índice vacío.
+    #[test]
+    fn index_status_sin_indice_avisa() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        let st = search_index_status(None).unwrap();
+        assert!(!st.initialized);
+        assert_eq!(st.docs, 0);
+        assert!(st.root.is_none());
     }
 
     #[test]

@@ -72,6 +72,22 @@ interface ReindexProgress {
   current: string;
 }
 
+/** Foto del índice tantivy. Espeja `IndexStatus` de `search.rs`. Sin esto un
+ *  índice vacío, viejo o apuntando a otro root se ve igual que "sin
+ *  resultados": el buscador contesta que no hay nada y no hay forma de
+ *  distinguir "no está en el texto" de "no está indexado". */
+export interface IndexStatus {
+  initialized: boolean;
+  root: string | null;
+  docs: number;
+  /** ms epoch del último write al índice en esta sesión, 0 si ninguno. */
+  lastWrite: number;
+  /** Sólo cuando se consultó un path (el archivo activo). */
+  pathIndexed?: boolean | null;
+  pathMtimeIndex?: number | null;
+  pathMtimeDisk?: number | null;
+}
+
 /** Pedido pendiente de "saltar al primer match" para un path. El editor / reader
  *  que corresponde al path lo consume con `consumePendingHighlight()` cuando
  *  termina de renderizar el contenido. `requestId` evita doble-consumo. */
@@ -114,6 +130,15 @@ export class SearchService {
   readonly error = signal<string | null>(null);
   readonly reindexing = signal<boolean>(false);
   readonly reindexProgress = signal<ReindexProgress | null>(null);
+  /** Estado del índice, refrescado al abrir el panel, tras cada búsqueda y
+   *  tras un reindex. Null hasta la primera consulta. */
+  readonly indexStatus = signal<IndexStatus | null>(null);
+  /** El archivo abierto no está en el índice: cualquier búsqueda que no sea
+   *  "Archivo actual" lo va a ignorar, y eso hoy se ve como "sin resultados". */
+  readonly activeFileMissingFromIndex = computed(() => {
+    const st = this.indexStatus();
+    return st != null && st.initialized && st.pathIndexed === false;
+  });
   /** Qué tan bien matchean los resultados actuales (ver `MatchLevel`). */
   readonly matchLevel = signal<MatchLevel>('phrase');
   /** Docs que tenían todas las palabras pero lejos, y por eso no se muestran. */
@@ -226,6 +251,18 @@ export class SearchService {
 
   show(): void {
     this.open.set(true);
+    void this.refreshIndexStatus();
+  }
+
+  /** Pregunta al backend por el estado del índice, incluyendo si el archivo
+   *  activo está adentro. Best-effort: si falla, deja el estado anterior. */
+  async refreshIndexStatus(): Promise<void> {
+    try {
+      const path = this.activeFile()?.path;
+      this.indexStatus.set(await invoke<IndexStatus>('search_index_status', { path }));
+    } catch (err) {
+      this.debug.warn('search', `estado del índice: ${err}`);
+    }
   }
 
   hide(): void {
@@ -316,6 +353,7 @@ export class SearchService {
     } finally {
       if (id === this.currentRequestId) this.loading.set(false);
     }
+    void this.refreshIndexStatus();
   }
 
   /** Búsqueda client-side sobre el archivo activo. Cada párrafo con match es
@@ -501,6 +539,7 @@ export class SearchService {
     try {
       const total = await invoke<number>('search_reindex', { root });
       this.debug.info('search', `reindex completo: ${total} docs`);
+      await this.refreshIndexStatus();
       // Re-correr query actual si hay una.
       if (this.query().trim()) await this.runSearch();
     } catch (err) {

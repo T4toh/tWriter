@@ -307,8 +307,12 @@ pub fn get_settings(app: AppHandle) -> Result<Settings, String> {
 pub fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
     let path = settings_path(&app)?;
     let mut settings = settings;
+    let mut previous_root = None;
     match read_settings(&app) {
-        Ok(disk) => merge_backend_owned(&mut settings, &disk),
+        Ok(disk) => {
+            previous_root = disk.root.clone();
+            merge_backend_owned(&mut settings, &disk);
+        }
         Err(e) => {
             // Justo el camino donde se pierde el runtime recordado si el
             // disco falla: igual seguimos y escribimos lo que llegó del
@@ -317,7 +321,16 @@ pub fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
         }
     }
     let raw = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    fs::write(&path, raw).map_err(|e| e.to_string())
+    fs::write(&path, raw).map_err(|e| e.to_string())?;
+    // El índice de búsqueda vive atado a un root. Si cambió y nadie reindexa,
+    // el buscador sigue contestando con los documentos del root anterior.
+    if let Some(root) = &settings.root {
+        if previous_root.as_deref() != Some(root.as_str()) {
+            tracing::info!(target: "search", root = %root, "root nuevo: reindexando");
+            crate::search::spawn_reindex(app.clone(), std::path::PathBuf::from(root));
+        }
+    }
+    Ok(())
 }
 
 /// Runtime recordado, o `None` si no hay nada o el archivo no se pudo leer.
