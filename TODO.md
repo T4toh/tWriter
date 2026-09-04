@@ -1938,17 +1938,17 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
     solo de esto — arreglado el 2026-09-04 (ver el item de abajo, ya cerrado).
   - Caminos sin test automatizado en `replace.rs` (hueco de cobertura, no bug
     conocido — el comportamiento es el correcto, lo que falta es el arnés):
-    el TOCTOU del id de snapshot y la recalibración del guard de mtime a
-    `SystemTime` piden concurrencia real o timing, y un test que pasa por
-    casualidad es peor que ninguno; el repro del fallo al reescribir el
+    el TOCTOU del id de snapshot pide concurrencia real, y un test que pasa
+    por casualidad es peor que ninguno; el repro del fallo al reescribir el
     manifest final no se puede forzar sin romper también la fase anterior; y
     la variante `files == 0` del filtro de salteados (todo salteado sin
     ningún escrito) queda sin ejercitar porque el disparador que sí se
     encontró —un hard link entre dos capítulos— siempre incluye una
     escritura exitosa.
-  - El guard del undo por mtime tiene un hueco de resolución de 1 segundo —
-    item propio más abajo: "El guard del undo por mtime no distingue una
-    edición hecha en el mismo segundo que el reemplazo".
+  - El guard del undo por mtime tenía un hueco de resolución de 1 segundo —
+    cerrado el 2026-09-04 pasándolo a hash del contenido, ver el item de más
+    abajo (ya tildado). El guard de la fase 3 del apply se fue por el mismo
+    camino y su test dejó de depender del filesystem.
   - Los contadores de la barra de Deshacer no bajan tras un Deshacer
     parcial (siguen mostrando el total original aunque ya se restauró parte).
   - "Archivo actual" no es el mismo scope en búsqueda que en reemplazo:
@@ -2001,44 +2001,64 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   `fs::tests::write_atomic_*`, más los 432 de Rust en verde.
 
 
-- [ ] **El guard del undo por mtime no distingue una edición hecha en el
-  mismo segundo que el reemplazo** (encontrado revisando "reemplazar en
-  lote", propuesto por CodeRabbit en la review del PR #94)
-  El undo se niega a pisar un capítulo del snapshot si detecta que se editó
-  a mano después del reemplazo, y lo hace comparando mtimes: `mtime_epoch`
-  (`src-tauri/src/replace.rs`) trunca a **segundos**, y el campo que guarda
-  el manifest (`mtime_after_apply`) es ese mismo segundo. Si una edición
-  ajena —autosave, la otra PC, un pull— cae dentro del mismo segundo que la
-  escritura del reemplazo, el mtime resultante es idéntico al que quedó
-  registrado y el guard no tiene con qué distinguirlos: lo trata como "nadie
-  lo tocó después" y lo pisa igual. En discos con resolución de mtime de 1
-  segundo (HFS+, exFAT, SMB — que es donde vive de verdad esto, porque el
-  repo de novelas puede estar en una carpeta de Dropbox o iCloud) la ventana
-  entera de un lote chico puede caer adentro de un solo segundo, así que no
-  es un caso de laboratorio.
-  **Por qué el mtime no alcanza**: la resolución del guard es la del
-  filesystem, no la del reloj — hasta pasando a nanosegundos (que ya
-  arreglaría APFS/ext4) quedan HFS+/exFAT/SMB con `tv_nsec` siempre en 0. El
-  guard depende de una propiedad del filesystem que la app no controla ni
-  puede detectar de antemano.
-  **Lo que propone CodeRabbit, y es mejor**: sacar la decisión de la
-  resolución del filesystem del todo. En vez de comparar mtimes, guardar en
-  el manifest un **hash del contenido que el reemplazo escribió** por
-  capítulo, y al deshacer comparar ese hash contra el contenido actual en
-  disco — si coinciden, nadie tocó el archivo desde el reemplazo y es seguro
-  restaurar; si no, se editó después (sea cual sea el mtime) y va a
-  `blocked` como hoy. Content-addressed, no time-addressed: dos escrituras
-  en el mismo segundo dejan de ser indistinguibles porque no se les pregunta
-  al reloj.
-  **Por qué no se hace ahora**: el mecanismo actual (mtime crudo en la fase
-  3 del apply, `mtime_epoch` en el manifest, el guard del undo, los
-  sentinels `0` para "no se pudo registrar") ya pasó **cinco rondas de
-  review** para llegar a donde está, con su propio ledger de huecos
-  conocidos y aceptados (ver el item de "Reemplazar en lote" de más arriba).
-  Cambiar el mecanismo de guard —no un parche sobre él— es un cambio de
-  formato del manifest (los snapshots viejos en disco no tienen el hash) y
-  se merece su propio ciclo de spec + review, no colarse como ajuste rápido
-  adentro de esta feature.
+- [x] **El guard del undo por mtime no distingue una edición hecha en el
+  mismo segundo que el reemplazo** (`fix/undo-guard-por-hash`, verificado a
+  mano por el autor el 2026-09-04; propuesto por CodeRabbit en la review del
+  PR #94)
+  El undo se negaba a pisar un capítulo del snapshot si detectaba que se editó
+  a mano después del reemplazo, y lo hacía comparando mtimes: `mtime_epoch`
+  (`src-tauri/src/replace.rs`) trunca a **segundos**, y el campo que guardaba
+  el manifest (`mtime_after_apply`) era ese mismo segundo. Si una edición
+  ajena —autosave, la otra PC, un pull— caía dentro del mismo segundo que la
+  escritura del reemplazo, el mtime resultante era idéntico al registrado y el
+  guard no tenía con qué distinguirlos: lo trataba como "nadie lo tocó
+  después" y lo pisaba igual. En discos con resolución de mtime de 1 segundo
+  (HFS+, exFAT, SMB — que es donde vive de verdad esto, porque el repo de
+  novelas puede estar en una carpeta de Dropbox o iCloud) la ventana entera de
+  un lote chico podía caer adentro de un solo segundo.
+  **Por qué el mtime no alcanzaba, y por qué detectar el filesystem tampoco**:
+  la resolución del guard es la del filesystem, no la del reloj — hasta
+  pasando a nanosegundos (que ya arreglaría APFS/ext4) quedaban HFS+/exFAT/SMB
+  con `tv_nsec` siempre en 0. Y preguntarle al volumen qué es (`statfs`) no
+  sirve: te dice que el guard es de mentira ahí, no te da resolución, y el
+  repo se mueve de volumen.
+  **Hecho el 2026-09-04**: el manifest guarda `hashAfterApply`, el hash del
+  contenido que quedó en disco después de escribir, y el undo lo compara
+  contra el contenido de hoy — coincide ⇒ nadie lo tocó ⇒ restaura; no
+  coincide ⇒ se editó después, sea cual sea el mtime ⇒ `blocked` y el autor
+  decide. Content-addressed, no time-addressed: dos escrituras en el mismo
+  segundo dejan de ser indistinguibles porque no se le pregunta al reloj.
+  Detalles que importan:
+  - **FNV-1a 64 escrito a mano**, sin dependencia nueva: no hace falta un hash
+    criptográfico (el "adversario" es un autosave) y a diferencia del
+    `DefaultHasher` de la std es estable de por vida, que es lo que pide un
+    valor que va a un archivo y lo lee otra versión de la app.
+  - El hash se toma **del disco**, no del `nuevo` que había en memoria:
+    `write_chapter` le agrega el `\n` final si falta.
+  - `mtimeAfterApply` se sigue escribiendo y es el **fallback** para los
+    snapshots que quedaron en disco de antes del campo; sin eso,
+    `hashAfterApply: None` los mandaba a restaurar sin ningún guard.
+  - Los sentinels de "no se pudo registrar" (`None` / `0`) siguen sin
+    bloquear: el capítulo puede estar truncado por un fallo de escritura y es
+    justo cuando el autor más necesita deshacer.
+  **Y de arrastre, el guard de la fase 3 del apply** (el que evita pisar una
+  edición ajena llegada entre el read de la fase 1 y la escritura) pasó a
+  comparar **contenido** en vez de mtimes crudos: `p.html` es el
+  `read_to_string` exacto de la fase 1, así que alcanza con releer el archivo
+  justo antes de escribirlo. Se fueron `mtime_raw`, el campo `mtime_antes` del
+  `Pendiente` y el techo documentado que ya no aplica (neto −21 líneas). Cae
+  además un falso positivo que el mtime tenía **hasta en APFS**: un autosave
+  que reescribía contenido idéntico movía el mtime y el capítulo se salteaba
+  sin motivo, cuando el `nuevo` calculado sobre ese html seguía siendo válido.
+  Y el test del symlink dejó de depender de que el volumen distinga dos
+  mtimes: ahora se dispara por contenido y es determinístico en cualquier
+  filesystem.
+  Tests: la edición en el mismo segundo (mtime forzado al que registró el
+  manifest) y el manifest viejo sin la clave, que tiene que caer al mtime;
+  437 de Rust en verde. La carrera real no se reproduce con los dedos, así que
+  la verificación a mano fue fabricando el estado: reemplazo en el repo de
+  prueba, edición del capítulo, `os.utime` devolviendo el mtime al segundo que
+  registró el apply, y Deshacer — que salió bloqueado en vez de pisar.
 
 
 - [x] **El índice se puede quedar mudo y no hay forma de saberlo**
