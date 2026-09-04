@@ -2041,36 +2041,48 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   adentro de esta feature.
 
 
-- [ ] **El índice se puede quedar mudo y no hay forma de saberlo** (encontrado
-  el 2026-09-03 persiguiendo un `golpear` que no traía resultados)
-  **Instrumentado en `fix/indice-mudo`, pendiente de verificación del autor.**
-  Lo que se hizo:
+- [x] **El índice se puede quedar mudo y no hay forma de saberlo**
+  (encontrado el 2026-09-03 persiguiendo un `golpear` que no traía
+  resultados; `fix/indice-mudo`, verificado a mano por el autor el
+  2026-09-04)
+  **Causa raíz encontrada**: cambiar el root nunca reinicializaba el índice.
+  `setRoot` solo persistía settings y `full_reindex` corría en un único lugar
+  (el boot), así que tras elegir otra carpeta el buscador seguía contestando
+  con los documentos del root anterior y cada save iba a parar al índice
+  viejo — en silencio. `set_settings` (`settings.rs`) ahora compara el root
+  contra el de disco y dispara `search::spawn_reindex`; el boot usa el mismo
+  helper. Verificado en el log: `root nuevo: reindexando root=…/novelas` →
+  `reindex full completo indexed=925` en ~0.9 s.
+  **Segunda causa raíz, encontrada probando**: el botón "Reindexar" del panel
+  —el único remedio a mano cuando el índice quedó viejo— **fallaba en
+  silencio salvo la primera vez**. `init_for_root` abría el writer nuevo
+  antes de soltar el viejo y tantivy toma un lock exclusivo por directorio,
+  así que todo reindex posterior al del boot moría con `Failed to acquire
+  Lockfile: LockBusy`. Al boot no hay índice previo, o sea que el bug quedaba
+  tapado justo donde no molestaba y aparecía únicamente cuando el usuario iba
+  a buscar el remedio. Test: dos `full_reindex` seguidos sobre el mismo root.
+  Lo demás que se hizo:
   - `with_index` (`search.rs`) ya no se traga el no-op: cuando el índice no
     está inicializado logea un WARN con la operación y el path que descartó.
-    Lo mismo `search_query_impl`, que devolvía lista vacía en silencio.
-  - **Comando nuevo `search_index_status(path?)`** (`search.rs`): devuelve
-    `initialized`, `root`, `docs`, `lastWrite` (ms epoch del último commit de
-    esta sesión) y, si se le pasa un path, si ese doc está en el índice y con
-    qué mtime contra el del disco. Es la pregunta que no se podía hacer.
-  - El panel de búsqueda lo muestra: un resumen `N docs indexados, último
-    cambio HH:MM:SS` cuando no hay lista a la vista, y un aviso con botón
-    **Reindexar** cuando el archivo abierto **no está** en el índice — que es
-    exactamente el segundo episodio ("no aparecía hasta abrir el archivo").
-  - **Causa raíz encontrada de paso**: cambiar el root nunca reinicializaba el
-    índice. `setRoot` solo persistía settings, y `full_reindex` corría en un
-    único lugar (el boot). O sea que tras elegir otra carpeta el buscador
-    seguía contestando con los documentos del root anterior y cada save iba a
-    parar al índice viejo. `set_settings` (`settings.rs`) ahora compara el root
-    contra el de disco y dispara `search::spawn_reindex` cuando cambió; el boot
-    usa el mismo helper.
-  **Lo que sigue sin explicación**: los dos episodios originales (el `golpear`
-  con 4 resultados de un solo libro, y el término que no aparecía hasta abrir
-  el archivo) no se reprodujeron. Lo del root explica la familia de síntomas
-  pero no está confirmado que sea lo que pasó. Si vuelve a pasar, ahora el
-  panel dice si el archivo está indexado y el log dice qué writes se
-  descartaron.
-  **Decisión aparte, sigue abierta**: reindexar el repo entero en cada arranque
-  (925 docs en ~1s con el repo de prueba) es O(repo) y tira el trabajo
+    Lo mismo `search_query_impl`, que devolvía lista vacía en silencio. El
+    error del reindex ahora se ve en el panel, no sólo en el 🐛.
+  - **Comando `search_index_status(path?)`**: `initialized`, `root`, `docs`,
+    `lastWrite` (ms del último commit de la sesión) y, con un path, si ese doc
+    está en el índice y con qué mtime contra el del disco.
+  - El panel de búsqueda lo muestra: resumen `N docs indexados, último cambio
+    HH:MM:SS` cuando no hay lista a la vista, y un aviso con botón
+    **Reindexar** cuando el archivo abierto **no está** en el índice. El
+    estado sigue al archivo activo vía effect — al principio sólo se
+    refrescaba al abrir el panel y al terminar una búsqueda de backend, así
+    que cambiar de capítulo (o buscar con scope "Archivo actual", que es
+    client-side) dejaba el aviso mostrando lo del archivo anterior.
+  **Los dos episodios originales no se reprodujeron** (el `golpear` con 4
+  resultados de un solo libro, y el término que no aparecía hasta abrir el
+  archivo). Lo del root explica la familia de síntomas, pero no está
+  confirmado que sea lo que pasó. Si vuelve: el panel dice si el archivo está
+  indexado y el log dice qué writes se descartaron.
+  **Decisión aparte, sigue abierta**: reindexar el repo entero en cada
+  arranque (925 docs en ~0.9 s con el repo real) es O(repo) y tira el trabajo
   incremental de la sesión anterior. Alcanzaría comparar mtimes contra el
   índice y tocar solo lo que cambió — el `mtime` ya está guardado por doc y
   `search_index_status` ya lo sabe leer.
