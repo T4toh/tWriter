@@ -110,6 +110,12 @@ cabecera de `src/app/core/search-highlight.spec.ts` deja sentado ese criterio.
   `pickCover`, `covers`, `thumbs`). Alinear eso es un rename mecánico de
   `landing/` + `core/cover-cache.ts` pendiente; hasta que se haga, en esa zona
   seguir el inglés de alrededor en vez de mezclar.
+- **`settings.json` está tipado en los dos lados.** Un campo nuevo va en la
+  interfaz `Settings` de `src/app/core/settings-service.ts` **y** en el
+  `struct Settings` de `src-tauri/src/settings.rs` (con su `rename` camelCase).
+  Si falta el lado Rust, serde descarta el campo al guardar y la preferencia
+  se pierde al reiniciar, sin ningún error: el síntoma es "lo dejé en X y
+  volvió a arrancar en Y".
 - **El remedio se da adentro de la app.** Si la app puede detectar un problema de
   entorno (daemon caído, runtime ausente, sidecar faltante, credencial vencida),
   tiene que decir **qué** pasó y dar el remedio **accionable** ahí mismo: un botón

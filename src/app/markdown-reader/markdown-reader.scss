@@ -226,7 +226,7 @@
     box-sizing: border-box;
     color: var(--fg);
     caret-color: transparent;
-    font-family: var(--font-body);
+    font-family: var(--editor-font-family, var(--font-body));
     font-size: 15px;
     line-height: 1.6;
     cursor: default;

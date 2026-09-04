@@ -597,3 +597,25 @@ option {
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
+
+// Fila de un slot de fuente: descripción a la izquierda, dropdown a la
+// derecha. Mismo marco que `.gs-option`, pero sin `cursor: pointer` — el
+// clickeable es el `app-select`, no la fila.
+.gs-font-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+
+  & + .gs-font-row {
+    margin-top: 10px;
+  }
+
+  app-select {
+    flex: 0 0 14rem;
+    min-width: 0;
+  }
+}
+

@@ -37,7 +37,11 @@ import {
   setSearchHighlights,
 } from '../editor/search-highlight-extension';
 import { buildEditorProps } from '../editor/editor-props';
-import { PARAGRAPH_SPACING_EM, SettingsService } from '../core/settings-service';
+import {
+  PARAGRAPH_SPACING_EM,
+  resolveEditorFontStack,
+  SettingsService,
+} from '../core/settings-service';
 import { atajo } from '../shared/atajo';
 import {
   ContextMenuService,
@@ -105,6 +109,12 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
   protected readonly state = signal<ToolbarState>(EMPTY_STATE);
   protected readonly width = this.settings.editorWidth;
   protected readonly fontSize = this.settings.editorFontSize;
+  /** Misma familia que el editor de capítulos: es el mismo texto para el
+   *  autor, y tenerlas distintas era una inconsistencia, no una opción. El
+   *  selector vive en el toolbar del editor y las dos superficies lo leen. */
+  protected readonly fontStack = computed(() =>
+    resolveEditorFontStack(this.settings.editorFontFamily()),
+  );
   protected readonly paragraphSpacing = this.settings.editorParagraphSpacing;
   protected readonly paragraphSpacingEm = computed(
     () => PARAGRAPH_SPACING_EM[this.paragraphSpacing()],

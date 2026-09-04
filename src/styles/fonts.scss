@@ -1,0 +1,66 @@
+// Las tres familias de la UI, bundleadas. Antes `--font-body: 'Merriweather'`
+// y compañía nombraban familias que el repo no shipeaba: si el usuario no las
+// tenía instaladas, la app caía al serif/sans del sistema sin avisar (en la
+// Mac del autor, ninguna de las tres estaba instalada).
+//
+// Subset `latin` de Google Fonts, que ya cubre español e inglés (acentos, ñ,
+// ¿, ¡ viven en U+00C0-00FF).
+//
+// La Merriweather redonda es la única variable de las cinco: un archivo para
+// todo el eje de peso —por eso la API devuelve la MISMA URL para 400 y 700— y
+// se declara con rango `400 700`, que es lo que usa la app (el eje real llega
+// más lejos, pero declarar de menos es inofensivo y no depende de adivinarlo).
+// Las otras cuatro son instancias estáticas y se declaran con su peso exacto:
+// declararle un rango a una estática es lo único que rompe de verdad, porque
+// el motor deja de sintetizar la negrita y todo sale en 400.
+//
+// Licencias en `OFL-*.txt` al lado de los archivos, y en el modal Acerca de
+// vía `scripts/generar-licencias.mjs`.
+//
+// `src/assets/fonts/` está en el `ignore` del glob de assets de
+// `angular.json`: los `url()` de acá abajo hacen que el build los emita con
+// hash en `media/`, así que copiarlos también a `assets/` duplicaba 190 kB en
+// el bundle. Los `OFL-*.txt` no los lee nadie en runtime — su texto va
+// embebido en `licencias.json`.
+
+@font-face {
+  font-family: 'Merriweather';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('../assets/fonts/merriweather.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Merriweather';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/merriweather-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Lato';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/lato-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Lato';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../assets/fonts/lato-700.woff2') format('woff2');
+}
+
+// Sin italic ni bold propios: el motor los sintetiza y en paths y diffs no se
+// nota.
+@font-face {
+  font-family: 'Roboto Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/roboto-mono.woff2') format('woff2');
+}

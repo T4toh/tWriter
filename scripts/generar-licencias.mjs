@@ -46,6 +46,7 @@ const app = {
 
 // ── 2. Los datos de terceros que shipeamos ───────────────────────────────────
 const tesauro = join(repo, 'src-tauri', 'resources', 'tesauro');
+const fuentes = join(repo, 'src', 'assets', 'fonts');
 const datos = [
   {
     nombre: 'OpenThesaurus-es (th_es_v2.dat)',
@@ -65,6 +66,30 @@ const datos = [
       'hiperónimos. El detalle está en scripts/podar-tesauro-en.mjs.',
     licencia: 'WordNet',
     texto: leer(join(tesauro, 'WordNet_license.txt')).trim(),
+  },
+  {
+    nombre: 'Merriweather (merriweather.woff2, merriweather-italic.woff2)',
+    descripcion:
+      'Serif de lectura de la app: el texto del editor y las notas. Subset «latin» de ' +
+      'Google Fonts, sin modificar.',
+    licencia: 'OFL-1.1',
+    texto: leer(join(fuentes, 'OFL-merriweather.txt')).trim(),
+  },
+  {
+    nombre: 'Lato (lato-400.woff2, lato-700.woff2)',
+    descripcion:
+      'Sans de la interfaz: paneles, árbol, menús y botones. Subset «latin» de Google ' +
+      'Fonts, sin modificar.',
+    licencia: 'OFL-1.1',
+    texto: leer(join(fuentes, 'OFL-lato.txt')).trim(),
+  },
+  {
+    nombre: 'Roboto Mono (roboto-mono.woff2)',
+    descripcion:
+      'Monoespaciada de los paths, los diffs y el panel de debug. Subset «latin» de ' +
+      'Google Fonts, sin modificar.',
+    licencia: 'OFL-1.1',
+    texto: leer(join(fuentes, 'OFL-robotomono.txt')).trim(),
   },
 ];
 

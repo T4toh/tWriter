@@ -24,6 +24,64 @@
         </label>
       </details>
 
+      <details class="gs-bloque" [open]="aparienciaAbierta()" (toggle)="aparienciaAbierta.set($any($event.target).open)">
+        <summary>Apariencia</summary>
+        <p class="gs-bloque-intro">Tema de la app.</p>
+        @for (t of themes; track t) {
+          <label class="gs-option">
+            <input
+              type="radio"
+              name="app-theme"
+              [value]="t"
+              [checked]="theme() === t"
+              (change)="onThemeChange(t)"
+            />
+            <div class="gs-option-text">
+              <strong>{{ themeLabel[t] }}</strong>
+              <span class="muted">{{ themeAyuda[t] }}</span>
+            </div>
+          </label>
+        }
+
+        <p class="gs-bloque-intro">
+          Las tipografías de la interfaz. El default es el que shipea tWriter;
+          podés cambiarlo por cualquier fuente instalada en esta PC. La fuente
+          del texto que escribís —capítulos y notas— se elige en el toolbar del
+          editor.
+        </p>
+        @for (slot of slots; track slot) {
+          <div class="gs-font-row">
+            <div class="gs-option-text">
+              <strong>{{ slotLabel[slot] }}</strong>
+              <span class="muted">{{ slotAyuda[slot] }}</span>
+            </div>
+            <app-select
+              [groups]="fontGroups()[slot]"
+              [itemTemplate]="fontItemTpl"
+              [searchThreshold]="0"
+              [ngModel]="fontValue(slot)"
+              (ngModelChange)="onFontSelect(slot, $event)"
+              (click)="onFontDropdownOpen()"
+              (itemHover)="onFontHover($event)"
+            ></app-select>
+          </div>
+        }
+        <ng-template #fontItemTpl let-opt>
+          <span
+            class="font-item"
+            [style.font-family]="opt.data?.fontFamily ? '\'' + opt.data.fontFamily + '\', serif' : null"
+          >{{ opt.label }}</span>
+        </ng-template>
+        @if (fontsCargando()) {
+          <p class="muted">Leyendo las fuentes instaladas…</p>
+        }
+        @if (hayFuenteElegida()) {
+          <button type="button" class="btn btn-secondary" (click)="resetFonts()">
+            Volver a las fuentes de la app
+          </button>
+        }
+      </details>
+
       <details class="gs-bloque" [open]="gramaticaAbierta()" (toggle)="gramaticaAbierta.set($any($event.target).open)">
         <summary>Gramática</summary>
         <p class="gs-bloque-intro">

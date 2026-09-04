@@ -112,7 +112,7 @@
     </button>
   </div>
 }
-<div class="mr-body">
+<div class="mr-body" [style.--editor-font-family]="fontStack()">
   @if (loading()) {
     <p class="mr-status">Cargando…</p>
   } @else if (error(); as err) {

@@ -370,6 +370,83 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   nunca activaba su `overflow-y`, scrolleando el archivo de fondo. Fix:
   `grid-template-rows: minmax(0,1fr)` + `min-height:0` + `overscroll-behavior:contain`.
 
+- [x] **Apartado "Apariencia" en Configuración: tema de la app y fuentes**
+  (pedido el 2026-09-04, después de definir los tokens de tema)
+  Hoy el tema **lo decide el sistema operativo y nada más**: `styles.scss`
+  tiene `color-scheme: light dark` y un `@media (prefers-color-scheme: dark)`,
+  sin override manual ni persistencia. El modal de Configuración
+  (`settings-modal/`) es solo gramática — variantes regionales, nivel de
+  chequeo, repeticiones — así que no hay dónde elegir nada de apariencia.
+  **Lo que ya está hecho** (y es la mitad que existe):
+  - Los 29 tokens de color (`--panel-bg`, `--panel-header-bg`, `--hover-bg`,
+    `--input-bg`, `--muted`, `--danger`, `--mark-bg`, …) ya están definidos
+    en `styles.scss` para claro y oscuro, mapeados a la paleta cálida. Antes
+    resolvían al fallback oscuro hardcodeado de cada `.scss`.
+  - La fuente **del editor** sí es configurable y persiste:
+    `editorFontFamily` + `editorFontRecents` (dropdown en el toolbar del
+    editor, con preview en la propia tipografía al hover vía
+    `SystemFontsService.loadFace`), `bumpFontSize(±)`, `cycleEditorWidth()`,
+    `cycleParagraphSpacing()`. Todo eso vive en botones del editor, no en
+    Configuración, y no toca la UI.
+  - `theme-editor/` + `themes-service` + `fonts-service` **no son** el tema
+    de la app: son los temas tipográficos del **EPUB** (`body_font`,
+    `page_margin`, `dropcap`, fuentes adoptadas al repo). No mezclar los dos.
+  **Lo que falta**:
+  1. Sección "Apariencia" en el modal de Configuración, con el mismo patrón
+     de `gs-section-divider` que ya usan las de gramática.
+  2. Tema como preferencia propia: `appTheme: 'system' | 'light' | 'dark'` en
+     `settings-service` (persiste solo, como el resto), aplicado con un
+     `data-theme` en el `<html>`. Los bloques de tokens pasan a
+     `:root:not([data-theme="light"])` para el `prefers-color-scheme` y
+     `:root[data-theme="dark"]` para el override, y `color-scheme` tiene que
+     seguir al elegido, no al del OS, o los scrollbars y los widgets nativos
+     quedan del tema contrario.
+  3. Fuente de UI elegible, y **antes que eso**, que las fuentes existan: hoy
+     `--font-body: 'Merriweather'`, `--font-ui: 'Lato'` y
+     `--font-mono: 'Roboto Mono'` no tienen **ningún `@font-face`** ni
+     `src/assets/fonts/` en el repo (CLAUDE.md dice que las TTF van ahí — no
+     está hecho), así que si el usuario no las tiene instaladas la app cae al
+     serif/sans del sistema y nadie se enteró nunca. Bundlearlas con
+     `@font-face` + `font-display: swap` y su licencia OFL al lado.
+  4. Mover (o duplicar) a esa sección lo del editor que hoy solo se toca
+     desde el toolbar: fuente, tamaño, ancho y espaciado de párrafo.
+  5. Que el tema de la app **no** se filtre al EPUB exportado: son dos cosas
+     distintas y el EPUB tiene su propio `epub_style.css` + temas.
+  Sobre tests: esto es casi todo tokens y DOM, o sea `pnpm build` +
+  verificación manual del autor. Lo único puro que vale un smoke runner es el
+  mapeo `'system' | 'light' | 'dark'` → atributo/`color-scheme`.
+  **Hecho el 2026-09-04** (rama `feat/tema-app`), en tres pasos:
+  1. Las tres familias bundleadas: cinco `.woff2` del subset latin en
+     `src/assets/fonts/` (~190 kB) declaradas en `src/styles/fonts.scss`, con
+     sus OFL y las entradas en `generar-licencias.mjs`. La carpeta va al
+     `ignore` del glob de assets: los `url()` del scss ya las emiten con hash
+     en `media/`.
+  2. Bloque "Apariencia" en el modal, con la fuente de **Interfaz**
+     (`--font-ui`) y la **Monoespaciada** (`--font-mono`) elegibles entre las
+     instaladas en la PC, preview de cada opción en su propia tipografía al
+     hover, y "Volver a las fuentes de la app". La mitad pura vive en
+     `core/app-fonts.ts` con su smoke runner
+     (`scripts/run-app-fonts-smoke.mjs`, 11 aserciones); elegir el default
+     guarda `null` y **borra** la custom property, así el default sigue
+     definido solo en `styles.scss`.
+  3. `appTheme` ('system' | 'light' | 'dark') persistido, aplicado con
+     `data-theme` en el `<html>`; los tokens oscuros pasaron a un mixin porque
+     ahora entran por el media query (con `:not([data-theme])`) y por el
+     override manual.
+  **Dos cosas del plan original NO se hicieron, por decisión del autor**:
+  - El serif de lectura no es un slot de Apariencia. La fuente del texto se
+    elige en el toolbar del editor, que ya existía, y ahora la comparten las
+    tres superficies del mismo contenido: editor de capítulos, editor de
+    notas y lector de Markdown (antes cada una tenía la suya).
+  - Tampoco se movió a Configuración el resto de los controles del editor
+    (tamaño, ancho, espaciado): se quedan donde están.
+  La ventana nativa también acompaña: el mismo effect llama `setTheme()` de la
+  ventana de Tauri (`null` para 'system') con
+  `core:window:allow-set-theme` en las capabilities — sin eso, la barra de
+  título quedaba clara con el tema forzado a Oscuro. Verificado a mano por el
+  autor el 2026-09-04: tema, fuentes y barra de título, incluido que
+  `settings.json` los conserva al reiniciar.
+
 ## Gramática, ortografía y tesauro
 
 > **Relevamiento del 2026-08-20.** Todo lo de abajo está medido contra el
