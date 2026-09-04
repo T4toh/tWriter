@@ -179,10 +179,18 @@ export class ReplaceService {
     effect(() => {
       const activo = this.search.replaceMode();
       this.search.query();
-      this.settings.searchScope();
+      const scope = this.settings.searchScope();
       this.settings.replaceCaseSensitive();
       this.settings.replaceWholeWord();
-      this.chapter.panes[0].active();
+      // El capítulo activo del pane 0 solo influye en `resolveScopePath()`
+      // para `saga`/`book`/`current` (resuelve un ancestro o el propio path
+      // del capítulo); para `all`/`chapters` esa función siempre devuelve
+      // `root`. Leerlo sin este filtro reactivaba el effect en cada cambio
+      // de capítulo y relanzaba un escaneo completo del scope en disco que
+      // daba exactamente el mismo resultado.
+      if (scope === 'saga' || scope === 'book' || scope === 'current') {
+        this.chapter.panes[0].active();
+      }
       if (!activo) {
         this.reset();
         return;

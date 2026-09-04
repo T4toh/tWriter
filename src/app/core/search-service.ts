@@ -180,7 +180,7 @@ export class SearchService {
     // ("saga actual" depende del cap del pane 0; "current" depende del archivo
     // resuelto por activeFile, que incluye notas y md-reader).
     effect(() => {
-      this.replaceMode();
+      const enReemplazo = this.replaceMode();
       this.settings.searchScope();
       this.settings.searchDebug();
       this.settings.searchFuzzy();
@@ -191,6 +191,20 @@ export class SearchService {
       this.mdReader.viewing();
       this.mdReader.content();
       this.lastFocusedSurface();
+      if (enReemplazo) {
+        // El early return de `runSearch()` evita que ENTRE en modo reemplazo
+        // se dispare un `search_query` nuevo, pero no invalida el que ya
+        // estaba en vuelo desde antes: su callback sigue comparando su `id`
+        // capturado contra `currentRequestId`, que acá no cambió, así que
+        // pasa el chequeo de identidad y puede pisar `results`/`error` con
+        // una respuesta tardía mientras el panel ya muestra el preview de
+        // reemplazo. Bumpear acá lo invalida sin depender de que haya query
+        // para relanzar un search (que además no correspondería en este modo).
+        this.currentRequestId++;
+        this.loading.set(false);
+        this.error.set(null);
+        return;
+      }
       if (this.query().trim()) {
         this.scheduleSearch();
       }

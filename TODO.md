@@ -1932,9 +1932,9 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
     ningún escrito) queda sin ejercitar porque el disparador que sí se
     encontró —un hard link entre dos capítulos— siempre incluye una
     escritura exitosa.
-  - El guard que protege contra pisar una edición ajena compara mtimes en
-    segundos: en discos con resolución de 1s (HFS+, exFAT, SMB) una edición
-    hecha en el mismo segundo que el reemplazo es invisible para el guard.
+  - El guard del undo por mtime tiene un hueco de resolución de 1 segundo —
+    item propio más abajo: "El guard del undo por mtime no distingue una
+    edición hecha en el mismo segundo que el reemplazo".
   - Los contadores de la barra de Deshacer no bajan tras un Deshacer
     parcial (siguen mostrando el total original aunque ya se restauró parte).
   - "Archivo actual" no es el mismo scope en búsqueda que en reemplazo:
@@ -1972,6 +1972,46 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   recuperable), pero el autosave normal no tiene ningún snapshot — un
   capítulo truncado por un corte de luz mientras se escribe desde el editor
   se pierde sin red.
+
+
+- [ ] **El guard del undo por mtime no distingue una edición hecha en el
+  mismo segundo que el reemplazo** (encontrado revisando "reemplazar en
+  lote", propuesto por CodeRabbit en la review del PR #94)
+  El undo se niega a pisar un capítulo del snapshot si detecta que se editó
+  a mano después del reemplazo, y lo hace comparando mtimes: `mtime_epoch`
+  (`src-tauri/src/replace.rs`) trunca a **segundos**, y el campo que guarda
+  el manifest (`mtime_after_apply`) es ese mismo segundo. Si una edición
+  ajena —autosave, la otra PC, un pull— cae dentro del mismo segundo que la
+  escritura del reemplazo, el mtime resultante es idéntico al que quedó
+  registrado y el guard no tiene con qué distinguirlos: lo trata como "nadie
+  lo tocó después" y lo pisa igual. En discos con resolución de mtime de 1
+  segundo (HFS+, exFAT, SMB — que es donde vive de verdad esto, porque el
+  repo de novelas puede estar en una carpeta de Dropbox o iCloud) la ventana
+  entera de un lote chico puede caer adentro de un solo segundo, así que no
+  es un caso de laboratorio.
+  **Por qué el mtime no alcanza**: la resolución del guard es la del
+  filesystem, no la del reloj — hasta pasando a nanosegundos (que ya
+  arreglaría APFS/ext4) quedan HFS+/exFAT/SMB con `tv_nsec` siempre en 0. El
+  guard depende de una propiedad del filesystem que la app no controla ni
+  puede detectar de antemano.
+  **Lo que propone CodeRabbit, y es mejor**: sacar la decisión de la
+  resolución del filesystem del todo. En vez de comparar mtimes, guardar en
+  el manifest un **hash del contenido que el reemplazo escribió** por
+  capítulo, y al deshacer comparar ese hash contra el contenido actual en
+  disco — si coinciden, nadie tocó el archivo desde el reemplazo y es seguro
+  restaurar; si no, se editó después (sea cual sea el mtime) y va a
+  `blocked` como hoy. Content-addressed, no time-addressed: dos escrituras
+  en el mismo segundo dejan de ser indistinguibles porque no se les pregunta
+  al reloj.
+  **Por qué no se hace ahora**: el mecanismo actual (mtime crudo en la fase
+  3 del apply, `mtime_epoch` en el manifest, el guard del undo, los
+  sentinels `0` para "no se pudo registrar") ya pasó **cinco rondas de
+  review** para llegar a donde está, con su propio ledger de huecos
+  conocidos y aceptados (ver el item de "Reemplazar en lote" de más arriba).
+  Cambiar el mecanismo de guard —no un parche sobre él— es un cambio de
+  formato del manifest (los snapshots viejos en disco no tienen el hash) y
+  se merece su propio ciclo de spec + review, no colarse como ajuste rápido
+  adentro de esta feature.
 
 
 - [ ] **El índice se puede quedar mudo y no hay forma de saberlo** (encontrado

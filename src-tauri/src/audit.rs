@@ -76,7 +76,20 @@ fn walk_paths(path: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
         return Ok(());
     }
     let entries = fs::read_dir(path).map_err(|e| format!("read_dir {}: {}", path.display(), e))?;
-    let mut sorted: Vec<PathBuf> = entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
+    // Antes `filter_map(|e| e.ok())` se tragaba en silencio las entradas cuyo
+    // `read_dir` falla (permisos, symlink roto en Dropbox/iCloud) — un preview
+    // podía omitir capítulos y reportar como completo un scope que no lo era.
+    // Propagar el error es peor UX puntual pero mejor que mentir sobre el
+    // scope. CAMBIA COMPORTAMIENTO para los dos consumidores existentes de
+    // `chapter_paths`: `list_chapters_for_audit` (auditoría RAE) y el
+    // educador de comillas (`quotes-fix-service.ts`), que antes seguían de
+    // largo ante una entrada ilegible y ahora fallan con error.
+    let mut sorted: Vec<PathBuf> = entries
+        .map(|e| {
+            e.map(|entry| entry.path())
+                .map_err(|e| format!("read_dir {}: {}", path.display(), e))
+        })
+        .collect::<Result<_, _>>()?;
     sorted.sort();
     for entry in sorted {
         if entry.is_dir() {
@@ -116,4 +129,37 @@ pub fn read_meta_field(chapter_path: &Path, field: &str) -> Option<String> {
     let raw = fs::read_to_string(&meta_path).ok()?;
     let value: serde_json::Value = serde_json::from_str(&raw).ok()?;
     value.get(field).and_then(|v| v.as_str()).map(String::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Una entrada cuyo `read_dir` falla (subcarpeta sin permiso de lectura)
+    /// tiene que propagar el error en vez de tragarse en silencio y devolver
+    /// un scope incompleto. Solo Unix: en Windows los permisos POSIX no
+    /// aplican y `set_readonly` no bloquea el listado de un directorio.
+    #[cfg(unix)]
+    #[test]
+    fn walk_paths_propaga_error_de_entrada_ilegible() {
+        use std::os::unix::fs::PermissionsExt;
+        use tempfile::TempDir;
+
+        let td = TempDir::new().unwrap();
+        let sin_permiso = td.path().join("sin-permiso");
+        fs::create_dir(&sin_permiso).unwrap();
+        fs::write(td.path().join("1.html"), "<p>ok</p>").unwrap();
+
+        let permisos_originales = fs::metadata(&sin_permiso).unwrap().permissions();
+        fs::set_permissions(&sin_permiso, std::fs::Permissions::from_mode(0o000)).unwrap();
+
+        let resultado = chapter_paths(td.path());
+
+        // Restaurar permisos ANTES de asertar: si el assert paniquea, el
+        // `TempDir` igual se borra al final del test, y sin permisos de
+        // lectura ese borrado fallaría y dejaría basura en /tmp.
+        fs::set_permissions(&sin_permiso, permisos_originales).unwrap();
+
+        assert!(resultado.is_err(), "esperaba error, dio {resultado:?}");
+    }
 }

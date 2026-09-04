@@ -115,6 +115,50 @@ interface ReplacePreview {
   /** True si se cortó por el tope de 2000/500. La UI muestra el aviso. */
   truncated: boolean;
 }
+
+// Payload de `replace_apply`. Campos reales de `ReplaceOutcome` en
+// `src-tauri/src/replace.rs` (`#[serde(rename_all = "camelCase")]`).
+interface ReplaceOutcome {
+  files: number;         // capítulos efectivamente escritos
+  occurrences: number;   // ocurrencias reemplazadas en total
+  /** Cambiaron entre el preview y el apply (autosave, pull, la otra PC): no
+   *  se tocaron. */
+  skippedFiles: string[];
+  /** Se intentaron escribir y falló (disco lleno, permisos, archivo tomado
+   *  por el servicio de sync). Cada entrada es `"<path>: <error>"`. Los que
+   *  sí se escribieron antes del fallo quedan en el snapshot, así que
+   *  Deshacer los cubre. OJO: no son todos capítulos — acá también caen
+   *  `.twriter/stats.json` (si no se pudo guardar el conteo de palabras) y
+   *  el `manifest.json` del propio snapshot (si no se pudo reescribir con
+   *  los mtimes reales). */
+  failedFiles: string[];
+  /** Vacío solo si no se intentó escribir ningún capítulo (sin edits, o todo
+   *  salteado por la revalidación o el guard de mtime) — ahí no hay nada que
+   *  deshacer y no se crea snapshot. Si una escritura se intentó y falló,
+   *  viene poblado aunque `files` sea 0. */
+  snapshotId: string;
+}
+
+// Payload de `replace_undo`. Campos reales de `UndoOutcome` en
+// `src-tauri/src/replace.rs` (mismo `rename_all`).
+interface UndoOutcome {
+  restored: number;   // capítulos restaurados desde el snapshot
+  /** Se editaron DESPUÉS del reemplazo: no se pisaron. El panel ofrece
+   *  "Pisarlos igual" con estos paths. */
+  blocked: string[];
+  /** Falló la restauración (permisos, disco, `rel` inválido en el
+   *  manifest). Formato `"<path>: <error>"`, mismo que `failedFiles`. El
+   *  snapshot NO se borra si hay alguno, para poder reintentar. OJO: no son
+   *  todos capítulos — acá también cae `.twriter/stats.json`. */
+  failed: string[];
+  /** True cuando lo de `blocked` se bloqueó porque el REGISTRO del snapshot
+   *  quedó incompleto (residuo del rename del manifest final), no porque el
+   *  capítulo se haya editado después del reemplazo. Son dos motivos
+   *  distintos: con esto en `false`, "Pisarlos igual" pisa ediciones propias
+   *  y recientes del autor; con esto en `true`, la app no sabe si restaurar
+   *  es seguro. */
+  suspect: boolean;
+}
 ```
 
 ```rust

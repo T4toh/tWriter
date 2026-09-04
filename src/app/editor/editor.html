@@ -269,7 +269,7 @@
   ></div>
 
   @if (active() && canEdit() && replaceApplying()) {
-    <div class="overlay overlay-busy">
+    <div class="overlay overlay-busy" role="status" aria-live="polite">
       <app-spinner [size]="18" />
       <p>Aplicando reemplazo en lote…</p>
     </div>
