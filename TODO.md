@@ -370,7 +370,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   nunca activaba su `overflow-y`, scrolleando el archivo de fondo. Fix:
   `grid-template-rows: minmax(0,1fr)` + `min-height:0` + `overscroll-behavior:contain`.
 
-- [ ] **Apartado "Apariencia" en Configuración: tema de la app y fuentes**
+- [x] **Apartado "Apariencia" en Configuración: tema de la app y fuentes**
   (pedido el 2026-09-04, después de definir los tokens de tema)
   Hoy el tema **lo decide el sistema operativo y nada más**: `styles.scss`
   tiene `color-scheme: light dark` y un `@media (prefers-color-scheme: dark)`,
@@ -415,6 +415,35 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Sobre tests: esto es casi todo tokens y DOM, o sea `pnpm build` +
   verificación manual del autor. Lo único puro que vale un smoke runner es el
   mapeo `'system' | 'light' | 'dark'` → atributo/`color-scheme`.
+  **Hecho el 2026-09-04** (rama `feat/tema-app`), en tres pasos:
+  1. Las tres familias bundleadas: cinco `.woff2` del subset latin en
+     `src/assets/fonts/` (~190 kB) declaradas en `src/styles/fonts.scss`, con
+     sus OFL y las entradas en `generar-licencias.mjs`. La carpeta va al
+     `ignore` del glob de assets: los `url()` del scss ya las emiten con hash
+     en `media/`.
+  2. Bloque "Apariencia" en el modal, con la fuente de **Interfaz**
+     (`--font-ui`) y la **Monoespaciada** (`--font-mono`) elegibles entre las
+     instaladas en la PC, preview de cada opción en su propia tipografía al
+     hover, y "Volver a las fuentes de la app". La mitad pura vive en
+     `core/app-fonts.ts` con su smoke runner
+     (`scripts/run-app-fonts-smoke.mjs`, 11 aserciones); elegir el default
+     guarda `null` y **borra** la custom property, así el default sigue
+     definido solo en `styles.scss`.
+  3. `appTheme` ('system' | 'light' | 'dark') persistido, aplicado con
+     `data-theme` en el `<html>`; los tokens oscuros pasaron a un mixin porque
+     ahora entran por el media query (con `:not([data-theme])`) y por el
+     override manual.
+  **Dos cosas del plan original NO se hicieron, por decisión del autor**:
+  - El serif de lectura no es un slot de Apariencia. La fuente del texto se
+    elige en el toolbar del editor, que ya existía, y ahora la comparten las
+    tres superficies del mismo contenido: editor de capítulos, editor de
+    notas y lector de Markdown (antes cada una tenía la suya).
+  - Tampoco se movió a Configuración el resto de los controles del editor
+    (tamaño, ancho, espaciado): se quedan donde están.
+  **Lo que queda afuera y se ve**: con el tema forzado a Oscuro y el OS en
+  claro, la barra de título nativa de la ventana sigue clara — eso no lo
+  arregla el CSS, hay que llamar a `setTheme()` de la ventana de Tauri y
+  habilitar el permiso en las capabilities.
 
 ## Gramática, ortografía y tesauro
 
