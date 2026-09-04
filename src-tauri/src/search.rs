@@ -766,12 +766,22 @@ pub fn remove_document(path: &Path) -> Result<(), String> {
 pub fn spawn_reindex(app: AppHandle, root: PathBuf) {
     tauri::async_runtime::spawn(async move {
         let _ = tauri::async_runtime::spawn_blocking(move || {
-            let mut emit_cb = |p: ReindexProgress| {
-                let _ = app.emit("search-reindex-progress", p);
+            let app_progreso = app.clone();
+            let mut emit_cb = move |p: ReindexProgress| {
+                let _ = app_progreso.emit("search-reindex-progress", p);
             };
-            if let Err(e) = full_reindex(&root, Some(&mut emit_cb)) {
-                tracing::warn!(target: "search", error = %e, "reindex falló");
-            }
+            let indexados = match full_reindex(&root, Some(&mut emit_cb)) {
+                Ok(n) => n,
+                Err(e) => {
+                    tracing::warn!(target: "search", error = %e, "reindex falló");
+                    0
+                }
+            };
+            // Cierre explícito del stream. El front no puede deducir el final
+            // del progreso: si un `add_document` falla, `done` nunca llega a
+            // `total`, y el aviso de "Indexando…" quedaría pegado para siempre.
+            // Se emite también cuando el reindex falló, con 0.
+            let _ = app.emit("search-reindex-done", indexados);
         })
         .await;
     });

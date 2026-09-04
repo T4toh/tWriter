@@ -9,6 +9,7 @@ import { NoteService } from './note-service';
 import { ProjectService } from './project-service';
 import { findAllMatchesInPlain, tokenize } from './search-highlight';
 import { SearchScope as SearchScopeKey, SettingsService } from './settings-service';
+import { ToastService } from './toast-service';
 
 const CURRENT_FILE_MAX_PARAGRAPH_HITS = 200;
 
@@ -114,6 +115,7 @@ export class SearchService {
   private chapter = inject(ChapterService);
   private note = inject(NoteService);
   private mdReader = inject(MarkdownReaderService);
+  private toasts = inject(ToastService);
 
   // Para cerrar el panel usar hide(), nunca `open.set(false)` directo: hay
   // estado asociado (`replaceMode`) que tiene que bajar junto con `open`, y
@@ -199,6 +201,11 @@ export class SearchService {
    *  invoke en cada tecleo: `activeFile` se recomputa con el contenido del
    *  editor, pero el path solo cambia al cambiar de archivo. */
   private lastStatusPath: string | null | undefined = undefined;
+  /** Toast vivo del reindex de fondo (boot / cambio de root), y su watchdog.
+   *  Sólo existe cuando el reindex NO vino del botón, que ya se muestra solo
+   *  en el panel. */
+  private reindexToastId: number | null = null;
+  private reindexWatchdog: ReturnType<typeof setTimeout> | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private currentRequestId = 0;
   private highlightCounter = 0;
@@ -580,13 +587,42 @@ export class SearchService {
 
   private async bindProgressListener(): Promise<void> {
     try {
-      // El listener vive toda la sesión; SearchService es providedIn 'root'.
+      // Los listeners viven toda la sesión; SearchService es providedIn 'root'.
       await listen<ReindexProgress>('search-reindex-progress', (event) => {
-        this.reindexProgress.set(event.payload);
+        const p = event.payload;
+        this.reindexProgress.set(p);
+        // El reindex del boot y el del cambio de root no pasan por `reindex()`:
+        // nadie prende `reindexing`, y el panel suele estar cerrado justo
+        // cuando cambiás de carpeta. Sin esto la app se queda muda un segundo
+        // largo (925 docs) y parece colgada. El del botón ya se muestra en el
+        // panel, así que ahí no duplicamos.
+        if (this.reindexing()) return;
+        const texto = `Indexando el repo… ${p.done}/${p.total}`;
+        if (this.reindexToastId === null) this.reindexToastId = this.toasts.progreso(texto);
+        else this.toasts.update(this.reindexToastId, texto);
+        // Red de contención por si el evento de cierre no llega (backend caído
+        // a mitad): el toast de progreso no se auto-cierra.
+        if (this.reindexWatchdog !== null) clearTimeout(this.reindexWatchdog);
+        this.reindexWatchdog = setTimeout(() => this.cerrarToastReindex(), 15_000);
+      });
+      await listen<number>('search-reindex-done', (event) => {
+        this.cerrarToastReindex();
+        void this.refreshIndexStatus();
+        this.debug.info('search', `reindex de fondo: ${event.payload} docs`);
       });
     } catch {
       // SSR / no-Tauri: sin listener.
     }
+  }
+
+  private cerrarToastReindex(): void {
+    if (this.reindexWatchdog !== null) {
+      clearTimeout(this.reindexWatchdog);
+      this.reindexWatchdog = null;
+    }
+    if (this.reindexToastId === null) return;
+    this.toasts.dismiss(this.reindexToastId);
+    this.reindexToastId = null;
   }
 }
 
