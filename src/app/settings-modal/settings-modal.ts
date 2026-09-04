@@ -289,6 +289,16 @@ export class SettingsModal {
     this.settings.resetAppFonts();
   }
 
+  /** El botón vive adentro del `<summary>` —resetea ese bloque, así que va
+   *  enfrentado a su título— y clickearlo dispara la acción por defecto del
+   *  summary: colapsar el bloque que se está mirando. De ahí el
+   *  `preventDefault`. */
+  protected resetFontsDesdeSummary(ev: Event): void {
+    ev.preventDefault();
+    ev.stopPropagation();
+    this.resetFonts();
+  }
+
   protected readonly hayFuenteElegida = computed(() =>
     this.slots.some((slot) => this.settings.appFont(slot) !== null),
   );
