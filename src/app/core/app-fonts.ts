@@ -19,7 +19,7 @@ export const APP_FONT_VAR: Record<AppFontSlot, string> = {
 
 export const APP_FONT_LABEL: Record<AppFontSlot, string> = {
   ui: 'Interfaz',
-  body: 'Lectura',
+  body: 'Serif',
   mono: 'Monoespaciada',
 };
 

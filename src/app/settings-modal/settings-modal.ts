@@ -214,7 +214,7 @@ export class SettingsModal {
   protected readonly slotLabel = APP_FONT_LABEL;
   protected readonly slotAyuda: Record<AppFontSlot, string> = {
     ui: 'Paneles, árbol, menús y botones.',
-    body: 'El texto que se lee y se escribe: editor y notas. El selector del toolbar del editor sigue pisando esto.',
+    body: 'Notas, lector de Markdown y los textos largos de los modales (bio, sinopsis). El texto del editor no: ese se elige en su propio toolbar y pisa esto.',
     mono: 'Paths, diffs y el panel de debug.',
   };
   /** Lo que shipea la app por slot. Solo para el label de la opción "default":
