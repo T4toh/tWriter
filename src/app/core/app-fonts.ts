@@ -5,21 +5,21 @@
  *  entonces no se puede cargar desde node: acá adentro no hay nada de eso, así
  *  que `scripts/run-app-fonts-smoke.mjs` lo compila y lo ejercita solo. */
 
-/** Los tres slots de fuente de la **app**, cada uno mapeado a la custom
- *  property que ya usan los componentes. Distinto del selector del editor:
- *  ese pisa la fuente del texto que se escribe (`--editor-font-family`), esto
- *  es la tipografía de la app. */
-export type AppFontSlot = 'ui' | 'body' | 'mono';
+/** Los slots de fuente de la **UI de la app**, cada uno mapeado a la custom
+ *  property que ya usan los componentes.
+ *
+ *  El serif de lectura NO está acá: la fuente del texto —capítulos y notas—
+ *  se elige en el toolbar del editor (`editorFontFamily`) y las dos
+ *  superficies comparten ese valor. Esto es solo el chrome. */
+export type AppFontSlot = 'ui' | 'mono';
 
 export const APP_FONT_VAR: Record<AppFontSlot, string> = {
   ui: '--font-ui',
-  body: '--font-body',
   mono: '--font-mono',
 };
 
 export const APP_FONT_LABEL: Record<AppFontSlot, string> = {
   ui: 'Interfaz',
-  body: 'Serif',
   mono: 'Monoespaciada',
 };
 
@@ -30,7 +30,6 @@ export const APP_FONT_LABEL: Record<AppFontSlot, string> = {
  *  un genérico, que es lo que impide que la app quede sin tipografía. */
 const APP_FONT_FALLBACK: Record<AppFontSlot, string> = {
   ui: "system-ui, -apple-system, 'Segoe UI', sans-serif",
-  body: "georgia, 'Times New Roman', serif",
   mono: 'ui-monospace, monospace',
 };
 

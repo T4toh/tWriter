@@ -54,7 +54,7 @@ console.log('resolveAppFontStack');
 // borre la custom property y deje ganar el valor de styles.scss.
 check('null → null (gana el default de la app)', resolveAppFontStack('ui', null) === null);
 check('string vacío → null', resolveAppFontStack('ui', '') === null);
-check('solo espacios → null', resolveAppFontStack('body', '   ') === null);
+check('solo espacios → null', resolveAppFontStack('mono', '   ') === null);
 
 {
   const stack = resolveAppFontStack('ui', 'Inter');
@@ -62,10 +62,8 @@ check('solo espacios → null', resolveAppFontStack('body', '   ') === null);
   check('fallback del slot ui es sans', stack.includes('sans-serif'), stack);
 }
 {
-  const stack = resolveAppFontStack('body', 'EB Garamond');
+  const stack = resolveAppFontStack('ui', 'EB Garamond');
   check('familia con espacios queda citada', stack.startsWith("'EB Garamond', "), stack);
-  check('fallback del slot body es serif', stack.endsWith('serif'), stack);
-  check('fallback de body no es sans', !stack.includes('sans-serif'), stack);
 }
 {
   const stack = resolveAppFontStack('mono', 'JetBrains Mono');
@@ -84,7 +82,6 @@ check('solo espacios → null', resolveAppFontStack('body', '   ') === null);
 
 console.log('APP_FONT_VAR');
 check('ui → --font-ui', APP_FONT_VAR.ui === '--font-ui');
-check('body → --font-body', APP_FONT_VAR.body === '--font-body');
 check('mono → --font-mono', APP_FONT_VAR.mono === '--font-mono');
 
 rmSync(outDir, { recursive: true, force: true });

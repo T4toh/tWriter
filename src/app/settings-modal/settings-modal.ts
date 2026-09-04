@@ -210,18 +210,16 @@ export class SettingsModal {
   // ── Apariencia: las tres fuentes de la app ──────────────────────────────
   private systemFonts = inject(SystemFontsService);
 
-  protected readonly slots: readonly AppFontSlot[] = ['ui', 'body', 'mono'];
+  protected readonly slots: readonly AppFontSlot[] = ['ui', 'mono'];
   protected readonly slotLabel = APP_FONT_LABEL;
   protected readonly slotAyuda: Record<AppFontSlot, string> = {
     ui: 'Paneles, árbol, menús y botones.',
-    body: 'Notas, lector de Markdown y los textos largos de los modales (bio, sinopsis). El texto del editor no: ese se elige en su propio toolbar y pisa esto.',
     mono: 'Paths, diffs y el panel de debug.',
   };
   /** Lo que shipea la app por slot. Solo para el label de la opción "default":
    *  el valor que se guarda es `null` y el stack real vive en `styles.scss`. */
   private readonly slotDefault: Record<AppFontSlot, string> = {
     ui: 'Lato',
-    body: 'Merriweather',
     mono: 'Roboto Mono',
   };
 
@@ -244,7 +242,7 @@ export class SettingsModal {
       if (instaladas.length > 0) grupos.push({ label: 'Instaladas', options: instaladas });
       return grupos;
     };
-    return { ui: armar('ui'), body: armar('body'), mono: armar('mono') };
+    return { ui: armar('ui'), mono: armar('mono') };
   });
 
   protected fontValue(slot: AppFontSlot): string {

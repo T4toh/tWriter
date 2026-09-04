@@ -27,8 +27,10 @@
       <details class="gs-bloque" [open]="aparienciaAbierta()" (toggle)="aparienciaAbierta.set($any($event.target).open)">
         <summary>Apariencia</summary>
         <p class="gs-bloque-intro">
-          Las tres tipografías de la app. El default es el que shipea tWriter;
-          podés cambiarlo por cualquier fuente instalada en esta PC.
+          Las tipografías de la interfaz. El default es el que shipea tWriter;
+          podés cambiarlo por cualquier fuente instalada en esta PC. La fuente
+          del texto que escribís —capítulos y notas— se elige en el toolbar del
+          editor.
         </p>
         @for (slot of slots; track slot) {
           <div class="gs-font-row">

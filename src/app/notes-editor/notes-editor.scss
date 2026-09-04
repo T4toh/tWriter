@@ -126,7 +126,7 @@
       0 0 0 1px var(--border),
       0 4px 24px rgb(0 0 0 / 8%);
     caret-color: var(--fg);
-    font-family: var(--font-body);
+    font-family: var(--editor-font-family, var(--font-body));
     font-size: var(--editor-font-size, 17px);
     line-height: 1.55;
 
