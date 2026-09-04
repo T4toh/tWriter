@@ -231,6 +231,15 @@ export class App {
       const theme = this.settings.appTheme();
       if (theme === 'system') document.documentElement.removeAttribute('data-theme');
       else document.documentElement.setAttribute('data-theme', theme);
+      // Y la ventana nativa, que el CSS no alcanza: con el tema forzado a
+      // Oscuro y el OS en claro, la barra de título quedaba clara. `null` la
+      // devuelve a seguir al sistema. En macOS y Linux el tema es de la app
+      // entera, no de esta ventana — da igual acá, hay una sola. Best-effort:
+      // si el backend rechaza el permiso no se rompe el tema del CSS, que es
+      // lo que importa.
+      void getCurrentWindow()
+        .setTheme(theme === 'system' ? null : theme)
+        .catch((e: unknown) => this.debug.error('theme', String(e)));
     });
     // Las fuentes de la UI van al `<html>`, no a un elemento de acá
     // adentro: `body { font-family: var(--font-ui) }` está por ENCIMA de
