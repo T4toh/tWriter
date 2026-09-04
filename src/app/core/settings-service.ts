@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, WritableSignal, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { NativeDialogsService } from './native-dialogs-service';
 import { GrammarMode } from './types';
@@ -6,6 +6,8 @@ import {
   EXCEPCIONES_DEFAULT,
   ExcepcionesDeliberadas,
 } from '../repeticiones/detector';
+import { AppFontSlot } from './app-fonts';
+
 
 export type EditorWidth = 'narrow' | 'wide' | 'full';
 export type ParagraphSpacing = 'tight' | 'normal' | 'loose';
@@ -92,6 +94,10 @@ interface Settings {
   editorFontFamily?: EditorFontFamily;
   editorFontRecents?: string[];
   editorParagraphSpacing?: ParagraphSpacing;
+  /** Fuentes de la app por slot. `null`/ausente = el default de `styles.scss`. */
+  appFontUi?: string | null;
+  appFontBody?: string | null;
+  appFontMono?: string | null;
   grammarMode?: GrammarMode;
   grammarCustomUrl?: string | null;
   grammarLtUsername?: string | null;
@@ -140,6 +146,10 @@ export class SettingsService {
   readonly editorFontFamily = signal<EditorFontFamily>(FONT_FAMILY_DEFAULT);
   readonly editorFontRecents = signal<string[]>([]);
   readonly editorParagraphSpacing = signal<ParagraphSpacing>(SPACING_DEFAULT);
+  /** Fuente elegida por slot. `null` = el default de la app. */
+  readonly appFontUi = signal<string | null>(null);
+  readonly appFontBody = signal<string | null>(null);
+  readonly appFontMono = signal<string | null>(null);
   readonly grammarMode = signal<GrammarMode>('public');
   readonly grammarCustomUrl = signal<string | null>(null);
   readonly grammarLtUsername = signal<string | null>(null);
@@ -200,6 +210,9 @@ export class SettingsService {
         Array.isArray(s.editorFontRecents) ? s.editorFontRecents.slice(0, FONT_RECENTS_MAX) : [],
       );
       this.editorParagraphSpacing.set(s.editorParagraphSpacing ?? SPACING_DEFAULT);
+      this.appFontUi.set(s.appFontUi ?? null);
+      this.appFontBody.set(s.appFontBody ?? null);
+      this.appFontMono.set(s.appFontMono ?? null);
       this.grammarMode.set((s.grammarMode as GrammarMode) ?? 'public');
       this.grammarCustomUrl.set(s.grammarCustomUrl ?? null);
       this.grammarLtUsername.set(s.grammarLtUsername ?? null);
@@ -357,6 +370,30 @@ export class SettingsService {
     void this.persist();
   }
 
+  /** `null` vuelve el slot al default de la app. */
+  setAppFont(slot: AppFontSlot, family: string | null): void {
+    const valor = family?.trim() ? family.trim() : null;
+    this.appFontSignal(slot).set(valor);
+    void this.persist();
+  }
+
+  appFont(slot: AppFontSlot): string | null {
+    return this.appFontSignal(slot)();
+  }
+
+  resetAppFonts(): void {
+    this.appFontUi.set(null);
+    this.appFontBody.set(null);
+    this.appFontMono.set(null);
+    void this.persist();
+  }
+
+  private appFontSignal(slot: AppFontSlot): WritableSignal<string | null> {
+    if (slot === 'ui') return this.appFontUi;
+    if (slot === 'body') return this.appFontBody;
+    return this.appFontMono;
+  }
+
   cycleParagraphSpacing(): void {
     const order: ParagraphSpacing[] = ['tight', 'normal', 'loose'];
     const next = order[(order.indexOf(this.editorParagraphSpacing()) + 1) % order.length];
@@ -459,6 +496,9 @@ export class SettingsService {
       editorFontFamily: this.editorFontFamily(),
       editorFontRecents: this.editorFontRecents().length ? this.editorFontRecents() : undefined,
       editorParagraphSpacing: this.editorParagraphSpacing(),
+      appFontUi: this.appFontUi(),
+      appFontBody: this.appFontBody(),
+      appFontMono: this.appFontMono(),
       grammarMode: this.grammarMode(),
       grammarCustomUrl: this.grammarCustomUrl(),
       grammarLtUsername: this.grammarLtUsername(),

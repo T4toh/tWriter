@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   effect,
   inject,
   signal,
@@ -20,8 +21,10 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { DebugService } from '../core/debug-service';
 import { GrammarService, LtDockerStatus, SecretStatus } from '../core/grammar-service';
+import { APP_FONT_LABEL, AppFontSlot } from '../core/app-fonts';
 import { SettingsService } from '../core/settings-service';
-import { Select } from '../shared/select';
+import { SystemFontsService } from '../core/system-fonts-service';
+import { Select, SelectGroup, SelectOption } from '../shared/select';
 import { CopyCommand } from '../shared/copy-command';
 import { GrammarMode } from '../core/types';
 
@@ -42,7 +45,7 @@ interface LtProgressEvent {
 /** Secciones colapsables del modal. `show()` recibe cuál abrir: el effect que
  *  reacciona a LanguageTool caído pide `gramatica`, porque si el bloque
  *  arrancara colapsado el remedio quedaría escondido detrás de un click. */
-export type SeccionSettings = 'general' | 'gramatica';
+export type SeccionSettings = 'general' | 'apariencia' | 'gramatica';
 
 @Component({
   selector: 'app-settings-modal',
@@ -194,13 +197,85 @@ export class SettingsModal {
    *  no se persiste lo que el autor colapsó a mano, porque el modal tiene que
    *  abrirse con Gramática a la vista cada vez que LT se cae. */
   protected readonly generalAbierta = signal<boolean>(false);
+  protected readonly aparienciaAbierta = signal<boolean>(false);
   protected readonly gramaticaAbierta = signal<boolean>(true);
 
   show(seccion: SeccionSettings = 'gramatica'): void {
     this.generalAbierta.set(seccion === 'general');
+    this.aparienciaAbierta.set(seccion === 'apariencia');
     this.gramaticaAbierta.set(seccion === 'gramatica');
     this.open.set(true);
   }
+
+  // ── Apariencia: las tres fuentes de la app ──────────────────────────────
+  private systemFonts = inject(SystemFontsService);
+
+  protected readonly slots: readonly AppFontSlot[] = ['ui', 'body', 'mono'];
+  protected readonly slotLabel = APP_FONT_LABEL;
+  protected readonly slotAyuda: Record<AppFontSlot, string> = {
+    ui: 'Paneles, árbol, menús y botones.',
+    body: 'El texto que se lee y se escribe: editor y notas. El selector del toolbar del editor sigue pisando esto.',
+    mono: 'Paths, diffs y el panel de debug.',
+  };
+  /** Lo que shipea la app por slot. Solo para el label de la opción "default":
+   *  el valor que se guarda es `null` y el stack real vive en `styles.scss`. */
+  private readonly slotDefault: Record<AppFontSlot, string> = {
+    ui: 'Lato',
+    body: 'Merriweather',
+    mono: 'Roboto Mono',
+  };
+
+  /** Un `SelectGroup[]` por slot. Se arma una sola vez por cambio del listado
+   *  del OS, en vez de una función llamada desde el template por cada CD. */
+  protected readonly fontGroups = computed<Record<AppFontSlot, SelectGroup[]>>(() => {
+    const sys = this.systemFonts.fonts();
+    const instaladas: SelectOption[] = sys.map((f) => ({
+      value: f.family,
+      label: f.family,
+      data: { fontFamily: f.family, path: f.path },
+    }));
+    const armar = (slot: AppFontSlot): SelectGroup[] => {
+      const grupos: SelectGroup[] = [
+        {
+          label: 'De la app',
+          options: [{ value: '', label: `${this.slotDefault[slot]} (default)` }],
+        },
+      ];
+      if (instaladas.length > 0) grupos.push({ label: 'Instaladas', options: instaladas });
+      return grupos;
+    };
+    return { ui: armar('ui'), body: armar('body'), mono: armar('mono') };
+  });
+
+  protected fontValue(slot: AppFontSlot): string {
+    return this.settings.appFont(slot) ?? '';
+  }
+
+  protected readonly fontsCargando = this.systemFonts.loading;
+
+  /** El listado del OS tarda ~400ms la primera vez, así que se pide al abrir
+   *  el dropdown y no al abrir el modal. */
+  protected onFontDropdownOpen(): void {
+    void this.systemFonts.ensureLoaded();
+  }
+
+  protected onFontHover(opt: SelectOption): void {
+    const data = opt.data as { fontFamily?: string; path?: string } | undefined;
+    if (!data?.fontFamily || !data.path) return;
+    void this.systemFonts.loadFace(data.fontFamily, data.path);
+  }
+
+  protected onFontSelect(slot: AppFontSlot, value: string): void {
+    this.settings.setAppFont(slot, value || null);
+  }
+
+  protected resetFonts(): void {
+    this.settings.resetAppFonts();
+  }
+
+  protected readonly hayFuenteElegida = computed(() =>
+    this.slots.some((slot) => this.settings.appFont(slot) !== null),
+  );
 
   close(): void {
     this.open.set(false);

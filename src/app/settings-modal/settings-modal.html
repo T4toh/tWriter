@@ -24,6 +24,45 @@
         </label>
       </details>
 
+      <details class="gs-bloque" [open]="aparienciaAbierta()" (toggle)="aparienciaAbierta.set($any($event.target).open)">
+        <summary>Apariencia</summary>
+        <p class="gs-bloque-intro">
+          Las tres tipografías de la app. El default es el que shipea tWriter;
+          podés cambiarlo por cualquier fuente instalada en esta PC.
+        </p>
+        @for (slot of slots; track slot) {
+          <div class="gs-font-row">
+            <div class="gs-option-text">
+              <strong>{{ slotLabel[slot] }}</strong>
+              <span class="muted">{{ slotAyuda[slot] }}</span>
+            </div>
+            <app-select
+              [groups]="fontGroups()[slot]"
+              [itemTemplate]="fontItemTpl"
+              [searchThreshold]="0"
+              [ngModel]="fontValue(slot)"
+              (ngModelChange)="onFontSelect(slot, $event)"
+              (click)="onFontDropdownOpen()"
+              (itemHover)="onFontHover($event)"
+            ></app-select>
+          </div>
+        }
+        <ng-template #fontItemTpl let-opt>
+          <span
+            class="font-item"
+            [style.font-family]="opt.data?.fontFamily ? '\'' + opt.data.fontFamily + '\', serif' : null"
+          >{{ opt.label }}</span>
+        </ng-template>
+        @if (fontsCargando()) {
+          <p class="muted">Leyendo las fuentes instaladas…</p>
+        }
+        @if (hayFuenteElegida()) {
+          <button type="button" class="btn btn-secondary" (click)="resetFonts()">
+            Volver a las fuentes de la app
+          </button>
+        }
+      </details>
+
       <details class="gs-bloque" [open]="gramaticaAbierta()" (toggle)="gramaticaAbierta.set($any($event.target).open)">
         <summary>Gramática</summary>
         <p class="gs-bloque-intro">

@@ -18,6 +18,7 @@ import { ProjectService } from './core/project-service';
 import { RaeAuditService } from './core/rae-audit-service';
 import { RustLogBridge } from './core/rust-log-bridge';
 import { SearchService } from './core/search-service';
+import { APP_FONT_VAR, AppFontSlot, resolveAppFontStack } from './core/app-fonts';
 import { SettingsService } from './core/settings-service';
 import { ToastService } from './core/toast-service';
 import { UpdaterService } from './core/updater-service';
@@ -220,6 +221,20 @@ export class App {
     effect(() => {
       if (this.grammar.pedidoDeConfig() === 0) return;
       this.settingsModal?.show('gramatica');
+    });
+    // Las tres fuentes de la app van al `<html>`, no a un elemento de acá
+    // adentro: `body { font-family: var(--font-ui) }` está por ENCIMA de
+    // `<app-root>`, así que una custom property seteada más abajo no lo
+    // alcanza y la mitad de la UI se quedaría con la fuente vieja. `null`
+    // borra la property para que gane el default de `styles.scss` — no se
+    // reescribe el stack default acá, que se desincronizaría solo.
+    effect(() => {
+      const root = document.documentElement;
+      for (const slot of ['ui', 'body', 'mono'] as AppFontSlot[]) {
+        const stack = resolveAppFontStack(slot, this.settings.appFont(slot));
+        if (stack) root.style.setProperty(APP_FONT_VAR[slot], stack);
+        else root.style.removeProperty(APP_FONT_VAR[slot]);
+      }
     });
     // Mutex per-pane: cuando se abre un capítulo en un pane, la nota del MISMO pane se cierra.
     effect(() => {
