@@ -222,7 +222,17 @@ export class App {
       if (this.grammar.pedidoDeConfig() === 0) return;
       this.settingsModal?.show('gramatica');
     });
-    // Las tres fuentes de la app van al `<html>`, no a un elemento de acá
+    // Tema elegido a mano: `data-theme` en el `<html>`, que es donde los
+    // bloques de `styles.scss` lo esperan. `system` **borra** el atributo en
+    // vez de escribir el tema que el OS tiene ahora: así el
+    // `prefers-color-scheme` sigue vivo y la app acompaña al OS si cambia
+    // mientras está abierta.
+    effect(() => {
+      const theme = this.settings.appTheme();
+      if (theme === 'system') document.documentElement.removeAttribute('data-theme');
+      else document.documentElement.setAttribute('data-theme', theme);
+    });
+    // Las fuentes de la UI van al `<html>`, no a un elemento de acá
     // adentro: `body { font-family: var(--font-ui) }` está por ENCIMA de
     // `<app-root>`, así que una custom property seteada más abajo no lo
     // alcanza y la mitad de la UI se quedaría con la fuente vieja. `null`

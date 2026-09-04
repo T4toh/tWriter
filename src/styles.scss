@@ -47,35 +47,58 @@
   --mono-font: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1f1d1a;
-    --bg-soft: #181614;
-    --fg: #e8e4dc;
-    --fg-muted: #9a948a;
-    --border: #2e2a25;
-    --accent: #c8a878;
+/* Los tokens oscuros van en un mixin porque se aplican por dos caminos
+ * distintos: el tema del sistema y el override manual de Configuración. */
+@mixin tokens-oscuros {
+  --bg: #1f1d1a;
+  --bg-soft: #181614;
+  --fg: #e8e4dc;
+  --fg-muted: #9a948a;
+  --border: #2e2a25;
+  --accent: #c8a878;
 
-    /* Mismos tokens que arriba, en la paleta oscura (cálida, no los grises
-     * neutros que traían los fallbacks). */
-    --panel-bg-elev: #262320;
-    --panel-header-bg: #262320;
-    --hover-bg: #302c27;
-    --input-bg: #171512;
-    --badge-bg: #2a2621;
-    --accent-bg: #3a2f22;
-    --surface-2: rgb(255 255 255 / 4%);
-    --bg-darker: #151310;
-    --border-subtle: #272320;
-    --muted-darker: #7c766d;
-    --ok: #6fbf8b;
-    --warn: #d4a35a;
-    --warning: #d4a35a;
-    --err: #e07a78;
-    --danger: #e07a78;
-    --mark-bg: #6b5220;
-    --mark-fg: #f5efe2;
+  /* Mismos tokens que arriba, en la paleta oscura (cálida, no los grises
+   * neutros que traían los fallbacks). */
+  --panel-bg-elev: #262320;
+  --panel-header-bg: #262320;
+  --hover-bg: #302c27;
+  --input-bg: #171512;
+  --badge-bg: #2a2621;
+  --accent-bg: #3a2f22;
+  --surface-2: rgb(255 255 255 / 4%);
+  --bg-darker: #151310;
+  --border-subtle: #272320;
+  --muted-darker: #7c766d;
+  --ok: #6fbf8b;
+  --warn: #d4a35a;
+  --warning: #d4a35a;
+  --err: #e07a78;
+  --danger: #e07a78;
+  --mark-bg: #6b5220;
+  --mark-fg: #f5efe2;
+}
+
+/* El OS en oscuro manda... salvo que el autor haya forzado claro a mano. El
+ * `:not()` es lo que hace que "Claro" gane sobre el sistema sin tener que
+ * repetir toda la paleta clara. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='dark']):not([data-theme='light']) {
+    @include tokens-oscuros;
   }
+}
+
+/* Override manual (`data-theme` lo escribe el effect de `app.ts`). Misma
+ * especificidad que el bloque de arriba, pero viene después, así que gana.
+ * `color-scheme` tiene que seguir al tema elegido y no al del OS, o los
+ * scrollbars y los controles nativos quedan del tema contrario. */
+:root[data-theme='dark'] {
+  @include tokens-oscuros;
+
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 html,

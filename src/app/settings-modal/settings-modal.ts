@@ -22,7 +22,12 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { DebugService } from '../core/debug-service';
 import { GrammarService, LtDockerStatus, SecretStatus } from '../core/grammar-service';
 import { APP_FONT_LABEL, AppFontSlot } from '../core/app-fonts';
-import { SettingsService } from '../core/settings-service';
+import {
+  APP_THEME_LABEL,
+  APP_THEMES,
+  AppTheme,
+  SettingsService,
+} from '../core/settings-service';
 import { SystemFontsService } from '../core/system-fonts-service';
 import { Select, SelectGroup, SelectOption } from '../shared/select';
 import { CopyCommand } from '../shared/copy-command';
@@ -209,6 +214,19 @@ export class SettingsModal {
 
   // ── Apariencia: las tres fuentes de la app ──────────────────────────────
   private systemFonts = inject(SystemFontsService);
+
+  protected readonly themes = APP_THEMES;
+  protected readonly themeLabel = APP_THEME_LABEL;
+  protected readonly themeAyuda: Record<AppTheme, string> = {
+    system: 'Sigue al tema del sistema operativo, y lo acompaña si cambia con la app abierta.',
+    light: 'Siempre claro, sin importar el sistema.',
+    dark: 'Siempre oscuro, sin importar el sistema.',
+  };
+  protected readonly theme = this.settings.appTheme;
+
+  protected onThemeChange(theme: AppTheme): void {
+    this.settings.setAppTheme(theme);
+  }
 
   protected readonly slots: readonly AppFontSlot[] = ['ui', 'mono'];
   protected readonly slotLabel = APP_FONT_LABEL;

@@ -26,6 +26,23 @@
 
       <details class="gs-bloque" [open]="aparienciaAbierta()" (toggle)="aparienciaAbierta.set($any($event.target).open)">
         <summary>Apariencia</summary>
+        <p class="gs-bloque-intro">Tema de la app.</p>
+        @for (t of themes; track t) {
+          <label class="gs-option">
+            <input
+              type="radio"
+              name="app-theme"
+              [value]="t"
+              [checked]="theme() === t"
+              (change)="onThemeChange(t)"
+            />
+            <div class="gs-option-text">
+              <strong>{{ themeLabel[t] }}</strong>
+              <span class="muted">{{ themeAyuda[t] }}</span>
+            </div>
+          </label>
+        }
+
         <p class="gs-bloque-intro">
           Las tipografías de la interfaz. El default es el que shipea tWriter;
           podés cambiarlo por cualquier fuente instalada en esta PC. La fuente
