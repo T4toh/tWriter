@@ -553,8 +553,11 @@ pub struct ReplaceOutcome {
 pub struct SnapshotFile {
     pub rel: String,
     pub occurrences: usize,
-    /// mtime en segundos epoch DESPUÉS de escribir. El undo lo usa para no
-    /// pisar una edición posterior al reemplazo.
+    /// mtime en segundos epoch DESPUÉS de escribir. **Fallback**: desde que
+    /// existe `hash_after_apply` el guard del undo va por contenido, y esto
+    /// solo decide para los snapshots que quedaron en disco de antes (sin el
+    /// campo del hash). Se sigue registrando para que un downgrade de la app
+    /// no se quede sin guard.
     ///
     /// `0` es un sentinel, NO un mtime real: significa "no se pudo
     /// registrar" (el capítulo no llegó a escribirse, o la reescritura final
@@ -564,6 +567,22 @@ pub struct SnapshotFile {
     /// autor justo en el caso en que más lo necesita: un lote que falló a
     /// mitad de camino.
     pub mtime_after_apply: u64,
+    /// Hash del contenido que quedó en disco DESPUÉS de escribir. Es el guard
+    /// del undo: si el contenido de hoy hashea igual, nadie tocó el capítulo
+    /// desde el reemplazo y restaurar es seguro; si no, se editó después (sea
+    /// cual sea el mtime) y va a `blocked`.
+    ///
+    /// Content-addressed en vez de time-addressed porque el mtime no alcanza:
+    /// su resolución es la del filesystem, y en HFS+/exFAT/SMB —donde vive el
+    /// repo si está en Dropbox o iCloud— es de un segundo, así que una edición
+    /// ajena que cae en el mismo segundo que el reemplazo le queda invisible.
+    ///
+    /// `None` es el mismo sentinel que el `0` del mtime ("no se pudo
+    /// registrar", restaurar igual), y además es lo que trae un manifest
+    /// viejo, escrito antes de que el campo existiera: ahí el guard cae al
+    /// mtime en vez de quedarse sin guard.
+    #[serde(default)]
+    pub hash_after_apply: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -601,14 +620,34 @@ fn mtime_epoch(path: &Path) -> u64 {
 /// es mitigación, no garantía, y lo que de verdad protege al autor en esos
 /// volúmenes es el snapshot.
 ///
-/// El guard del undo tiene el mismo techo pero peor, y en TODO filesystem:
-/// compara `mtime_epoch` (segundos) contra `mtime_after_apply`, que es el campo
-/// en segundos del manifest, así que una edición ajena que caiga en el mismo
-/// segundo que la escritura del apply le queda invisible y el undo la pisa.
-/// Cerrarlo pide cambiar el formato del campo a `(secs, nanos)` —o sea migrar
-/// los manifests en disco— y la ventana es de un segundo: deferido.
+/// El guard del undo tenía el mismo techo pero peor (comparaba segundos contra
+/// segundos, así que fallaba en TODO filesystem). Ya no: pasó a comparar el
+/// hash del contenido, ver `SnapshotFile::hash_after_apply`. Este de acá sigue
+/// con el techo del filesystem.
 fn mtime_raw(path: &Path) -> Option<SystemTime> {
     std::fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
+/// FNV-1a de 64 bits, en hex. Elegido por lo que NO necesita: no es
+/// criptográfico (acá el "adversario" es un autosave o un `git pull`, no
+/// alguien fabricando una colisión), no es una dependencia nueva, y a
+/// diferencia del `DefaultHasher` de la std es estable de por vida — el valor
+/// va a un archivo en disco que una versión posterior de la app tiene que poder
+/// comparar.
+fn hash_contenido(bytes: &[u8]) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in bytes {
+        h ^= u64::from(*b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{h:016x}")
+}
+
+/// Hash del contenido que hay en disco. `None` si no se pudo leer: en el apply
+/// eso es el sentinel de "no pude registrar" (el undo restaura igual), y en el
+/// undo significa que no hay con qué comparar.
+fn hash_de_archivo(path: &Path) -> Option<String> {
+    std::fs::read(path).ok().map(|b| hash_contenido(&b))
 }
 
 /// Un `rel` del manifest con segmento vacío, `.` o `..` se sale del root al
@@ -764,7 +803,12 @@ pub fn aplicar(
         if !rel_valido(&rel) {
             return Err(format!("path de capítulo inválido: {}", p.path.display()));
         }
-        manifest_files.push(SnapshotFile { rel, occurrences: p.ocurrencias, mtime_after_apply: 0 });
+        manifest_files.push(SnapshotFile {
+            rel,
+            occurrences: p.ocurrencias,
+            mtime_after_apply: 0,
+            hash_after_apply: None,
+        });
     }
 
     // Reclamar el id ATÓMICAMENTE con `create_dir` (falla si ya existe, a
@@ -877,6 +921,11 @@ pub fn aplicar(
                 out.files += 1;
                 out.occurrences += p.ocurrencias;
                 manifest_files[idx].mtime_after_apply = mtime_epoch(&p.path);
+                // Del disco, no de `p.nuevo`: `write_chapter` le agrega el
+                // `\n` final si falta, así que hashear lo que teníamos en
+                // memoria daría un valor que el undo nunca va a poder igualar
+                // leyendo el archivo.
+                manifest_files[idx].hash_after_apply = hash_de_archivo(&p.path);
                 stats.insert(
                     manifest_files[idx].rel.clone(),
                     crate::stats::ChapterStat {
@@ -892,11 +941,13 @@ pub fn aplicar(
                 // quedaba restaurable sin red para siempre, y el Deshacer de
                 // días después le pisaba las ediciones nuevas. Con el mtime
                 // real las tres formas del fallo se resuelven solas: truncado
-                // ⇒ el mtime es el del write ⇒ restaura; intacto ⇒ mtime
-                // viejo ⇒ restaura; editado después ⇒ mtime mayor ⇒ va a
-                // `blocked` y el autor decide. El `0` queda para lo único que
-                // lo motivó: "escribí pero no pude leer el mtime".
+                // ⇒ el hash es el del disco de ahora ⇒ restaura; intacto ⇒
+                // idem ⇒ restaura; editado después ⇒ el hash cambió ⇒ va a
+                // `blocked` y el autor decide. Los sentinels (`0` / `None`)
+                // quedan para lo único que los motivó: "escribí pero no pude
+                // leer el archivo".
                 manifest_files[idx].mtime_after_apply = mtime_epoch(&p.path);
+                manifest_files[idx].hash_after_apply = hash_de_archivo(&p.path);
                 out.failed_files.push(format!("{}: {}", p.path.display(), e));
                 break;
             }
@@ -1159,14 +1210,26 @@ pub fn deshacer(
         let forzado = force_paths
             .iter()
             .any(|p| PathBuf::from(p).components().collect::<PathBuf>() == destino_norm);
-        // `mtime_after_apply == 0` es el sentinel de "no se pudo registrar el
-        // mtime" que deja `replace_apply` (ver el doc del campo en replace.rs).
-        // Ahí el capítulo SÍ hay que restaurarlo: puede estar escrito, o
-        // truncado por un fallo de escritura, y es justo cuando el autor más
-        // necesita deshacer. Sin esta rama el guard lo bloquearía siempre,
-        // porque cualquier archivo existente tiene mtime > 0.
-        let editado_despues =
-            f.mtime_after_apply != 0 && mtime_epoch(&destino) > f.mtime_after_apply;
+        // El guard va por contenido: si el capítulo hashea igual que lo que el
+        // apply dejó escrito, nadie lo tocó. Nada de relojes — el mtime en
+        // segundos no distingue una edición ajena que cayó adentro del mismo
+        // segundo que el reemplazo, y en HFS+/exFAT/SMB no hay más resolución
+        // que esa (ver el doc de `hash_after_apply`).
+        //
+        // Los sentinels de "no se pudo registrar" (`None` acá, `0` en el
+        // mtime) NO bloquean: ahí el capítulo puede estar escrito o truncado
+        // por un fallo de escritura, y es justo cuando el autor más necesita
+        // deshacer.
+        //
+        // Un archivo ilegible tampoco bloquea (`is_some_and`): sin contenido
+        // con qué comparar, el caso vivo es el capítulo borrado, y restaurarlo
+        // es exactamente lo que se le pide al undo. Mismo criterio que tenía el
+        // guard de mtime, donde un `metadata` fallido daba `0`.
+        let editado_despues = match &f.hash_after_apply {
+            Some(h) => hash_de_archivo(&destino).is_some_and(|actual| &actual != h),
+            // Manifest viejo (pre-hash): el guard de mtime es lo único que hay.
+            None => f.mtime_after_apply != 0 && mtime_epoch(&destino) > f.mtime_after_apply,
+        };
         if !forzado && (manifest_sospechoso || editado_despues) {
             out.suspect |= manifest_sospechoso;
             out.blocked.push(destino_str);
@@ -1527,6 +1590,20 @@ mod tests {
         let t = SystemTime::now() + std::time::Duration::from_secs(10);
         let f = fs::File::options().write(true).open(path).unwrap();
         f.set_modified(t).unwrap();
+    }
+
+    /// Pisa el mtime con un epoch en segundos exacto. Con el segundo que el
+    /// manifest registró, reproduce la edición ajena que cayó DENTRO del mismo
+    /// segundo que el reemplazo — lo que en HFS+/exFAT/SMB pasa siempre.
+    fn forzar_mtime(path: &Path, secs: u64) {
+        let f = fs::File::options().write(true).open(path).unwrap();
+        f.set_modified(UNIX_EPOCH + std::time::Duration::from_secs(secs)).unwrap();
+    }
+
+    /// Lee el manifest del snapshot.
+    fn manifest_de(root: &Path, snapshot_id: &str) -> SnapshotManifest {
+        let p = root.join(".twriter/undo").join(snapshot_id).join("manifest.json");
+        serde_json::from_str(&fs::read_to_string(p).unwrap()).unwrap()
     }
 
     #[test]
@@ -2272,6 +2349,62 @@ mod tests {
     }
 
     #[test]
+    fn undo_no_pisa_una_edicion_hecha_en_el_mismo_segundo() {
+        // El guard por mtime no podía ver esto: `mtime_after_apply` está en
+        // segundos, así que una edición ajena que cae adentro del mismo segundo
+        // que el reemplazo deja el mtime IDÉNTICO al registrado. En APFS el
+        // caso es raro; en HFS+/exFAT/SMB (Dropbox, iCloud) el mtime no tiene
+        // más resolución que el segundo, así que el lote entero puede caer
+        // adentro de uno. El guard por hash no le pregunta al reloj.
+        let td = scope_con(&[("libro/1.html", "<p>Angelica dijo</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+        let registrado = manifest_de(td.path(), &out.snapshot_id).files[0].mtime_after_apply;
+        assert_ne!(registrado, 0, "el apply registró un mtime real");
+
+        let cap = td.path().join("libro/1.html");
+        fs::write(&cap, "<p>Angélica dijo, y después siguió</p>\n").unwrap();
+        forzar_mtime(&cap, registrado);
+
+        let u = deshacer_t(td.path(), &out.snapshot_id, &[]).unwrap();
+        assert_eq!(u.restored, 0);
+        assert_eq!(u.blocked.len(), 1, "{:?}", u.blocked);
+        assert!(!u.suspect, "bloqueado por la edición del autor, no por el registro");
+        assert!(
+            fs::read_to_string(&cap).unwrap().contains("y después siguió"),
+            "no se pisó la edición nueva"
+        );
+    }
+
+    #[test]
+    fn undo_de_un_manifest_viejo_sin_hash_cae_al_guard_de_mtime() {
+        // Los snapshots que quedaron en disco de antes del hash no tienen el
+        // campo. Sin fallback, `hash_after_apply: None` los mandaría a
+        // restaurar sin ningún guard.
+        let td = scope_con(&[("libro/1.html", "<p>Angelica dijo</p>")]);
+        let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
+        let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
+        // El manifest tal como lo escribía la versión anterior: sin la clave.
+        let snap = td.path().join(".twriter/undo").join(&out.snapshot_id);
+        let mut crudo: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(snap.join("manifest.json")).unwrap()).unwrap();
+        crudo["files"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("hashAfterApply")
+            .expect("el apply lo escribió");
+        fs::write(snap.join("manifest.json"), crudo.to_string()).unwrap();
+
+        let cap = td.path().join("libro/1.html");
+        fs::write(&cap, "<p>Angélica dijo, y después siguió</p>\n").unwrap();
+        forzar_mtime_futuro(&cap);
+
+        let u = deshacer_t(td.path(), &out.snapshot_id, &[]).unwrap();
+        assert_eq!(u.restored, 0);
+        assert_eq!(u.blocked.len(), 1, "{:?}", u.blocked);
+    }
+
+    #[test]
     fn undo_pisa_si_el_usuario_lo_fuerza() {
         let td = scope_con(&[("libro/1.html", "<p>Angelica dijo</p>")]);
         let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
@@ -2349,16 +2482,18 @@ mod tests {
         let td = scope_con(&[("libro/1.html", "<p>Angelica dijo</p>")]);
         let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
         let out = aplicar_t(td.path(), "Angelica", &ops(false, true), edits_de(&pv), "Angélica").unwrap();
-        // Manifest con el sentinel, tal como lo deja un apply que no pudo
-        // registrar el mtime real.
+        // Manifest con el sentinel, tal como lo deja un apply que escribió
+        // pero no pudo volver a leer el archivo para registrarlo.
         let snap = td.path().join(".twriter/undo").join(&out.snapshot_id);
         let mut manifest: SnapshotManifest =
             serde_json::from_str(&fs::read_to_string(snap.join("manifest.json")).unwrap()).unwrap();
         manifest.files[0].mtime_after_apply = 0;
+        manifest.files[0].hash_after_apply = None;
         fs::write(snap.join("manifest.json"), serde_json::to_string_pretty(&manifest).unwrap())
             .unwrap();
         // Y el capítulo con mtime al futuro: es exactamente el estado en que
-        // el guard, sin la rama del sentinel, bloquearía el restore.
+        // el guard, sin la rama del sentinel, bloquearía el restore. (Con el
+        // hash en `None` el guard cae al mtime, que es lo que este test pinnea.)
         let cap = td.path().join("libro/1.html");
         forzar_mtime_futuro(&cap);
 
@@ -2492,6 +2627,7 @@ mod tests {
                 rel: "../victima.html".to_string(),
                 occurrences: 1,
                 mtime_after_apply: 0,
+                hash_after_apply: None,
             }],
         };
         fs::write(snap.join("manifest.json"), serde_json::to_string_pretty(&manifest).unwrap())
@@ -2601,6 +2737,7 @@ mod tests {
                 rel: "libro/book.json".to_string(),
                 occurrences: 1,
                 mtime_after_apply: 0,
+                hash_after_apply: None,
             }],
         };
         fs::write(snap.join("manifest.json"), serde_json::to_string_pretty(&manifest).unwrap())
