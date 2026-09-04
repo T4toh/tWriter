@@ -268,7 +268,12 @@
     (contextmenu)="onContextMenu($event)"
   ></div>
 
-  @if (!active()) {
+  @if (active() && canEdit() && replaceApplying()) {
+    <div class="overlay overlay-busy" role="status" aria-live="polite">
+      <app-spinner [size]="18" />
+      <p>Aplicando reemplazo en lote…</p>
+    </div>
+  } @else if (!active()) {
     <div class="overlay overlay-landing">
       <app-landing />
     </div>

@@ -1795,43 +1795,223 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Verificado a mano por el autor el 2026-09-03.
 
 
-- [ ] **No hay reemplazar: corregir un nombre en todo el libro se hace a mano,
-  uno por uno** (reportado el 2026-09-03: "estuve buscando Angelica para cambiar
-  por Angélica a mano como mono")
-  El caso real es el más simple posible y el más frecuente: un nombre propio mal
-  escrito desde el principio, `Angelica` → `Angélica`, repartido en decenas de
-  capítulos. Hoy la única herramienta es buscar, abrir cada hit, corregir a mano
-  y acordarse de dónde se quedó. La búsqueda ya encuentra todo; lo que falta es
-  el otro lado.
-  **Las piezas están casi todas.** `findAllMatchesInPlain`
-  (`search-highlight.ts`) devuelve **todos** los rangos de un texto, no el
-  primero, y ya se usa para pintar las decoraciones; `offsetToPm`
-  (`grammar-extension.ts`) los ancla a posiciones PM; el índice sabe en qué
-  capítulos está el término. O sea que "reemplazar en el capítulo abierto" es
-  casi gratis: los rangos ya están calculados y aplicar el cambio es un
-  `insertContentAt` por rango, de atrás para adelante para no invalidar
-  posiciones.
-  **Lo que hay que decidir** (nada de esto está diseñado):
-  (a) **Alcance.** ¿Solo el capítulo abierto, o libro/saga entero? El primero es
-      el 20% del trabajo y el 80% del valor; el segundo obliga a escribir N
-      archivos que no están abiertos en el editor, o sea camino nuevo por Rust y
-      no por TipTap.
-  (b) **Preview y confirmación.** Reemplazar a ciegas en 40 capítulos no se puede
-      ofrecer. Lo más parecido que ya existe es el diff del conversor RAE y el
-      modal de revisión por libro; habría que ver si se reusa alguno.
-  (c) **Deshacer.** Adentro del capítulo abierto el undo de ProseMirror alcanza.
-      Cruzando archivos no hay undo — lo que sí hay es el auto-commit de git,
-      que hace del "volver atrás" un revert. Puede ser suficiente: commitear
-      antes de aplicar y decirlo en la UI.
-  (d) **Mayúsculas y palabra completa.** `Angelica` → `Angélica` necesita
-      preservar caso al principio de oración, y `casa` no debería tocar
-      `casarse`. Los toggles de la búsqueda hoy son `≈` (fuzzy) y scope; el
-      fuzzy **no** puede alimentar un reemplazo (reemplazar sobre un match
-      Levenshtein cambia palabras que no se pidieron), así que reemplazar tiene
-      que exigir modo exacto.
-  Mientras no exista, el atajo honesto para el caso `Angelica`: agregar la forma
-  correcta al diccionario de la saga no ayuda, y el conversor RAE tampoco toca
-  ortografía — así que hoy no hay atajo, es a mano.
+- [ ] **Reemplazar en lote: implementado, pendiente de verificación del autor**
+  (reportado el 2026-09-03: "estuve buscando Angelica para cambiar por
+  Angélica a mano como mono")
+  Diseño en `docs/superpowers/specs/2026-09-03-reemplazar-en-lote-design.md`,
+  plan de implementación en `docs/superpowers/plans/2026-09-03-reemplazar-en-lote.md`.
+  Vive en el panel de búsqueda, atrás del toggle `⇄` del header: reusa el
+  mismo selector de scope de la búsqueda (capítulo actual, libro, saga, todo
+  el repo), y agrega un campo "reemplazar por" con los toggles `Aa`
+  (mayúsculas) y `ab` (palabra completa) — `≈` (fuzzy) queda deshabilitado en
+  este modo, con el motivo escrito al lado: un match aproximado cambiaría
+  palabras que no se pidieron. Escribir needle + replacement dispara un
+  preview (`replace_preview` en Rust, debounce de 250ms) que enumera las
+  ocurrencias leyendo del **disco**, no del índice tantivy — así que es
+  inmune al item de arriba (el índice mudo). El preview se agrupa por
+  capítulo, con checkbox tri-estado por grupo y por ocurrencia individual
+  para destildar casos puntuales; aplicar corre `replace_apply`, que
+  snapshotea los originales antes de escribir.
+  **La pieza no obvia es el mapeo plain ↔ HTML por runs** (`src-tauri/src/replace.rs`):
+  se busca sobre el texto plano, que es lo que el autor ve, pero se escribe
+  sobre el HTML, y los offsets de los dos no coinciden (los tags no están en
+  el plain, las entidades cambian de largo). La solución es construir el
+  plain junto con una lista de **runs** — tramos que se corresponden byte a
+  byte con el HTML, cortados por cada tag, cada entidad y cada cierre de
+  bloque — y aplicar una única regla: **una ocurrencia solo es reemplazable
+  si cae entera dentro de un run**. Esa regla sola rechaza los tres casos
+  peligrosos (frase partida por una cursiva, match que abarca una entidad,
+  match que cruza dos párrafos) sin código especial para ninguno, y
+  garantiza que nunca se pise markup. Lo que no entra en ningún run se
+  muestra en el panel como salteado, con su snippet y el motivo.
+  **La red de seguridad** es un snapshot de los originales en
+  `.twriter/undo/` (uno solo, se pisa con cada apply nuevo) más un botón
+  Deshacer en el propio panel de búsqueda, no en un toast que desaparece.
+  Deshacer se niega a pisar y ofrece "Pisarlos igual" en dos casos: si algún
+  capítulo del snapshot se editó a mano **después** del reemplazo (compara
+  mtimes), o si el registro del snapshot quedó incompleto y no se puede
+  confiar en él (`suspect`) — son dos motivos distintos y el panel los explica
+  por separado, no con un mensaje genérico.
+  **Qué falta probar a mano** (con la app levantada, sobre el repo de prueba
+  no-git — nunca sobre el `Novelas/` real; `pnpm tauri dev` hay que
+  reiniciarlo porque los cambios de Rust no entran por HMR), ordenado por lo
+  que más importa:
+  1. El flujo básico: `Angelica` → `Angélica` con scope "Todo el repo", que
+     el conteo del preview coincida con lo que se ve en pantalla, y que el
+     árbol y el status de git se refresquen solos sin recargar la app.
+  2. **El EPUB end-to-end**: hacer un reemplazo cuyo texto nuevo contenga un
+     `&` (por ejemplo, reemplazar algo por "Marks & Spencer"), exportar el
+     libro y confirmar que abre en Thorium. Antes el `&` se escribía crudo en
+     el HTML sin escapar — invisible en la app, pero capaz de romper el EPUB
+     con un error de parseo meses después, sin ninguna pista de dónde salió.
+     Ya se escapan `&`/`<`/`>`; esta es la única forma de cerrar el bug del
+     todo, porque no se puede verificar desde los tests.
+  3. **Que la ventana responda mientras se tipea**, con scope "Todo el repo"
+     sobre un repo grande — y sobre todo si vive en Dropbox o iCloud con
+     "optimizar almacenamiento" activado, donde leer un archivo
+     desmaterializado baja de la red. Los tres comandos de Rust corrían en
+     el hilo principal y el preview se dispara cada 250ms escaneando todo el
+     scope en disco, así que antes eso podía congelar la ventana entera sin
+     spinner y sin poder cancelar. Ya van al pool de blocking.
+  4. **El bloqueo del editor durante el apply**, que es el caso que más costó
+     cerrar en la review: con un capítulo del scope abierto, disparar un
+     reemplazo que lo incluya y, apenas termine (mientras el toast todavía es
+     visible), intentar escribir de inmediato — tiene que seguir en
+     solo-lectura hasta que el rescan termina del todo. Probar también
+     abriendo un capítulo nuevo (o un split) *durante* el apply, y repetir
+     con split view abierto en los dos paneles.
+  5. **La secuencia completa de la exclusión manual**: destildar una
+     ocurrencia → aplicar → el panel tiene que quedar con **todo destildado**
+     y el botón de aplicar muerto (no armado apuntando a lo que ya se
+     excluyó) → tocar **Deshacer** → tiene que volver **todo destildado**
+     también, no todo tildado de nuevo. Antes, el preview posterior a un
+     apply o a un undo volvía con todo tildado, y un click de más
+     re-aplicaba justo lo que el autor había excluido a propósito. Es el
+     caso que más costó cerrar en la review y no tiene test automatizado —
+     vive en un servicio que inyecta `invoke()` y otros siete servicios.
+  6. Deshacer: hacer un reemplazo, editar a mano uno de los capítulos
+     tocados, y confirmar que Deshacer dice "se editaron después y no los
+     pisé" en vez de pisarlo. Si se puede forzar el otro caso (registro de
+     snapshot incompleto), confirmar que el mensaje es el otro ("no sé si es
+     seguro restaurar"), no el mismo texto para los dos motivos.
+  7. Deshacer y volver a reemplazar: que el snapshot viejo se borre (solo se
+     guarda el último).
+  8. Destildar una ocurrencia suelta (o un capítulo entero, en tri-estado) y
+     confirmar que ese párrafo o capítulo queda intacto.
+  9. Buscar un texto donde cada aparición esté cruzando una cursiva/negrita o
+     un salto de párrafo (por ejemplo, una palabra que en el libro real
+     siempre aparece partida en itálica): el panel tiene que mostrar el
+     grupo con el motivo de salteo, no quedar en blanco, y el capítulo no
+     debe tener checkbox tildable.
+  10. Reemplazo con "reemplazar por" vacío (el caso "Borrar"): el botón dice
+      "Borrar…" y el resultado/la barra de Deshacer reflejan "(borrado)".
+  11. Cerrar el panel en modo reemplazo por las cuatro vías (✕, Esc, `Ctrl/Cmd+F`,
+      y el mutex que lo cierra al abrir una nota o la auditoría RAE) y
+      reabrirlo: siempre tiene que volver a modo búsqueda normal, nunca
+      quedarse en modo reemplazo escaneando disco en el fondo.
+  12. El header con los 7 botones en un panel angosto — mirar que no quede
+      apretado — y que "Deshacer"/"Pisarlos igual"/el botón de aplicar tengan
+      pinta de botón real, no una caja apretada de ícono.
+  13. **El tri-estado del checkbox de capítulo**: con un grupo donde algunas
+      ocurrencias están destildadas, confirmar que el checkbox se ve
+      `indeterminate` de verdad (la rayita, no tildado ni vacío) — y sobre
+      todo, que clickearlo **no** abre ni cierra el `<details>` del grupo
+      (el checkbox vive adentro del `<summary>` con
+      `(click)="$event.stopPropagation()"` en `search-panel.html`, pero
+      según el spec el `stopPropagation` no cancela por sí solo la
+      "activation behavior" del `<summary>` — la review no lo pudo
+      certificar leyendo el código y pidió verlo andando en la WKWebView de
+      Mac y en WebKitGTK de Arch).
+  **Huecos conocidos y cosas deferidas** (están en el ledger de la feature,
+  no son sorpresa; ninguna es bloqueante para usarlo con cuidado):
+  - Un texto de reemplazo que contenga `&`, `<` o `>` queda, en lotes
+    posteriores, no reemplazable como string entero (las partes de alrededor
+    sí siguen siéndolo) — el escape corta run igual que cualquier entidad.
+    El panel lo muestra como salteado con su motivo, así que es visible y no
+    silencioso.
+  - Un `<` suelto en el HTML se come el texto hasta el próximo `>` de
+    cualquier parte del archivo. Es el mismo comportamiento que ya tiene la
+    búsqueda (`search.rs`) y se dejó así a propósito: arreglar uno sin el
+    otro los desincroniza.
+  - El fold que evita pisar dos ediciones del mismo archivo no cubre
+    symlinks, la insensibilidad a mayúsculas de APFS ni NFC vs NFD en
+    nombres de carpeta acentuados — las tres son la misma clase de problema
+    (grafías distintas para el mismo path real) y se dejaron afuera porque
+    `canonicalize` toca el filesystem por cada edición y puede resolver un
+    symlink de Dropbox/iCloud a otro lado.
+  - `fs::write_chapter` sin tmp+rename es un riesgo de la app entera, no solo
+    de esto — item propio más abajo: "El guardado de capítulos puede
+    truncarlos en disco lleno".
+  - Caminos sin test automatizado en `replace.rs` (hueco de cobertura, no bug
+    conocido — el comportamiento es el correcto, lo que falta es el arnés):
+    el TOCTOU del id de snapshot y la recalibración del guard de mtime a
+    `SystemTime` piden concurrencia real o timing, y un test que pasa por
+    casualidad es peor que ninguno; el repro del fallo al reescribir el
+    manifest final no se puede forzar sin romper también la fase anterior; y
+    la variante `files == 0` del filtro de salteados (todo salteado sin
+    ningún escrito) queda sin ejercitar porque el disparador que sí se
+    encontró —un hard link entre dos capítulos— siempre incluye una
+    escritura exitosa.
+  - El guard del undo por mtime tiene un hueco de resolución de 1 segundo —
+    item propio más abajo: "El guard del undo por mtime no distingue una
+    edición hecha en el mismo segundo que el reemplazo".
+  - Los contadores de la barra de Deshacer no bajan tras un Deshacer
+    parcial (siguen mostrando el total original aunque ya se restauró parte).
+  - "Archivo actual" no es el mismo scope en búsqueda que en reemplazo:
+    búsqueda usa el foco (e incluye notas), reemplazo usa el pane activo.
+  - Cambiar de carpeta raíz con el panel de reemplazo abierto no revalida el
+    scope elegido — riesgo bajo, porque cambiar de root ya cierra los
+    capítulos abiertos.
+  - El chequeo de extensión del frontend (`.html`, case-insensitive) no
+    coincide con el filtro de Rust (sensible a mayúsculas): un archivo
+    `1.HTML` pasaría el guard del frontend y daría preview vacío.
+  - Fuera de alcance por diseño, no por olvido: reemplazar dentro de notas,
+    regex, deshacer granular estilo ProseMirror, historial de reemplazos, y
+    tocar títulos de capítulo — ninguno se implementó.
+
+
+- [ ] **El guardado de capítulos puede truncarlos en disco lleno**
+  (encontrado el 2026-09-03 revisando `replace_apply` para "reemplazar en
+  lote", pero es un problema de toda la app, no de esa feature)
+  `fs::write_chapter` (`src-tauri/src/fs.rs`) escribe con `fs::write` pelado:
+  abre el archivo con `O_TRUNC` y recién después vuelca el contenido nuevo.
+  Si el disco se llena o el proceso muere a mitad de la escritura (ENOSPC,
+  corte de luz, kill -9), el capítulo queda truncado a lo que alcanzó a
+  escribir — no hay ningún estado intermedio seguro. Y este es el camino que
+  usa **todo** guardado de la app: el autosave del editor, el reemplazo en
+  lote, el conversor RAE al aplicar, cualquier escritura de un capítulo.
+  El arreglo es el patrón atómico de siempre — escribir a un `.tmp` al lado y
+  `rename()` sobre el destino, que en POSIX es atómico — y **ya está en este
+  mismo repo**: `stats.rs::write_stats` lo hace exactamente así (`fn
+  write_stats`, comentario "Sobrescribe `.twriter/stats.json` de forma
+  atómica (tmp + rename)"). Es el mismo cambio, tres líneas, aplicado a
+  `write_chapter` en vez de a `write_stats`.
+  Por qué no se hizo ya: se encontró y se dejó fuera a propósito durante la
+  Task 3 de "reemplazar en lote" (el reemplazo en lote lo mitiga con su
+  propio snapshot en `.twriter/undo/`, así que ahí el peor caso es
+  recuperable), pero el autosave normal no tiene ningún snapshot — un
+  capítulo truncado por un corte de luz mientras se escribe desde el editor
+  se pierde sin red.
+
+
+- [ ] **El guard del undo por mtime no distingue una edición hecha en el
+  mismo segundo que el reemplazo** (encontrado revisando "reemplazar en
+  lote", propuesto por CodeRabbit en la review del PR #94)
+  El undo se niega a pisar un capítulo del snapshot si detecta que se editó
+  a mano después del reemplazo, y lo hace comparando mtimes: `mtime_epoch`
+  (`src-tauri/src/replace.rs`) trunca a **segundos**, y el campo que guarda
+  el manifest (`mtime_after_apply`) es ese mismo segundo. Si una edición
+  ajena —autosave, la otra PC, un pull— cae dentro del mismo segundo que la
+  escritura del reemplazo, el mtime resultante es idéntico al que quedó
+  registrado y el guard no tiene con qué distinguirlos: lo trata como "nadie
+  lo tocó después" y lo pisa igual. En discos con resolución de mtime de 1
+  segundo (HFS+, exFAT, SMB — que es donde vive de verdad esto, porque el
+  repo de novelas puede estar en una carpeta de Dropbox o iCloud) la ventana
+  entera de un lote chico puede caer adentro de un solo segundo, así que no
+  es un caso de laboratorio.
+  **Por qué el mtime no alcanza**: la resolución del guard es la del
+  filesystem, no la del reloj — hasta pasando a nanosegundos (que ya
+  arreglaría APFS/ext4) quedan HFS+/exFAT/SMB con `tv_nsec` siempre en 0. El
+  guard depende de una propiedad del filesystem que la app no controla ni
+  puede detectar de antemano.
+  **Lo que propone CodeRabbit, y es mejor**: sacar la decisión de la
+  resolución del filesystem del todo. En vez de comparar mtimes, guardar en
+  el manifest un **hash del contenido que el reemplazo escribió** por
+  capítulo, y al deshacer comparar ese hash contra el contenido actual en
+  disco — si coinciden, nadie tocó el archivo desde el reemplazo y es seguro
+  restaurar; si no, se editó después (sea cual sea el mtime) y va a
+  `blocked` como hoy. Content-addressed, no time-addressed: dos escrituras
+  en el mismo segundo dejan de ser indistinguibles porque no se les pregunta
+  al reloj.
+  **Por qué no se hace ahora**: el mecanismo actual (mtime crudo en la fase
+  3 del apply, `mtime_epoch` en el manifest, el guard del undo, los
+  sentinels `0` para "no se pudo registrar") ya pasó **cinco rondas de
+  review** para llegar a donde está, con su propio ledger de huecos
+  conocidos y aceptados (ver el item de "Reemplazar en lote" de más arriba).
+  Cambiar el mecanismo de guard —no un parche sobre él— es un cambio de
+  formato del manifest (los snapshots viejos en disco no tienen el hash) y
+  se merece su propio ciclo de spec + review, no colarse como ajuste rápido
+  adentro de esta feature.
 
 
 - [ ] **El índice se puede quedar mudo y no hay forma de saberlo** (encontrado

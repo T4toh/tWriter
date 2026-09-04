@@ -309,3 +309,66 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+// Mismo padding vertical que `.sp-scope-row`, que va justo encima: sin el
+// padding de arriba el input queda pegado al borde inferior de esa fila.
+.sp-replace-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 6px 8px 8px;
+}
+
+.sp-check {
+  flex: 0 0 auto;
+  margin: 0 0.4rem 0 0;
+  cursor: pointer;
+}
+
+.sp-occ {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+// Las filas de ocurrencia/skip del reemplazo, a diferencia de `.sp-hit`
+// (search), no traían padding propio y quedaban pegadas al borde izquierdo,
+// desalineadas con el header del grupo (`.sp-group-head` usa 8px 12px).
+.sp-item--check,
+.sp-item--skipped {
+  padding: 10px 12px 10px 24px;
+}
+
+.sp-item--skipped {
+  opacity: 0.6;
+}
+
+.sp-skip-why {
+  display: block;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.sp-undo-bar,
+.sp-apply-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.5rem;
+}
+
+.sp-undo-text,
+.sp-apply-why,
+.sp-undo-blocked {
+  font-size: 0.8rem;
+}
+
+// El resto (fondo, color, disabled) lo trae el sistema global `.btn.btn-primary`
+// de `styles.scss` — acá solo el layout que es propio de esta fila.
+.sp-apply {
+  margin-left: auto;
+}

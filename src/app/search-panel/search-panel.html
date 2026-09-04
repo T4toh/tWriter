@@ -23,14 +23,28 @@
     class="sp-btn"
     [class.is-active]="searchFuzzy()"
     (click)="toggleFuzzy()"
+    [disabled]="replaceMode()"
     [title]="
-      searchFuzzy()
-        ? 'Búsqueda flexible (≈) ON — tolera typos y acentos. Apagá para buscar el texto exacto (corregir errores).'
-        : 'Búsqueda exacta — encuentra el texto literal. Activá (≈) para tolerar typos/acentos (nombres inventados).'
+      replaceMode()
+        ? 'La búsqueda flexible (≈) no se puede usar para reemplazar: un match aproximado cambiaría palabras que no pediste.'
+        : searchFuzzy()
+          ? 'Búsqueda flexible (≈) ON — tolera typos y acentos. Apagá para buscar el texto exacto (corregir errores).'
+          : 'Búsqueda exacta — encuentra el texto literal. Activá (≈) para tolerar typos/acentos (nombres inventados).'
     "
     aria-label="Toggle búsqueda flexible"
   >
     <span class="ico">≈</span>
+  </button>
+  <button
+    type="button"
+    class="sp-btn"
+    [class.is-active]="replaceMode()"
+    [attr.aria-pressed]="replaceMode()"
+    (click)="toggleReplaceMode()"
+    [title]="replaceMode() ? 'Cerrar el reemplazo' : 'Reemplazar en lote'"
+    aria-label="Toggle modo reemplazo"
+  >
+    <svg class="ico" lucideReplace [size]="14"></svg>
   </button>
   <button
     type="button"
@@ -76,7 +90,51 @@
   }
 </div>
 
+@if (replaceMode()) {
+  <div class="sp-replace-row">
+    <svg class="sp-icon" lucideReplace [size]="16"></svg>
+    <input
+      #replaceInput
+      type="text"
+      class="sp-input"
+      placeholder="Reemplazar por… (vacío borra)"
+      aria-label="Texto de reemplazo"
+      [value]="replacement()"
+      (input)="onReplacementInput($event)"
+      spellcheck="false"
+      autocomplete="off"
+    />
+    <button
+      type="button"
+      class="sp-btn"
+      [class.is-active]="caseSensitive()"
+      [attr.aria-pressed]="caseSensitive()"
+      (click)="toggleCaseSensitive()"
+      title="Distinguir mayúsculas de minúsculas"
+      aria-label="Toggle distinguir mayúsculas"
+    >
+      <span class="ico">Aa</span>
+    </button>
+    <button
+      type="button"
+      class="sp-btn"
+      [class.is-active]="wholeWord()"
+      [attr.aria-pressed]="wholeWord()"
+      (click)="toggleWholeWord()"
+      title="Palabra completa — con esto apagado, reemplazar «golpear» también toca «golpearon»"
+      aria-label="Toggle palabra completa"
+    >
+      <span class="ico">ab</span>
+    </button>
+  </div>
+  <p class="sp-status sp-hint">
+    Solo texto exacto: ≈ no aplica al reemplazo — un match aproximado cambiaría
+    palabras que no pediste.
+  </p>
+}
+
 <div class="sp-body">
+  @if (!replaceMode()) {
   @if (reindexing()) {
     @if (reindexProgress(); as p) {
       <p class="sp-status">Indexando… {{ p.done }}/{{ p.total }}</p>
@@ -157,5 +215,132 @@
         </li>
       }
     </ul>
+  }
+  }
+
+  @if (replaceMode()) {
+    @if (replaceError(); as err) {
+      <p class="sp-status sp-error">{{ err }}</p>
+    }
+    @if (replacePreviewing() || replacePending()) {
+      <p class="sp-status">Buscando ocurrencias…</p>
+    }
+    @if (replaceTruncated()) {
+      <p class="sp-status sp-partial">
+        Demasiadas ocurrencias para revisar de una. Acotá el alcance o el término.
+      </p>
+    }
+    @if (!replacePreviewing() && !replacePending() && !replaceError() && replaceGroups().length === 0) {
+      @if (motivoBloqueo() === 'sinQuery') {
+        <p class="sp-status sp-hint">
+          Escribí arriba qué buscar y acá con qué reemplazarlo. Solo toca capítulos.
+        </p>
+      } @else if (motivoBloqueo() === 'scopeNotas') {
+        <p class="sp-status sp-partial">
+          El reemplazo solo toca capítulos. Elegí otro alcance.
+        </p>
+      } @else {
+        <p class="sp-status">
+          Sin ocurrencias exactas de "{{ query() }}". El reemplazo no usa ≈ ni pliega
+          acentos.
+        </p>
+      }
+    }
+
+    @if (replaceGroups().length > 0) {
+      @if (replaceCounts().total > 0) {
+        <p class="sp-count">
+          {{ replaceCounts().total }} en {{ replaceChaptersTocables() }} capítulo{{ replaceChaptersTocables() === 1 ? '' : 's' }}
+          · {{ replaceCounts().selected }} seleccionada{{ replaceCounts().selected === 1 ? '' : 's' }}
+        </p>
+      }
+      <ul class="sp-list">
+        @for (group of replaceGroups(); track group.path) {
+          <li class="sp-group">
+            <details class="sp-group-details" open>
+              <summary class="sp-group-head" [title]="group.path">
+                @if (group.occurrences.length > 0) {
+                  <input
+                    type="checkbox"
+                    class="sp-check"
+                    [checked]="estadoGrupo(group) === 'all'"
+                    [indeterminate]="estadoGrupo(group) === 'some'"
+                    (click)="$event.stopPropagation()"
+                    (change)="onToggleGrupo(group)"
+                    [attr.aria-label]="'Seleccionar todas en ' + group.title"
+                  />
+                }
+                <span class="sp-hit-title">{{ group.title }}</span>
+                <span class="sp-group-count">
+                  {{ group.occurrences.length }}
+                </span>
+              </summary>
+              <ul class="sp-group-body">
+                @for (occ of group.occurrences; track occ.id) {
+                  <li class="sp-item sp-item--check">
+                    <label class="sp-occ">
+                      <input
+                        type="checkbox"
+                        class="sp-check"
+                        [checked]="estaSeleccionada(occ.id)"
+                        (change)="onToggleOcurrencia(occ.id)"
+                      />
+                      <span class="sp-hit-snippet">{{ occ.snippet }}</span>
+                    </label>
+                  </li>
+                }
+                @for (sk of group.skipped; track $index) {
+                  <li class="sp-item sp-item--skipped">
+                    <span class="sp-hit-snippet">{{ sk.snippet }}</span>
+                    <span class="sp-skip-why">no se reemplaza: {{ motivoSkipLabel(sk.reason) }}</span>
+                  </li>
+                }
+              </ul>
+              <p class="sp-hit-path">{{ group.path }}</p>
+            </details>
+          </li>
+        }
+      </ul>
+    }
+
+    @if (lastUndo(); as u) {
+      <div class="sp-undo-bar">
+        <span class="sp-undo-text">
+          Último: {{ u.needle }} → {{ u.replacement || '(borrado)' }} ·
+          {{ u.occurrences }} en {{ u.files }} capítulo{{ u.files === 1 ? '' : 's' }}
+        </span>
+        @if (u.blocked.length > 0) {
+          <span class="sp-undo-blocked">
+            @if (u.suspect) {
+              El registro quedó incompleto: no sé si es seguro restaurar
+              {{ u.blocked.length }}.
+            } @else {
+              {{ u.blocked.length }} se editaron después y no los pisé.
+            }
+          </span>
+          <button type="button" class="btn btn-danger" (click)="forzarDeshacer()" [disabled]="replaceApplying()">
+            Pisarlos igual
+          </button>
+        } @else {
+          <button type="button" class="btn btn-secondary" (click)="deshacerReemplazo()" [disabled]="replaceApplying()">
+            Deshacer
+          </button>
+        }
+      </div>
+    }
+
+    <div class="sp-apply-row">
+      @if (textoBloqueo(); as why) {
+        <span class="sp-apply-why">{{ why }}</span>
+      }
+      <button
+        type="button"
+        class="btn btn-primary sp-apply"
+        [disabled]="!puedeAplicar()"
+        (click)="aplicarReemplazo()"
+      >
+        {{ replaceApplying() ? 'Aplicando…' : labelAplicar() }}
+      </button>
+    </div>
   }
 </div>

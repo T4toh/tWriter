@@ -20,6 +20,7 @@ import {
   LucideList,
   LucideNotebook,
   LucideRefreshCw,
+  LucideReplace,
   LucideSearch,
   LucideX,
   type LucideIcon,
@@ -31,6 +32,8 @@ import { NoteService } from '../core/note-service';
 import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { compararPorEstructura, ordenDeEstructura } from '../core/orden-estructura';
 import { ProjectService } from '../core/project-service';
+import { ReplaceService } from '../core/replace-service';
+import type { MotivoSkip, ReplaceGroup } from '../core/replace-selection';
 import { findAllMatchesInPlain, tokenize } from '../core/search-highlight';
 import { SearchHit, SearchService } from '../core/search-service';
 import { SearchScope, SettingsService } from '../core/settings-service';
@@ -42,7 +45,7 @@ import { atajo } from '../shared/atajo';
   selector: 'app-search-panel',
   imports: [
     FormsModule, Select,
-    LucideBug, LucideDynamicIcon, LucideRefreshCw, LucideSearch, LucideX,
+    LucideBug, LucideDynamicIcon, LucideRefreshCw, LucideReplace, LucideSearch, LucideX,
   ],
   templateUrl: './search-panel.html',
   styleUrl: './search-panel.scss',
@@ -57,9 +60,15 @@ export class SearchPanel implements AfterViewInit {
   private nav = inject(NavigationService);
   private project = inject(ProjectService);
   private settings = inject(SettingsService);
+  private replace = inject(ReplaceService);
 
   @ViewChild('input', { static: true })
   inputRef!: ElementRef<HTMLInputElement>;
+
+  // No `static: true`: el input de reemplazo solo existe dentro de
+  // `@if (replaceMode())`, así que puede no estar en el DOM todavía.
+  @ViewChild('replaceInput')
+  replaceInputRef?: ElementRef<HTMLInputElement>;
 
   protected readonly query = this.svc.query;
   protected readonly results = this.svc.results;
@@ -146,6 +155,32 @@ export class SearchPanel implements AfterViewInit {
   protected readonly searchFuzzy = this.settings.searchFuzzy;
   protected readonly scopeNeedsContext = this.svc.scopeNeedsContext;
 
+  protected readonly replaceMode = this.svc.replaceMode;
+  protected readonly replacement = this.replace.replacement;
+  protected readonly replaceGroups = this.replace.groups;
+  protected readonly replaceCounts = this.replace.counts;
+  protected readonly replacePreviewing = this.replace.previewing;
+  /** Ventana del debounce ANTES de que `previewing` se prenda — sin esto, el
+   *  cuerpo del panel podía decir "Sin ocurrencias" mientras el botón de
+   *  aplicar decía "Buscando ocurrencias…" (mismo criterio en los dos lados). */
+  protected readonly replacePending = this.replace.pending;
+  protected readonly replaceApplying = this.replace.applying;
+  protected readonly replaceError = this.replace.error;
+  protected readonly replaceTruncated = this.replace.truncated;
+  protected readonly replaceSkipped = this.replace.totalSkipped;
+  protected readonly puedeAplicar = this.replace.puedeAplicar;
+  protected readonly motivoBloqueo = this.replace.motivoBloqueo;
+  protected readonly lastUndo = this.replace.lastUndo;
+  protected readonly caseSensitive = this.settings.replaceCaseSensitive;
+  protected readonly wholeWord = this.settings.replaceWholeWord;
+  /** `replaceCounts().chapters` es `groups.length`, que también cuenta los
+   *  grupos que solo aportan `skipped` (nada reemplazable ahí). Para el
+   *  contador del header usamos este en cambio: capítulos con al menos una
+   *  ocurrencia tocable. */
+  protected readonly replaceChaptersTocables = computed(
+    () => this.replaceGroups().filter((g) => g.occurrences.length > 0).length,
+  );
+
   protected readonly scopeOptions: SelectOption[] = [
     { value: 'all', label: 'Todo el repo' },
     { value: 'saga', label: 'Saga actual' },
@@ -188,6 +223,8 @@ export class SearchPanel implements AfterViewInit {
   }
 
   protected close(): void {
+    // hide() ya apaga replaceMode — es el choke point, no cada caller (ver
+    // SearchService.hide()).
     this.svc.hide();
   }
 
@@ -217,6 +254,101 @@ export class SearchPanel implements AfterViewInit {
     void this.settings.setSearchFuzzy(!this.searchFuzzy());
   }
 
+  protected toggleReplaceMode(): void {
+    this.svc.replaceMode.update((v) => !v);
+    queueMicrotask(() => this.inputRef?.nativeElement.focus());
+  }
+
+  protected onReplacementInput(event: Event): void {
+    this.replace.setReplacement((event.target as HTMLInputElement).value);
+  }
+
+  protected toggleCaseSensitive(): void {
+    void this.settings.setReplaceCaseSensitive(!this.caseSensitive());
+  }
+
+  protected toggleWholeWord(): void {
+    void this.settings.setReplaceWholeWord(!this.wholeWord());
+  }
+
+  protected estadoGrupo(group: ReplaceGroup): 'all' | 'none' | 'some' {
+    return this.replace.estadoGrupo(group);
+  }
+
+  protected estaSeleccionada(id: string): boolean {
+    return !this.replace.deselected().has(id);
+  }
+
+  protected onToggleOcurrencia(id: string): void {
+    this.replace.toggleOcurrencia(id);
+  }
+
+  protected onToggleGrupo(group: ReplaceGroup): void {
+    this.replace.toggleGrupo(group);
+  }
+
+  protected aplicarReemplazo(): void {
+    void this.replace.apply();
+  }
+
+  protected deshacerReemplazo(): void {
+    void this.replace.undo();
+  }
+
+  protected forzarDeshacer(): void {
+    const info = this.lastUndo();
+    if (!info) return;
+    void this.replace.undo(info.blocked);
+  }
+
+  /** Etiqueta del botón. Replacement vacío es borrar, y hay que decirlo.
+   *  El botón ya está deshabilitado con n=0 (ver `puedeAplicar`), pero el
+   *  texto no tiene por qué anunciar "las 0 seleccionadas". */
+  protected labelAplicar(): string {
+    const n = this.replaceCounts().selected;
+    const verbo = this.replacement() ? 'Reemplazar' : 'Borrar';
+    if (n === 0) return verbo;
+    if (n === 1) return `${verbo} 1 ocurrencia`;
+    return `${verbo} las ${n} seleccionadas`;
+  }
+
+  /** El motivo va en texto VISIBLE al lado del botón, no en un tooltip: si la
+   *  app sabe por qué no se puede, lo dice. */
+  protected textoBloqueo(): string {
+    switch (this.motivoBloqueo()) {
+      case 'sinQuery':
+        return 'Escribí qué buscar.';
+      case 'sinCambio':
+        return 'El texto de reemplazo es igual al buscado.';
+      case 'scopeNotas':
+        return 'El reemplazo solo toca capítulos, no notas.';
+      case 'sinCapitulo':
+        return 'Abrí un capítulo para usar este alcance.';
+      case 'sinAncestro':
+        // El capítulo abierto existe pero vive en una carpeta suelta, así que
+        // no cuelga de ninguna saga ni libro. Decir "abrí un capítulo" acá
+        // sería mentir: ya hay uno abierto.
+        return 'El capítulo abierto no pertenece a ese alcance. Elegí otro.';
+      case 'sinPreview':
+        return 'Buscando ocurrencias…';
+      case 'sinSeleccion':
+        return 'No hay ocurrencias seleccionadas.';
+      default:
+        return '';
+    }
+  }
+
+  protected motivoSkipLabel(reason: MotivoSkip): string {
+    switch (reason) {
+      case 'cruzaTag':
+        return 'cruza una cursiva o negrita';
+      case 'cruzaEntidad':
+        return 'contiene un carácter escapado';
+      case 'cruzaBloque':
+        return 'cruza dos párrafos';
+    }
+  }
+
   protected formatBm25(score: number | undefined): string {
     if (score == null) return '';
     return `BM25 ${score.toFixed(2)}`;
@@ -230,6 +362,18 @@ export class SearchPanel implements AfterViewInit {
     if (target === this.inputRef?.nativeElement) {
       if (this.query()) {
         this.svc.clear();
+      } else {
+        this.close();
+      }
+      event.preventDefault();
+      return;
+    }
+    // Mismo criterio para el input de reemplazo: antes cerraba el panel
+    // entero de un solo Esc en vez de limpiar primero, asimétrico con el de
+    // búsqueda arriba.
+    if (target === this.replaceInputRef?.nativeElement) {
+      if (this.replacement()) {
+        this.replace.setReplacement('');
       } else {
         this.close();
       }

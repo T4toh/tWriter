@@ -99,8 +99,16 @@ export class SearchService {
   private note = inject(NoteService);
   private mdReader = inject(MarkdownReaderService);
 
+  // Para cerrar el panel usar hide(), nunca `open.set(false)` directo: hay
+  // estado asociado (`replaceMode`) que tiene que bajar junto con `open`, y
+  // solo `hide()` lo hace.
   readonly open = signal<boolean>(false);
   readonly query = signal<string>('');
+  /** Modo reemplazo del panel (toggle `⇄`). Vive acá y no en `ReplaceService`
+   *  para que ese pueda inyectar a este sin DI circular. Mientras está
+   *  prendido la query a tantivy NO corre: el panel muestra el preview del
+   *  reemplazo, que se calcula aparte y sobre el disco. */
+  readonly replaceMode = signal<boolean>(false);
   readonly results = signal<SearchHit[]>([]);
   readonly loading = signal<boolean>(false);
   readonly error = signal<string | null>(null);
@@ -172,6 +180,7 @@ export class SearchService {
     // ("saga actual" depende del cap del pane 0; "current" depende del archivo
     // resuelto por activeFile, que incluye notas y md-reader).
     effect(() => {
+      const enReemplazo = this.replaceMode();
       this.settings.searchScope();
       this.settings.searchDebug();
       this.settings.searchFuzzy();
@@ -182,6 +191,20 @@ export class SearchService {
       this.mdReader.viewing();
       this.mdReader.content();
       this.lastFocusedSurface();
+      if (enReemplazo) {
+        // El early return de `runSearch()` evita que ENTRE en modo reemplazo
+        // se dispare un `search_query` nuevo, pero no invalida el que ya
+        // estaba en vuelo desde antes: su callback sigue comparando su `id`
+        // capturado contra `currentRequestId`, que acá no cambió, así que
+        // pasa el chequeo de identidad y puede pisar `results`/`error` con
+        // una respuesta tardía mientras el panel ya muestra el preview de
+        // reemplazo. Bumpear acá lo invalida sin depender de que haya query
+        // para relanzar un search (que además no correspondería en este modo).
+        this.currentRequestId++;
+        this.loading.set(false);
+        this.error.set(null);
+        return;
+      }
       if (this.query().trim()) {
         this.scheduleSearch();
       }
@@ -194,7 +217,11 @@ export class SearchService {
   }
 
   toggle(): void {
-    this.open.update((o) => !o);
+    // Delega en show()/hide() en vez de un `update` a mano: así cerrar por
+    // Ctrl/Cmd+F pasa por el mismo choke point que el botón ✕ y Esc, y
+    // apaga `replaceMode` (ver hide()) sin que este método tenga que saberlo.
+    if (this.open()) this.hide();
+    else this.show();
   }
 
   show(): void {
@@ -203,6 +230,14 @@ export class SearchService {
 
   hide(): void {
     this.open.set(false);
+    // El modo reemplazo no puede sobrevivir al panel cerrado: su effect en
+    // ReplaceService sigue vivo (Editor también lo inyecta ahora) y depende
+    // del capítulo activo, así que dejarlo prendido dispara un
+    // flushAllDirty() + un replace_preview que camina todo el scope en disco
+    // en cada cambio de capítulo, invisible, para siempre. Apagarlo acá (y no
+    // en cada caller de hide()/toggle()) cubre el botón ✕, las dos ramas de
+    // Esc, Ctrl/Cmd+F y el mutex del md-reader de una sola vez.
+    this.replaceMode.set(false);
   }
 
   setQuery(q: string): void {
@@ -232,6 +267,10 @@ export class SearchService {
   }
 
   private async runSearch(): Promise<void> {
+    if (this.replaceMode()) {
+      this.loading.set(false);
+      return;
+    }
     const q = this.query().trim();
     if (!q) {
       this.results.set([]);

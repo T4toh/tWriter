@@ -19,6 +19,7 @@ mod import_wizard;
 mod macos_text;
 mod notes;
 mod reorder;
+mod replace;
 mod saga_config;
 mod search;
 mod secrets;
@@ -65,6 +66,7 @@ use notes::{
     write_note,
 };
 use reorder::{move_node, relocate_node};
+use replace::{replace_apply, replace_preview, replace_undo};
 use search::{search_apply_path_change, search_query, search_reindex};
 use secrets::{lt_api_key_save, lt_api_key_status};
 use settings::{get_settings, set_settings};
@@ -215,6 +217,9 @@ pub fn run() {
             search_query,
             search_reindex,
             search_apply_path_change,
+            replace_preview,
+            replace_apply,
+            replace_undo,
             joplin_scan,
             joplin_import_apply,
             lt_api_key_status,

@@ -36,6 +36,7 @@ import { CursorRestoreService } from '../core/cursor-restore-service';
 import { SagaContextService } from '../core/saga-context-service';
 import { DebugService } from '../core/debug-service';
 import { GrammarService } from '../core/grammar-service';
+import { ReplaceService } from '../core/replace-service';
 import { SearchService } from '../core/search-service';
 import { ToastService } from '../core/toast-service';
 import {
@@ -157,6 +158,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private debug = inject(DebugService);
   private toast = inject(ToastService);
   private readonly tesauro = inject(TesauroService);
+  private readonly replace = inject(ReplaceService);
 
   /** Pane que renderiza este editor. Default 0 = principal. 1 = secundario (split). */
   readonly paneId = input<PaneId>(0);
@@ -168,6 +170,12 @@ export class Editor implements AfterViewInit, OnDestroy {
   private readonly pane = computed(() => this.chapter.panes[this.paneId()]);
   protected readonly active = computed(() => this.pane().active());
   protected readonly canEdit = computed(() => this.pane().canEdit());
+  /** El reemplazo en lote está escribiendo en disco. Mientras dure, el editor
+   *  pasa a solo-lectura (ver el effect en el constructor) para que tipear en
+   *  el capítulo abierto no deje `dirty=true` — si quedara así, la recarga
+   *  post-reemplazo lo saltea y el próximo autosave reescribe el contenido
+   *  PRE-reemplazo, deshaciendo el trabajo en silencio. */
+  protected readonly replaceApplying = this.replace.applying;
   protected readonly wordCount = computed(() => this.pane().wordCount());
   protected readonly dirty = computed(() => this.pane().dirty());
   protected readonly saving = computed(() => this.pane().saving());
@@ -780,6 +788,27 @@ export class Editor implements AfterViewInit, OnDestroy {
       const editor = this.tiptap;
       if (!editor) return;
       editor.setOptions({ editorProps: buildEditorProps(editor.view.dom, fontSizePx) });
+    });
+
+    // Solo-lectura mientras el reemplazo en lote aplica (ver `replaceApplying`
+    // arriba). `loadedAt()` se lee TRACKEADA (no `untracked`) a propósito: el
+    // effect de `loadedAt` de arriba hace `setEditable(true)` al recargar un
+    // capítulo, y `afterWrite()` (en ReplaceService) recarga justo los que se
+    // acaban de reemplazar mientras `applying` sigue en true — sin este
+    // re-trigger el editor volvía a ser editable, tapado por el overlay, y el
+    // autor tipeaba a ciegas. Como este effect se creó después del de
+    // `loadedAt`, corre segundo en el mismo flush y reimpone el solo-lectura.
+    // También cubre un editor CREADO durante el apply (abrir un capítulo o el
+    // split con el overlay puesto): antes nacía editable y este effect nunca
+    // volvía a correr porque `tiptap` es un campo, no una signal — leer
+    // `loadedAt()` lo dispara en cuanto ese editor nuevo carga contenido.
+    // `emitUpdate: false` evita que el toggle por sí solo ensucie el pane.
+    effect(() => {
+      const applying = this.replace.applying();
+      this.pane().loadedAt();
+      if (!this.viewReady() || !this.tiptap) return;
+      const node = untracked(() => this.active());
+      this.tiptap.setEditable(!!node?.editable && !applying, false);
     });
   }
 
