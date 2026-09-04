@@ -67,7 +67,7 @@ use notes::{
 };
 use reorder::{move_node, relocate_node};
 use replace::{replace_apply, replace_preview, replace_undo};
-use search::{search_apply_path_change, search_query, search_reindex};
+use search::{search_apply_path_change, search_index_status, search_query, search_reindex};
 use secrets::{lt_api_key_save, lt_api_key_status};
 use settings::{get_settings, set_settings};
 use split_chapter::{list_part_paths, split_chapter_apply, split_chapter_preview};
@@ -97,27 +97,16 @@ pub fn run() {
             debug_bridge::set_app_handle(handle.clone());
             tracing::info!(target: "boot", "tWriter listo");
             // Auto-init search index si hay root configurado. Best-effort.
-            tauri::async_runtime::spawn(async move {
-                let cfg = match settings::get_settings(handle.clone()) {
-                    Ok(c) => c,
-                    Err(e) => {
-                        tracing::warn!(target: "search", error = %e, "no pude leer settings al boot");
-                        return;
+            match settings::get_settings(handle.clone()) {
+                Ok(cfg) => {
+                    if let Some(root) = cfg.root {
+                        search::spawn_reindex(handle.clone(), std::path::PathBuf::from(root));
                     }
-                };
-                let Some(root) = cfg.root else { return; };
-                let handle_for_blocking = handle.clone();
-                let _ = tauri::async_runtime::spawn_blocking(move || {
-                    let mut emit_cb = move |p: search::ReindexProgress| {
-                        let _ = tauri::Emitter::emit(&handle_for_blocking, "search-reindex-progress", p);
-                    };
-                    let r = std::path::PathBuf::from(&root);
-                    if let Err(e) = search::full_reindex(&r, Some(&mut emit_cb)) {
-                        tracing::warn!(target: "search", error = %e, "reindex boot falló");
-                    }
-                })
-                .await;
-            });
+                }
+                Err(e) => {
+                    tracing::warn!(target: "search", error = %e, "no pude leer settings al boot");
+                }
+            }
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
@@ -216,6 +205,7 @@ pub fn run() {
             pick_file,
             search_query,
             search_reindex,
+            search_index_status,
             search_apply_path_change,
             replace_preview,
             replace_apply,

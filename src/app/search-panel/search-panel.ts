@@ -78,6 +78,18 @@ export class SearchPanel implements AfterViewInit {
   protected readonly reindexProgress = this.svc.reindexProgress;
   protected readonly matchLevel = this.svc.matchLevel;
   protected readonly scattered = this.svc.scattered;
+  protected readonly indexStatus = this.svc.indexStatus;
+  protected readonly activeFileMissingFromIndex = this.svc.activeFileMissingFromIndex;
+  /** Resumen del índice para el pie del panel: cuántos docs y de cuándo. */
+  protected readonly indexSummary = computed(() => {
+    const st = this.indexStatus();
+    if (!st) return null;
+    if (!st.initialized) return 'Índice sin inicializar — la búsqueda no ve nada.';
+    const docs = `${st.docs} doc${st.docs === 1 ? '' : 's'} indexados`;
+    if (!st.lastWrite) return docs + '.';
+    const hora = new Date(st.lastWrite).toLocaleTimeString('es-AR', { hour12: false });
+    return `${docs}, último cambio ${hora}.`;
+  });
   protected readonly count = computed(() => this.results().length);
   /** Posición de cada path en la estructura del repo, para ordenar los grupos
    *  por orden de lectura. Se recalcula solo cuando cambia el árbol. */

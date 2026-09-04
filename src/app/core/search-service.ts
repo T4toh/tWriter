@@ -9,6 +9,7 @@ import { NoteService } from './note-service';
 import { ProjectService } from './project-service';
 import { findAllMatchesInPlain, tokenize } from './search-highlight';
 import { SearchScope as SearchScopeKey, SettingsService } from './settings-service';
+import { ToastService } from './toast-service';
 
 const CURRENT_FILE_MAX_PARAGRAPH_HITS = 200;
 
@@ -72,6 +73,22 @@ interface ReindexProgress {
   current: string;
 }
 
+/** Foto del índice tantivy. Espeja `IndexStatus` de `search.rs`. Sin esto un
+ *  índice vacío, viejo o apuntando a otro root se ve igual que "sin
+ *  resultados": el buscador contesta que no hay nada y no hay forma de
+ *  distinguir "no está en el texto" de "no está indexado". */
+export interface IndexStatus {
+  initialized: boolean;
+  root: string | null;
+  docs: number;
+  /** ms epoch del último write al índice en esta sesión, 0 si ninguno. */
+  lastWrite: number;
+  /** Sólo cuando se consultó un path (el archivo activo). */
+  pathIndexed?: boolean | null;
+  pathMtimeIndex?: number | null;
+  pathMtimeDisk?: number | null;
+}
+
 /** Pedido pendiente de "saltar al primer match" para un path. El editor / reader
  *  que corresponde al path lo consume con `consumePendingHighlight()` cuando
  *  termina de renderizar el contenido. `requestId` evita doble-consumo. */
@@ -98,6 +115,7 @@ export class SearchService {
   private chapter = inject(ChapterService);
   private note = inject(NoteService);
   private mdReader = inject(MarkdownReaderService);
+  private toasts = inject(ToastService);
 
   // Para cerrar el panel usar hide(), nunca `open.set(false)` directo: hay
   // estado asociado (`replaceMode`) que tiene que bajar junto con `open`, y
@@ -114,6 +132,15 @@ export class SearchService {
   readonly error = signal<string | null>(null);
   readonly reindexing = signal<boolean>(false);
   readonly reindexProgress = signal<ReindexProgress | null>(null);
+  /** Estado del índice, refrescado al abrir el panel, tras cada búsqueda y
+   *  tras un reindex. Null hasta la primera consulta. */
+  readonly indexStatus = signal<IndexStatus | null>(null);
+  /** El archivo abierto no está en el índice: cualquier búsqueda que no sea
+   *  "Archivo actual" lo va a ignorar, y eso hoy se ve como "sin resultados". */
+  readonly activeFileMissingFromIndex = computed(() => {
+    const st = this.indexStatus();
+    return st != null && st.initialized && st.pathIndexed === false;
+  });
   /** Qué tan bien matchean los resultados actuales (ver `MatchLevel`). */
   readonly matchLevel = signal<MatchLevel>('phrase');
   /** Docs que tenían todas las palabras pero lejos, y por eso no se muestran. */
@@ -170,12 +197,36 @@ export class SearchService {
     },
   );
 
+  /** Último path por el que se preguntó el estado del índice. Evita repetir el
+   *  invoke en cada tecleo: `activeFile` se recomputa con el contenido del
+   *  editor, pero el path solo cambia al cambiar de archivo. */
+  private lastStatusPath: string | null | undefined = undefined;
+  /** Toast vivo del reindex de fondo (boot / cambio de root), y su watchdog.
+   *  Sólo existe cuando el reindex NO vino del botón, que ya se muestra solo
+   *  en el panel. */
+  private reindexToastId: number | null = null;
+  private reindexWatchdog: ReturnType<typeof setTimeout> | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private currentRequestId = 0;
   private highlightCounter = 0;
 
   constructor() {
     void this.bindProgressListener();
+    // El estado del índice tiene que seguir al archivo abierto, no al momento
+    // en que se abrió el panel: cambiar de capítulo con el panel abierto (o
+    // buscar con scope "Archivo actual", que es client-side y ni toca el
+    // backend) dejaba el aviso mostrando lo del archivo anterior.
+    effect(() => {
+      const abierto = this.open();
+      const path = this.activeFile()?.path ?? null;
+      if (!abierto) {
+        this.lastStatusPath = undefined;
+        return;
+      }
+      if (path === this.lastStatusPath) return;
+      this.lastStatusPath = path;
+      void this.refreshIndexStatus(path);
+    });
     // Re-corre la query cuando cambia el scope, el debug o el archivo activo
     // ("saga actual" depende del cap del pane 0; "current" depende del archivo
     // resuelto por activeFile, que incluye notas y md-reader).
@@ -226,6 +277,20 @@ export class SearchService {
 
   show(): void {
     this.open.set(true);
+  }
+
+  /** Pregunta al backend por el estado del índice, incluyendo si el path
+   *  consultado está adentro. Sin `path` usa el archivo activo. Best-effort:
+   *  si falla, deja el estado anterior. */
+  async refreshIndexStatus(path?: string | null): Promise<void> {
+    const target = path === undefined ? this.activeFile()?.path : (path ?? undefined);
+    try {
+      this.indexStatus.set(
+        await invoke<IndexStatus>('search_index_status', { path: target }),
+      );
+    } catch (err) {
+      this.debug.warn('search', `estado del índice: ${err}`);
+    }
   }
 
   hide(): void {
@@ -316,6 +381,7 @@ export class SearchService {
     } finally {
       if (id === this.currentRequestId) this.loading.set(false);
     }
+    void this.refreshIndexStatus();
   }
 
   /** Búsqueda client-side sobre el archivo activo. Cada párrafo con match es
@@ -501,9 +567,17 @@ export class SearchService {
     try {
       const total = await invoke<number>('search_reindex', { root });
       this.debug.info('search', `reindex completo: ${total} docs`);
+      // El path no cambió, así que el effect no vuelve a correr: refresco a
+      // mano y sincronizo el dedupe para no pedirlo dos veces.
+      this.lastStatusPath = this.activeFile()?.path ?? null;
+      await this.refreshIndexStatus(this.lastStatusPath);
       // Re-correr query actual si hay una.
       if (this.query().trim()) await this.runSearch();
     } catch (err) {
+      // Visible en el panel, no sólo en el 🐛: reindexar es el remedio que la
+      // UI ofrece cuando el índice quedó viejo, y fallar en silencio deja al
+      // usuario apretando un botón que no hace nada.
+      this.error.set(`No se pudo reindexar: ${err}`);
       this.debug.error('search', `reindex falló: ${err}`);
     } finally {
       this.reindexing.set(false);
@@ -513,13 +587,42 @@ export class SearchService {
 
   private async bindProgressListener(): Promise<void> {
     try {
-      // El listener vive toda la sesión; SearchService es providedIn 'root'.
+      // Los listeners viven toda la sesión; SearchService es providedIn 'root'.
       await listen<ReindexProgress>('search-reindex-progress', (event) => {
-        this.reindexProgress.set(event.payload);
+        const p = event.payload;
+        this.reindexProgress.set(p);
+        // El reindex del boot y el del cambio de root no pasan por `reindex()`:
+        // nadie prende `reindexing`, y el panel suele estar cerrado justo
+        // cuando cambiás de carpeta. Sin esto la app se queda muda un segundo
+        // largo (925 docs) y parece colgada. El del botón ya se muestra en el
+        // panel, así que ahí no duplicamos.
+        if (this.reindexing()) return;
+        const texto = `Indexando el repo… ${p.done}/${p.total}`;
+        if (this.reindexToastId === null) this.reindexToastId = this.toasts.progreso(texto);
+        else this.toasts.update(this.reindexToastId, texto);
+        // Red de contención por si el evento de cierre no llega (backend caído
+        // a mitad): el toast de progreso no se auto-cierra.
+        if (this.reindexWatchdog !== null) clearTimeout(this.reindexWatchdog);
+        this.reindexWatchdog = setTimeout(() => this.cerrarToastReindex(), 15_000);
+      });
+      await listen<number>('search-reindex-done', (event) => {
+        this.cerrarToastReindex();
+        void this.refreshIndexStatus();
+        this.debug.info('search', `reindex de fondo: ${event.payload} docs`);
       });
     } catch {
       // SSR / no-Tauri: sin listener.
     }
+  }
+
+  private cerrarToastReindex(): void {
+    if (this.reindexWatchdog !== null) {
+      clearTimeout(this.reindexWatchdog);
+      this.reindexWatchdog = null;
+    }
+    if (this.reindexToastId === null) return;
+    this.toasts.dismiss(this.reindexToastId);
+    this.reindexToastId = null;
   }
 }
 

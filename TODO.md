@@ -2041,47 +2041,51 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   adentro de esta feature.
 
 
-- [ ] **El índice se puede quedar mudo y no hay forma de saberlo** (encontrado
-  el 2026-09-03 persiguiendo un `golpear` que no traía resultados)
-  Tres cosas que se suman y dejan al buscador mintiendo sin una sola señal:
-  (a) **El indexado incremental es un no-op silencioso.** `with_index`
-      (`search.rs`) hace `return Ok(())` si el slot del estado está en `None`, y
-      `init_for_root` se llama desde **un solo lugar**: `full_reindex`
-      (`search.rs:660`). O sea que antes del primer reindex, cada
-      `index_document` al guardar un capítulo se descarta y devuelve Ok.
-  (b) **El reindex de boot no se ve.** Loguea `INFO` en el target `search`, y el
-      filtro por default es `EnvFilter::new("twriter_lib=info,boot=info,warn,error")`
-      (`debug_bridge.rs:33`) — el `warn` suelto pone el nivel default en WARN, así
-      que ese INFO no sale nunca. Con `RUST_LOG="search=debug" pnpm tauri dev`
-      aparece: `reindex full completo indexed=925`, un segundo después del boot.
-      Sin eso no hay manera de saber si el índice está fresco, viejo o vacío.
-  (c) **Reindexa el repo entero en cada arranque.** 925 docs en ~1s con el repo
-      de prueba, pero es O(repo) y tira el trabajo incremental de la sesión
-      anterior. Con un repo grande esto se nota.
-  **Qué haría falta**: que la UI sepa el estado del índice (cuántos docs, de
-  cuándo) y lo muestre en el panel de búsqueda, y que `with_index` logee un WARN
-  en vez de tragarse el no-op. Lo de reindexar todo en cada boot es una decisión
-  aparte: alcanzaría comparar mtimes contra el índice y tocar solo lo que cambió.
-  **Sin explicación, no reproducido**: el síntoma que arrancó todo esto fue
-  `golpear` con scope "Todo el repo" devolviendo **4 resultados**, todos del
-  libro `2 - Más que un trabajo`, con el índice completo. Contra una copia del
-  mismo repo, la misma query en modo exacto da **23 hits**, y con scope de libro
-  los 3 capítulos correctos.
-  Segundo episodio el mismo día, y este es el que más pinta tiene: un término no
-  aparecía **hasta abrir el archivo**. El autor lo probó en **todos** los
-  scopes, así que no es el caso esperado de "Archivo actual" (que lee el buffer
-  del editor y por diseño solo encuentra en archivos abiertos). Abrir un
-  capítulo escribe stats/meta, eso dispara `search_apply_path_change` →
-  `index_document`, y ahí recién aparece — o sea que el doc **no estaba** en el
-  índice aunque el boot reporte `indexed=925`. Los dos episodios dejaron de
-  pasar y no hubo repro para aislarlos.
-  **Lo que haría falta para cazarlo**: un comando que diga si un path está en el
-  índice y con qué mtime, expuesto en el panel 🐛 — hoy no hay forma de
-  preguntárselo a la app, y ahí se fue toda una sesión de adivinar leyendo
-  mtimes de los archivos del índice (con una conclusión equivocada en el medio).
-  Mientras no exista: arrancar con `RUST_LOG="search=debug"` y mirar si el
-  `indexed=N` del boot coincide con la cantidad de docs del repo.
-
+- [x] **El índice se puede quedar mudo y no hay forma de saberlo**
+  (encontrado el 2026-09-03 persiguiendo un `golpear` que no traía
+  resultados; `fix/indice-mudo`, verificado a mano por el autor el
+  2026-09-04)
+  **Causa raíz encontrada**: cambiar el root nunca reinicializaba el índice.
+  `setRoot` solo persistía settings y `full_reindex` corría en un único lugar
+  (el boot), así que tras elegir otra carpeta el buscador seguía contestando
+  con los documentos del root anterior y cada save iba a parar al índice
+  viejo — en silencio. `set_settings` (`settings.rs`) ahora compara el root
+  contra el de disco y dispara `search::spawn_reindex`; el boot usa el mismo
+  helper. Verificado en el log: `root nuevo: reindexando root=…/novelas` →
+  `reindex full completo indexed=925` en ~0.9 s.
+  **Segunda causa raíz, encontrada probando**: el botón "Reindexar" del panel
+  —el único remedio a mano cuando el índice quedó viejo— **fallaba en
+  silencio salvo la primera vez**. `init_for_root` abría el writer nuevo
+  antes de soltar el viejo y tantivy toma un lock exclusivo por directorio,
+  así que todo reindex posterior al del boot moría con `Failed to acquire
+  Lockfile: LockBusy`. Al boot no hay índice previo, o sea que el bug quedaba
+  tapado justo donde no molestaba y aparecía únicamente cuando el usuario iba
+  a buscar el remedio. Test: dos `full_reindex` seguidos sobre el mismo root.
+  Lo demás que se hizo:
+  - `with_index` (`search.rs`) ya no se traga el no-op: cuando el índice no
+    está inicializado logea un WARN con la operación y el path que descartó.
+    Lo mismo `search_query_impl`, que devolvía lista vacía en silencio. El
+    error del reindex ahora se ve en el panel, no sólo en el 🐛.
+  - **Comando `search_index_status(path?)`**: `initialized`, `root`, `docs`,
+    `lastWrite` (ms del último commit de la sesión) y, con un path, si ese doc
+    está en el índice y con qué mtime contra el del disco.
+  - El panel de búsqueda lo muestra: resumen `N docs indexados, último cambio
+    HH:MM:SS` cuando no hay lista a la vista, y un aviso con botón
+    **Reindexar** cuando el archivo abierto **no está** en el índice. El
+    estado sigue al archivo activo vía effect — al principio sólo se
+    refrescaba al abrir el panel y al terminar una búsqueda de backend, así
+    que cambiar de capítulo (o buscar con scope "Archivo actual", que es
+    client-side) dejaba el aviso mostrando lo del archivo anterior.
+  **Los dos episodios originales no se reprodujeron** (el `golpear` con 4
+  resultados de un solo libro, y el término que no aparecía hasta abrir el
+  archivo). Lo del root explica la familia de síntomas, pero no está
+  confirmado que sea lo que pasó. Si vuelve: el panel dice si el archivo está
+  indexado y el log dice qué writes se descartaron.
+  **Decisión aparte, sigue abierta**: reindexar el repo entero en cada
+  arranque (925 docs en ~0.9 s con el repo real) es O(repo) y tira el trabajo
+  incremental de la sesión anterior. Alcanzaría comparar mtimes contra el
+  índice y tocar solo lo que cambió — el `mtime` ya está guardado por doc y
+  `search_index_status` ya lo sabe leer.
 
 - [ ] **El salto no encuentra un match partido por una itálica** (de la review
   de CodeRabbit en el PR #93, 2026-09-03)
