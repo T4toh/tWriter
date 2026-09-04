@@ -76,6 +76,20 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub editor_paragraph_spacing: Option<String>,
+    /// Tema de la app: `system` (sigue al OS), `light` o `dark`. Ausente =
+    /// `system`.
+    #[serde(default, rename = "appTheme", skip_serializing_if = "Option::is_none")]
+    pub app_theme: Option<String>,
+    /// Fuentes de la UI por slot. Ausente = la que shipea la app (el frontend
+    /// borra la custom property y gana el valor de `styles.scss`).
+    #[serde(default, rename = "appFontUi", skip_serializing_if = "Option::is_none")]
+    pub app_font_ui: Option<String>,
+    #[serde(
+        default,
+        rename = "appFontMono",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub app_font_mono: Option<String>,
     #[serde(
         default,
         rename = "grammarMode",
