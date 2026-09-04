@@ -440,10 +440,12 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
     notas y lector de Markdown (antes cada una tenía la suya).
   - Tampoco se movió a Configuración el resto de los controles del editor
     (tamaño, ancho, espaciado): se quedan donde están.
-  **Lo que queda afuera y se ve**: con el tema forzado a Oscuro y el OS en
-  claro, la barra de título nativa de la ventana sigue clara — eso no lo
-  arregla el CSS, hay que llamar a `setTheme()` de la ventana de Tauri y
-  habilitar el permiso en las capabilities.
+  La ventana nativa también acompaña: el mismo effect llama `setTheme()` de la
+  ventana de Tauri (`null` para 'system') con
+  `core:window:allow-set-theme` en las capabilities — sin eso, la barra de
+  título quedaba clara con el tema forzado a Oscuro. Verificado a mano por el
+  autor el 2026-09-04: tema, fuentes y barra de título, incluido que
+  `settings.json` los conserva al reiniciar.
 
 ## Gramática, ortografía y tesauro
 
