@@ -10,6 +10,39 @@
   --fg-muted: #6f6a62;
   --border: #ddd6c8;
   --accent: #5a3a1a;
+
+  /* Tokens que los componentes ya usaban con un fallback oscuro hardcodeado
+   * (`var(--panel-header-bg, #1f1f1f)`) porque nunca se habían definido: el
+   * panel de búsqueda, los colapsables y varios modales quedaban gris oscuro
+   * incluso en tema claro. Definidos acá, todos siguen el tema y los
+   * fallbacks quedan muertos — no hace falta tocar cada `.scss`.
+   * Los `--editor-*` NO van acá: los setea el template inline por usuario. */
+  --panel-bg: var(--bg);
+  --panel-bg-elev: #fffdf9;
+  --panel-header-bg: var(--bg-soft);
+  --panel-border: var(--border);
+  --panel-fg: var(--fg);
+  --hover-bg: #e7e1d5;
+  --input-bg: #fffdf9;
+  --badge-bg: var(--bg-soft);
+  --accent-bg: #efe4d6;
+  --surface-2: rgb(28 26 23 / 4%);
+  --bg-darker: #efeae1;
+  --bg-secondary: var(--bg-soft);
+  --border-subtle: #ebe5d9;
+  --text: var(--fg);
+  --text-muted: var(--fg-muted);
+  --muted: var(--fg-muted);
+  --muted-darker: #918b81;
+  --ok: #2f7d4f;
+  --warn: #a8781f;
+  --warning: #a8781f;
+  --err: #b3403f;
+  --danger: #b3403f;
+  --mark-bg: #f3d9a8;
+  --mark-fg: #1c1a17;
+  --font-serif: var(--font-body);
+  --mono-font: var(--font-mono);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,6 +53,26 @@
     --fg-muted: #9a948a;
     --border: #2e2a25;
     --accent: #c8a878;
+
+    /* Mismos tokens que arriba, en la paleta oscura (cálida, no los grises
+     * neutros que traían los fallbacks). */
+    --panel-bg-elev: #262320;
+    --panel-header-bg: #262320;
+    --hover-bg: #302c27;
+    --input-bg: #171512;
+    --badge-bg: #2a2621;
+    --accent-bg: #3a2f22;
+    --surface-2: rgb(255 255 255 / 4%);
+    --bg-darker: #151310;
+    --border-subtle: #272320;
+    --muted-darker: #7c766d;
+    --ok: #6fbf8b;
+    --warn: #d4a35a;
+    --warning: #d4a35a;
+    --err: #e07a78;
+    --danger: #e07a78;
+    --mark-bg: #6b5220;
+    --mark-fg: #f5efe2;
   }
 }
 

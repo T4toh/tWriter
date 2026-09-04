@@ -367,8 +367,23 @@
   font-size: 0.8rem;
 }
 
-// El resto (fondo, color, disabled) lo trae el sistema global `.btn.btn-primary`
-// de `styles.scss` — acá solo el layout que es propio de esta fila.
+// La fila que cierra el listado, separada de la última ocurrencia.
+.sp-apply-row {
+  padding-top: 1rem;
+}
+
+// El botón copia el look de `.sp-group-head` —mismo fondo, mismo padding, mismo
+// hover— en vez del azul `.btn-primary`, que se comía visualmente el panel. Los
+// mismos `var(..., fallback)` que el header de grupo a propósito: si algún día
+// se definen los tokens, los dos cambian juntos. Del `.btn` global quedan el
+// radio, el borde, la tipografía y el `:disabled`.
 .sp-apply {
   margin-left: auto;
+  padding: 8px 12px;
+  background: var(--panel-header-bg, #1f1f1f);
+  color: var(--fg);
+
+  &:hover:not(:disabled) {
+    background: var(--hover-bg, #2a2a2a);
+  }
 }
