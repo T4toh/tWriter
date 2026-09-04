@@ -1361,9 +1361,7 @@ fn build_copyright_xhtml(cfg: &BookConfig) -> String {
         xml_escape(autor)
     ));
     let reserva = cfg.derechos_reservados.unwrap_or(true);
-    // Sin campo propio, el inciso de ficción sigue a `derechos_reservados`:
-    // es lo que hacía antes de separarlos.
-    let ficcion = cfg.obra_de_ficcion.unwrap_or(reserva);
+    let ficcion = cfg.obra_de_ficcion.unwrap_or(true);
     let ia = cfg.nota_ia.unwrap_or(false);
     for (clave, activo) in [("reserva", reserva), ("ficcion", ficcion), ("ia", ia)] {
         if !activo {
@@ -2670,6 +2668,15 @@ mod tests {
         let xhtml = build_copyright_xhtml(&cfg);
         assert!(xhtml.contains("Todos los derechos reservados."));
         assert!(!xhtml.contains("obra de ficción"));
+    }
+
+    #[test]
+    fn copyright_mantiene_el_inciso_de_ficcion_sin_reserva() {
+        let cfg: BookConfig =
+            serde_json::from_str(r#"{"titulo":"X","derechos_reservados":false}"#).unwrap();
+        let xhtml = build_copyright_xhtml(&cfg);
+        assert!(!xhtml.contains("Todos los derechos reservados."));
+        assert!(xhtml.contains("Esta novela es enteramente una obra de ficción."));
     }
 
     #[test]

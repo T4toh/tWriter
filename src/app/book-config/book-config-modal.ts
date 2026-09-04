@@ -303,7 +303,7 @@ export class BookConfigModal {
     if (!c) return false;
     const reserva = c.derechos_reservados ?? true;
     if (clave === 'reserva') return reserva;
-    if (clave === 'ficcion') return c.obra_de_ficcion ?? reserva;
+    if (clave === 'ficcion') return c.obra_de_ficcion ?? true;
     return c.nota_ia ?? false;
   }
 
@@ -311,10 +311,7 @@ export class BookConfigModal {
     const c = this.config();
     if (!c) return;
     if (clave === 'reserva') {
-      // Al apagar la reserva, el inciso de ficción tenía que quedar donde
-      // estaba: lo materializamos antes de que el default lo arrastre.
-      const ficcion = this.incisoActivo('ficcion');
-      this.config.set({ ...c, derechos_reservados: activo, obra_de_ficcion: ficcion });
+      this.config.set({ ...c, derechos_reservados: activo });
       return;
     }
     if (clave === 'ficcion') this.config.set({ ...c, obra_de_ficcion: activo });
