@@ -110,6 +110,14 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Editor / UX
 
+- **Los popups scrollean con la vista** (bug, reportado por el autor el
+  2026-09-03): los flotantes anclados a una posición del texto (tooltip de
+  gramática/RAE, menú de sinónimos del tesauro, etc.) se posicionan una sola vez
+  y quedan pegados a coordenadas del documento, así que al scrollear el editor
+  el popup se va con la vista en vez de quedarse sobre la palabra —o al revés,
+  queda flotando sobre texto que ya no es el suyo. Hay que reposicionar en
+  `scroll`/`resize` del contenedor scrolleable (o cerrar el popup si el ancla
+  sale de viewport, que es lo barato).
 - Más variantes de divisor de escena (más allá del `* * *`).
 - [x] **Auto-abrir modal de configuración de LanguageTool cuando el chequeo
   tira error** (`fix/lt-config-modal-y-split-hint`, verificado a mano por el
@@ -2395,13 +2403,25 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## EPUB
 
+- **Abrir la carpeta del EPUB exportado / abrirlo en el visor**: al terminar el
+  export la app dice dónde quedó el archivo y ahí muere; el autor tiene que ir a
+  buscarlo a mano. Sumar en el aviso de export exitoso dos acciones: "Mostrar en
+  la carpeta" y "Abrir" (visor EPUB default del OS). `tauri-plugin-opener` ya
+  está instalado y registrado (`lib.rs:123`), así que es `reveal_item_in_dir` +
+  `opener::open_path`, sin dependencia nueva.
 - [x] **Copyright editable en ambos idiomas** (ES/EN): hoy el texto de la
   página de copyright sale fijo/auto-generado. Permitir editar el cuerpo y
   que cambie según el `idioma` del libro.
-- **Incisos extra de copyright tipo Reedsy**: sumar cláusulas opcionales
+- [x] **Incisos extra de copyright tipo Reedsy** (`epub.rs::texto_inciso_default`
+  + fieldset "Página legal" del modal de config del libro): sumar cláusulas opcionales
   (reserva de derechos, "obra de ficción / personajes ficticios",
   prohibición de reproducción, etc.) elegibles al armar la página legal,
-  bilingües como el copyright.
+  bilingües como el copyright. Quedaron tres claves — `reserva`, `ficcion`,
+  `ia` — cada una con default ES/EN editable. El inciso `ficcion` ("Cualquier
+  parecido con personas reales... es enteramente coincidencia") arranca en
+  **true por su cuenta** desde 2026-09-03: antes heredaba el valor de
+  `derechos_reservados`, así que apagar la reserva se llevaba puesto el aviso
+  de ficción sin que nadie lo pidiera.
 - [x] **Nota de uso de IA en la página legal** (pedido del autor, 2026-09-01): inciso
   opcional que declare que la IA se usó **solo para generar imágenes** — el texto
   lo escribe el autor. Va como una cláusula más del item de arriba (bilingüe
