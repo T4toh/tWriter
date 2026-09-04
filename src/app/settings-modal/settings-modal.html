@@ -25,7 +25,20 @@
       </details>
 
       <details class="gs-bloque" [open]="aparienciaAbierta()" (toggle)="aparienciaAbierta.set($any($event.target).open)">
-        <summary>Apariencia</summary>
+        <summary>
+          Apariencia
+          @if (hayFuenteElegida()) {
+            <button
+              type="button"
+              class="gs-reset-bloque"
+              title="Volver a las fuentes que shipea tWriter"
+              (click)="resetFontsDesdeSummary($event)"
+            >
+              <svg lucideX [size]="10"></svg>
+              Restablecer
+            </button>
+          }
+        </summary>
         <p class="gs-bloque-intro">Tema de la app.</p>
         @for (t of themes; track t) {
           <label class="gs-option">
@@ -74,11 +87,6 @@
         </ng-template>
         @if (fontsCargando()) {
           <p class="muted">Leyendo las fuentes instaladas…</p>
-        }
-        @if (hayFuenteElegida()) {
-          <button type="button" class="btn btn-secondary" (click)="resetFonts()">
-            Volver a las fuentes de la app
-          </button>
         }
       </details>
 

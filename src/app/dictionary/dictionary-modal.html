@@ -51,7 +51,7 @@
           <input
             type="text"
             class="add-input"
-            placeholder="Agregar palabra (ej: Krilar, Aelindor)"
+            placeholder="Agregar palabra o término (ej: Krilar, Kun Lian, Sarta’an)"
             [ngModel]="newWord()"
             (ngModelChange)="updateNewWord($event)"
             (keydown)="onAddKeydown($event)"
@@ -79,7 +79,12 @@
         @if (newWordValidation(); as v) {
           @if (v.ok) {
             <p class="hint hint-ok">
-              @if (v.sanitized) {
+              @if (nuevaEsEntera()) {
+                <span class="badge-entera">entera</span>
+                Se guarda como <strong>{{ v.value }}</strong> y se busca entera,
+                sin partirla en el espacio ni en el apóstrofe, respetando las
+                mayúsculas tal cual las escribiste.
+              } @else if (v.sanitized) {
                 Se guardará como <strong>{{ v.value }}</strong>
               } @else {
                 <svg lucideCheck [size]="12"></svg>
@@ -130,6 +135,13 @@
             @for (word of filteredWords(); track word) {
               <li class="word-row" [class.confirming]="confirmDelete() === word">
                 <span class="word">{{ word }}</span>
+                @if (esEntera(word)) {
+                  <span
+                    class="badge-entera"
+                    title="Se busca entera, sin partirla en el espacio ni en el apóstrofe, y distingue mayúsculas"
+                    >entera</span
+                  >
+                }
                 @if (confirmDelete() === word) {
                   <div class="row-actions">
                     <span class="confirm-prompt">¿Borrar?</span>

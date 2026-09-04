@@ -186,6 +186,23 @@
   color: var(--err, #e07070);
 }
 
+/* Los términos que un tokenizador partiría —con espacio o con apóstrofe— se
+   comportan distinto al resto del diccionario: se buscan enteros y distinguen
+   mayúsculas. Por eso se ven distinto. Ver `compound-terms.ts`. */
+.badge-entera {
+  flex: 0 0 auto;
+  padding: 0.05em 0.4em;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-family: var(--font-ui);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .search-row {
   display: flex;
   position: relative;

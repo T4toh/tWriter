@@ -6,6 +6,7 @@ import { ToastService } from '../core/toast-service';
 import { DerivedFormsPanel } from './derived-forms-panel';
 import { inferLemma } from './derived-forms';
 import { validateWord } from './word-validator';
+import { isCompound } from './compound-terms';
 
 @Component({
   selector: 'app-dictionary-modal',
@@ -48,12 +49,24 @@ export class DictionaryModal {
     return v !== null && v.ok && !this.adding();
   });
 
+  /** La entrada que se está por agregar es una frase, no una palabra. Cambia lo
+   *  que se le promete al autor: se matchea entera y CON las mayúsculas que
+   *  escriba, al revés que el resto del diccionario. */
+  protected readonly nuevaEsEntera = computed<boolean>(() => {
+    const v = this.newWordValidation();
+    return v !== null && v.ok && isCompound(v.value);
+  });
+
+  protected readonly esEntera = isCompound;
+
   /** Mismo criterio que el popover del editor: «+ formas…» solo si hay lema que
    *  inferir. Sin esto un nombre propio en `-ar` (`Krilar`) cae al fallback del
-   *  panel y ofrece 15 conjugaciones de un verbo inexistente, todas tildadas. */
+   *  panel y ofrece 15 conjugaciones de un verbo inexistente, todas tildadas.
+   *  Las frases no derivan nada: `stripInflection` es token-level y flexionar
+   *  `Tres Torres` no significa nada. */
   protected readonly puedeDerivar = computed<boolean>(() => {
     const idioma = this.idiomaFlexion();
-    if (idioma !== 'es' || !this.canAdd()) return false;
+    if (idioma !== 'es' || !this.canAdd() || this.nuevaEsEntera()) return false;
     return inferLemma(this.newWord().trim(), idioma).length > 0;
   });
 

@@ -1620,7 +1620,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Emparentado con `## Proofreading`: son la misma necesidad de "encontré algo
   mientras escribía, que quede anotado sin frenar la escritura".
 
-- [ ] **El diccionario no soporta términos compuestos** (`Kun Lian` un reino,
+- [x] **El diccionario no soporta términos compuestos** (`Kun Lian` un reino,
   `Tres Torres` un vino) — reportado el 2026-09-02
   **Guardarlos ya funciona, usarlos no.** `validateWord` permite espacios
   internos a propósito (`word-validator.ts:17-19`) y `diccionario.txt` se lee
@@ -1689,6 +1689,77 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   arriba — con la diferencia de que **este se arregla de nuestro lado**, no con
   un parche a LT: la regla no está mal, no tiene cómo saber que `de las Arenas`
   es un apellido inventado.
+  **Tercer caso, encontrado probando el fix: el apóstrofe parte igual que el
+  espacio.** «Sarta’an» —una palabra sola para el autor— LT la corta: medido
+  contra el container (6.7, `es-AR`), `Sarta’an cayó al mar.` marca `an` con
+  `MORFOLOGIK_RULE_ES` (offset 6, largo 2), y `Escapó de Sa’artan hace años.`
+  marca `Sa` y `artan` como DOS matches separados. El `PALABRA_RE = /\p{L}+/gu`
+  del detector de repeticiones (`detector.ts:179`) parte en el mismo lugar.
+  Es exactamente la misma forma que el caso de «las Arenas» —la marca está
+  contenida en la entrada del diccionario pero no le es igual— con apóstrofe en
+  vez de espacio, así que entra en la misma maquinaria. Lo que cambia es la
+  definición de qué entrada es compuesta: no «tiene espacio» sino «algún
+  tokenizador la va a partir».
+
+  **Resuelto** (`feat/diccionario-terminos-compuestos`, verificado a mano por el
+  autor el 2026-09-04 contra el container de LT, con los tres casos: `Kun Lian`,
+  `Tres Torres` —incluida la distinción contra `tres torres` en minúscula— y
+  `Sarta’an`). Se hizo la pasada compartida que decía la
+  dirección, ni un filtro nuevo por consumidor: `dictionary/compound-terms.ts`
+  es un módulo puro (smoke runner `scripts/run-compound-terms-smoke.mjs`, 36
+  aserciones) que compila las entradas con espacio o apóstrofe interno en un
+  solo regex y devuelve **rangos** sobre el texto plano. `SagaContextService.compoundTerms()`
+  las separa del resto; `dictionary` y el `DictLookup` de flexión quedan como
+  estaban, que es donde siguen viviendo las simples.
+  Las tres decisiones que este ítem dejaba abiertas, cerradas por el autor:
+  (a) **las compuestas no generan derivadas** — `stripInflection` es token-level
+  y flexionar una frase no significa nada, así que el botón «+ formas…» se
+  apaga cuando lo que se está agregando es una frase;
+  (b) **el match ES sensible a mayúsculas**, y es la única parte del diccionario
+  que lo es. `Tres Torres` el vino contra `tres torres` de piedra es justamente
+  la distinción que el feature existe para poder marcar: con match insensible,
+  cargar el vino apagaría la corrección sobre la frase común y estaríamos de
+  vuelta en el workaround que este ítem venía a matar;
+  (c) **se ven distinto en el modal** — badge `entera` en cada fila compuesta y
+  un hint al tipear que dice qué se va a guardar y que las mayúsculas cuentan.
+  El badge dice `entera` y no `frase` justamente por el caso del apóstrofe:
+  `Sarta’an` recibe el mismo tratamiento que `Tres Torres` y llamarla frase
+  sería mentir. Es un solo concepto —se busca entera, distingue mayúsculas— así
+  que es una sola etiqueta.
+  Lo que se levantó, y es un cambio de criterio explícito: adentro de un rango
+  compuesto se descarta **cualquier** categoría de LT, no solo `TYPOS`. Es el
+  único lugar donde el diccionario pisa más allá de la ortografía, y es lo que
+  tapa el `AGREEMENT_DET_NOUN` de «Amalut de las Arenas». Adentro de un nombre
+  propio del mundo no hay nada que corregir.
+  Detalles que salieron al escribirlo: **cada hueco lleva SU separador**, no uno
+  genérico — el término se corta conservando los separadores y cada uno se
+  traduce al patrón que le toca. Un `[ \t'’]+` para todo sería más corto y
+  estaría mal: dejaría que `Sarta’an` matcheara `Sarta an` y que `Tres Torres`
+  matcheara `Tres’Torres`. Las variantes de apóstrofe (recta, tipográfica y las
+  que mete un autocorrector) sí son intercambiables entre sí, porque el autor
+  guarda con una y el texto puede traer la otra según de dónde vino pegado.
+  El separador de espacio es `[ \t\u00a0]+` y **no** `\s+`, porque el plano separa bloques con `\n\n` y
+  un `\s+` dejaría que `Tres Torres` matcheara un `Tres` que cierra un párrafo
+  con el `Torres` que abre el siguiente; los términos se ordenan de más largo a
+  más corto porque la alternación de JS es leftmost-**first**-alternative y no
+  leftmost-longest (con `de las Arenas` adelante, `Amalut de las Arenas` nunca
+  ganaría y el rango quedaría corto); los bordes se chequean a mano en vez de
+  con lookbehind, que WebKitGTK viejo no siempre trae y un `SyntaxError` al
+  compilar el regex se llevaría puesto el chequeo entero; y el borde usa
+  `[\p{L}\p{N}]` y no `\b`, que es ASCII-only y no ve los acentos — el mismo
+  bug que se arrastró del `dialogos_a_esp` de Python.
+  En el re-filtrado en vivo de `editor.ts` los rangos se calculan contra
+  `lastCheckedPlain` y no contra el doc de ese momento: es el único texto en el
+  que `m.offset` significa algo, porque es contra ese plano que se posicionaron
+  los matches.
+  Los cuatro consumidores quedaron cableados: los dos filtros de LT
+  (`checkGrammar` y el re-filtrado en vivo) y los dos call sites de
+  `detectRepeticiones` (editor y revisión por libro). El detector no se tocó —
+  sigue siendo puro y token-level; el descarte por contención va en los
+  llamadores.
+  **Sigue pendiente y es de otros ítems**: el autocompletado de términos del
+  proyecto todavía sugiere `Kun`, no `Kun Lian`, y la búsqueda por frase sigue
+  siendo la misma primitiva sin compartir.
 
 - [ ] **La revisión por libro cuenta pero no muestra ni lleva: repeticiones y
   rayas quedan en un número** (reportado el 2026-09-02)
