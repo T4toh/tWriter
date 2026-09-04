@@ -539,7 +539,7 @@ pub struct ReplaceOutcome {
     /// pudieron escribir" miente en esos dos casos.
     pub failed_files: Vec<String>,
     /// Vacío solo si no se INTENTÓ escribir ningún capítulo (sin edits, todo
-    /// salteado por la revalidación o por el guard de mtime): ahí no hay nada
+    /// salteado por la revalidación o por el guard de la fase 3): ahí no hay
     /// que deshacer y el snapshot se borra. Si una escritura se intentó y
     /// falló, esto vuelve poblado aunque `files` sea 0: `write_chapter` es
     /// tmp+rename, así que el capítulo que falló quedó intacto, pero el lote
@@ -602,30 +602,6 @@ fn mtime_epoch(path: &Path) -> u64 {
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_secs())
         .unwrap_or(0)
-}
-
-/// Mtime crudo, sin truncar a segundos. A diferencia de `mtime_epoch` (que
-/// sigue sirviendo para el campo en segundos del manifest), esto es lo que
-/// compara el guard de la fase 3: `mtime_epoch` pierde cualquier escritura
-/// ajena que caiga dentro del mismo segundo que el read de la fase 1, que es
-/// el caso común en un lote chico — la ventana entera puede caer adentro de
-/// un solo segundo.
-///
-/// TECHO CONOCIDO: la precisión que devuelve esto es la del filesystem, no la
-/// del reloj. En APFS y ext4 el mtime tiene nanosegundos y el guard distingue
-/// dos escrituras seguidas; en HFS+, exFAT y SMB la resolución es de 1 segundo
-/// (`tv_nsec` siempre en 0, medido) y el guard queda en un no-op para
-/// cualquier edición ajena que caiga en el mismo segundo. El repo de novelas
-/// puede vivir en una carpeta de Dropbox o iCloud, así que no es teórico: esto
-/// es mitigación, no garantía, y lo que de verdad protege al autor en esos
-/// volúmenes es el snapshot.
-///
-/// El guard del undo tenía el mismo techo pero peor (comparaba segundos contra
-/// segundos, así que fallaba en TODO filesystem). Ya no: pasó a comparar el
-/// hash del contenido, ver `SnapshotFile::hash_after_apply`. Este de acá sigue
-/// con el techo del filesystem.
-fn mtime_raw(path: &Path) -> Option<SystemTime> {
-    std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
 /// FNV-1a de 64 bits, en hex. Elegido por lo que NO necesita: no es
@@ -732,7 +708,6 @@ pub fn aplicar(
         html: String,
         nuevo: String,
         ocurrencias: usize,
-        mtime_antes: Option<SystemTime>,
     }
     let mut pendientes: Vec<Pendiente> = Vec::new();
     // Se escapa una sola vez acá y no adentro del loop: lo que se guarda en el
@@ -748,12 +723,6 @@ pub fn aplicar(
             out.skipped_files.push(path_str);
             continue;
         };
-        // Mtime al momento de leer: la fase 3 lo vuelve a chequear justo
-        // antes de escribir, para no pisar una edición que llegó en la
-        // ventana entre este read y esa escritura. Crudo (no `mtime_epoch`,
-        // que trunca a segundos y perdería un write ajeno en el mismo
-        // segundo).
-        let mtime_antes = mtime_raw(&path);
         let map = plain_con_runs(&html);
         let vigentes: Vec<(usize, usize)> = buscar_ocurrencias(&map.plain, needle, op)
             .into_iter()
@@ -778,7 +747,7 @@ pub fn aplicar(
         ranges.dedup();
         let ocurrencias = ranges.len();
         let nuevo = aplicar_ranges(&html, ranges, &replacement_html);
-        pendientes.push(Pendiente { path, html, nuevo, ocurrencias, mtime_antes });
+        pendientes.push(Pendiente { path, html, nuevo, ocurrencias });
     }
     if pendientes.is_empty() {
         return Ok(out);
@@ -890,14 +859,26 @@ pub fn aplicar(
         // write de la otra PC — la misma ventana que justifica la
         // revalidación de la fase 1, pero más chica. Sin este chequeo,
         // `write_chapter` de abajo pisaría esa edición ajena con `nuevo`
-        // calculado sobre el html VIEJO, perdiéndola en silencio. Cubierto
-        // por inspección, no por test: forzar la carrera de forma
-        // determinística exigiría un thread compitiendo por timing contra
-        // esta misma llamada, o un hook de test en el camino de escritura —
-        // ninguno de los dos vale lo que cuesta un guard de tres líneas.
-        // Sobre la resolución de mtime de la que depende el guard (y en qué
-        // filesystems es un no-op), ver el techo documentado en `mtime_raw`.
-        if mtime_raw(&p.path) != p.mtime_antes {
+        // calculado sobre el html VIEJO, perdiéndola en silencio.
+        //
+        // Compara CONTENIDO, no mtime: el mtime tiene la resolución del
+        // filesystem (1 segundo en HFS+/exFAT/SMB, que es donde vive el repo
+        // si está en Dropbox o iCloud), así que un write ajeno que caiga en el
+        // mismo segundo que el read de la fase 1 le queda invisible — y en un
+        // lote chico la ventana entera cabe adentro de un segundo. El
+        // contenido no depende del reloj ni del volumen. Cuesta releer el
+        // archivo que estamos por escribir, que acaba de pasar por el page
+        // cache.
+        //
+        // De arrastre se va un falso positivo que el mtime tenía hasta en
+        // APFS: un autosave que reescribe contenido IDÉNTICO movía el mtime y
+        // el capítulo se salteaba sin motivo, cuando `nuevo` seguía siendo
+        // válido.
+        //
+        // Un archivo ilegible cuenta como cambiado (`None != Some`), igual que
+        // antes: no se pisa lo que no se pudo leer.
+        let en_disco = std::fs::read_to_string(&p.path).ok();
+        if en_disco.as_deref() != Some(p.html.as_str()) {
             // Cambió entre el read de la fase 1 y este punto. Mismo canal y
             // semántica que la revalidación: "cambió desde que lo leí", no
             // se pisa.
@@ -956,7 +937,7 @@ pub fn aplicar(
 
     if out.files == 0 && out.failed_files.is_empty() {
         // Nada que deshacer: ninguna escritura se intentó siquiera, todas se
-        // saltearon por el guard de mtime. `stats` no cambió (nadie llegó al
+        // saltearon por el guard de la fase 3. `stats` no cambió (nadie llegó
         // insert), y dejar un snapshot sin ningún capítulo real ensuciaría
         // `.twriter/undo` con un Deshacer que además sería DAÑINO: restaurar
         // pisaría justo la edición ajena que el guard acaba de proteger.
@@ -1151,8 +1132,8 @@ pub struct UndoOutcome {
     pub suspect: bool,
 }
 
-/// Restaura el snapshot. Ver el contexto de la Task 4: el guard de mtime es lo
-/// que evita comerse las ediciones posteriores al reemplazo.
+/// Restaura el snapshot. Ver el contexto de la Task 4: el guard por hash del
+/// contenido es lo que evita comerse las ediciones posteriores al reemplazo.
 pub fn deshacer(
     root: &Path,
     snapshot_id: &str,
@@ -1181,9 +1162,9 @@ pub fn deshacer(
         .map_err(|e| format!("manifest de {snapshot_id} ilegible: {e}"))?;
 
     // Si quedó el `.tmp` del rename, el manifest que acabamos de leer puede ser
-    // el INICIAL: el que trae todos los mtimes en el sentinel `0`, o sea el que
-    // le dice al undo "restaurá todo igual" incluso lo que el guard de mtime
-    // salteó. Un `exists()` y ninguna escritura nueva: con el manifest bajo
+    // el INICIAL: el que trae todos los campos en el sentinel, o sea el que
+    // le dice al undo "restaurá todo igual" incluso lo que el guard de la
+    // fase 3 salteó. Un `exists()` y ninguna escritura nueva: con el manifest bajo
     // sospecha nada se restaura solo, todo sale por `blocked` y el panel pide
     // confirmación explícita. No es airtight (si el fallo fue antes de crear el
     // tmp no queda rastro) pero cubre el ENOSPC, que es el caso probable.
@@ -2070,7 +2051,7 @@ mod tests {
     #[cfg(unix)]
     fn apply_conserva_el_snapshot_cuando_la_escritura_falla() {
         // Critical 1 de la round 4: la rama de `files == 0` (agregada en la
-        // ronda anterior para no ofrecer Deshacer cuando el guard de mtime
+        // ronda anterior para no ofrecer Deshacer cuando el guard de la fase 3
         // saltea todo) también se comía el snapshot cuando la escritura se
         // INTENTÓ y falló. Con `write_chapter` en tmp+rename el capítulo que
         // falla ya no queda truncado, pero el snapshot tiene que sobrevivir
@@ -2111,21 +2092,20 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn apply_no_lista_en_el_manifest_al_que_saltea_el_guard_de_mtime() {
+    fn apply_no_lista_en_el_manifest_al_que_saltea_el_guard_de_la_fase_3() {
         // Important de la round 5, el daño inverso del Critical 1: el
-        // `continue` del guard de mtime no tocaba `manifest_files[idx]`, así
+        // `continue` del guard de la fase 3 no tocaba `manifest_files[idx]`, así
         // que el capítulo salteado quedaba listado con el sentinel `0` — que
         // para el undo significa "restaurá igual". Deshacer entonces pisaba
         // justo la edición ajena que el guard acababa de proteger.
         //
         // El guard se dispara con ESTADO del filesystem, sin threads ni
         // timing: `2.html` es un symlink a `1.html`, así que escribir
-        // `1.html` en la fase 3 le cambia el mtime a `2.html` (metadata
+        // `1.html` en la fase 3 le cambia el contenido a `2.html` (el read
         // sigue el link) y su guard lo saltea. Antes esto se hacía con un
         // hard link, que dejó de servir cuando `write_chapter` pasó a
-        // tmp+rename: el rename estrena inode y el otro lado del hard link
-        // se queda con el mtime viejo. (Depende de que el volumen distinga
-        // los dos mtimes: en APFS sí — ver el techo en `mtime_raw`.)
+        // tmp+rename: el rename estrena inode y el otro lado del hard link se
+        // queda con el contenido viejo.
         use std::os::unix::fs::PermissionsExt;
         let td = scope_con(&[
             ("libro/1.html", "<p>Angelica uno</p>"),
@@ -2180,10 +2160,9 @@ mod tests {
         // snapshot nuevo puede ser la única copia del capítulo que este
         // apply acaba de truncar, mientras que el anterior solo cubre un
         // apply que ya salió bien. Distinguir "falló en el open, archivo
-        // intacto" de "falló escribiendo, archivo dañado" exigiría confiar
-        // en la resolución del mtime, que en HFS+/SMB es de un segundo (ver
-        // el techo en `mtime_raw`): apostar ahí es volver a la pérdida de
-        // datos.
+        // intacto" de "falló escribiendo, archivo dañado" pide preguntarle al
+        // error de `write_chapter` algo que no dice: apostar ahí es volver a
+        // la pérdida de datos.
         use std::os::unix::fs::PermissionsExt;
         let td = scope_con(&[("libro/1.html", "<p>uno</p>")]);
         let pv1 = preview_scope(td.path(), "uno", &ops(false, true)).unwrap();
@@ -2425,7 +2404,7 @@ mod tests {
     fn apply_no_lista_en_el_manifest_lo_que_no_intento_escribir() {
         // Critical 1 de la review r1, pérdida de datos: el `break` de la fase
         // 3 dejaba listados con el sentinel `0` los capítulos que nunca se
-        // intentaron. El `0` saltea el guard de mtime del undo por diseño, así
+        // intentaron. El sentinel saltea el guard del undo por diseño, así
         // que quedaban restaurables SIN guard para siempre — y el autor puede
         // deshacer días después, con ediciones nuevas en el medio.
         use std::os::unix::fs::PermissionsExt;
