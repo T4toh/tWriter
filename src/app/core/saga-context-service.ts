@@ -1,6 +1,7 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { existsCaseInsensitive, validateWord } from '../dictionary/word-validator';
+import { isCompound } from '../dictionary/compound-terms';
 import {
   DictLookup,
   IdiomaFlexion,
@@ -35,6 +36,11 @@ export class SagaContextService {
    *  `dictionary` (Set en minúscula) sirve para filtrar; para SUGERIR hace
    *  falta la forma original, que es la que se le ofrece al autor. */
   readonly dictionaryWords = this.dictWords.asReadonly();
+  /** Las entradas de más de una palabra (`Kun Lian`, `Tres Torres`). No sirven
+   *  a los consumidores token-level —ni `dictionary` ni `lookup` las van a
+   *  matchear nunca— así que van por su propio camino: se buscan como frase
+   *  sobre el texto plano y devuelven rangos. Ver `dictionary/compound-terms.ts`. */
+  readonly compoundTerms = computed<string[]>(() => this.dictWords().filter(isCompound));
   /** Índice para el pelado de flexión. Se rearma cuando cambia el diccionario. */
   private readonly lookup = computed<DictLookup>(() => makeDictLookup(this.dictWords()));
   /** Idioma de la saga reducido a las dos familias de reglas de flexión.

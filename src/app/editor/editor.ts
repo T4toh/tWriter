@@ -88,6 +88,7 @@ import {
 } from './rae-extension';
 import { RaePopover } from './rae-popover';
 import { detectRepeticiones, DEFAULTS as REP_DEFAULTS } from '../repeticiones/detector';
+import { findCompoundRanges, isInsideCompound } from '../dictionary/compound-terms';
 import {
   RangoPm,
   RepeticionPos,
@@ -658,7 +659,19 @@ export class Editor implements AfterViewInit, OnDestroy {
       const current = untracked(() => this.grammarMatches());
       if (current.length === 0) return;
       const editor = this.tiptap;
+      // Los rangos van contra `lastCheckedPlain`, no contra el doc de ahora: es
+      // el único texto en el que `m.offset` significa algo, porque es contra ese
+      // plano que se posicionaron los matches. (`m.from`/`m.to` sí son del doc,
+      // y por eso el chequeo de TYPOS de abajo sigue usando esos.)
+      // Con `lastCheckedPlain` en null (capítulo recién abierto, todavía sin
+      // check) no hay plano contra el cual anclar: sin rangos, el filtro se
+      // comporta como antes en vez de descartar a ciegas.
+      const compuestas = findCompoundRanges(
+        this.lastCheckedPlain ?? '',
+        this.sagaCtx.compoundTerms(),
+      );
       const filtered = current.filter((m) => {
+        if (isInsideCompound(compuestas, m.offset, m.offset + m.length)) return false;
         if (m.category !== 'TYPOS') return true;
         const word = editor.state.doc.textBetween(m.from, m.to, ' ').trim();
         return !this.sagaCtx.isInDictionary(word);
@@ -1142,7 +1155,16 @@ export class Editor implements AfterViewInit, OnDestroy {
           );
         },
       );
+      const compuestas = findCompoundRanges(plain, this.sagaCtx.compoundTerms());
       const filtered = positioned.filter((m) => {
+        // Adentro de un término compuesto del mundo no hay NADA que corregir,
+        // sea de la categoría que sea. Es el único lugar donde el diccionario
+        // filtra más allá de `TYPOS`, y es deliberado: «Amalut de las Arenas»
+        // dispara `AGREEMENT_DET_NOUN` sobre `las Arenas` porque `Arenas` existe
+        // en el léxico de LT como propio singular. La regla no está mal —no
+        // tiene cómo saber que es un apellido inventado— así que el arreglo va
+        // de este lado.
+        if (isInsideCompound(compuestas, m.offset, m.offset + m.length)) return false;
         if (m.category !== 'TYPOS') return true;
         const word = plain.slice(m.offset, m.offset + m.length);
         return !this.sagaCtx.isInDictionary(word);
@@ -1354,13 +1376,16 @@ export class Editor implements AfterViewInit, OnDestroy {
     }
     if (!force && plain === this.lastRepPlain) return;
     const lang = this.meta().idioma === 'en' ? 'en' : 'es';
+    const compuestas = findCompoundRanges(plain, this.sagaCtx.compoundTerms());
     const raw = detectRepeticiones(plain, lang, {
       ...REP_DEFAULTS,
       excepciones: this.settings.repeticionesExcepciones(),
       // Los nombres propios inventados del mundo. Que `Kallai` se repita cinco
       // veces en una escena es normal; misma fuente que filtra los TYPOS de LT.
       ignorar: this.sagaCtx.dictionary(),
-    });
+      // Las compuestas no entran por `ignorar`: el detector es token-level y
+      // `Tres Torres` no es un token. Se descartan por rango, abajo.
+    }).filter((r) => !isInsideCompound(compuestas, r.offset, r.offset + r.length));
     const positioned = mapRepeticionesToPm(raw, ranges);
     this.repeticiones.set(positioned);
     this.applyRepeticionesDecorations(positioned);

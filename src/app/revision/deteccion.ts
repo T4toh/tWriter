@@ -8,6 +8,7 @@ import {
   detectRepeticiones,
   ExcepcionesDeliberadas,
 } from '../repeticiones/detector';
+import { findCompoundRanges, isInsideCompound } from '../dictionary/compound-terms';
 import { RaeAutoFix } from '../core/types';
 
 /** Qué transformaciones aplicar. Repeticiones no está: no se auto-aplican,
@@ -145,11 +146,15 @@ export function detectarEnCapitulo(
     (v) => v.autoFix !== undefined && v.category !== 'pending-conversion',
   ).length;
 
+  // Las entradas compuestas del diccionario (`Kun Lian`, `Tres Torres`) no
+  // pueden filtrarse por `ignorar`, que es token-level. Se sacan del mismo
+  // `opts.diccionario` y se descartan por rango, igual que en el editor.
+  const compuestas = findCompoundRanges(plain, [...opts.diccionario]);
   const reps = detectRepeticiones(plain, esIngles ? 'en' : 'es', {
     ...REP_DEFAULTS,
     excepciones: opts.excepciones,
     ignorar: opts.diccionario,
-  });
+  }).filter((r) => !isInsideCompound(compuestas, r.offset, r.offset + r.length));
 
   return { rayas, comillas, arreglosRae, repeticiones: reps.length, esIngles };
 }
