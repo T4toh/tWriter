@@ -195,12 +195,31 @@ export class SearchService {
     },
   );
 
+  /** Último path por el que se preguntó el estado del índice. Evita repetir el
+   *  invoke en cada tecleo: `activeFile` se recomputa con el contenido del
+   *  editor, pero el path solo cambia al cambiar de archivo. */
+  private lastStatusPath: string | null | undefined = undefined;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private currentRequestId = 0;
   private highlightCounter = 0;
 
   constructor() {
     void this.bindProgressListener();
+    // El estado del índice tiene que seguir al archivo abierto, no al momento
+    // en que se abrió el panel: cambiar de capítulo con el panel abierto (o
+    // buscar con scope "Archivo actual", que es client-side y ni toca el
+    // backend) dejaba el aviso mostrando lo del archivo anterior.
+    effect(() => {
+      const abierto = this.open();
+      const path = this.activeFile()?.path ?? null;
+      if (!abierto) {
+        this.lastStatusPath = undefined;
+        return;
+      }
+      if (path === this.lastStatusPath) return;
+      this.lastStatusPath = path;
+      void this.refreshIndexStatus(path);
+    });
     // Re-corre la query cuando cambia el scope, el debug o el archivo activo
     // ("saga actual" depende del cap del pane 0; "current" depende del archivo
     // resuelto por activeFile, que incluye notas y md-reader).
@@ -251,15 +270,17 @@ export class SearchService {
 
   show(): void {
     this.open.set(true);
-    void this.refreshIndexStatus();
   }
 
-  /** Pregunta al backend por el estado del índice, incluyendo si el archivo
-   *  activo está adentro. Best-effort: si falla, deja el estado anterior. */
-  async refreshIndexStatus(): Promise<void> {
+  /** Pregunta al backend por el estado del índice, incluyendo si el path
+   *  consultado está adentro. Sin `path` usa el archivo activo. Best-effort:
+   *  si falla, deja el estado anterior. */
+  async refreshIndexStatus(path?: string | null): Promise<void> {
+    const target = path === undefined ? this.activeFile()?.path : (path ?? undefined);
     try {
-      const path = this.activeFile()?.path;
-      this.indexStatus.set(await invoke<IndexStatus>('search_index_status', { path }));
+      this.indexStatus.set(
+        await invoke<IndexStatus>('search_index_status', { path: target }),
+      );
     } catch (err) {
       this.debug.warn('search', `estado del índice: ${err}`);
     }
@@ -539,10 +560,17 @@ export class SearchService {
     try {
       const total = await invoke<number>('search_reindex', { root });
       this.debug.info('search', `reindex completo: ${total} docs`);
-      await this.refreshIndexStatus();
+      // El path no cambió, así que el effect no vuelve a correr: refresco a
+      // mano y sincronizo el dedupe para no pedirlo dos veces.
+      this.lastStatusPath = this.activeFile()?.path ?? null;
+      await this.refreshIndexStatus(this.lastStatusPath);
       // Re-correr query actual si hay una.
       if (this.query().trim()) await this.runSearch();
     } catch (err) {
+      // Visible en el panel, no sólo en el 🐛: reindexar es el remedio que la
+      // UI ofrece cuando el índice quedó viejo, y fallar en silencio deja al
+      // usuario apretando un botón que no hace nada.
+      this.error.set(`No se pudo reindexar: ${err}`);
       this.debug.error('search', `reindex falló: ${err}`);
     } finally {
       this.reindexing.set(false);

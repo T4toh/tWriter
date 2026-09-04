@@ -302,6 +302,18 @@ fn open_or_create(root: &Path) -> Result<SearchIndex, String> {
 /// Inicializa o re-inicializa el state global del index para `root`.
 /// Si ya existía un index para otro root, lo descarta.
 pub fn init_for_root(root: &Path) -> Result<(), String> {
+    // Soltar el índice anterior ANTES de abrir el nuevo. tantivy toma un lock
+    // exclusivo por directorio (`.tantivy-writer.lock`) y abrir un segundo
+    // writer sobre el mismo dir falla con `LockBusy` — por eso el botón
+    // "Reindexar" andaba sólo la primera vez (al boot no hay índice previo) y
+    // después fallaba en silencio, justo cuando es el único remedio a mano.
+    // La ventana entre el drop y el `Some(idx)` deja a `with_index` sin índice
+    // por unos ms: los writes que caigan ahí se descartan con WARN, y no se
+    // pierde nada porque el reindex que sigue relee todo del disco.
+    {
+        let mut slot = state().lock().map_err(|e| e.to_string())?;
+        *slot = None;
+    }
     let idx = open_or_create(root)?;
     let mut slot = state().lock().map_err(|e| e.to_string())?;
     *slot = Some(idx);
@@ -1474,6 +1486,25 @@ mod tests {
     fn reset_state() {
         let mut slot = state().lock().unwrap();
         *slot = None;
+    }
+
+    /// El botón "Reindexar" del panel es el único remedio a mano cuando el
+    /// índice quedó viejo — y fallaba en silencio salvo la primera vez:
+    /// `init_for_root` abría el writer nuevo antes de soltar el viejo, y
+    /// tantivy toma un lock exclusivo por directorio.
+    #[test]
+    fn reindex_dos_veces_seguidas_no_falla_por_el_lock() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        let dir = make_repo();
+        let root = dir.path();
+
+        let primero = full_reindex(root, None).unwrap();
+        let segundo = full_reindex(root, None).expect("el segundo reindex no puede fallar");
+        assert_eq!(primero, segundo);
+        assert!(segundo > 0);
+
+        reset_state();
     }
 
     /// El caso que motivó todo: distinguir "no está en el texto" de "no está
