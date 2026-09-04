@@ -541,9 +541,10 @@ pub struct ReplaceOutcome {
     /// Vacío solo si no se INTENTÓ escribir ningún capítulo (sin edits, todo
     /// salteado por la revalidación o por el guard de mtime): ahí no hay nada
     /// que deshacer y el snapshot se borra. Si una escritura se intentó y
-    /// falló, esto vuelve poblado aunque `files` sea 0 — `fs::write` trunca al
-    /// abrir, así que un fallo posterior al open deja el capítulo dañado y el
-    /// snapshot es la única copia del original.
+    /// falló, esto vuelve poblado aunque `files` sea 0: `write_chapter` es
+    /// tmp+rename, así que el capítulo que falló quedó intacto, pero el lote
+    /// puede haber reescrito capítulos anteriores y el id es lo único que
+    /// deja deshacerlos.
     pub snapshot_id: String,
 }
 
@@ -911,10 +912,12 @@ pub fn aplicar(
         //
         // `failed_files` es lo que separa este caso de "se intentó escribir y
         // falló", que también da `files == 0` y por el que hay que pasar por
-        // el camino normal: `fs::write` abre con `O_TRUNC`, así que un fallo
-        // posterior al open (ENOSPC, EIO, quota) deja el capítulo del autor
-        // truncado a 0 bytes y este snapshot es la ÚNICA copia del original.
-        // Borrarlo acá era pérdida de datos lisa y llana.
+        // el camino normal. Desde que `write_chapter` escribe con tmp+rename,
+        // un fallo (ENOSPC, EIO, quota) deja el capítulo viejo entero en vez
+        // de truncado, así que el snapshot ya no es la única copia — pero se
+        // conserva igual: es la red del lote entero, no de ese archivo, y
+        // borrarlo le saca el id al autor cuando el fallo llegó a mitad de
+        // camino.
         //
         // Y de acá depende algo del undo: `deshacer` borra el snapshot cuando
         // no queda nada bloqueado ni fallado, así que un manifest con
@@ -1992,10 +1995,10 @@ mod tests {
         // Critical 1 de la round 4: la rama de `files == 0` (agregada en la
         // ronda anterior para no ofrecer Deshacer cuando el guard de mtime
         // saltea todo) también se comía el snapshot cuando la escritura se
-        // INTENTÓ y falló. Y ese caso es pérdida de datos: `fs::write` abre
-        // con `O_TRUNC`, así que un fallo posterior al open (ENOSPC, EIO,
-        // quota) deja el capítulo en 0 bytes y el snapshot es la única copia
-        // del original.
+        // INTENTÓ y falló. Con `write_chapter` en tmp+rename el capítulo que
+        // falla ya no queda truncado, pero el snapshot tiene que sobrevivir
+        // igual: cubre el lote, y el fallo pudo llegar después de reescribir
+        // otros capítulos.
         //
         // Acá el fallo se fuerza con permisos, que rompen en el open y NO
         // dañan el archivo — el estado observable que importa es el mismo
@@ -2039,16 +2042,23 @@ mod tests {
         // justo la edición ajena que el guard acababa de proteger.
         //
         // El guard se dispara con ESTADO del filesystem, sin threads ni
-        // timing: `2.html` es un hard link al mismo inode que `1.html`, así
-        // que escribir `1.html` en la fase 3 le cambia el mtime a `2.html` y
-        // su guard lo saltea. (Depende de que el volumen distinga los dos
-        // mtimes: en APFS sí — ver el techo en `mtime_raw`.)
+        // timing: `2.html` es un symlink a `1.html`, así que escribir
+        // `1.html` en la fase 3 le cambia el mtime a `2.html` (metadata
+        // sigue el link) y su guard lo saltea. Antes esto se hacía con un
+        // hard link, que dejó de servir cuando `write_chapter` pasó a
+        // tmp+rename: el rename estrena inode y el otro lado del hard link
+        // se queda con el mtime viejo. (Depende de que el volumen distinga
+        // los dos mtimes: en APFS sí — ver el techo en `mtime_raw`.)
         use std::os::unix::fs::PermissionsExt;
         let td = scope_con(&[
             ("libro/1.html", "<p>Angelica uno</p>"),
             ("libro/3.html", "<p>Angelica tres</p>"),
         ]);
-        fs::hard_link(td.path().join("libro/1.html"), td.path().join("libro/2.html")).unwrap();
+        std::os::unix::fs::symlink(
+            td.path().join("libro/1.html"),
+            td.path().join("libro/2.html"),
+        )
+        .unwrap();
         let pv = preview_scope(td.path(), "Angelica", &ops(false, true)).unwrap();
         assert_eq!(pv.groups.len(), 3, "los tres capítulos entran al lote");
         // Y el tercero falla al escribir, para que el lote tenga a la vez un

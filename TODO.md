@@ -1880,7 +1880,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Verificado a mano por el autor el 2026-09-03.
 
 
-- [ ] **Reemplazar en lote: implementado, pendiente de verificación del autor**
+- [x] **Reemplazar en lote: implementado y verificado por el autor**
   (reportado el 2026-09-03: "estuve buscando Angelica para cambiar por
   Angélica a mano como mono")
   Diseño en `docs/superpowers/specs/2026-09-03-reemplazar-en-lote-design.md`,
@@ -1917,76 +1917,6 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   mtimes), o si el registro del snapshot quedó incompleto y no se puede
   confiar en él (`suspect`) — son dos motivos distintos y el panel los explica
   por separado, no con un mensaje genérico.
-  **Qué falta probar a mano** (con la app levantada, sobre el repo de prueba
-  no-git — nunca sobre el `Novelas/` real; `pnpm tauri dev` hay que
-  reiniciarlo porque los cambios de Rust no entran por HMR), ordenado por lo
-  que más importa:
-  1. El flujo básico: `Angelica` → `Angélica` con scope "Todo el repo", que
-     el conteo del preview coincida con lo que se ve en pantalla, y que el
-     árbol y el status de git se refresquen solos sin recargar la app.
-  2. **El EPUB end-to-end**: hacer un reemplazo cuyo texto nuevo contenga un
-     `&` (por ejemplo, reemplazar algo por "Marks & Spencer"), exportar el
-     libro y confirmar que abre en Thorium. Antes el `&` se escribía crudo en
-     el HTML sin escapar — invisible en la app, pero capaz de romper el EPUB
-     con un error de parseo meses después, sin ninguna pista de dónde salió.
-     Ya se escapan `&`/`<`/`>`; esta es la única forma de cerrar el bug del
-     todo, porque no se puede verificar desde los tests.
-  3. **Que la ventana responda mientras se tipea**, con scope "Todo el repo"
-     sobre un repo grande — y sobre todo si vive en Dropbox o iCloud con
-     "optimizar almacenamiento" activado, donde leer un archivo
-     desmaterializado baja de la red. Los tres comandos de Rust corrían en
-     el hilo principal y el preview se dispara cada 250ms escaneando todo el
-     scope en disco, así que antes eso podía congelar la ventana entera sin
-     spinner y sin poder cancelar. Ya van al pool de blocking.
-  4. **El bloqueo del editor durante el apply**, que es el caso que más costó
-     cerrar en la review: con un capítulo del scope abierto, disparar un
-     reemplazo que lo incluya y, apenas termine (mientras el toast todavía es
-     visible), intentar escribir de inmediato — tiene que seguir en
-     solo-lectura hasta que el rescan termina del todo. Probar también
-     abriendo un capítulo nuevo (o un split) *durante* el apply, y repetir
-     con split view abierto en los dos paneles.
-  5. **La secuencia completa de la exclusión manual**: destildar una
-     ocurrencia → aplicar → el panel tiene que quedar con **todo destildado**
-     y el botón de aplicar muerto (no armado apuntando a lo que ya se
-     excluyó) → tocar **Deshacer** → tiene que volver **todo destildado**
-     también, no todo tildado de nuevo. Antes, el preview posterior a un
-     apply o a un undo volvía con todo tildado, y un click de más
-     re-aplicaba justo lo que el autor había excluido a propósito. Es el
-     caso que más costó cerrar en la review y no tiene test automatizado —
-     vive en un servicio que inyecta `invoke()` y otros siete servicios.
-  6. Deshacer: hacer un reemplazo, editar a mano uno de los capítulos
-     tocados, y confirmar que Deshacer dice "se editaron después y no los
-     pisé" en vez de pisarlo. Si se puede forzar el otro caso (registro de
-     snapshot incompleto), confirmar que el mensaje es el otro ("no sé si es
-     seguro restaurar"), no el mismo texto para los dos motivos.
-  7. Deshacer y volver a reemplazar: que el snapshot viejo se borre (solo se
-     guarda el último).
-  8. Destildar una ocurrencia suelta (o un capítulo entero, en tri-estado) y
-     confirmar que ese párrafo o capítulo queda intacto.
-  9. Buscar un texto donde cada aparición esté cruzando una cursiva/negrita o
-     un salto de párrafo (por ejemplo, una palabra que en el libro real
-     siempre aparece partida en itálica): el panel tiene que mostrar el
-     grupo con el motivo de salteo, no quedar en blanco, y el capítulo no
-     debe tener checkbox tildable.
-  10. Reemplazo con "reemplazar por" vacío (el caso "Borrar"): el botón dice
-      "Borrar…" y el resultado/la barra de Deshacer reflejan "(borrado)".
-  11. Cerrar el panel en modo reemplazo por las cuatro vías (✕, Esc, `Ctrl/Cmd+F`,
-      y el mutex que lo cierra al abrir una nota o la auditoría RAE) y
-      reabrirlo: siempre tiene que volver a modo búsqueda normal, nunca
-      quedarse en modo reemplazo escaneando disco en el fondo.
-  12. El header con los 7 botones en un panel angosto — mirar que no quede
-      apretado — y que "Deshacer"/"Pisarlos igual"/el botón de aplicar tengan
-      pinta de botón real, no una caja apretada de ícono.
-  13. **El tri-estado del checkbox de capítulo**: con un grupo donde algunas
-      ocurrencias están destildadas, confirmar que el checkbox se ve
-      `indeterminate` de verdad (la rayita, no tildado ni vacío) — y sobre
-      todo, que clickearlo **no** abre ni cierra el `<details>` del grupo
-      (el checkbox vive adentro del `<summary>` con
-      `(click)="$event.stopPropagation()"` en `search-panel.html`, pero
-      según el spec el `stopPropagation` no cancela por sí solo la
-      "activation behavior" del `<summary>` — la review no lo pudo
-      certificar leyendo el código y pidió verlo andando en la WKWebView de
-      Mac y en WebKitGTK de Arch).
   **Huecos conocidos y cosas deferidas** (están en el ledger de la feature,
   no son sorpresa; ninguna es bloqueante para usarlo con cuidado):
   - Un texto de reemplazo que contenga `&`, `<` o `>` queda, en lotes
@@ -2004,9 +1934,8 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
     (grafías distintas para el mismo path real) y se dejaron afuera porque
     `canonicalize` toca el filesystem por cada edición y puede resolver un
     symlink de Dropbox/iCloud a otro lado.
-  - `fs::write_chapter` sin tmp+rename es un riesgo de la app entera, no solo
-    de esto — item propio más abajo: "El guardado de capítulos puede
-    truncarlos en disco lleno".
+  - `fs::write_chapter` sin tmp+rename era un riesgo de la app entera, no
+    solo de esto — arreglado el 2026-09-04 (ver el item de abajo, ya cerrado).
   - Caminos sin test automatizado en `replace.rs` (hueco de cobertura, no bug
     conocido — el comportamiento es el correcto, lo que falta es el arnés):
     el TOCTOU del id de snapshot y la recalibración del guard de mtime a
@@ -2033,9 +1962,10 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   - Fuera de alcance por diseño, no por olvido: reemplazar dentro de notas,
     regex, deshacer granular estilo ProseMirror, historial de reemplazos, y
     tocar títulos de capítulo — ninguno se implementó.
+  Verificado a mano por el autor el 2026-09-04.
 
 
-- [ ] **El guardado de capítulos puede truncarlos en disco lleno**
+- [x] **El guardado de capítulos puede truncarlos en disco lleno**
   (encontrado el 2026-09-03 revisando `replace_apply` para "reemplazar en
   lote", pero es un problema de toda la app, no de esa feature)
   `fs::write_chapter` (`src-tauri/src/fs.rs`) escribe con `fs::write` pelado:
@@ -2057,6 +1987,18 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   recuperable), pero el autosave normal no tiene ningún snapshot — un
   capítulo truncado por un corte de luz mientras se escribe desde el editor
   se pierde sin red.
+  **Hecho el 2026-09-04**: `fs::write_atomic` en `src-tauri/src/fs.rs` (tmp
+  al lado + `sync_all` + `rename`, mismo patrón que `stats::write_stats`),
+  usado por `write_chapter` y `write_meta` — o sea autosave, reemplazo en
+  lote y RAE, que todos pasan por ahí. El tmp lleva pid + contador para que
+  dos writers del mismo capítulo no intercalen bytes en un tmp compartido, y
+  se borra si el rename falla. Se mantiene el rechazo de un archivo de solo
+  lectura (que `fs::write` daba con EACCES y el `rename` se saltearía) y se
+  le copian los permisos del destino al tmp. Efecto colateral esperado: el
+  rename estrena inode, así que dos capítulos hard-linkeados ahora divergen
+  en vez de escribirse juntos — el test del guard de mtime en `replace.rs`
+  que usaba ese hard link como disparador pasó a un symlink. Tests:
+  `fs::tests::write_atomic_*`, más los 432 de Rust en verde.
 
 
 - [ ] **El guard del undo por mtime no distingue una edición hecha en el

@@ -158,6 +158,59 @@ pub fn get_tree(root: String) -> Result<TreeNode, String> {
     result
 }
 
+/// Escribe `content` de forma atómica: archivo `.tmp` al lado, `sync_all()`
+/// y `rename()` sobre el destino, que en POSIX es atómico. Un `fs::write`
+/// pelado abre con `O_TRUNC` y recién después vuelca los bytes, así que un
+/// ENOSPC, un `kill -9` o un corte de luz a mitad de la escritura dejan el
+/// archivo truncado y sin ningún estado intermedio recuperable. Mismo patrón
+/// que `stats::write_stats`.
+///
+/// El nombre del `.tmp` lleva pid + contador porque dos writers sobre el
+/// mismo capítulo (autosave del editor y `replace_apply`, por ejemplo)
+/// compartiendo un tmp fijo podrían intercalar bytes y renombrar un archivo
+/// mezclado. Si el rename falla, el tmp se borra.
+pub fn write_atomic(p: &Path, content: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let name = p.file_name().unwrap_or_default().to_string_lossy().into_owned();
+    let tmp = p.with_file_name(format!(".{}.{}.{}.tmp", name, std::process::id(), seq));
+
+    // `rename` solo necesita permiso de escritura en el directorio, así que
+    // pisaría un archivo de solo lectura que `fs::write` rechazaba con
+    // EACCES. Se mantiene el rechazo, y se le copian los permisos del
+    // destino al tmp para que un guardado no le baje el modo a 0644.
+    // (El rename también rompe hard links en vez de escribir los dos lados:
+    // los capítulos linkeados divergen, que es lo esperable acá.)
+    let perms = match fs::metadata(p) {
+        Ok(md) if md.permissions().readonly() => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                format!("{}: archivo de solo lectura", p.display()),
+            ));
+        }
+        Ok(md) => Some(md.permissions()),
+        Err(_) => None,
+    };
+
+    let write = (|| {
+        let mut f = fs::File::create(&tmp)?;
+        f.write_all(content.as_bytes())?;
+        if let Some(perms) = perms {
+            f.set_permissions(perms)?;
+        }
+        // ponytail: sin fsync del directorio — el rename puede quedar sin
+        // durar si se corta la luz justo después, pero entonces sobrevive el
+        // contenido viejo entero, que es el punto del patrón.
+        f.sync_all()
+    })();
+    if let Err(e) = write.and_then(|_| fs::rename(&tmp, p)) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
+    Ok(())
+}
+
 /// Lee el HTML de un capítulo. Solo soporta .html (los .odt/.docx hay que importar antes).
 #[tauri::command]
 pub fn read_chapter(path: String) -> Result<String, String> {
@@ -190,7 +243,7 @@ pub fn write_chapter(path: String, html: String) -> Result<(), String> {
         content.push('\n');
     }
     let bytes = content.len();
-    fs::write(&p, content).map_err(|e| {
+    write_atomic(&p, &content).map_err(|e| {
         tracing::error!(target: "fs", path = %path, error = %e, "write_chapter falló");
         e.to_string()
     })?;
@@ -305,7 +358,7 @@ pub fn write_meta(chapter_path: String, meta: ChapterMeta) -> Result<(), String>
         tracing::error!(target: "fs", chapter = %chapter_path, error = %e, "write_meta: serializar JSON falló");
         e.to_string()
     })?;
-    fs::write(&meta_path, raw).map_err(|e| {
+    write_atomic(&meta_path, &raw).map_err(|e| {
         tracing::error!(target: "fs", path = %meta_path.display(), error = %e, "write_meta falló");
         e.to_string()
     })
@@ -927,5 +980,37 @@ mod tests {
             normalize_chapter_html(html),
             "<p><em>foo</em><strong>bar</strong></p>"
         );
+    }
+
+    #[test]
+    fn write_atomic_pisa_y_no_deja_tmp() {
+        let td = tempfile::TempDir::new().unwrap();
+        let dest = td.path().join("1.html");
+        super::write_atomic(&dest, "<p>uno</p>\n").unwrap();
+        super::write_atomic(&dest, "<p>dos</p>\n").unwrap();
+        assert_eq!(std::fs::read_to_string(&dest).unwrap(), "<p>dos</p>\n");
+        let sobrantes: Vec<_> = std::fs::read_dir(td.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".tmp"))
+            .collect();
+        assert!(sobrantes.is_empty(), "quedaron tmps: {:?}", sobrantes);
+    }
+
+    #[test]
+    fn write_atomic_falla_sin_dejar_tmp_ni_tocar_el_destino() {
+        // Destino que es un directorio: el rename falla y el tmp tiene que
+        // desaparecer igual.
+        let td = tempfile::TempDir::new().unwrap();
+        let dest = td.path().join("soy-carpeta");
+        std::fs::create_dir(&dest).unwrap();
+        assert!(super::write_atomic(&dest, "<p>x</p>\n").is_err());
+        assert!(dest.is_dir());
+        let sobrantes: Vec<_> = std::fs::read_dir(td.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".tmp"))
+            .collect();
+        assert!(sobrantes.is_empty(), "quedaron tmps: {:?}", sobrantes);
     }
 }
