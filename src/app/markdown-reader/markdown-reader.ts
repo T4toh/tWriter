@@ -34,7 +34,7 @@ import {
   highlightBestMatch,
   findAllMatchesInPlain,
 } from '../core/search-highlight';
-import { SettingsService } from '../core/settings-service';
+import { resolveEditorFontStack, SettingsService } from '../core/settings-service';
 import { FALLBACK_FONT_SIZE } from '../editor/caret-scrolloff';
 import { buildEditorProps } from '../editor/editor-props';
 import { extractPlainText, offsetToPm } from '../editor/grammar-extension';
@@ -92,6 +92,12 @@ export class MarkdownReader implements AfterViewInit, OnDestroy {
   protected readonly saving = this.svc.saving;
   protected readonly rightPanelWidth = this.settings.rightPanelWidth;
   protected readonly state = signal<ToolbarState>(EMPTY_STATE);
+  /** La misma familia que el editor de capítulos y el de notas: el lector
+   *  muestra el mismo texto, con otra fuente parecía otro documento. */
+  protected readonly fontStack = computed(() =>
+    resolveEditorFontStack(this.settings.editorFontFamily()),
+  );
+
   protected readonly widthIcon = computed<LucideIcon>(() => {
     switch (this.rightPanelWidth()) {
       case 'compact':
