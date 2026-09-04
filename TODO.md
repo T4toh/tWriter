@@ -2089,18 +2089,22 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 - [ ] **El salto no encuentra un match partido por una itálica** (de la review
   de CodeRabbit en el PR #93, 2026-09-03)
-  `pickBestBlock` elige el bloque usando su `textContent`, que **concatena** los
-  text nodes, pero `selectFirstMatchIn` después los recorre **de a uno**. Una
-  frase que cruza el borde de un `<em>` —`libros de <em>Técnica Arcana</em>`—
-  puede ganar el bloque y no encontrarse adentro de ningún nodo.
-  Mitigado, no resuelto: cuando ninguna de las cuatro pasadas encuentra nada, se
-  scrollea y flashea **el bloque** ganador. O sea el salto cae en el párrafo
-  correcto, pero sin seleccionar la frase.
-  **El arreglo de verdad**: buscar sobre la concatenación de los text nodes del
-  bloque y mapear el offset de vuelta a un `Range` multi-nodo (`setStart` en un
-  nodo, `setEnd` en otro). Es la misma clase de problema que resuelve
-  `offsetToPm` para las decoraciones de PM, pero a nivel DOM.
-
+  **Arreglado en `fix/salto-multinodo`, pendiente de verificación del autor.**
+  `selectFirstMatchIn` ahora busca sobre la **concatenación** de los text nodes
+  de cada bloque en vez de recorrerlos de a uno, y mapea el offset del match de
+  vuelta a un `Range` multi-nodo (`setStart` en un nodo, `setEnd` en otro). El
+  mapeo salió puro (`mapRangeToNodes`) y entró al smoke runner que ya existía,
+  `scripts/run-search-locate-smoke.mjs` — 48 aserciones.
+  Dos cosas que cayeron de arrastre:
+  - `highlightBestMatch` le pasa **los bloques** como raíces, nunca el host
+    entero. Concatenar los text nodes del host pegaría el final de un párrafo
+    con el principio del siguiente y generaría matches fantasma que no existen
+    en el texto.
+  - El flash es del bloque, no del padre del text node. Con el match adentro de
+    un `<em>` el padre es la itálica, y flashear tres palabras en bastardilla no
+    dice dónde está el párrafo.
+  El fallback de "scrollear y flashear el bloque ganador sin seleccionar" sigue
+  ahí como red, pero ya no es el camino esperable para una frase con itálicas.
 
 ## Tree / Importer
 

@@ -44,7 +44,7 @@ if (r.status !== 0) {
 
 const mod = await import(pathToFileURL(join(outDir, 'search-highlight.js')).href);
 const { pickBestBlock, tokenize, findAllMatchesInPlain, esInicioDePalabra, esMatchDeTermino,
-        esPalabraCompleta, buscarPalabraCompleta } = mod;
+        esPalabraCompleta, buscarPalabraCompleta, mapRangeToNodes } = mod;
 
 let passed = 0;
 let failed = 0;
@@ -273,6 +273,53 @@ function marcados(plain, query, fold = false) {
     'la caballera levantó la espada',
   ];
   check('multi-término: palabras completas ganan', pick(bloques, 'caballera espada') === 1);
+}
+
+// ── mapRangeToNodes: la mitad pura del salto multi-nodo ─────────────────────
+// `selectFirstMatchIn` busca sobre la concatenación de los text nodes del
+// bloque y mapea el offset de vuelta a un Range. El armado del Range necesita
+// document, pero el mapeo no, y es donde estaba el bug.
+
+{
+  // Repro del TODO: `libros de <em>Técnica Arcana</em>` son tres text nodes.
+  // Buscando "de Técnica" el match arranca en el nodo 0 y termina en el 1.
+  const largos = ['libros de '.length, 'Técnica Arcana'.length];
+  const concat = 'libros de ' + 'Técnica Arcana';
+  const start = concat.indexOf('de Técnica');
+  const r = mapRangeToNodes(largos, start, start + 'de Técnica'.length);
+  check('match a caballo de dos nodos: arranca en el 0', r.startIndex === 0 && r.startOffset === 7);
+  check('match a caballo de dos nodos: termina en el 1', r.endIndex === 1 && r.endOffset === 7);
+}
+
+{
+  // El caso de siempre: entero adentro de un nodo.
+  const r = mapRangeToNodes([10, 20], 2, 5);
+  check('match dentro de un solo nodo', r.startIndex === 0 && r.startOffset === 2 && r.endIndex === 0 && r.endOffset === 5);
+}
+
+{
+  // El nodo entero, borde a borde. `end` exclusivo ⇒ el último char está en el
+  // nodo 0, no arranca el 1.
+  const r = mapRangeToNodes([10, 20], 0, 10);
+  check('rango que cubre un nodo entero no se pasa al siguiente', r.startIndex === 0 && r.endIndex === 0 && r.endOffset === 10);
+}
+
+{
+  // Nodos vacíos en el medio: no pueden ganar el borde.
+  const r = mapRangeToNodes([5, 0, 5], 5, 8);
+  check('nodo vacío se saltea', r.startIndex === 2 && r.startOffset === 0 && r.endIndex === 2 && r.endOffset === 3);
+}
+
+{
+  // Tres nodos: el match cruza el del medio entero.
+  const r = mapRangeToNodes([4, 3, 4], 2, 9);
+  check('match que cruza tres nodos', r.startIndex === 0 && r.startOffset === 2 && r.endIndex === 2 && r.endOffset === 2);
+}
+
+{
+  check('rango vacío ⇒ null', mapRangeToNodes([5], 3, 3) === null);
+  check('rango que se pasa del final ⇒ null', mapRangeToNodes([5], 3, 9) === null);
+  check('sin nodos ⇒ null', mapRangeToNodes([], 0, 1) === null);
 }
 
 rmSync(outDir, { recursive: true, force: true });
