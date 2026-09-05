@@ -88,8 +88,12 @@
   display: block;
 }
 
+/* Los 280px eran para la tarjeta horizontal, que necesitaba ancho para la tapa
+   al costado MÁS la columna de texto. La vertical apila las dos cosas, así que
+   con 180 alcanza y entran bastantes más por fila — que es lo que se quiere en
+   una estantería. */
 .grid[data-mode='books'] {
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 }
 
 .card {

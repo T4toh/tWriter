@@ -1,6 +1,8 @@
 <button
   type="button"
   class="book-card"
+  [class.vertical]="layout() === 'vertical'"
+  [class.horizontal]="layout() === 'horizontal'"
   [class.unconfigured]="!isConfigured()"
   (click)="onClick()"
 >
@@ -18,51 +20,53 @@
     @if (subtitle(); as sub) {
       <p class="subtitle">{{ sub }}</p>
     }
-    @if (author(); as a) {
+    @if (layout() === 'horizontal' && author(); as a) {
       <p class="author">{{ a }}</p>
     }
     <div class="foot">
-      <span class="date">{{ formatDate(node().modifiedMs) }}</span>
-      <span class="count">
-        {{ chapterCount() }} cap.
-        @if (node().wordCount; as w) {
-          · {{ formatWords(w) }}
-        }
-      </span>
+      <div class="foot-meta">
+        <span class="date">{{ node().modifiedMs | fechaCorta }}</span>
+        <span class="count">
+          {{ chapterCount() }} cap.
+          @if (node().wordCount; as w) {
+            · {{ formatWords(w) }}
+          }
+        </span>
+      </div>
+      <div class="card-actions">
+        <button
+          type="button"
+          class="card-btn"
+          (click)="openConfig($event)"
+          title="Configurar novela"
+        >
+          <svg lucideSettings [size]="16"></svg>
+        </button>
+        <button
+          type="button"
+          class="card-btn"
+          (click)="abrirRevision($event)"
+          title="Revisar y corregir la novela"
+        >
+          <svg lucideListChecks [size]="16"></svg>
+        </button>
+        <button
+          type="button"
+          class="card-btn"
+          [disabled]="exporting()"
+          (click)="exportEpub($event)"
+          title="Exportar a EPUB"
+        >
+          @if (exporting()) {
+            <app-spinner [size]="14" />
+          } @else {
+            <svg lucideArrowDownToLine [size]="16"></svg>
+          }
+        </button>
+      </div>
     </div>
     @if (!isConfigured()) {
       <p class="hint">Sin configurar</p>
     }
-  </div>
-  <div class="card-actions">
-    <button
-      type="button"
-      class="card-btn"
-      (click)="openConfig($event)"
-      title="Configurar novela"
-    >
-      <svg lucideSettings [size]="16"></svg>
-    </button>
-    <button
-      type="button"
-      class="card-btn"
-      (click)="abrirRevision($event)"
-      title="Revisar y corregir la novela"
-    >
-      <svg lucideListChecks [size]="16"></svg>
-    </button>
-    <button
-      type="button"
-      class="card-btn"
-      [disabled]="exporting()"
-      (click)="exportEpub($event)"
-      title="Exportar a EPUB"
-    >
-      @if (exporting()) {
-        <app-spinner [size]="14" />
-      } @else {
-        <svg lucideArrowDownToLine [size]="16"></svg>
-      }
-    </button>
   </div>
 </button>

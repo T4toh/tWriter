@@ -113,6 +113,30 @@
   color: var(--fg-muted);
 }
 
+/* Lleva a la lista por ocurrencia (panel derecho). Discreto: la acción
+   principal de la fila sigue siendo la casilla. */
+.rl-ver {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 1.5;
+  cursor: pointer;
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    color: var(--accent);
+  }
+}
+
 .rl-nota {
   flex-basis: 100%;
   font-size: 11px;

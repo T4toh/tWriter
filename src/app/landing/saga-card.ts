@@ -1,3 +1,4 @@
+import { FechaCortaPipe } from '../shared/fecha-corta-pipe';
 import {
   Component,
   computed,
@@ -22,7 +23,7 @@ const MAX_THUMBS = 6;
 
 @Component({
   selector: 'app-saga-card',
-  imports: [],
+  imports: [FechaCortaPipe],
   templateUrl: './saga-card.html',
   styleUrl: './saga-card.scss',
 })
@@ -60,22 +61,6 @@ export class SagaCard {
     return `${Math.round(n / 100) / 10}k palabras`;
   }
 
-  protected formatDate(ms: number | undefined): string {
-    if (!ms) return 'sin editar';
-    const now = Date.now();
-    const diff = now - ms;
-    const min = 60_000;
-    const hour = 60 * min;
-    const day = 24 * hour;
-    if (diff < hour) return `hace ${Math.max(1, Math.floor(diff / min))} min`;
-    if (diff < day) return `hace ${Math.floor(diff / hour)} h`;
-    if (diff < 7 * day) return `hace ${Math.floor(diff / day)} d`;
-    return new Date(ms).toLocaleDateString('es-AR', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  }
 
   protected onClick(): void {
     this.select.emit(this.node());

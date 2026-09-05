@@ -1,3 +1,4 @@
+import { FechaCortaPipe } from '../shared/fecha-corta-pipe';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
@@ -24,7 +25,7 @@ interface Crumb {
 
 @Component({
   selector: 'app-landing',
-  imports: [BookCard, SagaCard, SagaHeader, CreateCard, FolderCard, AutorCard],
+  imports: [FechaCortaPipe, BookCard, SagaCard, SagaHeader, CreateCard, FolderCard, AutorCard],
   templateUrl: './landing.html',
   styleUrl: './landing.scss',
 })
@@ -275,32 +276,6 @@ export class Landing {
     }
   }
 
-  protected formatDate(ms: number | undefined): string {
-    if (!ms) return 'sin editar';
-    const now = Date.now();
-    const diff = now - ms;
-    const min = 60_000;
-    const hour = 60 * min;
-    const day = 24 * hour;
-    if (diff < hour) {
-      const m = Math.max(1, Math.floor(diff / min));
-      return `hace ${m} min`;
-    }
-    if (diff < day) {
-      const h = Math.floor(diff / hour);
-      return `hace ${h} h`;
-    }
-    if (diff < 7 * day) {
-      const d = Math.floor(diff / day);
-      return `hace ${d} d`;
-    }
-    const date = new Date(ms);
-    return date.toLocaleDateString('es-AR', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  }
 
   protected kindLabel(kind: string): string {
     switch (kind) {

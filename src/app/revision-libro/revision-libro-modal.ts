@@ -1,4 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import { LucideArrowRight } from '@lucide/angular';
+import { RaeAuditService } from '../core/rae-audit-service';
+import { RepeticionesAuditService } from '../core/repeticiones-audit-service';
 import {
   ConteoCapitulos,
   ConteoDetector,
@@ -9,13 +12,15 @@ import { Spinner } from '../shared/spinner';
 
 @Component({
   selector: 'app-revision-libro-modal',
-  imports: [Spinner],
+  imports: [Spinner, LucideArrowRight],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './revision-libro-modal.html',
   styleUrl: './revision-libro-modal.scss',
 })
 export class RevisionLibroModal {
   protected readonly svc = inject(RevisionLibroService);
+  private raeAudit = inject(RaeAuditService);
+  private repeticionesAudit = inject(RepeticionesAuditService);
 
   protected readonly rayas = signal<boolean>(false);
   protected readonly comillas = signal<boolean>(false);
@@ -84,6 +89,32 @@ export class RevisionLibroModal {
       arreglosRae: this.arreglosRae(),
     };
     await this.svc.aplicar(seleccion);
+  }
+
+  /** Los conteos de este modal son un número y nada más: no dicen cuáles ni
+   *  dónde, así que para arreglar algo había que abrir capítulo por capítulo a
+   *  buscarlo de nuevo a ojo. Estos dos abren la lista por ocurrencia, con
+   *  snippet y salto al lugar.
+   *
+   *  Cierran el modal a propósito: los dos paneles viven en el slot derecho,
+   *  al lado del editor, y la gracia es poder arreglar mientras se recorre la
+   *  lista — con el modal encima no se puede tocar nada. */
+  protected verRae(ev: Event): void {
+    // Las dos filas de RAE son `<label>` con checkbox adentro, así que
+    // clickear el botón tildaría la casilla de paso.
+    ev.preventDefault();
+    ev.stopPropagation();
+    const node = this.svc.libro();
+    if (!node) return;
+    this.svc.cerrar();
+    void this.raeAudit.open({ path: node.path, name: node.name });
+  }
+
+  protected verRepeticiones(): void {
+    const node = this.svc.libro();
+    if (!node) return;
+    this.svc.cerrar();
+    void this.repeticionesAudit.open({ path: node.path, name: node.name });
   }
 
   /** Rayas/comillas: no hay conteo real de cambios (ver `ConteoCapitulos`),

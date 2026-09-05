@@ -1,0 +1,184 @@
+/* Hermano de `rae-audit/rae-audit-panel.scss`: los dos paneles comparten el
+   slot derecho y tienen que verse como la misma familia. Lo propio de acá son
+   los grupos colapsables — un libro entero da cientos de repeticiones, así que
+   los capítulos con más de 10 arrancan cerrados. */
+
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.rp-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+
+.rp-panel-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.rp-panel-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.rp-panel-labels {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rp-panel-scope {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rp-panel-sub {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+
+.rp-panel-close {
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 4px;
+  border-radius: 3px;
+
+  &:hover {
+    background: var(--border);
+    color: var(--fg);
+  }
+}
+
+.rp-panel-error {
+  padding: 8px 12px;
+  background: rgb(210 48 48 / 10%);
+  color: #d23030;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rp-panel-empty {
+  padding: 16px 12px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+.rp-panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.rp-chapter {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+
+.rp-chapter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px 4px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--bg-soft);
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    color: var(--accent);
+  }
+}
+
+.rp-chapter-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rp-chapter-count {
+  flex-shrink: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--fg-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.rp-rep-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rp-rep-row {
+  padding: 6px 12px;
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+
+  &:hover {
+    background: var(--bg-soft);
+  }
+
+  &:not(:last-child) {
+    border-bottom-color: var(--border);
+  }
+}
+
+.rp-rep-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+
+.rp-rep-palabra {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.rp-rep-detalle {
+  margin-left: auto;
+  color: var(--fg-muted);
+}
+
+.rp-rep-snippet {
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 12px;
+  color: var(--fg);
+  margin: 2px 0;
+  line-height: 1.4;
+}

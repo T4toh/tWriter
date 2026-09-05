@@ -1,15 +1,29 @@
+/* Dos formas de la misma tarjeta, elegidas por el input `layout`:
+
+   - `vertical` — la de la grilla. Portada arriba a todo el ancho, texto abajo.
+     Existe porque la horizontal no cerraba: la grilla es `minmax(220px, 1fr)`
+     y con la tapa al costado le quedaban ~154px de columna al texto, donde
+     tenían que entrar título, subtítulo, fecha, capítulos, palabras y tres
+     controles. No entraban, y cada arreglo era pelearse por esos 154px. Con la
+     portada arriba el texto se queda con el ancho entero y el problema
+     desaparece en vez de parchearse. De paso la portada se ve, que en una
+     biblioteca es lo que identifica al libro.
+   - `horizontal` — la del header del libro. Es UNA sola y llega a 720px, así
+     que ahí una portada a todo el ancho sería absurda: se queda al costado, y
+     es la única que muestra el autor. */
+
 .book-card {
   position: relative;
   display: flex;
-  gap: 12px;
-  padding: 12px;
+  padding: 0;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   text-align: left;
   cursor: pointer;
   font: inherit;
   color: inherit;
+  overflow: hidden;
   transition: transform 0.1s, border-color 0.1s, box-shadow 0.1s;
   width: 100%;
   height: 100%;
@@ -25,14 +39,41 @@
   }
 }
 
+.book-card.vertical {
+  flex-direction: column;
+
+  /* A sangre: la portada llega hasta el borde de la tarjeta, sin marco propio.
+     El `overflow: hidden` del contenedor la recorta contra el radio. */
+  .cover-slot {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+  }
+
+  .info {
+    padding: 10px 12px 12px;
+  }
+}
+
+.book-card.horizontal {
+  flex-direction: row;
+  gap: 12px;
+  padding: 12px;
+
+  .cover-slot {
+    width: 90px;
+    flex-shrink: 0;
+    aspect-ratio: 2 / 3;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+  }
+}
+
 .cover-slot {
-  width: 90px;
-  flex-shrink: 0;
-  aspect-ratio: 2 / 3;
   overflow: hidden;
-  border-radius: 3px;
   background: var(--bg-soft);
-  border: 1px solid var(--border);
   contain: paint;
 
   img {
@@ -71,13 +112,13 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
 }
 
 .title {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.25;
   color: var(--fg);
@@ -95,6 +136,9 @@
   font-style: italic;
 }
 
+/* Solo en el header. En la grilla el autor es el mismo en TODAS las tarjetas
+   —es la biblioteca del propio autor— así que no distingue nada y gasta una
+   línea en la zona más apretada. Sigue en la config de la novela y en el EPUB. */
 .author {
   margin: 0;
   font-size: 12px;
@@ -104,15 +148,34 @@
 .foot {
   margin-top: auto;
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
   justify-content: space-between;
+  gap: 2px 8px;
+  padding-top: 8px;
+}
+
+/* Dos textos que encogen: sin `nowrap` cada uno wrappea POR DENTRO y en
+   paralelo, así que «hace 2 d» y «48 cap. · 63.1k palabras» se interpolaban en
+   dos líneas cruzadas («hace 2 | 48 cap. · 63.1k» / «d | palabras»). Con
+   `nowrap` en los hijos y `wrap` en el contenedor se apilan enteros. */
+.foot-meta {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px 8px;
+  min-width: 0;
   font-size: 11px;
   color: var(--fg-muted);
   font-family: var(--font-mono);
-  padding-top: 4px;
+
+  > * {
+    white-space: nowrap;
+  }
 }
 
 .hint {
-  margin: 0;
+  margin: 4px 0 0;
   font-size: 10px;
   color: var(--accent);
   text-transform: uppercase;
@@ -121,46 +184,22 @@
 }
 
 .card-actions {
-  position: absolute;
-  top: 8px;
-  right: 8px;
   display: flex;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.15s;
+  gap: 2px;
+
+  /* `auto` a la izquierda: cuando envuelven a su propia línea quedan pegados a
+     la derecha en vez de a la izquierda. */
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 
+/* El chip es global (`src/styles.scss`), compartido con `saga-header`. Acá solo
+   lo que es del pie: sin `flex: 0 0 auto` los botones encogen —el `flex` del
+   contenedor no baja a los hijos— y con el pie apretado se aplastan a casi
+   cero, hasta quedar UNO visible aplanado contra el borde.
+
+   Ya no se apagan por opacidad: el chip con su contorno se lee entero, y
+   atenuarlo lo dejaba lavado. Siguen siempre visibles. */
 .card-btn {
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: rgb(0 0 0 / 5%);
-  color: var(--fg-muted);
-  border-radius: 3px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  transition: background 0.15s, color 0.15s;
-
-  &:hover:not(:disabled) {
-    background: var(--accent);
-    color: var(--bg);
-  }
-
-  &:disabled {
-    cursor: wait;
-  }
-}
-
-.book-card:hover .card-actions,
-.book-card.unconfigured .card-actions {
-  opacity: 1;
-}
-
-@media (prefers-color-scheme: dark) {
-  .card-btn {
-    background: rgb(255 255 255 / 8%);
-  }
+  flex: 0 0 auto;
 }

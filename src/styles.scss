@@ -147,6 +147,43 @@ body {
   border-radius: 3px;
 }
 
+// Botón-chip de acción de tarjeta: configurar, revisar, exportar, diccionario.
+// Estaba duplicado en `book-card.scss` y `saga-header.scss` con medidas
+// distintas —26/16 en la saga, 22/14 en el libro— y eso es justo lo que los
+// hacía ver disparejos. Una sola definición, mismo criterio que `.btn` de acá
+// abajo: los estilos globales no los encapsula Angular.
+// ---
+// El fondo sale de `--surface-2` y no de un `rgb()` con `@media
+// prefers-color-scheme` como tenía la saga: el media query se saltea el
+// override manual de tema, así que con el OS en oscuro y «Claro» forzado a mano
+// el chip quedaba de la paleta contraria.
+// ---
+// La UBICACIÓN no va acá: la saga los ancla arriba a la derecha y el libro los
+// lleva en el pie. Eso es de cada tarjeta; lo compartido es el chip.
+.card-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+
+  &:hover:not(:disabled) {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+  }
+
+  &:disabled {
+    cursor: wait;
+  }
+}
+
 // Botones de diálogo. Vivían copiados en diez `.scss` de componente, con cuatro
 // variantes distintas del mismo bloque: acá arriba aplica igual (los estilos
 // globales no los encapsula Angular, solo los del componente) y hay un solo

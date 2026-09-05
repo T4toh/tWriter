@@ -110,14 +110,38 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 
 ## Editor / UX
 
-- **Los popups scrollean con la vista** (bug, reportado por el autor el
-  2026-09-03): los flotantes anclados a una posición del texto (tooltip de
-  gramática/RAE, menú de sinónimos del tesauro, etc.) se posicionan una sola vez
-  y quedan pegados a coordenadas del documento, así que al scrollear el editor
-  el popup se va con la vista en vez de quedarse sobre la palabra —o al revés,
-  queda flotando sobre texto que ya no es el suyo. Hay que reposicionar en
-  `scroll`/`resize` del contenedor scrolleable (o cerrar el popup si el ancla
-  sale de viewport, que es lo barato).
+- [x] **Los popups scrollean con la vista** (bug, reportado por el autor el
+  2026-09-03; resuelto en `feat/panel-repeticiones-por-libro`, verificado a mano
+  por el autor el 2026-09-04, que además confirmó el criterio de cerrar cuando
+  el ancla se escapa): los flotantes anclados a una posición del texto se
+  posicionan una sola vez —son `position: fixed` con el ancla en coordenadas de
+  viewport— así que al scrollear el editor quedan flotando sobre texto que ya no
+  es el suyo.
+  **Lo que había, y explica por qué se veía en uno solo**: ya existía un
+  `popoverScrollListener` sobre el `scroll` de `.editor-host`, pero cerraba los
+  popovers en vez de moverlos, y **solo los de gramática y RAE** — al de
+  repeticiones nunca se lo agregó a esa lista, así que era el único que
+  sobrevivía al scroll y se veía derivar. Los otros dos no se veían mal porque
+  desaparecían.
+  **Lo que se hizo**: `reposicionarPopovers()` recalcula el ancla de los tres
+  contra la posición actual de su texto, preguntándole a ProseMirror
+  (`coordsAtPos`) dónde quedó. Se cierra solo si el ancla se fue del área
+  visible del editor, que es cuando ya no hay dónde apoyarlo. Cerrar de una era
+  peor de lo que parecía: scrollear un poco para leer el contexto de la marca te
+  hacía perder los sinónimos que viniste a elegir.
+  Un reposicionamiento por frame (`requestAnimationFrame`): `scroll` tira
+  decenas de eventos por gesto y cada uno reemplaza el objeto del popover, o sea
+  un render. `coordsAtPos` va en `try`: la posición puede no existir más si se
+  editó el doc con el popover abierto.
+  **De paso arregla** el "el popover abre un poco más abajo" del salto desde el
+  panel de repeticiones: no era el `gap` del placement, era que el salto
+  scrollea DESPUÉS de colocar el popover y el ancla quedaba vieja.
+  **Sigue pendiente**: el `resize` lo maneja cada popover por su cuenta
+  (`afterRenderEffect` + listener de `window`), pero reejecuta `placePopover`
+  con el ancla VIEJA. Si al redimensionar el texto se reacomoda, el ancla queda
+  desfasada igual que pasaba con el scroll. Es el mismo arreglo, llamando a
+  `reposicionarPopovers()` desde el `resize`, pero no se tocó acá para no
+  mezclarlo con el scroll sin poder probarlo.
 - Más variantes de divisor de escena (más allá del `* * *`).
 - [x] **Auto-abrir modal de configuración de LanguageTool cuando el chequeo
   tira error** (`fix/lt-config-modal-y-split-hint`, verificado a mano por el
@@ -1761,7 +1785,7 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   proyecto todavía sugiere `Kun`, no `Kun Lian`, y la búsqueda por frase sigue
   siendo la misma primitiva sin compartir.
 
-- [ ] **La revisión por libro cuenta pero no muestra ni lleva: repeticiones y
+- [x] **La revisión por libro cuenta pero no muestra ni lleva: repeticiones y
   rayas quedan en un número** (reportado el 2026-09-02)
   Las repeticiones **dentro del editor** están bárbaras — subrayado inline sobre
   el texto, con popover (`editor/repeticiones-extension.ts`,
@@ -1794,6 +1818,102 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   Ojo con el volumen: un libro entero puede dar cientos de repeticiones, así
   que la lista necesita agrupar por capítulo y colapsar (como hace el panel de
   búsqueda con `defaultOpen` para grupos de ≤10 hits).
+
+  **Resuelto** (`feat/panel-repeticiones-por-libro`, verificado a mano por el
+  autor el 2026-09-04). Y salió más chico de lo que este ítem suponía, porque **la
+  mitad ya estaba hecha**: rayas y arreglos RAE ya tienen vista por ocurrencia,
+  es el `rae-audit-panel`, que se abre desde el menú del árbol sobre cualquier
+  nodo. Las rayas están ahí adentro con la categoría `pending-conversion` — que
+  ES la conversión de diálogo, y por eso `deteccion.ts` la excluye del conteo de
+  `arreglosRae` para no contar el mismo cambio dos veces. O sea que el modal no
+  necesitaba construir esa lista: necesitaba **llevar** a la que ya existía.
+  Lo que faltaba de verdad era repeticiones, que no tenía vista por ocurrencia
+  en ningún lado — el detector inline marca solo el capítulo abierto.
+  Lo que se hizo:
+  - `core/repeticiones-audit-service.ts` + `repeticiones-audit/` — hermano del
+    par RAE, misma forma a propósito. Escanea un alcance (saga, libro o
+    sección), junta las ocurrencias con `path` + `offset` + `length`, y publica
+    capítulo a capítulo mientras escanea. Aplica el mismo diccionario de saga y
+    las mismas excepciones que el detector inline, más el descarte por rango de
+    los términos compuestos.
+  - Los grupos por capítulo son `<details>` y arrancan cerrados arriba de 10
+    repeticiones, que es el criterio del panel de búsqueda.
+  - Entrada en el menú contextual del árbol («Revisar repeticiones»), al lado de
+    «Revisar RAE», más un botón «ver» en cada fila del modal de revisión con
+    conteo > 0. Los del modal **cierran el modal**: los paneles viven en el slot
+    derecho al lado del editor, y la gracia es poder arreglar mientras se
+    recorre la lista — con el modal encima no se toca nada.
+  - `core/audit-snippet.ts` — `auditSnippet` y `auditAnchor` salieron de
+    `rae-audit-panel`, que los tenía adentro, y ahora los comparten los dos
+    paneles. Con smoke runner propio (`scripts/run-audit-snippet-smoke.mjs`, 17
+    aserciones), que antes no tenían.
+  - `core/tree-utils.ts` — `findNodeByPath` estaba copiada y pegada **cinco**
+    veces. Se sacó a un módulo al sumar el sexto llamador; migrados solo los dos
+    archivos que esta PR ya tocaba. **Quedan por migrar `app.ts`, `tree.ts` y
+    `search-panel.ts`** — es mecánico y sin riesgo, pero no iba mezclado acá.
+  `RaeAuditService` no puede cerrar el panel nuevo directamente: el de
+  repeticiones ya lo inyecta a él, y la vuelta cerraría un ciclo de DI. Va por
+  un effect en el que sí puede — si la auditoría RAE abre, la de repeticiones se
+  cierra sola. Sin eso quedaría abierta pero tapada (la cadena `@else if` de
+  `app.html` prioriza la RAE) y reaparecería vieja al cerrar la de arriba.
+  **No se tocó** `revision-libro-service.escanear`, que este ítem proponía
+  cambiar para que devolviera ocurrencias: el panel hace su propio escaneo, como
+  ya hace la auditoría RAE al lado del conteo de `arreglosRae`. Es un capítulo
+  leído dos veces a cambio de cero churn en el camino de aplicar, que escribe
+  archivos.
+  **Sigue pendiente**: las rayas del modal siguen diciendo «N capítulos» y no
+  «N ocurrencias» (`ConteoCapitulos` — `convertFragmentHtml` devuelve 0|1 por
+  capítulo). El botón «ver» tapa el agujero llevando al panel, donde el conteo
+  real sí está, pero el número del modal sigue siendo el flojo.
+
+- [x] **El salto desde el panel de repeticiones debería abrir el popover, no
+  solo llevarte al párrafo** (pedido del autor el 2026-09-04, probando el panel;
+  resuelto en `feat/panel-repeticiones-por-libro` y verificado a mano por el
+  autor el mismo día)
+  Hoy `openChapterAt` abre el capítulo y resalta el bloque, y ahí el autor tiene
+  que encontrar la palabra a ojo y clickearla para que aparezca el popover con
+  los sinónimos — que es lo único que le sirve para arreglarla. El click del
+  panel debería dejar el popover abierto sobre la aparición.
+  **Por qué no salió junto con el panel**: `openRepPopover(span, r, event)`
+  (`editor.ts:1752`) necesita el **elemento DOM** de la decoración —le pide
+  `getBoundingClientRect()`— y un `RepeticionPos` con posiciones de ProseMirror.
+  El panel no tiene ninguna de las dos: tiene un offset en el espacio de
+  `htmlToPlain`, que es exactamente el que NO coincide con el del editor (el
+  desfase de los `<hr>`, el mismo que obligó a usar ancla de texto en vez de
+  offset para el salto).
+  **La cadena que hace falta**: abrir el capítulo → esperar a que
+  `checkRepeticiones` pinte las decoraciones → identificar cuál de todas es la
+  que se venía a ver → abrirle el popover. La identificación no puede ser por
+  offset; tiene que ser por palabra normalizada + cercanía al bloque que resaltó
+  el ancla. Y hoy no hay orden garantizado entre el highlight (que entra por el
+  effect de `search.requestHighlight`) y el chequeo de repeticiones.
+  **Forma probable**: un `pendingPopover` en `RepeticionesAuditService` que el
+  editor consuma al final de `checkRepeticiones`, después de
+  `applyRepeticionesDecorations` — mismo patrón que `PendingHighlight` de
+  `search-service`. Ojo con no dejarlo pegado si el capítulo cambia mientras
+  tanto, y con limpiarlo aunque no se encuentre la aparición.
+  **Se cruza con** el ítem de `## Editor / UX` «los popups scrollean con la
+  vista»: el popover se posiciona una vez con coords de viewport, así que
+  abrirlo justo después de un scroll de salto hereda ese bug tal cual.
+  Aplica igual al panel RAE, que tiene el mismo salto sin popover.
+
+  **Resuelto**, y la parte que lo hacía caro se evitó: `openRepPopover` pedía el
+  nodo DOM de la decoración para `getBoundingClientRect()`, pero `abrirTesauro`
+  ya armaba el popover con `coordsAtPos` — sin DOM. Con eso alcanza y no hay que
+  esperar a que la decoración esté pintada.
+  El panel deja un `pendingPopover` en `RepeticionesAuditService` (mismo patrón
+  que el `PendingHighlight` de `SearchService`) y el editor lo consume al final
+  de `checkRepeticiones`, que es cuando existen las posiciones de ProseMirror.
+  La aparición se ubica por el ANCLA y no por el offset: `indexOf` del texto
+  literal en el plano del editor, y adentro de ese rango se busca la palabra.
+  Tres bordes que dejaban el pedido colgado y lo hacían saltar en el capítulo
+  siguiente: detector automático apagado (se fuerza el chequeo — clickear la
+  fila ES pedir ver esa repetición), ancla que ya no está porque se editó el
+  párrafo entre el escaneo y el click (cae a la primera aparición de la palabra),
+  y capítulo sin idioma declarado, que el panel resuelve con `detectLang` y el
+  editor no (se descarta el pedido). En los tres el pendiente se limpia siempre.
+  **El agravante del scroll se arregló junto**, en el ítem de `## Editor / UX`.
+  **Sigue pendiente para el panel RAE**, que tiene el mismo salto sin popover.
 
 ## Búsqueda
 
@@ -2679,6 +2799,66 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
 - Diseño de la página "Sobre el autor": hoy funcional pero genérico (foto circular + bio justified). Pensar layout más editorial (dos columnas, variantes de retrato, epígrafe).
 - Bio + foto del autor a nivel saga (heredados a libros nuevos) y/o `settings.json` (defaults globales del repo). Hoy solo `book.json`.
 - [x] **Vista copada para diseñar temas** (`feat/theme-editor-redesign-font-cleanup`): rediseño completo del theme editor con tabs (Tipografía / Capítulos / Editoriales / Página / Fuentes), controles agrupados en `ctrl-group` cards, preview live por tab (cuerpo+inline, página standalone con `chapter_title_position`, editoriales tipo title page + TOC + dedicatoria, mock EPUB con aspect-ratio por template). Font selector unificado con `<app-select>` + itemTemplate (cada nombre renderea en su tipografía, igual que el editor toolbar). Pool de fuentes con virtual scroll y FontFace eager-load. Modal altura fija — no baila entre tabs. De yapa: italic/bold sintetizados con tunings `italic_oblique_deg` / `italic_weight` / `bold_weight` (cascade — `bold_weight` levanta italic si éste no tiene peso propio), borradas las faces explícitas de la UI (Rust mantiene fields back-compat read; al re-guardar se omiten). Cleanup detector simplificado a sólo familias — bug "face explícita marcada como no usada" muere como side-effect.
+
+- [ ] **Formato de fecha configurable** (pedido del autor el 2026-09-04)
+  Hoy `shared/fecha-corta-pipe.ts` está fijo en `es-AR` con día/mes/año de dos
+  dígitos (`04/09/26`). Debería salir de Ajustes.
+  **Por qué no se usa el locale del sistema, que fue lo primero que se probó**:
+  la máquina del autor tiene `LANG=en_GB.UTF-8` y `LC_TIME=es_AR.UTF-8` — el
+  idioma en inglés y las fechas en argentino. `Intl` mira `navigator.language`,
+  que sale de `LANG` y no de `LC_TIME` (eso es de la libc, el motor JS no lo
+  consulta), así que "seguir al sistema" daba formato británico justo en el dato
+  donde el sistema decía otra cosa. Le pasó con otras apps y con addons de KDE.
+  **Alcance real**, según el autor: hay dos familias que importan, día-mes-año
+  y la japonesa/ISO invertida año-mes-día. No hace falta un selector de locales:
+  alcanza con un par de opciones y una muestra al lado de cada una.
+  Cuando se haga, el campo va en `Settings` **de los dos lados** — la interfaz
+  TS y el `struct` de Rust — o serde lo descarta al guardar y la preferencia se
+  pierde al reiniciar, sin ningún error (ver la convención en CLAUDE.md).
+
+## Deuda transversal
+
+- [ ] **Pasada de generalidades: hay bocha de código repetido, CSS y esas
+  yerbas** (pedido del autor el 2026-09-04, después de encontrar el chip de
+  botón duplicado entre `book-card` y `saga-header` con medidas distintas)
+  No es un refactor grande de una sentada: es una auditoría que liste lo que
+  está duplicado, con criterio de qué se unifica y qué no, y después se va
+  comiendo de a pedazos. **Lo ya detectado, para no volver a buscarlo**:
+  - `findNodeByPath` estaba copiada **cinco** veces (`app.ts`, `tree.ts`,
+    `search-panel.ts`, `rae-audit-panel.ts`, `node-actions-service.ts`). Se
+    creó `core/tree-utils.ts` y se migraron los dos archivos que la PR del
+    panel de repeticiones ya tocaba. **Faltan `app.ts`, `tree.ts` y
+    `search-panel.ts`** — mecánico y sin riesgo.
+  - `.card-btn` estaba duplicado en `book-card.scss` y `saga-header.scss` con
+    medidas distintas (26/16 contra 22/14), que es lo que los hacía ver
+    disparejos. Subido a `src/styles.scss`, al lado de `.btn` — que ya se había
+    subido por lo mismo, con su comentario explicando el criterio. Queda por
+    ver si el patrón aguanta o si conviene un componente `<app-card-btn>`.
+  - `yieldToEventLoop` está en `rae-audit-service` y en
+    `repeticiones-audit-service`, y el loop de escaneo con `progress` + guard de
+    scope + publicación incremental es casi el mismo en los dos. Si aparece un
+    tercer auditor, sale un helper.
+  - `formatDate` estaba copiada **cuatro** veces (`book-card`, `saga-card`,
+    `folder-card`, `landing`), semánticamente idéntica y escrita con llaves
+    distintas. **Resuelta borrándola**, no unificándola: era una
+    reimplementación a mano de `DatePipe`, que ya trae `shortDate`. Los cuatro
+    templates usan el pipe. De paso salió que la app **no registraba locale**,
+    así que `LOCALE_ID` era `en-US` y cualquier pipe de fecha o número formateaba
+    al revés (`9/5/26` en vez de `5/9/26`); ahora `app.config.ts` registra es-AR.
+    Es el mejor ejemplo de la sección: antes de unificar una función duplicada,
+    preguntarse si el framework ya la trae.
+  - `auditSnippet`/`auditAnchor` ya se unificaron en `core/audit-snippet.ts` —
+    ese es el ejemplo de cómo debería quedar el resto: módulo puro, con smoke
+    runner, y el comentario del porqué en un solo lugar.
+  **Qué mirar cuando se haga**: los `.scss` de componente que redefinen lo que
+  ya existe como token o como clase global (`--surface-2`, `.btn`, `.card-btn`);
+  los `@media (prefers-color-scheme: dark)` sueltos, que se saltean el override
+  manual de tema y dejan el componente en la paleta contraria cuando el autor
+  fuerza «Claro» con el OS en oscuro (el chip de la saga tenía exactamente ese
+  bug); y los helpers de path/árbol repetidos por componente.
+  **Criterio para no pasarse de rosca**: se unifica lo que ya está duplicado y
+  duele, no lo que podría llegar a compartirse. Dos copias iguales se unifican;
+  dos copias parecidas que divergieron a propósito, no.
 
 ## Archivos
 
