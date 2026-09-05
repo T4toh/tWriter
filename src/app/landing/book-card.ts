@@ -1,3 +1,4 @@
+import { FechaCortaPipe } from '../shared/fecha-corta-pipe';
 import {
   Component,
   computed,
@@ -18,7 +19,7 @@ import { Spinner } from '../shared/spinner';
 
 @Component({
   selector: 'app-book-card',
-  imports: [Spinner, LucideArrowDownToLine, LucideListChecks, LucideSettings],
+  imports: [FechaCortaPipe, Spinner, LucideArrowDownToLine, LucideListChecks, LucideSettings],
   templateUrl: './book-card.html',
   styleUrl: './book-card.scss',
 })
@@ -29,6 +30,11 @@ export class BookCard {
   private revision = inject(RevisionLibroService);
 
   readonly node = input.required<TreeNode>();
+  /** `vertical` (default) es la tarjeta de la grilla: portada arriba a todo el
+   *  ancho y texto abajo, que es donde el texto tiene lugar. `horizontal` es la
+   *  del header del libro, que es una sola y llega a 720px — ahí una portada a
+   *  todo el ancho sería absurda. */
+  readonly layout = input<'vertical' | 'horizontal'>('vertical');
   readonly select = output<TreeNode>();
   protected readonly exporting = signal<boolean>(false);
 
@@ -87,31 +93,6 @@ export class BookCard {
     return `${Math.round(n / 100) / 10}k palabras`;
   }
 
-  protected formatDate(ms: number | undefined): string {
-    if (!ms) return 'sin editar';
-    const now = Date.now();
-    const diff = now - ms;
-    const min = 60_000;
-    const hour = 60 * min;
-    const day = 24 * hour;
-    if (diff < hour) {
-      const m = Math.max(1, Math.floor(diff / min));
-      return `hace ${m} min`;
-    }
-    if (diff < day) {
-      const h = Math.floor(diff / hour);
-      return `hace ${h} h`;
-    }
-    if (diff < 7 * day) {
-      const d = Math.floor(diff / day);
-      return `hace ${d} d`;
-    }
-    return new Date(ms).toLocaleDateString('es-AR', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  }
 
   protected onClick(): void {
     this.select.emit(this.node());

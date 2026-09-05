@@ -1,3 +1,4 @@
+import { FechaCortaPipe } from '../shared/fecha-corta-pipe';
 import { Component, computed, input, output } from '@angular/core';
 import {
   LucideBookMarked,
@@ -22,7 +23,7 @@ const MAX_CHIPS = 8;
 
 @Component({
   selector: 'app-folder-card',
-  imports: [LucideDynamicIcon],
+  imports: [FechaCortaPipe, LucideDynamicIcon],
   templateUrl: './folder-card.html',
   styleUrl: './folder-card.scss',
 })
@@ -57,22 +58,6 @@ export class FolderCard {
     this.select.emit(this.node());
   }
 
-  protected formatDate(ms: number | undefined): string {
-    if (!ms) return 'sin editar';
-    const now = Date.now();
-    const diff = now - ms;
-    const min = 60_000;
-    const hour = 60 * min;
-    const day = 24 * hour;
-    if (diff < hour) return `hace ${Math.max(1, Math.floor(diff / min))} min`;
-    if (diff < day) return `hace ${Math.floor(diff / hour)} h`;
-    if (diff < 7 * day) return `hace ${Math.floor(diff / day)} d`;
-    return new Date(ms).toLocaleDateString('es-AR', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  }
 }
 
 function iconFor(kind: string): LucideIcon | null {

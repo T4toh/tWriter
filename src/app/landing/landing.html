@@ -17,7 +17,7 @@
 @if (currentNode(); as node) {
   @if (node.kind === 'book') {
     <div class="book-header" (contextmenu)="onCardContextMenu($event, node)">
-      <app-book-card [node]="node" (select)="onItemClick(node)" />
+      <app-book-card [node]="node" layout="horizontal" (select)="onItemClick(node)" />
     </div>
   } @else if (node.kind === 'saga') {
     <div class="saga-header-wrap" (contextmenu)="onCardContextMenu($event, node)">
@@ -70,7 +70,7 @@
           </div>
           <h3 class="card-name">{{ item.name }}</h3>
           <div class="card-foot">
-            <span class="date">{{ formatDate(item.modifiedMs) }}</span>
+            <span class="date">{{ item.modifiedMs | fechaCorta }}</span>
             @if (item.kind !== 'chapter') {
               <span class="count">{{ item.children.length }} item{{ item.children.length === 1 ? '' : 's' }}</span>
             }

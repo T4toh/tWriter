@@ -18,7 +18,7 @@
     }
   </div>
   <div class="foot">
-    <span class="date">{{ formatDate(node().modifiedMs) }}</span>
+    <span class="date">{{ node().modifiedMs | fechaCorta }}</span>
     <span class="count">
       {{ bookCount() }} novela{{ bookCount() === 1 ? '' : 's' }}
       @if (node().wordCount; as w) {

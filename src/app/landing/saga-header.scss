@@ -151,28 +151,4 @@
   gap: 4px;
 }
 
-.card-btn {
-  width: 26px;
-  height: 26px;
-  border: none;
-  background: rgb(0 0 0 / 5%);
-  color: var(--fg-muted);
-  border-radius: 3px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  transition: background 0.15s, color 0.15s;
-
-  &:hover:not(:disabled) {
-    background: var(--accent);
-    color: var(--bg);
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  .card-btn {
-    background: rgb(255 255 255 / 8%);
-  }
-}
+/* `.card-btn` es global (`src/styles.scss`), compartido con `book-card`. */

@@ -17,7 +17,7 @@
     }
   </div>
   <div class="foot">
-    <span class="date">{{ formatDate(node().modifiedMs) }}</span>
+    <span class="date">{{ node().modifiedMs | fechaCorta }}</span>
     <span class="count">
       {{ node().children.length }} item{{ node().children.length === 1 ? '' : 's' }}
     </span>
