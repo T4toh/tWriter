@@ -443,6 +443,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private hostClickListener: ((e: MouseEvent) => void) | null = null;
   private documentClickListener: ((e: MouseEvent) => void) | null = null;
   private popoverScrollListener: (() => void) | null = null;
+  private popoverScrollFrame: number | null = null;
   private grammarDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private raeDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private skipNextGrammarRemap = false;
@@ -874,6 +875,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (this.popoverScrollListener) {
       this.hostRef.nativeElement.removeEventListener('scroll', this.popoverScrollListener);
       this.popoverScrollListener = null;
+    }
+    if (this.popoverScrollFrame !== null) {
+      cancelAnimationFrame(this.popoverScrollFrame);
+      this.popoverScrollFrame = null;
     }
     if (this.grammarDebounceHandle !== null) {
       clearTimeout(this.grammarDebounceHandle);
@@ -2085,13 +2090,74 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (this.popoverScrollListener) {
       this.hostRef.nativeElement.removeEventListener('scroll', this.popoverScrollListener);
     }
-    // Los popovers son position:fixed y no siguen al scroll: si el capítulo se
-    // mueve, quedarían flotando lejos del span que los abrió.
-    this.popoverScrollListener = () => {
-      if (this.grammarPopover()) this.grammarPopover.set(null);
-      if (this.raePopover()) this.raePopover.set(null);
-    };
+    // Los popovers son `position: fixed` con el ancla capturada UNA vez, así que
+    // no siguen al scroll: si el capítulo se mueve, quedan flotando lejos del
+    // span que los abrió. Antes esto se resolvía cerrándolos, y encima solo los
+    // de gramática y RAE — al de repeticiones nunca se lo agregó a la lista, y
+    // por eso era el único que se veía derivar.
+    //
+    // Ahora se reposicionan: cerrar de golpe es peor, porque scrollear un poco
+    // para leer el contexto de la marca te hace perder los sinónimos que
+    // viniste a elegir. Solo se cierra si el ancla se fue del área visible del
+    // editor, que es cuando ya no hay dónde apoyarlo.
+    this.popoverScrollListener = () => this.programarReposicionPopovers();
     this.hostRef.nativeElement.addEventListener('scroll', this.popoverScrollListener, { passive: true });
+  }
+
+  /** Un reposicionamiento por frame: `scroll` dispara decenas de eventos por
+   *  gesto y cada uno reemplaza el objeto del popover, o sea un render. */
+  private programarReposicionPopovers(): void {
+    if (this.popoverScrollFrame !== null) return;
+    this.popoverScrollFrame = requestAnimationFrame(() => {
+      this.popoverScrollFrame = null;
+      this.reposicionarPopovers();
+    });
+  }
+
+  /** Recalcula el ancla de los popovers abiertos contra la posición ACTUAL de
+   *  su texto. El ancla vive en coordenadas de viewport y el texto se movió, así
+   *  que hay que volver a preguntarle a ProseMirror dónde quedó. */
+  private reposicionarPopovers(): void {
+    const editor = this.tiptap;
+    if (!editor) return;
+    const grammar = this.grammarPopover();
+    const rae = this.raePopover();
+    const rep = this.repPopover();
+    if (!grammar && !rae && !rep) return;
+
+    const caja = this.hostRef.nativeElement.getBoundingClientRect();
+    const anclaEn = (pos: number): AnchorBox | null => {
+      let c: { left: number; top: number; bottom: number };
+      try {
+        c = editor.view.coordsAtPos(pos);
+      } catch {
+        // La posición ya no existe en el doc (se editó con el popover abierto).
+        return null;
+      }
+      // Fuera del área visible del editor: no hay dónde apoyarlo.
+      if (c.bottom < caja.top || c.top > caja.bottom) return null;
+      return { left: c.left, top: c.top, bottom: c.bottom };
+    };
+
+    if (grammar) {
+      const a = anclaEn(grammar.from);
+      if (a) this.grammarPopover.set({ ...grammar, anchor: a });
+      else this.closeGrammarPopover();
+    }
+    if (rae) {
+      const a = anclaEn(rae.violation.from);
+      if (a) this.raePopover.set({ ...rae, anchor: a });
+      else this.raePopover.set(null);
+    }
+    if (rep) {
+      const a = anclaEn(rep.from);
+      if (a) {
+        this.repPopover.set({ ...rep, anchor: a });
+      } else {
+        this.repPopover.set(null);
+        this.limpiarGrupo();
+      }
+    }
   }
 
   private refreshState(): void {
