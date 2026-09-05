@@ -89,6 +89,7 @@ import {
 import { RaePopover } from './rae-popover';
 import { detectRepeticiones, DEFAULTS as REP_DEFAULTS } from '../repeticiones/detector';
 import { findCompoundRanges, isInsideCompound } from '../dictionary/compound-terms';
+import { RepeticionesAuditService } from '../core/repeticiones-audit-service';
 import {
   RangoPm,
   RepeticionPos,
@@ -151,6 +152,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected settings = inject(SettingsService);
   protected grammar = inject(GrammarService);
   protected sagaCtx = inject(SagaContextService);
+  private repeticionesAudit = inject(RepeticionesAuditService);
   protected systemFonts = inject(SystemFontsService);
   private fontsService = inject(FontsService);
   private ctxMenu = inject(ContextMenuService);
@@ -793,6 +795,28 @@ export class Editor implements AfterViewInit, OnDestroy {
       if (untracked(() => this.repAuto())) this.checkRepeticiones(true);
     });
 
+    // El panel de repeticiones pidió abrir el popover sobre una aparición. El
+    // `force` no es opcional: si el detector automático está apagado,
+    // `checkRepeticiones` no corre solo al abrir el capítulo y el pedido
+    // quedaría colgado para siempre. Clickear una fila del panel ES pedir ver
+    // esa repetición, así que se detecta aunque el auto esté en off.
+    effect(() => {
+      const pedido = this.repeticionesAudit.pendingPopover();
+      if (!pedido || pedido.path !== this.active()?.path) return;
+      if (!this.viewReady() || !this.tiptap) return;
+      untracked(() => {
+        // El panel resuelve el idioma con fallback a `detectLang` y el editor
+        // exige `meta().idioma` explícito, así que un capítulo sin idioma
+        // declarado puede tener repeticiones en la lista y no poder chequearse
+        // acá. Sin esto el pedido queda armado y salta en el próximo capítulo.
+        if (!this.canCheckRepeticiones()) {
+          this.repeticionesAudit.limpiarPopoverPendiente();
+          return;
+        }
+        this.checkRepeticiones(true);
+      });
+    });
+
     // El respiro del caret escala con la línea, así que cambia con la fuente.
     // `setOptions` termina en `view.updateState(state)` sin flag de scroll →
     // path "preserve" de ProseMirror: reaplica los props sin mover la vista.
@@ -1390,6 +1414,61 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.repeticiones.set(positioned);
     this.applyRepeticionesDecorations(positioned);
     this.lastRepPlain = plain;
+    this.consumirPopoverPendiente(plain, positioned);
+  }
+
+  /** Abre el popover sobre la aparición que se vino a ver desde el panel de
+   *  repeticiones. Corre al final de la detección porque recién acá existen las
+   *  posiciones de ProseMirror.
+   *
+   *  La aparición se ubica por el ANCLA, no por el offset: el panel calcula sus
+   *  offsets sobre `htmlToPlain` y esto vive en `extractPlainText`, y los dos
+   *  planos se desfasan (los `<hr>` que uno dropea y el otro convierte en
+   *  `* * *`). El ancla es texto literal, idéntico en los dos, así que
+   *  `indexOf` la ubica exacto — y ahí adentro se busca la palabra. */
+  private consumirPopoverPendiente(plain: string, positioned: RepeticionPos[]): void {
+    const pedido = untracked(() => this.repeticionesAudit.pendingPopover());
+    if (!pedido) return;
+    if (pedido.path !== this.active()?.path) return;
+    // Se limpia SIEMPRE, se encuentre o no: si el ancla ya no está (el autor
+    // editó el párrafo entre el escaneo y el click) el pedido tiene que morir
+    // acá, o queda armado y salta solo en el próximo capítulo que abra.
+    this.repeticionesAudit.limpiarPopoverPendiente();
+
+    const desde = plain.indexOf(pedido.anchor);
+    const hasta = desde < 0 ? -1 : desde + pedido.anchor.length;
+    const candidatas = positioned.filter((r) => r.palabra === pedido.palabra);
+    if (candidatas.length === 0) return;
+    // Dentro del ancla si se pudo ubicar; si no, la primera del capítulo, que
+    // al menos es la palabra correcta.
+    const objetivo =
+      desde < 0
+        ? candidatas[0]
+        : candidatas.find((r) => r.offset >= desde && r.offset < hasta) ?? candidatas[0];
+    this.abrirPopoverRepeticionEn(objetivo);
+  }
+
+  /** Abre el popover de repetición sin depender del nodo DOM de la decoración:
+   *  las coordenadas salen de `coordsAtPos`, igual que en `abrirTesauro`. Es lo
+   *  que permite abrirlo desde el panel, donde no hay ningún span clickeado. */
+  private abrirPopoverRepeticionEn(r: RepeticionPos): void {
+    const editor = this.tiptap;
+    if (!editor) return;
+    if (this.grammarPopover()) this.closeGrammarPopover();
+    if (this.raePopover()) this.raePopover.set(null);
+    const coords = editor.view.coordsAtPos(r.from);
+    this.repPopover.set({
+      repeticion: r,
+      // La palabra tal cual está escrita: `r.palabra` viene normalizada y
+      // mostrarla así se lee como un bug de la app.
+      palabra: editor.state.doc.textBetween(r.from, r.to, ' ').trim() || r.palabra,
+      anchor: { left: coords.left, top: coords.top, bottom: coords.bottom },
+      from: r.from,
+      to: r.to,
+    });
+    this.resaltarGrupo(r);
+    this.repResultado.set(null);
+    void this.cargarSinonimos(this.repPopover()!.palabra);
   }
 
   private applyRepeticionesDecorations(reps: RepeticionPos[]): void {

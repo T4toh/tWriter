@@ -1,0 +1,63 @@
+@if (scope(); as s) {
+  <header class="rp-panel-head">
+    <div class="rp-panel-title">
+      <svg class="rp-panel-icon" lucideRepeat [size]="16"></svg>
+      <div class="rp-panel-labels">
+        <span class="rp-panel-scope">Repeticiones — {{ s.name }}</span>
+        <span class="rp-panel-sub">
+          @if (loading()) {
+            @if (progress(); as p) {
+              {{ p.done }} / {{ p.total }} capítulos
+            } @else {
+              Escaneando…
+            }
+          } @else if (error()) {
+            Error
+          } @else if (total() > 0) {
+            {{ total() }} repeticiones en {{ grupos().length }} capítulos
+          } @else {
+            Sin repeticiones detectadas
+          }
+        </span>
+      </div>
+    </div>
+    <button type="button" class="rp-panel-close" (click)="close()" title="Cerrar">
+      <svg lucideX [size]="14"></svg>
+    </button>
+  </header>
+
+  @if (error(); as e) {
+    <div class="rp-panel-error">{{ e }}</div>
+  }
+
+  @if (emptyAfterLoad()) {
+    <div class="rp-panel-empty">
+      Ningún capítulo de este alcance tiene repeticiones cercanas. Los nombres
+      propios del diccionario de la saga no cuentan.
+    </div>
+  }
+
+  <ul class="rp-panel-list">
+    @for (g of grupos(); track g.chapter.path) {
+      <li class="rp-chapter">
+        <details class="rp-chapter-details" [attr.open]="g.abierto ? '' : null">
+          <summary class="rp-chapter-head">
+            <span class="rp-chapter-title">{{ g.chapter.title }}</span>
+            <span class="rp-chapter-count">{{ g.chapter.repeticiones.length }}</span>
+          </summary>
+          <ul class="rp-rep-list">
+            @for (r of g.chapter.repeticiones; track $index) {
+              <li class="rp-rep-row" (click)="openChapterAt(g.chapter, r)">
+                <div class="rp-rep-meta">
+                  <span class="rp-rep-palabra">{{ r.palabra }}</span>
+                  <span class="rp-rep-detalle">{{ detalle(r) }}</span>
+                </div>
+                <div class="rp-rep-snippet">{{ snippet(g.chapter, r) }}</div>
+              </li>
+            }
+          </ul>
+        </details>
+      </li>
+    }
+  </ul>
+}

@@ -1,7 +1,7 @@
 <div
   class="shell"
   [class.focus]="settings.focusMode()"
-  [class.with-viewer]="search.open() || imageViewer.viewing() !== null || fontPreview.viewing() !== null || markdownReader.viewing() !== null || raeAudit.isOpen()"
+  [class.with-viewer]="search.open() || imageViewer.viewing() !== null || fontPreview.viewing() !== null || markdownReader.viewing() !== null || raeAudit.isOpen() || repeticionesAudit.isOpen()"
   [attr.data-rpw]="settings.rightPanelWidth()"
 >
   <aside class="panel panel-left">
@@ -311,6 +311,10 @@
   @if (raeAudit.isOpen()) {
     <aside class="panel panel-right">
       <app-rae-audit-panel />
+    </aside>
+  } @else if (repeticionesAudit.isOpen()) {
+    <aside class="panel panel-right">
+      <app-repeticiones-audit-panel />
     </aside>
   } @else if (search.open()) {
     <aside class="panel panel-right">

@@ -23,6 +23,11 @@
             <input type="checkbox" [checked]="rayas()" (change)="rayas.set(!rayas())" [disabled]="r.rayas.capitulos === 0" />
             <span class="rl-nombre">Rayas RAE</span>
             <span class="rl-conteo">{{ resumenCapitulos(r.rayas) }}</span>
+            @if (r.rayas.capitulos > 0) {
+              <button type="button" class="rl-ver" (click)="verRae($event)" title="Ver las violaciones RAE una por una, con la oración y el salto al lugar">
+                ver <svg lucideArrowRight [size]="11"></svg>
+              </button>
+            }
             <span class="rl-nota">también normaliza las comillas tipográficas de todo el capítulo, no solo el diálogo</span>
           </label>
         } @else {
@@ -48,6 +53,11 @@
             <input type="checkbox" [checked]="arreglosRae()" (change)="arreglosRae.set(!arreglosRae())" [disabled]="r.arreglosRae.cambios === 0" />
             <span class="rl-nombre">Arreglos RAE</span>
             <span class="rl-conteo">{{ resumen(r.arreglosRae) }}</span>
+            @if (r.arreglosRae.cambios > 0) {
+              <button type="button" class="rl-ver" (click)="verRae($event)" title="Ver las violaciones RAE una por una, con la oración y el salto al lugar">
+                ver <svg lucideArrowRight [size]="11"></svg>
+              </button>
+            }
           </label>
         } @else {
           <div class="rl-fila rl-fila-reporte">
@@ -58,6 +68,11 @@
         <div class="rl-fila rl-fila-reporte">
           <span class="rl-nombre">Repeticiones</span>
           <span class="rl-conteo">{{ resumen(r.repeticiones) }}</span>
+          @if (r.repeticiones.cambios > 0) {
+            <button type="button" class="rl-ver" (click)="verRepeticiones()" title="Ver las repeticiones una por una, con la oración y el salto al lugar">
+              ver <svg lucideArrowRight [size]="11"></svg>
+            </button>
+          }
           <span class="rl-nota">no se arreglan solas: se reescriben a mano en el editor</span>
         </div>
       </div>
