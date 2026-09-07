@@ -193,6 +193,54 @@ body {
   z-index: 200;
 }
 
+// Card y header de los modales centrados. El bloque estaba escrito nueve veces
+// (card) y diez (header), idéntico salvo `width`/`max-height`, que son lo único
+// propio de cada uno.
+
+// NO llevan `font-family: var(--font-ui)` ni `color: var(--fg)`, que cinco de
+// las cards declaraban y las otras cuatro no. Los dos son redundantes: `body`
+// ya los setea y no hay heading con regla global que los pise. Se verificó que
+// ningún modal los necesite por herencia — los diez se declaran al toplevel de
+// `app.html`, hermanos entre sí, así que su único ancestro de fuente es `body`.
+// Si algún día un modal se declara adentro del editor (que sí tiene zonas en
+// `--font-body`), ahí va a necesitar la declaración explícita.
+
+// Los tres modales `inset` quedan afuera a propósito y no comparten nada de
+// esto: `sc-`/`nf-` usan otro padding (1.25rem), otro fondo
+// (`--panel-bg-elev`) y otra sombra, y `rae-` vive en `editor.html`. Son otra
+// familia visual, no una variante de esta.
+.modal-card {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
+}
+
+// `flex-shrink: 0` lo tenían cinco de los diez headers. Va en la base porque
+// es el comportamiento correcto: sin él, un body largo comprime el header
+// dentro del `display: flex` de la card. Los cinco que no lo tenían cambian
+// solo en ese caso de overflow.
+.modal-header {
+  flex-shrink: 0;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-soft);
+
+  h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+}
+
 // Botones de diálogo. Vivían copiados en diez `.scss` de componente, con cuatro
 // variantes distintas del mismo bloque: acá arriba aplica igual (los estilos
 // globales no los encapsula Angular, solo los del componente) y hay un solo
