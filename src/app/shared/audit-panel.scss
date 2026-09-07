@@ -1,0 +1,181 @@
+/* Shell compartido de los paneles de auditoría (RAE y repeticiones).
+ *
+ * Los dos comparten el slot derecho y tienen que verse como la misma familia.
+ * Hasta ahora eso se sostenía a mano: eran el mismo archivo con otro prefijo
+ * (`rae-` contra `rp-`), ~110 líneas iguales, y ya habían empezado a
+ * divergir sin que se notara --el título de capítulo de RAE tenía la clase en
+ * el template pero ninguna regla, así que un título largo desbordaba ahí y se
+ * cortaba con elipsis en repeticiones--.
+ *
+ * Ahora comparten las clases, no solo el aspecto: el vocabulario `audit-*` es
+ * el contrato, y lo propio de cada panel se queda en su `.scss` con su prefijo.
+ * Si aparece un tercer auditor, hereda todo esto sumando un `@use`.
+ *
+ * Nota de nombres: las filas se llaman `audit-row` y no `audit-violation`
+ * porque repeticiones no lista violaciones. De paso desambigua contra
+ * `.rae-violation`, que es la marca inline del editor y la lee `editor.ts`.
+ */
+
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.audit-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+
+.audit-panel-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.audit-panel-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.audit-panel-labels {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.audit-panel-scope {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audit-panel-sub {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+
+.audit-panel-close {
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 4px;
+  border-radius: 3px;
+
+  &:hover {
+    background: var(--border);
+    color: var(--fg);
+  }
+}
+
+.audit-panel-error {
+  padding: 8px 12px;
+  background: rgb(210 48 48 / 10%);
+  color: #d23030;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.audit-panel-empty {
+  padding: 16px 12px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+.audit-panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.audit-chapter {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+
+.audit-chapter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px 4px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--bg-soft);
+}
+
+/* Los títulos son nombres de capítulo y pueden ser largos: elipsis en vez de
+   wrap, para que la cabecera no crezca a dos renglones. */
+.audit-chapter-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-chapter-count {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.audit-row-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.audit-row {
+  padding: 6px 12px;
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+
+  &:hover {
+    background: var(--bg-soft);
+  }
+
+  &:not(:last-child) {
+    border-bottom-color: var(--border);
+  }
+}
+
+.audit-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+
+.audit-row-snippet {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--fg);
+  margin: 2px 0;
+  line-height: 1.4;
+}
