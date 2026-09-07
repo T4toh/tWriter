@@ -1155,7 +1155,7 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 
 ## Deuda transversal
 
-- [ ] **Pasada de generalidades: hay bocha de código repetido, CSS y esas
+- [x] **Pasada de generalidades: hay bocha de código repetido, CSS y esas
   yerbas** (pedido del autor el 2026-09-04, después de encontrar el chip de
   botón duplicado entre `book-card` y `saga-header` con medidas distintas)
   No es un refactor grande de una sentada: es una auditoría que liste lo que
@@ -1213,40 +1213,58 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   duele, no lo que podría llegar a compartirse. Dos copias iguales se unifican;
   dos copias parecidas que divergieron a propósito, no.
 
-  **Auditoría del SCSS, hecha el 2026-09-07.** De **10.113 líneas en 41
-  archivos a 9.391 en 44** — los tres archivos nuevos son partials compartidos
-  (`shared/config-modal.scss`, `shared/form-fields.scss`,
-  `shared/audit-panel.scss`), así que el corte real es de **722 líneas**.
-  **Cerrada**, salvo un ítem que espera decisión del autor.
+  **Auditoría del SCSS, hecha el 2026-09-07. CERRADA.** De **10.113 líneas en
+  41 archivos a 9.414 en 45**. Los cuatro archivos nuevos son partials
+  compartidos (`shared/config-modal.scss`, `shared/form-fields.scss`,
+  `shared/audit-panel.scss`, `editor/popover-shell.scss`), así que el corte
+  real es de **~700 líneas** de duplicación, más los helpers de TS
+  (`core/tree-utils.ts`, `core/yield-to-event-loop.ts`).
+
   Lo aplicado, en orden: reglas muertas (-104); los 148 fallbacks
   `var(--token, hex)` que nunca se resolvían y los 11 tokens alias; el partial
   `shared/config-modal.scss` (-236); el shell de modal entero
   (`.modal-backdrop` + `.modal-card` + `.modal-header`, -265); el partial
   `shared/form-fields.scss` (-47); el shell de tarjeta `.card` (-56); el
   partial `shared/audit-panel.scss` de los dos paneles de auditoría (-119); el
-  CSS de `select` que no tenía ningún `select` (-63); y los 46 literales de
-  color que pasaron a `--err`/`--ok`/`--warn`.
-  - **Popovers** (-32, LO ÚNICO QUE QUEDA, y decide el autor): el shell
-    (`position: fixed` + `z-index: 1000` + `overscroll-behavior: contain` +
-    tipografía) está triplicado entre `grammar-popover`, `rae-popover` y
-    `repeticiones-popover`, más `--measuring { visibility: hidden }` ×3.
-    `repeticiones-popover.scss:1` tiene un comentario que declina factorizarlo
-    diciendo "son dos archivos de 40 líneas": son **tres** y suman 367, así
-    que el comentario quedó viejo, pero la decisión sigue siendo del autor.
+  CSS de `select` que no tenía ningún `select` (-63); los 46 literales de color
+  que pasaron a `--err`/`--ok`/`--warn`; la caja de los tres popovers del
+  editor (`editor/popover-shell.scss`); los cinco fills de error y los
+  recuadros con tinte, con los tokens `--*-tint`; y `pnpm lint:css`, que quedó
+  en verde y ahora sirve de línea de base.
 
-  **Dos hallazgos del reporte que eran FALSOS y habrían causado regresiones**,
+  **Tres de las unificaciones resolvieron además una fragilidad de JS**, que
+  era el mejor argumento de cada una y no estaba en el reporte: el bloqueo de
+  la rueda sobre el velo y el cierre por click afuera de los popovers
+  enumeraban clases a mano (`[class*="backdrop"]` y
+  `closest('.grammar-pop, .rae-pop, .rep-pop')`), así que un modal o un popover
+  nuevo perdía el comportamiento en silencio; y los dos paneles de auditoría ya
+  habían divergido sin que nadie lo viera (el título de capítulo de RAE tenía
+  la clase en el template y ninguna regla, así que desbordaba). Ahora la clase
+  que da el estilo es la misma que engancha el comportamiento: olvidarla se ve
+  a la primera.
+
+  **Lo que queda anotado y NO se hizo, por si vuelve a aparecer en un audit**:
+  `--ok` sobre su tinte da ~4.3:1 en tema claro y `--warn` ~3.4:1, los dos por
+  debajo del 4.5 de AA para texto normal, y bajar el alfa del tinte no alcanza
+  porque los tokens ya arrancan cerca de la línea sobre el fondo pelado (4.75 y
+  3.69). La salida sería oscurecer `--ok` y `--warn` en el tema claro, pero eso
+  cambia TODOS sus usos y no solo los recuadros, así que es una decisión aparte.
+  Hoy los afectados son los chips `.ok` y `.warn` de Configuración.
+
+  **Tres hallazgos del reporte que eran FALSOS y habrían causado regresiones**,
   anotados para que no vuelvan:
   - `--panel-header-bg` *parece* alias de `--bg-soft` porque en claro es
     `var(--bg-soft)`, pero el mixin oscuro lo redefine a `#262320` mientras
     `--bg-soft` va a `#181614`. En oscuro no son el mismo color. Ídem
     `--panel-bg-elev`.
-  - Los cinco `background` de error con literal (`.btn-danger`, el hover
-    destructivo del menú contextual, y los `.error` de notes-editor,
-    font-preview y editor) NO pueden pasar a `var(--err)`: llevan
-    `color: white` hardcodeado y en oscuro `--err` es `#e07a78`, o sea blanco
-    sobre salmón claro. Para que entren hay que cambiar el texto a `var(--bg)`
-    primero, como ya hace `.btn-confirm` de dictionary-modal — es un cambio
-    visible del tema oscuro y está pendiente de que el autor lo acepte.
+  - Los cinco `background` de error (`.btn-danger`, el hover destructivo del
+    menú contextual, y los `.error` de notes-editor, font-preview y editor) no
+    podían pasar a `var(--err)` **tal cual**: llevaban `color: white`
+    hardcodeado, y en oscuro `--err` es `#e07a78`, o sea blanco sobre salmón
+    claro (2.91:1). Se resolvió cambiando el texto a `var(--bg)` junto con el
+    fondo, que es lo que ya hacía `.btn-confirm` de dictionary-modal: así el
+    par se invierte con el tema y da 5.32 en claro y 5.78 en oscuro. La regla
+    quedó escrita en `styles.scss`. Un fill de estado NUNCA lleva `white` fijo.
   - Y una tercera del mismo tipo: el `inset: 0` seguido de
     `width`/`height: 100%` en `.deck-card` y `.crop-image` **no** es
     redundante. Los dos son `<img>`, o sea elementos reemplazados, y un
@@ -1256,16 +1274,26 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 
   **Lo que se decidió no hacer**: el `border-radius` con 6 valores en 190
   sitios (el par 4px/3px sin criterio distinguible) no valía pasada propia y
-  cayó solo al consolidar modales, tarjetas e inputs. Y los dos banners de
-  error con tinte propio (`audit-panel-error` con `rgb(210 48 48 / 10%)` y
-  `ij-error` con `rgb(220 60 60 / 8%)`) quedan enteros: son pares texto+tinte
-  consistentes, y convertir solo el texto los descalza. Para que entren hace
-  falta un token de tinte, que no existe.
+  cayó solo al consolidar modales, tarjetas e inputs. Los dos banners de error con tinte propio
+  ya entraron: los tokens `--*-tint` existen y el par texto+fondo sigue el tema.
+  De paso salió que la pasada de colores había dejado **cuatro** recuadros
+  descalzados --`color: var(--ok/--warn/--err)` con un `rgb()` derivado del
+  literal viejo, en settings-modal ×2, import-wizard y editor--, que es
+  exactamente el problema que los tokens de tinte previenen.
 
 
-  **Aparte, preexistente**: `pnpm lint:css` viene rojo desde antes de esta
-  pasada — 9 errores de `font-family-name-quotes` en `styles.scss` y
-  `styles/fonts.scss`, 5 de ellos con arreglo automático por `--fix`.
+  **Queda un caso del mismo patrón, sin hacer**: `tree.scss:138` y `:309` y
+  `select.scss:36` usan `rgb(200 168 120 / 12%)` y `/ 25%`, que es el `--accent`
+  del tema OSCURO (`#c8a878`) aplicado sin condicionar tema — exactamente el
+  problema que tenía `#c87070` antes de esta pasada. No entró porque no es un
+  color de estado y el fix natural es un `--accent-tint` con su par por tema.
+  En claro el `--accent` es marrón (`#5a3a1a`), así que hoy esos fondos son un
+  tostado que no corresponde a la paleta clara.
+
+    **`pnpm lint:css` quedó en verde.** Venía rojo desde antes de la pasada con 9
+  errores, y eso tuvo costo real: con la base en rojo no se distingue un error
+  nuevo del ruido, y durante la pasada se coló un `//` suelto en un commit por
+  eso mismo. Ahora sirve de línea de base.
 
 ## Archivos
 

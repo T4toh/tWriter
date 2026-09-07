@@ -44,20 +44,47 @@
    * - Un `background:` de color plano SIN texto encima (los puntitos de
    *   estado de git en `app.scss`) también va al token: sigue el tema y en
    *   oscuro se lee mejor que el literal.
-   * - Un `background:` CON texto encima solo puede usar el token si el texto
-   *   es `var(--bg)`, como hace `.btn-confirm` en dictionary-modal: así el
-   *   par se invierte junto con el tema (5.32 en claro, 5.78 en oscuro). Si
-   *   el texto está hardcodeado en `white`, el token NO sirve -- en oscuro
-   *   --err es #e07a78 y blanco sobre salmón claro es ilegible. Por eso
-   *   quedan cinco fills con literal: `.btn-danger` acá abajo, el hover
-   *   destructivo del menú contextual, y los `.error` de notes-editor,
-   *   font-preview y editor.
+   * - Un `background:` CON texto encima usa el token junto con
+   *   `color: var(--bg)` para el texto, nunca `white` fijo: así el par se
+   *   invierte con el tema y da 5.32 en claro y 5.78 en oscuro. Con `white`
+   *   hardcodeado, en oscuro sería blanco sobre #e07a78 (2.91), ilegible.
+   *   Son cinco: `.btn-danger` acá abajo, el hover destructivo del menú
+   *   contextual, y los `.error` de notes-editor, font-preview y editor.
+   * - Un recuadro de mensaje (fondo tenue + texto) usa el par
+   *   `--<estado>-tint` + `--<estado>`. Nunca un `rgb()` suelto: se descalza
+   *   del texto y no sigue el tema.
    *
-   * Ojo con --warn en claro: 3.69:1 pasa el 3.0 de UI y texto grande, pero no
-   * el 4.5 de texto normal. Si se usa para un párrafo, hay que oscurecerlo. */
+   * Los alfas de tinte (10% claro, 12% oscuro) están elegidos para que el par
+   * texto+tinte de --err dé 4.63 y 4.86, o sea arriba del 4.5 de AA.
+   *
+   * Lo que el alfa NO puede arreglar: --ok sobre su tinte da ~4.3 en claro y
+   * --warn ~3.4, porque los dos tokens ya arrancan cerca de la línea sobre el
+   * fondo pelado (4.75 y 3.69). Bajar más el tinte no alcanza. La salida sería
+   * oscurecer --ok y --warn en el tema claro, pero eso cambia TODOS sus usos,
+   * no solo los recuadros, así que es una decisión aparte y no se tomó acá.
+   * Hoy los afectados son los chips `.ok` y `.warn` de Configuración. */
+  /* El rojo tira a bordó y es a propósito: desaturado es lo que le da el 5.32
+   * sobre el fondo claro --el #c87070 de antes tiraba a salmón y por eso se
+   * leía lavado-- y de paso pega con la paleta cálida, que sale de la misma
+   * familia que el --accent marrón. Revisado en la app por el autor el
+   * 2026-09-07 y dado por bueno: no "aclararlo" en una pasada futura pensando
+   * que es drift. */
   --ok: #2f7d4f;
   --warn: #a8781f;
   --err: #b3403f;
+
+  /* Tintes: el mismo color de estado en versión fondo y en versión borde, para
+   * los recuadros de mensaje (los `.error` con caja, los chips de estado). Van
+   * como token y no como `rgb()` suelto porque si no quedan descalzados del
+   * texto: hasta esta pasada varios recuadros tenían `color: var(--err)` con un
+   * fondo derivado del literal VIEJO, así que el par no coincidía y encima no
+   * seguía el tema. El alfa sube un poco en oscuro porque un tinte sobre fondo
+   * oscuro se lee más flojo que sobre claro. */
+  --err-tint: rgb(179 64 63 / 10%);
+  --err-tint-border: rgb(179 64 63 / 30%);
+  --ok-tint: rgb(47 125 79 / 10%);
+  --warn-tint: rgb(168 120 31 / 10%);
+  --warn-tint-border: rgb(168 120 31 / 45%);
   --mark-bg: #f3d9a8;
   --mark-fg: #1c1a17;
 }
@@ -87,6 +114,11 @@
   --ok: #6fbf8b;
   --warn: #d4a35a;
   --err: #e07a78;
+  --err-tint: rgb(224 122 120 / 12%);
+  --err-tint-border: rgb(224 122 120 / 35%);
+  --ok-tint: rgb(111 191 139 / 12%);
+  --warn-tint: rgb(212 163 90 / 12%);
+  --warn-tint-border: rgb(212 163 90 / 45%);
   --mark-bg: #6b5220;
   --mark-fg: #f5efe2;
 }
@@ -341,14 +373,13 @@ body {
     filter: brightness(1.1);
   }
 
-  /* El fill queda en literal a propósito: lleva `color: #fff` hardcodeado, y
-     con `var(--err)` en tema oscuro sería blanco sobre #e07a78. Para pasarlo
-     al token hay que cambiar el texto a `var(--bg)` primero -- ver la nota
-     de los semánticos arriba. */
+  /* El texto va en `var(--bg)` y no en `white`: así el par se invierte junto
+     con el tema y el contraste queda 5.32 en claro y 5.78 en oscuro. Con
+     `white` fijo, en oscuro sería blanco sobre #e07a78 (2.91) e ilegible. */
   &.btn-danger {
-    background: #c14b4b;
-    color: #fff;
-    border-color: #c14b4b;
+    background: var(--err);
+    color: var(--bg);
+    border-color: var(--err);
     font-weight: 600;
   }
 

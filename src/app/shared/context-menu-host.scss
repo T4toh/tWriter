@@ -43,8 +43,8 @@
 }
 
 .ctx-item.danger:hover:not(:disabled) {
-  background: #b04040;
-  color: white;
+  background: var(--err);
+  color: var(--bg);
 }
 
 .ctx-item:disabled {

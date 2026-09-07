@@ -290,7 +290,7 @@
   }
 
   &.error {
-    background: #b04040;
-    color: white;
+    background: var(--err);
+    color: var(--bg);
   }
 }

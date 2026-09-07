@@ -74,8 +74,8 @@
 }
 
 .fp-error {
-  background: #b04040;
-  color: white;
+  background: var(--err);
+  color: var(--bg);
   padding: 0.5rem 0.75rem;
   border-radius: 4px;
   font-family: var(--font-mono);

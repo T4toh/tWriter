@@ -86,8 +86,8 @@
 
 .audit-panel-error {
   padding: 8px 12px;
-  background: rgb(210 48 48 / 10%);
-  color: #d23030;
+  background: var(--err-tint);
+  color: var(--err);
   font-size: 12px;
   border-bottom: 1px solid var(--border);
 }
