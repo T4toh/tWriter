@@ -63,6 +63,12 @@
    * oscurecer --ok y --warn en el tema claro, pero eso cambia TODOS sus usos,
    * no solo los recuadros, así que es una decisión aparte y no se tomó acá.
    * Hoy los afectados son los chips `.ok` y `.warn` de Configuración. */
+  /* El rojo tira a bordó y es a propósito: desaturado es lo que le da el 5.32
+   * sobre el fondo claro --el #c87070 de antes tiraba a salmón y por eso se
+   * leía lavado-- y de paso pega con la paleta cálida, que sale de la misma
+   * familia que el --accent marrón. Revisado en la app por el autor el
+   * 2026-09-07 y dado por bueno: no "aclararlo" en una pasada futura pensando
+   * que es drift. */
   --ok: #2f7d4f;
   --warn: #a8781f;
   --err: #b3403f;
