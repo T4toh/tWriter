@@ -1,8 +1,8 @@
 @if (about.open()) {
   <div class="modal-backdrop" (click)="close()"></div>
-  <div class="ab-modal" (click)="$event.stopPropagation()">
+  <div class="modal-card ab-modal" (click)="$event.stopPropagation()">
     @if (about.licencias(); as lic) {
-      <header class="ab-header">
+      <header class="modal-header ab-header">
         <div class="ab-titulo">
           <img src="assets/icon.png" alt="" class="ab-icono" />
           <h2>{{ lic.app.nombre }} <span class="ab-version">v{{ lic.app.version }}</span></h2>
@@ -17,7 +17,7 @@
         </p>
       </header>
     } @else {
-      <header class="ab-header">
+      <header class="modal-header ab-header">
         <div class="ab-titulo">
           <img src="assets/icon.png" alt="" class="ab-icono" />
           <h2>Acerca de tWriter</h2>

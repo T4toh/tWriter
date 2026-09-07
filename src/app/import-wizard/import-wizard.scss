@@ -1,34 +1,14 @@
 .iw-modal {
-  position: fixed;
-  z-index: 201;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   width: min(820px, 92vw);
   max-height: 88vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
-  overflow: hidden;
 }
 
 .iw-header {
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-soft);
   display: flex;
   align-items: center;
   gap: 1rem;
 
   h2 {
-    margin: 0;
-    font-family: var(--font-ui);
-    font-size: 16px;
-    font-weight: 600;
     flex: 1;
   }
 

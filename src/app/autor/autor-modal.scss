@@ -10,17 +10,14 @@
   // una pantalla normal, y el scroll solo aparece si el autor agranda los
   // textareas o escribe una bio larga — no de arranque.
   max-height: 90vh;
+
+  // La única card del grupo sin header/body separados: el padding y el gap van
+  // en la card y scrollea entera, así que pisa el `overflow: hidden` de
+  // `.modal-card`. Queda `overflow-x` en hidden, que antes era visible — no
+  // cambia nada porque `box-sizing` + `width` ya evitan el desborde lateral.
   overflow-y: auto;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
   padding: 1.25rem 1.5rem;
-  display: flex;
-  flex-direction: column;
   gap: 0.85rem;
-  font-family: var(--font-ui);
-  color: var(--fg);
   box-sizing: border-box;
 }
 
