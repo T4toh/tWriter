@@ -279,12 +279,6 @@
   }
 }
 
-.sp-hit-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .sp-hit-icon {
   font-size: 0.95rem;
 }
@@ -296,13 +290,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.sp-hit-kind {
-  font-size: 0.72rem;
-  color: var(--muted, #888);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .sp-hit-bm25 {

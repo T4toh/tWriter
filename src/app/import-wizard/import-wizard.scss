@@ -153,10 +153,6 @@
   font-size: 12px;
 }
 
-.saga-row {
-  margin-bottom: 0.75rem;
-}
-
 .books-list {
   display: flex;
   flex-direction: column;
@@ -354,14 +350,6 @@
     font-size: 11px;
     color: var(--fg-muted);
   }
-}
-
-.extra-row .extra-tag {
-  font-size: 10px;
-  color: var(--fg-muted);
-  background: var(--border);
-  padding: 1px 6px;
-  border-radius: 8px;
 }
 
 .files-subheader {

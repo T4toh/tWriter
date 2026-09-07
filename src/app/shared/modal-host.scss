@@ -102,8 +102,7 @@
     }
   }
 
-  input[type='text'],
-  select {
+  input[type='text'] {
     background: var(--bg-soft);
     border: 1px solid var(--border);
     color: var(--fg);
