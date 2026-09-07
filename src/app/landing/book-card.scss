@@ -12,27 +12,24 @@
      que ahí una portada a todo el ancho sería absurda: se queda al costado, y
      es la única que muestra el autor. */
 
+// El chrome y el hover salen de `.card` global. Lo de acá es lo que la hace
+// distinta: la portada va a sangre, así que sin padding y sin gap, con
+// `overflow: hidden` para que la imagen se recorte contra el radio --que es
+// 8px y no los 6px del resto, porque la tapa a sangre pide la esquina más
+// redonda--. `position: relative` es para los controles absolutos de arriba.
+
+// El `flex-direction: column` que hereda de `.card` es inerte acá: `layout` es
+// un union cerrado 'vertical' | 'horizontal' con default, así que la tarjeta
+// siempre lleva una de las dos clases y las dos declaran su propio
+// `flex-direction` (column y row), que le ganan por especificidad.
 .book-card {
   position: relative;
-  display: flex;
+  gap: 0;
   padding: 0;
-  background: var(--bg);
-  border: 1px solid var(--border);
   border-radius: 8px;
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
   overflow: hidden;
-  transition: transform 0.1s, border-color 0.1s, box-shadow 0.1s;
   width: 100%;
   height: 100%;
-
-  &:hover {
-    border-color: var(--accent);
-    box-shadow: 0 4px 16px rgb(0 0 0 / 10%);
-    transform: translateY(-1px);
-  }
 
   &.unconfigured {
     border-style: dashed;

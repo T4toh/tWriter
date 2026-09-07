@@ -420,7 +420,6 @@
   }
 
   > input,
-  > select,
   > textarea {
     padding: 6px 8px;
     border: 1px solid var(--border);
@@ -436,20 +435,6 @@
       border-color: var(--accent);
     }
   }
-
-  > select {
-    padding-right: 28px;
-    background-image: linear-gradient(45deg, transparent 50%, var(--fg-muted) 50%),
-      linear-gradient(135deg, var(--fg-muted) 50%, transparent 50%);
-    background-position: calc(100% - 14px) center, calc(100% - 9px) center;
-    background-size: 5px 5px, 5px 5px;
-    background-repeat: no-repeat;
-  }
-}
-
-option {
-  background: var(--bg);
-  color: var(--fg);
 }
 
 .resumen {
