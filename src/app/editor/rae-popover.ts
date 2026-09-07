@@ -22,12 +22,12 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
     @if (violation(); as v) {
       <div
         #root
-        class="rae-pop"
+        class="editor-pop rae-pop"
         [class.rae-pop--pending]="v.category === 'pending-conversion'"
         [class.rae-pop--char]="v.category === 'char'"
         [class.rae-pop--structure]="v.category === 'structure'"
         [class.rae-pop--typo]="v.category === 'typo'"
-        [class.rae-pop--measuring]="placed() === null"
+        [class.editor-pop--measuring]="placed() === null"
         [style.top.px]="placed()?.y ?? 0"
         [style.left.px]="placed()?.x ?? 0"
         [style.max-height.px]="clippedMaxHeight()"

@@ -1824,7 +1824,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     const target = event.target as HTMLElement | null;
     // Defensa en profundidad: si algún día un elemento interno del popover
     // dejara de burbujear hasta su root, el guard evita que se cierre solo.
-    if (target?.closest('.grammar-pop, .rae-pop, .rep-pop')) return;
+    if (target?.closest('.editor-pop')) return;
     if (this.grammarPopover()) this.closeGrammarPopover();
     if (this.raePopover()) this.raePopover.set(null);
     if (this.repPopover()) {

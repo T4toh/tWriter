@@ -1,0 +1,31 @@
+/* Caja compartida de los tres popovers del editor (gramática, RAE y
+ * repeticiones). Solo la caja: los cuerpos --sugerencias, diff, ocurrencias--
+ * cambian por razones distintas y siguen separados, que es lo que decía el
+ * comentario viejo de `repeticiones-popover.scss`. Lo que no cambiaba por
+ * razones distintas eran estas trece declaraciones, iguales en los tres.
+ *
+ * También arregla que el cierre por click afuera en `editor.ts` enumerara los
+ * tres nombres a mano: ahora matchea `.editor-pop`, que es además la clase que
+ * da la caja, así que olvidársela no falla callado.
+ */
+.editor-pop {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
+  padding: 8px 10px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Mientras se mide para decidir dónde va, el popover está en el DOM pero no se
+   muestra: si no, se lo ve saltar de la esquina a su posición final. */
+.editor-pop--measuring {
+  visibility: hidden;
+}

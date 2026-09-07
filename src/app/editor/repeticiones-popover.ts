@@ -29,8 +29,8 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
     @if (anchor()) {
       <div
         #root
-        class="rep-pop"
-        [class.rep-pop--measuring]="placed() === null"
+        class="editor-pop rep-pop"
+        [class.editor-pop--measuring]="placed() === null"
         [style.top.px]="placed()?.y ?? 0"
         [style.left.px]="placed()?.x ?? 0"
         [style.max-height.px]="clippedMaxHeight()"

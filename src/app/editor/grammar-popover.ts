@@ -22,8 +22,8 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
     @if (match(); as m) {
       <div
         #root
-        class="grammar-pop"
-        [class.grammar-pop--measuring]="placed() === null"
+        class="editor-pop grammar-pop"
+        [class.editor-pop--measuring]="placed() === null"
         [style.top.px]="placed()?.y ?? 0"
         [style.left.px]="placed()?.x ?? 0"
         [style.max-height.px]="clippedMaxHeight()"

@@ -1,27 +1,14 @@
-/* Hermano de `rae-popover.scss` con el violeta del detector. Se mantiene
- * aparte y no se factoriza a un mixin: son dos archivos de 40 líneas que
- * cambian por razones distintas. */
+/* Hermano de `rae-popover.scss` con el violeta del detector. La caja sale de
+ * `popover-shell.scss`; el cuerpo se queda acá. */
+@use 'popover-shell';
+
 .rep-pop {
-  position: fixed;
-  z-index: 1000;
   min-width: 220px;
   max-width: 320px;
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--border);
-  border-left: 3px solid #8257e6;
-  border-radius: 6px;
-  box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
-  padding: 8px 10px;
-  font-family: var(--font-ui);
-  font-size: 12px;
-  line-height: 1.4;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
 
-.rep-pop--measuring {
-  visibility: hidden;
+  /* El violeta es el canal de marca del detector de repeticiones, separado de
+     los cuatro cálidos de RAE. No es un color de UI: no va a --err/--warn. */
+  border-left: 3px solid #8257e6;
 }
 
 .rep-pop-head {
