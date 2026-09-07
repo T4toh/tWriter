@@ -224,6 +224,17 @@ export class Tree implements OnDestroy {
       if (extrasDirs.size > 0) this.extrasDirsExpanded.set(new Set(extrasDirs));
       const exports = this.settings.treeExportsExpanded();
       if (exports.size > 0) this.exportsExpanded.set(new Set(exports));
+      // Extras y Exportados se cargan lazy: el fetch lo dispara `toggleExtras`
+      // / `toggleExports` al expandir. Al hidratar desde settings nadie los
+      // clickea, así que hay que pedirlos a mano — sin esto un nodo que quedó
+      // expandido en la sesión anterior vuelve expandido y con "Cargando…"
+      // para siempre, porque `isExtrasExpanded()` es true y `hasLoadedExtras()`
+      // false y nada los reconcilia. Se arreglaba solo colapsando y volviendo
+      // a abrir, que es lo único que pasa por el toggle.
+      // `extrasDirsExpanded` no necesita nada: son subcarpetas dentro de los
+      // extras ya cargados, no un fetch aparte.
+      for (const path of this.extrasExpanded()) void this.hydrateExtras(path);
+      for (const path of this.exportsExpanded()) void this.hydrateExports(path);
     });
     // Scrollear a la fila activa. El expandido ya lo resuelve `ancestorPaths`,
     // pero sin esto la fila puede quedar fuera del viewport — típico al crear
@@ -334,6 +345,41 @@ export class Tree implements OnDestroy {
     this.settings.setTreeExtrasExpanded(this.extrasExpanded());
     if (!expanded && !this.extras.hasLoaded(scopePath)) {
       void this.refreshExtras(scopePath);
+    }
+  }
+
+  /** Igual que `refreshExtras`, pero para la hidratación del arranque.
+   *
+   *  Dos diferencias, las dos por el mismo motivo: el path viene de
+   *  `settings.json` y puede no existir más en disco (carpeta borrada o
+   *  renombrada desde afuera, o el otro PC). Ahí no corresponde un toast de
+   *  error al abrir la app —el autor no pidió nada—, y sobre todo no puede
+   *  quedar colgado en "Cargando…", que es justo el bug que esto arregla. Se
+   *  colapsa el nodo y se despersiste, así que se cura solo. */
+  private async hydrateExtras(scopePath: string): Promise<void> {
+    try {
+      await this.extras.refresh(scopePath);
+    } catch {
+      this.extrasExpanded.update((s) => {
+        const next = new Set(s);
+        next.delete(scopePath);
+        return next;
+      });
+      this.settings.setTreeExtrasExpanded(this.extrasExpanded());
+    }
+  }
+
+  /** Ver `hydrateExtras`. */
+  private async hydrateExports(bookPath: string): Promise<void> {
+    try {
+      await this.exports.refresh(bookPath);
+    } catch {
+      this.exportsExpanded.update((s) => {
+        const next = new Set(s);
+        next.delete(bookPath);
+        return next;
+      });
+      this.settings.setTreeExportsExpanded(this.exportsExpanded());
     }
   }
 
