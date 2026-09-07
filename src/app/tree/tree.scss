@@ -57,7 +57,7 @@
 
   &.active {
     color: var(--fg);
-    border-bottom-color: var(--accent, #6c6cff);
+    border-bottom-color: var(--accent);
   }
 }
 
@@ -399,8 +399,8 @@
 
 .cdk-drag-preview {
   box-sizing: border-box;
-  background: var(--bg-secondary, var(--bg, #1a1a1a));
-  border: 1px solid var(--accent, #6cf);
+  background: var(--bg-soft);
+  border: 1px solid var(--accent);
   border-radius: 4px;
   box-shadow: 0 4px 12px rgb(0 0 0 / 30%);
   opacity: 0.92;
@@ -414,7 +414,7 @@
 .cdk-drag-placeholder {
   opacity: 0;
   min-height: 22px;
-  border-top: 2px solid var(--accent, #6cf);
+  border-top: 2px solid var(--accent);
 }
 
 .cdk-drop-list-dragging .cdk-drag:not(.cdk-drag-placeholder) {

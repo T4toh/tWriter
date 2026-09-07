@@ -179,11 +179,11 @@
 }
 
 .hint-ok {
-  color: var(--ok, #4caf50);
+  color: var(--ok);
 }
 
 .hint-err {
-  color: var(--err, #e07070);
+  color: var(--err);
 }
 
 /* Los términos que un tokenizador partiría —con espacio o con apóstrofe— se
@@ -280,7 +280,7 @@
   }
 
   &.confirming {
-    background: color-mix(in srgb, var(--err, #e07070) 10%, transparent);
+    background: color-mix(in srgb, var(--err) 10%, transparent);
   }
 
   .word {
@@ -304,8 +304,8 @@
     opacity: 0.6;
 
     &:hover {
-      color: var(--err, #e07070);
-      border-color: color-mix(in srgb, var(--err, #e07070) 40%, transparent);
+      color: var(--err);
+      border-color: color-mix(in srgb, var(--err) 40%, transparent);
       opacity: 1;
     }
   }
@@ -317,7 +317,7 @@
     font-size: 12px;
 
     .confirm-prompt {
-      color: var(--err, #e07070);
+      color: var(--err);
       font-weight: 600;
     }
 
@@ -334,9 +334,9 @@
     }
 
     .btn-confirm {
-      background: var(--err, #e07070);
+      background: var(--err);
       color: var(--bg);
-      border-color: var(--err, #e07070);
+      border-color: var(--err);
     }
 
     .btn-cancel:hover {
@@ -363,5 +363,5 @@
 }
 
 .err {
-  color: var(--err, #e07070);
+  color: var(--err);
 }

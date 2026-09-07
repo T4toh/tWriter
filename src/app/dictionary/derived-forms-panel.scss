@@ -19,9 +19,9 @@
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  background: var(--panel-bg, #1e1e22);
-  color: var(--panel-fg, #e8e8ea);
-  border: 1px solid var(--panel-border, #3a3a40);
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
   border-radius: 0.5rem;
   box-shadow: 0 1rem 3rem rgb(0 0 0 / 50%);
 
@@ -31,7 +31,7 @@
     justify-content: space-between;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--panel-border, #3a3a40);
+    border-bottom: 1px solid var(--border);
 
     h3 {
       margin: 0;
@@ -55,7 +55,7 @@
     justify-content: flex-end;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
-    border-top: 1px solid var(--panel-border, #3a3a40);
+    border-top: 1px solid var(--border);
   }
 }
 
@@ -81,8 +81,8 @@
       padding: 0.4rem 0.5rem;
       font: inherit;
       color: inherit;
-      background: var(--input-bg, #141417);
-      border: 1px solid var(--panel-border, #3a3a40);
+      background: var(--input-bg);
+      border: 1px solid var(--border);
       border-radius: 0.25rem;
     }
   }
@@ -123,7 +123,7 @@
   }
 
   .forma {
-    font-family: var(--mono-font, ui-monospace, monospace);
+    font-family: var(--font-mono);
   }
 
   .nota {
@@ -146,14 +146,14 @@
   font: inherit;
   border-radius: 0.25rem;
   cursor: pointer;
-  border: 1px solid var(--panel-border, #3a3a40);
+  border: 1px solid var(--border);
   background: transparent;
   color: inherit;
 }
 
 .btn-agregar {
-  background: var(--accent, #4a7dff);
-  border-color: var(--accent, #4a7dff);
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 
   &:disabled {

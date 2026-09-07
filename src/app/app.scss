@@ -120,7 +120,7 @@
     left: 0;
     right: 0;
     height: 2px;
-    background: var(--accent, #6c6cff);
+    background: var(--accent);
   }
 }
 
@@ -430,7 +430,7 @@
 .sync-error-raw {
   margin: 4px 0 0;
   padding: 6px 8px;
-  background: var(--bg-darker, rgb(0 0 0 / 25%));
+  background: var(--bg-darker);
   color: var(--fg);
   font-family: var(--font-mono);
   font-size: 10px;

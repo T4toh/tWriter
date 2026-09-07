@@ -9,9 +9,9 @@
   position: fixed;
   inset: 6vh 12vw;
   z-index: 101;
-  background: var(--panel-bg, #1f1f1f);
-  color: var(--text, #e5e5e5);
-  border: 1px solid var(--border, #333);
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -21,8 +21,8 @@
 
 .nf-header {
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border, #333);
-  background: var(--panel-bg-elev, #262626);
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-bg-elev);
 
   h2 {
     margin: 0;
@@ -37,7 +37,7 @@
   align-items: end;
   gap: 0.75rem 1rem;
   padding: 0.9rem 1.25rem;
-  border-bottom: 1px solid var(--border, #333);
+  border-bottom: 1px solid var(--border);
 
   .nf-field {
     display: flex;
@@ -53,9 +53,9 @@
     // Mismo alto y tipografía que `app-select` (select.scss: 8px 10px / 14px),
     // sino el input queda más chico y desalineado al lado del combo.
     input {
-      background: var(--input-bg, #161616);
+      background: var(--input-bg);
       color: inherit;
-      border: 1px solid var(--border, #333);
+      border: 1px solid var(--border);
       border-radius: 4px;
       padding: 8px 10px;
       font-family: inherit;
@@ -80,10 +80,10 @@
 }
 
 .nf-bloque {
-  border: 1px solid var(--border, #333);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.5rem 0.6rem;
-  background: var(--panel-bg-elev, #232323);
+  background: var(--panel-bg-elev);
 
   .nf-bloque-head {
     display: flex;
@@ -104,28 +104,28 @@
 
     button {
       background: transparent;
-      border: 1px solid var(--border, #333);
+      border: 1px solid var(--border);
       border-radius: 4px;
       color: inherit;
       cursor: pointer;
       padding: 0.1rem 0.4rem;
 
       &:hover {
-        background: var(--hover-bg, #2e2e2e);
+        background: var(--hover-bg);
       }
     }
 
     .nf-quitar:hover {
-      border-color: var(--danger, #b04a4a);
-      color: var(--danger, #d97070);
+      border-color: var(--err);
+      color: var(--err);
     }
   }
 
   input,
   textarea {
-    background: var(--input-bg, #161616);
+    background: var(--input-bg);
     color: inherit;
-    border: 1px solid var(--border, #333);
+    border: 1px solid var(--border);
     border-radius: 4px;
     padding: 0.3rem 0.45rem;
     font: inherit;
@@ -177,8 +177,8 @@
   align-items: center;
   gap: 1rem;
   padding: 0.75rem 1.25rem;
-  border-top: 1px solid var(--border, #333);
-  background: var(--panel-bg-elev, #262626);
+  border-top: 1px solid var(--border);
+  background: var(--panel-bg-elev);
 
   .nf-add,
   .nf-actions {
@@ -188,7 +188,7 @@
 
   button {
     background: transparent;
-    border: 1px solid var(--border, #333);
+    border: 1px solid var(--border);
     border-radius: 4px;
     color: inherit;
     cursor: pointer;
@@ -196,7 +196,7 @@
     font: inherit;
 
     &:hover:not(:disabled) {
-      background: var(--hover-bg, #2e2e2e);
+      background: var(--hover-bg);
     }
 
     &:disabled {
@@ -206,7 +206,7 @@
   }
 
   .nf-primary {
-    background: var(--accent, #3b6ea5);
-    border-color: var(--accent, #3b6ea5);
+    background: var(--accent);
+    border-color: var(--accent);
   }
 }
