@@ -38,6 +38,7 @@ import { findAllMatchesInPlain, tokenize } from '../core/search-highlight';
 import { SearchHit, SearchService } from '../core/search-service';
 import { SearchScope, SettingsService } from '../core/settings-service';
 import { Select, SelectOption } from '../shared/select';
+import { findNodeByPath } from '../core/tree-utils';
 import { TreeNode } from '../core/types';
 import { atajo } from '../shared/atajo';
 
@@ -519,16 +520,6 @@ export class SearchPanel implements AfterViewInit {
     out += escapeHtml(snippet.slice(cursor));
     return out;
   }
-}
-
-function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
-  if (!root) return null;
-  if (root.path === path) return root;
-  for (const c of root.children) {
-    const found = findNodeByPath(c, path);
-    if (found) return found;
-  }
-  return null;
 }
 
 function escapeHtml(s: string): string {

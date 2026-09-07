@@ -1161,20 +1161,29 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   No es un refactor grande de una sentada: es una auditoría que liste lo que
   está duplicado, con criterio de qué se unifica y qué no, y después se va
   comiendo de a pedazos. **Lo ya detectado, para no volver a buscarlo**:
-  - `findNodeByPath` estaba copiada **cinco** veces (`app.ts`, `tree.ts`,
-    `search-panel.ts`, `rae-audit-panel.ts`, `node-actions-service.ts`). Se
-    creó `core/tree-utils.ts` y se migraron los dos archivos que la PR del
-    panel de repeticiones ya tocaba. **Faltan `app.ts`, `tree.ts` y
-    `search-panel.ts`** — mecánico y sin riesgo.
+  - `findNodeByPath` estaba copiada **seis** veces (`app.ts`, `tree.ts`,
+    `search-panel.ts`, `node-actions-service.ts`, `rae-audit-panel.ts` y el
+    panel de repeticiones) — el conteo viejo de acá decía cinco y se había
+    comido `node-actions-service`. **Resuelta**: todas importan de
+    `core/tree-utils.ts`, no queda ninguna copia. La única que divergía era la
+    de `app.ts`, con un `?? []` sobre `children` que resultó defensa muerta
+    (`fs.rs` declara `children: Vec<TreeNode>` sin `skip_serializing_if`, así
+    que serde siempre manda el campo); se conservó igual en el helper y el
+    porqué quedó en su comentario.
   - `.card-btn` estaba duplicado en `book-card.scss` y `saga-header.scss` con
     medidas distintas (26/16 contra 22/14), que es lo que los hacía ver
     disparejos. Subido a `src/styles.scss`, al lado de `.btn` — que ya se había
     subido por lo mismo, con su comentario explicando el criterio. Queda por
     ver si el patrón aguanta o si conviene un componente `<app-card-btn>`.
-  - `yieldToEventLoop` está en `rae-audit-service` y en
-    `repeticiones-audit-service`, y el loop de escaneo con `progress` + guard de
-    scope + publicación incremental es casi el mismo en los dos. Si aparece un
-    tercer auditor, sale un helper.
+  - `yieldToEventLoop` **apareció el tercer auditor** (`quotes-fix-service`,
+    además de `rae-audit-service` y `repeticiones-audit-service`), que era el
+    criterio anotado acá para extraerlo. **Resuelta**: salió a
+    `core/yield-to-event-loop.ts`, con el porqué del `setTimeout(0)` contra
+    `queueMicrotask`/`rAF` documentado ahí. Lo que **sigue duplicado** es el
+    loop de escaneo que lo rodea: `progress` + guard de scope + publicación
+    incremental es casi el mismo en los tres. Eso no se unificó todavía porque
+    las tres firmas de `progress` difieren; si se toca un cuarto auditor, ahí
+    sí conviene el helper de loop.
   - `formatDate` estaba copiada **cuatro** veces (`book-card`, `saga-card`,
     `folder-card`, `landing`), semánticamente idéntica y escrita con llaves
     distintas. **Resuelta borrándola**, no unificándola: era una
@@ -1189,10 +1198,17 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
     runner, y el comentario del porqué en un solo lugar.
   **Qué mirar cuando se haga**: los `.scss` de componente que redefinen lo que
   ya existe como token o como clase global (`--surface-2`, `.btn`, `.card-btn`);
-  los `@media (prefers-color-scheme: dark)` sueltos, que se saltean el override
-  manual de tema y dejan el componente en la paleta contraria cuando el autor
-  fuerza «Claro» con el OS en oscuro (el chip de la saga tenía exactamente ese
-  bug); y los helpers de path/árbol repetidos por componente.
+  y los helpers de path/árbol repetidos por componente. Los `@media
+  (prefers-color-scheme: dark)` sueltos **ya se descartaron como frente**: se
+  grepeó el 2026-09-07 y el único archivo que los tiene es `src/styles.scss`,
+  o sea que el bug del chip de la saga (componente en la paleta contraria al
+  forzar «Claro» con el OS en oscuro) no tiene hermanos escondidos.
+  **Lo que sí apareció midiendo**: colores hex hardcodeados en los `.scss` de
+  componente en vez de token — `#c87070` ×30, `#333` ×20, `#888` ×11,
+  `#4a9eff` ×11, `#d23030` ×10, `#b04040` ×9, `#e07070` ×8, `#c89020` ×8. Ojo
+  al unificar: los cuatro rojizos pueden ser una escala deliberada de estados
+  (error/warning/hover) y no drift, así que hay que mirar qué representa cada
+  uno antes de colapsarlos a un token.
   **Criterio para no pasarse de rosca**: se unifica lo que ya está duplicado y
   duele, no lo que podría llegar a compartirse. Dos copias iguales se unifican;
   dos copias parecidas que divergieron a propósito, no.

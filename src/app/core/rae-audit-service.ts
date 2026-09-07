@@ -8,6 +8,7 @@ import { ImageViewerService } from './image-viewer-service';
 import { MarkdownReaderService } from './markdown-reader-service';
 import { SearchService } from './search-service';
 import { DebugService } from './debug-service';
+import { yieldToEventLoop } from './yield-to-event-loop';
 
 interface ChapterPayload {
   path: string;
@@ -131,8 +132,4 @@ function titleFromPath(path: string): string {
   const parts = path.split(/[\\/]/);
   const file = parts[parts.length - 1] ?? path;
   return file.replace(/\.html$/i, '');
-}
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
 }
