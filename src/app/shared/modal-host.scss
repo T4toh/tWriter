@@ -1,3 +1,5 @@
+@use 'form-fields';
+
 // Velo más oscuro y animado, y escalón 300 porque este diálogo se abre ENCIMA
 // de un modal ya abierto. El resto sale de `.modal-backdrop`.
 .mh-backdrop {
@@ -102,26 +104,12 @@
     }
   }
 
-  input[type='text'] {
-    background: var(--bg-soft);
-    border: 1px solid var(--border);
-    color: var(--fg);
-    padding: 8px 10px;
-    border-radius: 4px;
-    font-family: inherit;
-    font-size: 14px;
-    outline: none;
-    appearance: none;
-    width: 100%;
-    box-sizing: border-box;
-
-    &:focus {
-      border-color: var(--accent);
-    }
-
-    &[aria-invalid='true'] {
-      border-color: #c14b4b;
-    }
+  // La base sale de `shared/form-fields`. Este input tenía medidas propias
+  // (8px 10px / 14px) que hacían que el prompt genérico se viera más grande
+  // que los inputs de los modales de config; se alinea al 6px 10px / 13px del
+  // resto por decisión del autor. Queda solo el estado de inválido.
+  input[type='text'][aria-invalid='true'] {
+    border-color: #c14b4b;
   }
 
   .field-label {

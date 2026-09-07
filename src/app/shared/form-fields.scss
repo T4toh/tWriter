@@ -1,0 +1,42 @@
+/* Campos de formulario: el bloque estaba escrito igual en cuatro `.scss`
+ * (config-modal, theme-editor, autor y modal-host).
+ *
+ * Es plain CSS con selectores de elemento, no una clase global, y eso es a
+ * propósito: `input[type='text'] { … }` en `styles.scss` alcanzaría los inputs
+ * de los dieciséis componentes que tienen alguno --el buscador, el rename del
+ * árbol, el wizard, el diccionario-- y varios de ésos ya traen su propio
+ * estilo. Como partial, cada componente que lo `@use`-a lo emite dentro de su
+ * scope y el radio queda en los cuatro de arriba.
+ *
+ * Los selectores van por tipo y NO incluyen un `input` pelado: cuatro de esos
+ * componentes tienen checkboxes, y un `input` sin filtro les aplicaría
+ * `width: 100%` y el padding, que es justo lo que no se quiere. `autor` tenía
+ * el `input` pelado pero sus únicos inputs son text y url, así que el cambio
+ * no lo toca.
+ *
+ * `import-wizard` queda AFUERA a propósito: su regla es `> input` con selector
+ * de hijo, alcanza sus nueve checkboxes, y tiene padding (6px 8px) y radius
+ * (3px) propios. Sumarlo compraba catorce líneas y arriesgaba el layout del
+ * wizard, que es el template más grande del repo.
+ */
+input[type='text'],
+input[type='number'],
+input[type='url'],
+textarea {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  appearance: none;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: var(--accent);
+  }
+}
