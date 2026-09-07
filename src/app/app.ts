@@ -5,6 +5,7 @@ import { CursorRestoreService } from './core/cursor-restore-service';
 import { DebugService } from './core/debug-service';
 import { FontPreviewService } from './core/font-preview-service';
 import { MarkdownReaderService } from './core/markdown-reader-service';
+import { NavigationService } from './core/navigation-service';
 import { NoteService } from './core/note-service';
 import { GitError, GitService } from './core/git-service';
 import { StorageService } from './core/storage-service';
@@ -122,6 +123,7 @@ export class App {
   private modal = inject(ModalService);
   private ctxMenu = inject(ContextMenuService);
   private nodeActions = inject(NodeActionsService);
+  private nav = inject(NavigationService);
   private toast = inject(ToastService);
 
   protected readonly dragOverCenter = signal<boolean>(false);
@@ -204,6 +206,15 @@ export class App {
 
   constructor() {
     inject(RustLogBridge);
+    // La rueda sobre el backdrop de un modal scrolleaba lo que está atrás: un
+    // `position: fixed` tapa el click pero no corta el `wheel`, que burbujea al
+    // contenedor scrolleable de abajo y lo mueve. Nunca se quiere ver atrás del
+    // modal, así que se bloquea y listo. Va acá en el shell y no en cada uno de
+    // los ~18 backdrops: todos son un div vacío hermano de la card, así que la
+    // rueda sobre el contenido del modal no matchea y scrollea normal.
+    // `{ passive: false }` explícito porque para `wheel` sobre `document` el
+    // default del navegador es passive, y ahí `preventDefault()` no hace nada.
+    document.addEventListener('wheel', this.blockBackdropWheel, { passive: false });
     void this.bootstrap();
     void this.bindCloseFlush();
     void this.bindFocusSync();
@@ -474,8 +485,46 @@ export class App {
     void this.project.loadTree();
   }
 
+  /** ponytail: matchea por convención de nombre (`*-backdrop`), así que un
+   *  backdrop nuevo que no la siga queda afuera sin avisar. El fix de verdad
+   *  es una clase `.modal-backdrop` compartida, pero son 18 archivos. */
+  private readonly blockBackdropWheel = (event: WheelEvent): void => {
+    const target = event.target;
+    if (target instanceof Element && target.closest('[class*="backdrop"]')) {
+      event.preventDefault();
+    }
+  };
+
   protected pickFolder(): void {
-    void this.project.chooseRoot();
+    void this.changeRoot();
+  }
+
+  /** El capítulo y la nota abiertos son del root viejo: dejarlos en pantalla
+   *  muestra contenido que no pertenece al proyecto que se acaba de cargar, y
+   *  el autosave los sigue escribiendo en la carpeta anterior. Flush antes de
+   *  abrir el picker para no comerse una edición sin guardar; el cierre va
+   *  después y solo si el root cambió de verdad (cancelar el diálogo no toca
+   *  nada). `ultimoCapitulo` también se limpia: sobrevive al cierre a
+   *  propósito —fija el libro del panel de notas— y quedaría apuntando a un
+   *  path que ya no existe. */
+  private async changeRoot(): Promise<void> {
+    const anterior = this.root();
+    try {
+      await this.chapter.flushAllDirty();
+      await this.note.flushAllDirty();
+    } catch (err) {
+      // El root viejo puede no estar más (carpeta movida, unmount). Se avisa y
+      // se sigue: mantener el buffer abierto tampoco lo salva.
+      this.debug.error('chapter', `flush antes de cambiar de carpeta falló: ${String(err)}`);
+    }
+    await this.project.chooseRoot();
+    if (this.root() === anterior) return;
+    for (const pane of [0, 1] as const) {
+      this.chapter.closeInPane(pane);
+      this.note.closeInPane(pane);
+    }
+    this.nav.ultimoCapitulo.set(null);
+    this.nav.goRoot();
   }
 
   protected syncNow(): void {
