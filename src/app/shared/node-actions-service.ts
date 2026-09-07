@@ -34,6 +34,7 @@ import { SettingsService } from '../core/settings-service';
 import { SplitChapterService } from '../core/split-chapter-service';
 import { ThemesService } from '../core/themes-service';
 import { ToastService } from '../core/toast-service';
+import { findNodeByPath } from '../core/tree-utils';
 import { FontEntry, ThemeMeta, TreeNode } from '../core/types';
 import { ModalService } from './modal-service';
 import { NoteFormService } from '../core/note-form-service';
@@ -1111,16 +1112,6 @@ export class NodeActionsService {
       (c) => c.kind === 'chapter' && c.ext === 'html' && c.name === stem,
     );
   }
-}
-
-function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
-  if (!root) return null;
-  if (root.path === path) return root;
-  for (const c of root.children) {
-    const found = findNodeByPath(c, path);
-    if (found) return found;
-  }
-  return null;
 }
 
 function findParent(node: TreeNode, target: TreeNode): TreeNode | null {

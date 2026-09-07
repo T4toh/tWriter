@@ -6,6 +6,7 @@ import { ToastService } from './toast-service';
 import { DebugService } from './debug-service';
 import { ProjectService } from './project-service';
 import { GitService } from './git-service';
+import { yieldToEventLoop } from './yield-to-event-loop';
 
 interface ChapterPayload {
   path: string;
@@ -82,8 +83,4 @@ export class QuotesFixService {
     const lang = p.idioma ?? detectLang(p.html);
     return lang === 'en';
   }
-}
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
 }

@@ -133,7 +133,7 @@ El scaffold inicial usa nombres `app.component.*` — refactorizar a convencione
 ## Reuso desde otros repos del usuario
 
 - **Reglas de diálogos** (~~`dialogos_a_esp/src/rules.py` y `converter.py`~~ **DEPRECADO**): la fuente original Python está deprecada — el repo Python tenía bugs (`\b` ASCII-only no matchea acentos, párrafos colapsados en la conversión, verbos dicendi acentuados invisibles) que se arrastraron al port TS y se fueron arreglando. Las reglas RAE vivas viven en `src/app/dialogos/converter.ts` + `rules-dedicated.ts` + `validator.ts`. No volver al Python como referencia.
-- **CSS y fuentes para EPUB**: extraídos de un EPUB de Reedsy. El de referencia es `~/Dropbox/Novelas/Buenos Aires 2077/1 - La Ciudad de las Luces/La Ciudad de las Luces Rev.2.epub`. Su `OEBPS/style.css` se recorta a un subset y vive en `src/styles/reedsy-subset.scss`. Las TTF (Merriweather, Lato, Roboto Mono) van a `src/assets/fonts/`.
+- **CSS y fuentes para EPUB**: extraídos de un EPUB de Reedsy. El de referencia es `~/Dropbox/Novelas/Buenos Aires 2077/1 - La Ciudad de las Luces/La Ciudad de las Luces Rev.2.epub`. Su `OEBPS/style.css` se recortó a un subset que vive en `src-tauri/resources/epub_style.css` (un `resource` de Tauri que se lee en runtime, ver la sección de sidecars). El `src/styles/reedsy-subset.scss` que este archivo mencionaba hasta el 2026-09-07 **nunca existió** — no hay commit que lo borre: se planeó como SCSS del front y terminó siendo el CSS del bundle. `src/styles/` tiene solo `fonts.scss`. Las TTF (Merriweather, Lato, Roboto Mono) van a `src/assets/fonts/`.
 - **NO reusar componentes** de la-cueva-de-tatoh — la UI de tWriter es bespoke (3 paneles, modo focus, tipografía serif).
 
 ## Sidecars y servicios externos

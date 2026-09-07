@@ -14,6 +14,7 @@ import { MarkdownReaderService } from './markdown-reader-service';
 import { RaeAuditService } from './rae-audit-service';
 import { SearchService } from './search-service';
 import { SettingsService } from './settings-service';
+import { yieldToEventLoop } from './yield-to-event-loop';
 
 interface ChapterPayload {
   path: string;
@@ -224,8 +225,4 @@ export class RepeticionesAuditService {
     this.error.set(null);
     this.progress.set(null);
   }
-}
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
 }

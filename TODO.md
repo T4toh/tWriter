@@ -1161,20 +1161,29 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   No es un refactor grande de una sentada: es una auditoría que liste lo que
   está duplicado, con criterio de qué se unifica y qué no, y después se va
   comiendo de a pedazos. **Lo ya detectado, para no volver a buscarlo**:
-  - `findNodeByPath` estaba copiada **cinco** veces (`app.ts`, `tree.ts`,
-    `search-panel.ts`, `rae-audit-panel.ts`, `node-actions-service.ts`). Se
-    creó `core/tree-utils.ts` y se migraron los dos archivos que la PR del
-    panel de repeticiones ya tocaba. **Faltan `app.ts`, `tree.ts` y
-    `search-panel.ts`** — mecánico y sin riesgo.
+  - `findNodeByPath` estaba copiada **seis** veces (`app.ts`, `tree.ts`,
+    `search-panel.ts`, `node-actions-service.ts`, `rae-audit-panel.ts` y el
+    panel de repeticiones) — el conteo viejo de acá decía cinco y se había
+    comido `node-actions-service`. **Resuelta**: todas importan de
+    `core/tree-utils.ts`, no queda ninguna copia. La única que divergía era la
+    de `app.ts`, con un `?? []` sobre `children` que resultó defensa muerta
+    (`fs.rs` declara `children: Vec<TreeNode>` sin `skip_serializing_if`, así
+    que serde siempre manda el campo); se conservó igual en el helper y el
+    porqué quedó en su comentario.
   - `.card-btn` estaba duplicado en `book-card.scss` y `saga-header.scss` con
     medidas distintas (26/16 contra 22/14), que es lo que los hacía ver
     disparejos. Subido a `src/styles.scss`, al lado de `.btn` — que ya se había
     subido por lo mismo, con su comentario explicando el criterio. Queda por
     ver si el patrón aguanta o si conviene un componente `<app-card-btn>`.
-  - `yieldToEventLoop` está en `rae-audit-service` y en
-    `repeticiones-audit-service`, y el loop de escaneo con `progress` + guard de
-    scope + publicación incremental es casi el mismo en los dos. Si aparece un
-    tercer auditor, sale un helper.
+  - `yieldToEventLoop` **apareció el tercer auditor** (`quotes-fix-service`,
+    además de `rae-audit-service` y `repeticiones-audit-service`), que era el
+    criterio anotado acá para extraerlo. **Resuelta**: salió a
+    `core/yield-to-event-loop.ts`, con el porqué del `setTimeout(0)` contra
+    `queueMicrotask`/`rAF` documentado ahí. Lo que **sigue duplicado** es el
+    loop de escaneo que lo rodea: `progress` + guard de scope + publicación
+    incremental es casi el mismo en los tres. Eso no se unificó todavía porque
+    las tres firmas de `progress` difieren; si se toca un cuarto auditor, ahí
+    sí conviene el helper de loop.
   - `formatDate` estaba copiada **cuatro** veces (`book-card`, `saga-card`,
     `folder-card`, `landing`), semánticamente idéntica y escrita con llaves
     distintas. **Resuelta borrándola**, no unificándola: era una
@@ -1189,13 +1198,91 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
     runner, y el comentario del porqué en un solo lugar.
   **Qué mirar cuando se haga**: los `.scss` de componente que redefinen lo que
   ya existe como token o como clase global (`--surface-2`, `.btn`, `.card-btn`);
-  los `@media (prefers-color-scheme: dark)` sueltos, que se saltean el override
-  manual de tema y dejan el componente en la paleta contraria cuando el autor
-  fuerza «Claro» con el OS en oscuro (el chip de la saga tenía exactamente ese
-  bug); y los helpers de path/árbol repetidos por componente.
+  y los helpers de path/árbol repetidos por componente. Los `@media
+  (prefers-color-scheme: dark)` sueltos **ya se descartaron como frente**: se
+  grepeó el 2026-09-07 y el único archivo que los tiene es `src/styles.scss`,
+  o sea que el bug del chip de la saga (componente en la paleta contraria al
+  forzar «Claro» con el OS en oscuro) no tiene hermanos escondidos.
+  **Lo que sí apareció midiendo**: colores hex hardcodeados en los `.scss` de
+  componente en vez de token — `#c87070` ×30, `#333` ×20, `#888` ×11,
+  `#4a9eff` ×11, `#d23030` ×10, `#b04040` ×9, `#e07070` ×8, `#c89020` ×8. Ojo
+  al unificar: los cuatro rojizos pueden ser una escala deliberada de estados
+  (error/warning/hover) y no drift, así que hay que mirar qué representa cada
+  uno antes de colapsarlos a un token.
   **Criterio para no pasarse de rosca**: se unifica lo que ya está duplicado y
   duele, no lo que podría llegar a compartirse. Dos copias iguales se unifican;
   dos copias parecidas que divergieron a propósito, no.
+
+  **Auditoría del SCSS, hecha el 2026-09-07** (10.113 líneas, 41 archivos).
+  Ya aplicado: reglas muertas (-104), los 148 fallbacks `var(--token, hex)` que
+  nunca se resolvían, los 11 tokens alias, y el partial
+  `shared/config-modal.scss` que saca las 236 líneas que saga-config y
+  book-config tenían idénticas. **Lo que queda, de mayor corte primero**:
+  - **Shell de modal reescrito 12 veces** (-265): `.{ij,iw,gs,ab,rl,sh,te,dict,
+    bc,sc,nf}-backdrop`/`-modal`/`-header` son byte-idénticos salvo
+    `width`/`max-height`/`z-index`. Van a `styles.scss` como
+    `.modal-backdrop`/`.modal-card`/`.modal-header` (mismo truco que `.btn`,
+    que ya está global porque la encapsulación no lo alcanza) + dos props de
+    override por modal. **Cambia el aspecto**: hay divergencias reales que
+    decidir a ojo — `autor-modal` pone el padding en la card y no en el body,
+    `theme-editor` usa `height` fija en vez de `max-height`,
+    `split-chapter`/`note-form` van en `z-index` 100 y el resto en 200,
+    `revision-libro`/`dictionary` traen `font-family` y `color` en la card.
+    Conviene partirlo: backdrop primero (-60, trivial), card y header después.
+  - **Paneles de auditoría** (-110): RAE y repeticiones comparten ~110 líneas
+    (header, close, `-panel-error`, `-panel-empty`, grupo de capítulo, filas).
+    El comentario de `repeticiones-audit-panel.scss:1` ya dice que "tienen que
+    verse como la misma familia" y hoy eso se sostiene a mano. Partial
+    `_audit-panel.scss` dejando afuera lo propio (colapsables de repeticiones,
+    `--sev` de RAE). Conviven en el slot derecho, así que se comparan de un
+    vistazo.
+  - **Bloque de input** (-110): las 22 líneas de `input/textarea/select`
+    (`bg-soft` + border + `outline:none` + `appearance:none` + `width:100%` +
+    `&:focus`) están en 6 archivos, y la flecha del select por gradiente en 4.
+    **Hay que elegir una divergencia**: `modal-host` usa `8px 10px / 14px` y
+    los demás `6px 10px / 13px`, o sea que el prompt genérico tiene inputs más
+    grandes que los modales de config.
+  - **Shells de tarjeta** (-60): 5 con la misma base de 15 líneas y el mismo
+    `&:hover`. `.saga-card` y `.folder-card` son idénticos hasta en
+    `.head .kind`. Al unificar hay que zanjar radius 6 vs 8 y gap 8 vs 10.
+  - **Colores semánticos** (0 líneas, ~50 sitios): un solo rojo escrito en
+    cuatro ortografías — `#c87070` ×30, `#c14b4b` ×6, `#e07070` ×8 y los 3
+    `#b04040` que se usan como *texto* — todos son `--err`. `#c87070` es el
+    valor oscuro de `--err` aproximado a mano y aplicado sin condicionar tema:
+    sobre `--bg` claro da ~3.2:1, así que **los errores en tema claro se leen
+    lavados y van a quedar notoriamente más oscuros**. Eso es el objetivo, no
+    un efecto lateral. Ídem `#4caf50`/`#6c9` → `--ok` y
+    `#c89020`-de-warning/`#e0a020` → `--warn`.
+    **NO tocar los 5 colores de marca del editor** (`#d23030`, `#d27a1f`,
+    `#c89020` cuando es marca, `#ffd500`, `#8257e6`): son una escala
+    deliberada y documentada en `editor.scss:645-651`, cuatro canales de marca
+    sobre paleta cálida más el violeta de repeticiones en canal separado.
+    Colapsarlos rompe la separación de canales de las marcas inline.
+    Los otros 6 usos de `#b04040` son *fill* (dot de sync, border-left de
+    toast, hover destructivo, `.fp-error`) y ese es un rol distinto del texto:
+    no van a `--err` sin pensarlo.
+  - **Popovers** (-32): el shell (`position:fixed` + `z-index:1000` +
+    `overscroll-behavior:contain` + tipografía) está triplicado, más
+    `--measuring { visibility: hidden }` ×3. Ojo que
+    `repeticiones-popover.scss:1` tiene un comentario que declina factorizarlo
+    diciendo "son dos archivos de 40 líneas" — son tres y suman 367, así que el
+    comentario quedó viejo, pero la decisión es del autor.
+  - **Restos mecánicos** (-15): triple bloque `select` en los config-modal (-8),
+    `.rae-pop--char`/`--structure` con la misma declaración a selector con coma
+    (-4), `inset: 0` seguido de `width/height: 100%` (-4, `inset` ya dimensiona)
+    y `.fp-sample` con `margin-bottom` + `:last-child` que sale con `gap` (-3).
+  **Total pendiente ≈ -590 líneas.** El `border-radius` con 6 valores en 190
+  sitios (el par 4px/3px sin criterio distinguible) no vale pasada propia: cae
+  solo al consolidar modales, tarjetas e inputs.
+
+  **Falsa alarma que ya se descartó**: `--panel-header-bg` *parece* alias de
+  `--bg-soft` porque en claro es `var(--bg-soft)`, pero el mixin oscuro lo
+  redefine a `#262320` mientras `--bg-soft` va a `#181614`. En oscuro no son el
+  mismo color. Ídem `--panel-bg-elev`. No colapsarlos.
+
+  **Aparte, preexistente**: `pnpm lint:css` viene rojo desde antes de esta
+  pasada — 9 errores de `font-family-name-quotes` en `styles.scss` y
+  `styles/fonts.scss`, 5 de ellos con arreglo automático por `--fix`.
 
 ## Archivos
 

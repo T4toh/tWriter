@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--panel-bg, #1a1a1a);
-  color: var(--text, #d4d4d4);
+  background: var(--bg);
+  color: var(--fg);
   font-size: 0.9rem;
 }
 
@@ -12,8 +12,8 @@
   align-items: center;
   gap: 4px;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--border, #333);
-  background: var(--panel-header-bg, #222);
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-header-bg);
   height: 41px;
   box-sizing: border-box;
 }
@@ -26,16 +26,16 @@
 .sp-input {
   flex: 1;
   height: 28px;
-  background: var(--input-bg, #2a2a2a);
+  background: var(--input-bg);
   color: inherit;
-  border: 1px solid var(--border, #333);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 0 8px;
   font-size: 0.85rem;
   outline: none;
 
   &:focus {
-    border-color: var(--accent, #5b8bd6);
+    border-color: var(--accent);
   }
 }
 
@@ -56,12 +56,12 @@
   padding: 0;
 
   &:hover:not(:disabled) {
-    background: var(--hover-bg, #2e2e2e);
+    background: var(--hover-bg);
     opacity: 1;
   }
 
   &.is-active {
-    background: var(--accent-bg, #2c4060);
+    background: var(--accent-bg);
     opacity: 1;
   }
 
@@ -81,14 +81,14 @@
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--border-subtle, #262626);
-  background: var(--panel-header-bg, #1f1f1f);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--panel-header-bg);
   box-sizing: border-box;
   font-size: 0.78rem;
 }
 
 .sp-scope-label {
-  color: var(--muted, #888);
+  color: var(--fg-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -99,7 +99,7 @@
 }
 
 .sp-scope-hint {
-  color: var(--warn, #d4a35a);
+  color: var(--warn);
   font-style: italic;
   font-size: 0.72rem;
   white-space: nowrap;
@@ -114,12 +114,12 @@
 
 .sp-status {
   margin: 12px;
-  color: var(--muted, #888);
+  color: var(--fg-muted);
   font-size: 0.85rem;
 }
 
 .sp-error {
-  color: var(--danger, #d66);
+  color: var(--err);
 }
 
 .sp-hint {
@@ -131,7 +131,7 @@
 .sp-inline-btn {
   margin-left: 6px;
   padding: 2px 6px;
-  border: 1px solid var(--border, rgb(255 255 255 / 15%));
+  border: 1px solid var(--border);
   border-radius: 3px;
   background: transparent;
   color: inherit;
@@ -140,7 +140,7 @@
   cursor: pointer;
 
   &:hover:not(:disabled) {
-    background: var(--surface-2, rgb(255 255 255 / 8%));
+    background: var(--surface-2);
   }
 
   &:disabled {
@@ -158,15 +158,15 @@
 .sp-partial {
   margin: 0 12px 8px;
   padding: 6px 8px;
-  border-left: 2px solid var(--warning, #c99);
-  background: var(--surface-2, rgb(255 255 255 / 4%));
+  border-left: 2px solid var(--warn);
+  background: var(--surface-2);
   border-radius: 3px;
   font-size: 0.78rem;
 }
 
 .sp-count {
   margin: 6px 12px 8px;
-  color: var(--muted, #888);
+  color: var(--fg-muted);
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -186,7 +186,7 @@
  * Summary nativo del <details> con título + count colapsable. Clicar el
  * summary toggle. Default open viene del attr. */
 .sp-group {
-  border-bottom: 1px solid var(--border, #333);
+  border-bottom: 1px solid var(--border);
 
   &:last-child {
     border-bottom: none;
@@ -207,7 +207,7 @@
   gap: 6px;
   padding: 8px 12px;
   cursor: pointer;
-  background: var(--panel-header-bg, #1f1f1f);
+  background: var(--panel-header-bg);
   user-select: none;
 
   /* Caret indicador del estado open/closed. */
@@ -221,7 +221,7 @@
   }
 
   &:hover {
-    background: var(--hover-bg, #2a2a2a);
+    background: var(--hover-bg);
   }
 }
 
@@ -231,8 +231,8 @@
 
 .sp-group-count {
   font-size: 0.72rem;
-  color: var(--muted, #888);
-  background: var(--input-bg, #2a2a2a);
+  color: var(--fg-muted);
+  background: var(--input-bg);
   padding: 1px 6px;
   border-radius: 8px;
   min-width: 1.5em;
@@ -243,7 +243,7 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  background: var(--panel-bg, #1a1a1a);
+  background: var(--bg);
 }
 
 .sp-group-body .sp-hit {
@@ -254,7 +254,7 @@
   margin: 0;
   padding: 4px 12px 8px 24px;
   font-size: 0.68rem;
-  color: var(--muted-darker, #666);
+  color: var(--muted-darker);
   font-family: monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -269,20 +269,14 @@
   text-align: left;
   padding: 10px 12px;
   cursor: pointer;
-  border-bottom: 1px solid var(--border-subtle, #262626);
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   gap: 4px;
 
   &:hover {
-    background: var(--hover-bg, #2a2a2a);
+    background: var(--hover-bg);
   }
-}
-
-.sp-hit-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .sp-hit-icon {
@@ -292,36 +286,29 @@
 .sp-hit-title {
   flex: 1;
   font-weight: 600;
-  color: var(--text, #e6e6e6);
+  color: var(--fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.sp-hit-kind {
-  font-size: 0.72rem;
-  color: var(--muted, #888);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .sp-hit-bm25 {
   margin: 0;
   font-size: 0.68rem;
   font-family: monospace;
-  color: var(--accent, #5b8bd6);
+  color: var(--accent);
   letter-spacing: 0.04em;
 }
 
 .sp-hit-snippet {
   margin: 0;
   font-size: 0.85rem;
-  color: var(--muted, #aaa);
+  color: var(--fg-muted);
   line-height: 1.4;
 
   mark {
-    background: var(--mark-bg, #5b8bd6);
-    color: var(--mark-fg, #fff);
+    background: var(--mark-bg);
+    color: var(--mark-fg);
     padding: 0 2px;
     border-radius: 2px;
   }
@@ -330,7 +317,7 @@
 .sp-hit-path {
   margin: 0;
   font-size: 0.7rem;
-  color: var(--muted-darker, #666);
+  color: var(--muted-darker);
   font-family: monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -401,16 +388,16 @@
 
 // El botón copia el look de `.sp-group-head` —mismo fondo, mismo padding, mismo
 // hover— en vez del azul `.btn-primary`, que se comía visualmente el panel. Los
-// mismos `var(..., fallback)` que el header de grupo a propósito: si algún día
+// mismos `var(...)` que el header de grupo a propósito: si algún día
 // se definen los tokens, los dos cambian juntos. Del `.btn` global quedan el
 // radio, el borde, la tipografía y el `:disabled`.
 .sp-apply {
   margin-left: auto;
   padding: 8px 12px;
-  background: var(--panel-header-bg, #1f1f1f);
+  background: var(--panel-header-bg);
   color: var(--fg);
 
   &:hover:not(:disabled) {
-    background: var(--hover-bg, #2a2a2a);
+    background: var(--hover-bg);
   }
 }

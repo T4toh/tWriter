@@ -7,17 +7,17 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.6rem 0.9rem;
-  background: var(--bg-soft, #1f1f23);
-  color: var(--fg, #eee);
-  border: 1px solid var(--accent, #5b8def);
+  background: var(--bg-soft);
+  color: var(--fg);
+  border: 1px solid var(--accent);
   border-radius: 6px;
   box-shadow: 0 4px 16px rgb(0 0 0 / 35%);
-  font-family: var(--font-ui, sans-serif);
+  font-family: var(--font-ui);
   font-size: 13px;
   max-width: 420px;
 
   &.downloading {
-    border-color: var(--fg-muted, #888);
+    border-color: var(--fg-muted);
   }
 
   &.ready {
@@ -40,7 +40,7 @@
   }
 
   .apply {
-    background: var(--accent, #5b8def);
+    background: var(--accent);
     color: white;
     border: none;
     padding: 4px 10px;
@@ -56,22 +56,22 @@
 
   .dismiss {
     background: transparent;
-    color: var(--fg-muted, #888);
+    color: var(--fg-muted);
     border: none;
     cursor: pointer;
     padding: 2px 6px;
     border-radius: 4px;
 
     &:hover {
-      background: var(--bg, #111);
-      color: var(--fg, #eee);
+      background: var(--bg);
+      color: var(--fg);
     }
   }
 
   .bar {
     flex: 1;
     height: 4px;
-    background: var(--border, #333);
+    background: var(--border);
     border-radius: 2px;
     overflow: hidden;
     min-width: 80px;
@@ -79,14 +79,14 @@
 
   .fill {
     height: 100%;
-    background: var(--accent, #5b8def);
+    background: var(--accent);
     transition: width 120ms linear;
   }
 
   .pct {
     font-variant-numeric: tabular-nums;
     font-size: 11px;
-    color: var(--fg-muted, #888);
+    color: var(--fg-muted);
     flex-shrink: 0;
   }
 }

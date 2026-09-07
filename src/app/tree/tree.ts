@@ -17,6 +17,7 @@ import { ProjectService } from '../core/project-service';
 import { NotasTab, SettingsService } from '../core/settings-service';
 import { ThemesService } from '../core/themes-service';
 import { ToastService } from '../core/toast-service';
+import { findNodeByPath } from '../core/tree-utils';
 import { FontEntry, ThemeMeta, TreeNode } from '../core/types';
 import { ModalService } from '../shared/modal-service';
 import { ContextMenuService } from '../shared/context-menu-service';
@@ -1036,16 +1037,6 @@ function pruneToNotes(node: TreeNode): TreeNode {
     .filter((c) => containsNote(c))
     .map((c) => (c.kind === 'note' ? c : pruneToNotes(c)));
   return { ...node, children };
-}
-
-function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
-  if (!root) return null;
-  if (root.path === path) return root;
-  for (const c of root.children) {
-    const found = findNodeByPath(c, path);
-    if (found) return found;
-  }
-  return null;
 }
 
 function isMarkdownExt(ext: string | null | undefined): boolean {

@@ -56,6 +56,7 @@ import { ModalService } from './shared/modal-service';
 import { ContextMenuHost } from './shared/context-menu-host';
 import { ContextMenuService } from './shared/context-menu-service';
 import { NodeActionsService } from './shared/node-actions-service';
+import { findNodeByPath } from './core/tree-utils';
 import { TreeNode } from './core/types';
 import { atajo } from './shared/atajo';
 import {
@@ -774,16 +775,6 @@ export class App {
     // maneja también a mano por git. `displayName` lo esconde en el árbol.
     await this.chapter.createDirectory(root, name.trim(), true);
   }
-}
-
-function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
-  if (!root) return null;
-  if (root.path === path) return root;
-  for (const c of root.children ?? []) {
-    const found = findNodeByPath(c, path);
-    if (found) return found;
-  }
-  return null;
 }
 
 function countByKind(n: TreeNode): { sagas: number; books: number; sections: number; chapters: number } {
