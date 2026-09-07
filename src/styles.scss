@@ -241,6 +241,39 @@ body {
   }
 }
 
+// Shell de las tarjetas de la galería. Cinco componentes tenían la misma base
+// de quince líneas y el MISMO `&:hover` de cuatro; `saga-card` y `folder-card`
+// eran byte-idénticas entre sí.
+
+// Las medidas (gap, padding, radius) van en la base por decisión del autor, no
+// solo el chrome: la alternativa era dejarlas en cada componente y quedarse con
+// dieciséis líneas menos de corte. El único cambio visual es la grilla de
+// capítulos de `landing`, que pasa de `gap: 8px` a 10px.
+
+// `width`/`height: 100%` NO van acá: las cuatro tarjetas de componente los
+// necesitan para llenar la celda de la grilla, pero la `.card` de `landing` no
+// los tenía y ponérselos le cambiaría el alto en su grilla.
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: transform 0.1s, border-color 0.1s, box-shadow 0.1s;
+
+  &:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 10%);
+    transform: translateY(-1px);
+  }
+}
+
 // Botones de diálogo. Vivían copiados en diez `.scss` de componente, con cuatro
 // variantes distintas del mismo bloque: acá arriba aplica igual (los estilos
 // globales no los encapsula Angular, solo los del componente) y hay un solo
