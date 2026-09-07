@@ -1,6 +1,6 @@
+// Velo más oscuro y animado, y escalón 300 porque este diálogo se abre ENCIMA
+// de un modal ya abierto. El resto sale de `.modal-backdrop`.
 .mh-backdrop {
-  position: fixed;
-  inset: 0;
   background: rgb(0 0 0 / 60%);
   z-index: 300;
   animation: mh-fade-in 120ms ease-out both;

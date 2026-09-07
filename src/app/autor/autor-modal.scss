@@ -1,10 +1,3 @@
-.backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgb(0 0 0 / 50%);
-  z-index: 200;
-}
-
 .modal {
   position: fixed;
   top: 50%;
@@ -220,9 +213,9 @@ textarea {
 
 // Paso de recorte: modal apilado arriba del modal del autor (mismo patrón
 // de backdrop+panel que .backdrop/.modal, con z-index más alto).
+// 210 y velo más oscuro: el recorte de la foto se abre sobre el modal de autor
+// (200/201). El resto sale de `.modal-backdrop`.
 .crop-backdrop {
-  position: fixed;
-  inset: 0;
   background: rgb(0 0 0 / 60%);
   z-index: 210;
 }

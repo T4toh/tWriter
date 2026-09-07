@@ -301,7 +301,7 @@
 </div>
 
 @if (rae(); as r) {
-  <div class="rae-backdrop" (click)="cancelRae()"></div>
+  <div class="modal-backdrop" (click)="cancelRae()"></div>
   <div class="rae-modal" (click)="$event.stopPropagation()">
     <header class="rae-header">
       <h2>Aplicar reglas RAE</h2>
@@ -325,7 +325,7 @@
 }
 
 @if (quotes(); as q) {
-  <div class="rae-backdrop" (click)="cancelQuotes()"></div>
+  <div class="modal-backdrop" (click)="cancelQuotes()"></div>
   <div class="rae-modal" (click)="$event.stopPropagation()">
     <header class="rae-header">
       <h2>Arreglar comillas</h2>

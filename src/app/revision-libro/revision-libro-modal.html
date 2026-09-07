@@ -1,5 +1,5 @@
 @if (svc.libro(); as libro) {
-  <div class="rl-backdrop" (click)="svc.cerrar()"></div>
+  <div class="modal-backdrop" (click)="svc.cerrar()"></div>
   <div class="rl-modal" (click)="$event.stopPropagation()">
     <header class="rl-header">
       <h2>Revisar «{{ libro.name }}»{{ idiomaLibro() ? ' · ' + idiomaLibro() : '' }}</h2>

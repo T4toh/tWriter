@@ -1,5 +1,5 @@
 @if (about.open()) {
-  <div class="ab-backdrop" (click)="close()"></div>
+  <div class="modal-backdrop" (click)="close()"></div>
   <div class="ab-modal" (click)="$event.stopPropagation()">
     @if (about.licencias(); as lic) {
       <header class="ab-header">

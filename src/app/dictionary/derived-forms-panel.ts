@@ -18,7 +18,7 @@ interface FormaItem {
   selector: 'app-derived-forms-panel',
   imports: [FormsModule],
   template: `
-    <div class="formas-backdrop" (click)="cerrar.emit()"></div>
+    <div class="modal-backdrop formas-backdrop" (click)="cerrar.emit()"></div>
     <div class="formas-panel" (click)="$event.stopPropagation()">
       <header>
         <h3>Formas de «{{ palabra() }}»</h3>
