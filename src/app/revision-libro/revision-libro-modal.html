@@ -1,7 +1,7 @@
 @if (svc.libro(); as libro) {
   <div class="modal-backdrop" (click)="svc.cerrar()"></div>
-  <div class="rl-modal" (click)="$event.stopPropagation()">
-    <header class="rl-header">
+  <div class="modal-card rl-modal" (click)="$event.stopPropagation()">
+    <header class="modal-header rl-header">
       <h2>Revisar «{{ libro.name }}»{{ idiomaLibro() ? ' · ' + idiomaLibro() : '' }}</h2>
       <button type="button" class="rl-escanear btn btn-secondary" [disabled]="svc.escaneando() || svc.aplicando()" (click)="svc.escanear()">
         @if (svc.escaneando()) { <app-spinner [size]="14" /> } @else { Escanear }

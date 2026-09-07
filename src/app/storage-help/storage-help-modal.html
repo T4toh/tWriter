@@ -1,7 +1,7 @@
 @if (help.open()) {
   <div class="modal-backdrop" (click)="close()"></div>
-  <div class="sh-modal" (click)="$event.stopPropagation()">
-    <header class="sh-header">
+  <div class="modal-card sh-modal" (click)="$event.stopPropagation()">
+    <header class="modal-header sh-header">
       <h2>Cómo usar git con esta carpeta</h2>
       <p>
         Git te da snapshots automáticos, historial completo y backup gratis en GitHub.

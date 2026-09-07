@@ -1,7 +1,7 @@
 @if (wizard.open()) {
   <div class="modal-backdrop" (click)="close()"></div>
-  <div class="ij-modal" (click)="$event.stopPropagation()">
-    <header class="ij-header">
+  <div class="modal-card ij-modal" (click)="$event.stopPropagation()">
+    <header class="modal-header ij-header">
       <h2>Importar notas (Joplin)</h2>
       <p class="step-pill">Paso {{ stepIndex() }} / {{ totalSteps() }}</p>
     </header>

@@ -1,7 +1,7 @@
 @if (editing(); as id) {
   <div class="modal-backdrop" (click)="close()"></div>
-  <div class="te-modal" (click)="$event.stopPropagation()">
-    <header class="te-header">
+  <div class="modal-card te-modal" (click)="$event.stopPropagation()">
+    <header class="modal-header te-header">
       <h2>Editar tema</h2>
       <p class="path">{{ id }}</p>
     </header>

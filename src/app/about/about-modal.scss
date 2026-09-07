@@ -1,31 +1,19 @@
 // Mismas medidas y variables de tema que `storage-help-modal.scss`: es el mismo
 // tipo de diálogo y no hay razón para que se vean distintos.
 .ab-modal {
-  position: fixed;
-  z-index: 201;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   width: min(680px, 92vw);
   max-height: 88vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
-  overflow: hidden;
 }
 
 .ab-header {
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-soft);
-
+  // Título más grande que el resto de los modales: Acerca de es una pantalla de
+  // presentación, no un formulario, y el h2 va al lado del icono de la app.
+  // El `font-weight: 700` es explícito a propósito: antes no declaraba ninguno
+  // y heredaba el bold del navegador, así que sin esto la base de
+  // `.modal-header` (600) lo dejaría más finito de lo que era.
   h2 {
-    margin: 0;
     font-size: 1.15rem;
+    font-weight: 700;
   }
 
   p {

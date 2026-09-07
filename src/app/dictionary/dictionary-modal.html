@@ -1,12 +1,12 @@
 @if (editing(); as target) {
   <div class="modal-backdrop" (click)="onBackdropClick()"></div>
   <div
-    class="dict-modal"
+    class="modal-card dict-modal"
     (click)="$event.stopPropagation()"
     (keydown)="onModalKeydown($event)"
     tabindex="-1"
   >
-    <header class="dict-header">
+    <header class="modal-header dict-header">
       <div>
         <h2>Diccionario</h2>
         <p class="saga-name">{{ target.nombre }}</p>
