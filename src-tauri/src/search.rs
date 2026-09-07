@@ -144,7 +144,8 @@ fn build_schema() -> (Schema, SchemaFields) {
     let saga_field = sb.add_text_field("saga", STRING | STORED);
     let book_field = sb.add_text_field("book", STRING | STORED);
     let section_field = sb.add_text_field("section", STRING | STORED);
-    // title + content usan el tokenizer "es_text" (lowercase + stopwords ES + remove-long).
+    // title + content usan el tokenizer "es_text" (remove-long + lowercase, sin
+    // stopwords y sin fold de acentos — ver el comentario de INDEX_VERSION).
     let es_indexing = TextFieldIndexing::default()
         .set_tokenizer(ES_TOKENIZER)
         .set_index_option(IndexRecordOption::WithFreqsAndPositions);
