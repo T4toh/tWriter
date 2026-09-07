@@ -80,7 +80,7 @@
       <p class="rl-vacio">Tocá «Escanear» para ver qué se puede corregir en esta novela.</p>
     }
 
-    <footer class="rl-actions">
+    <footer class="modal-actions">
       <button type="button" class="btn btn-secondary" (click)="svc.cerrar()">Cerrar</button>
       <button type="button" class="btn btn-primary" [disabled]="!puedeAplicar()" (click)="aplicar()">
         @if (svc.aplicando()) { <app-spinner [size]="14" /> } @else { Aplicar lo tildado }

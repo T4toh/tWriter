@@ -1282,6 +1282,21 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   exactamente el problema que los tokens de tinte previenen.
 
 
+  **Segunda capa, encontrada el 2026-09-07 con un barrido de bloques idénticos
+  repetidos entre archivos** (el reporte del audit solo había encontrado los
+  bloques grandes): el **footer de acciones del modal** estaba escrito NUEVE
+  veces con cinco variantes — era la cuarta pieza del shell y el reporte solo
+  había listado backdrop, card y header — y la **etiqueta de tipo de la
+  tarjeta** cuatro veces idéntica. Los dos resueltos con `.modal-actions` y
+  `.card .kind` globales.
+
+  Lo que ese barrido encontró y se decidió NO unificar, para no volver a
+  mirarlo: la **etiqueta de sección** de los modales de config (×3) difiere en
+  `color` entre autor y los otros dos, y el **subtítulo mono del header** (×3)
+  usa nombres de clase que significan cosas distintas (`.path` en config y
+  editor de temas, `.saga-name` en diccionario). Unificar cualquiera de las dos
+  sería forzarlas.
+
   **Queda un caso del mismo patrón, sin hacer**: `tree.scss:138` y `:309` y
   `select.scss:36` usan `rgb(200 168 120 / 12%)` y `/ 25%`, que es el `--accent`
   del tema OSCURO (`#c8a878`) aplicado sin condicionar tema — exactamente el

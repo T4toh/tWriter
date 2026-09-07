@@ -111,14 +111,6 @@
   align-items: center;
   gap: 8px;
 
-  .kind {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--accent);
-  }
-
   .ext {
     font-family: var(--font-mono);
     font-size: 10px;
