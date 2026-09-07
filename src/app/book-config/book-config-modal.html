@@ -1,7 +1,7 @@
 @if (editing(); as node) {
   <div class="modal-backdrop" (click)="close()"></div>
-  <div class="bc-modal" (click)="$event.stopPropagation()">
-    <header class="bc-header">
+  <div class="modal-card bc-modal" (click)="$event.stopPropagation()">
+    <header class="modal-header bc-header">
       <h2>Configurar novela</h2>
       <p class="path">{{ node.name }}</p>
     </header>
