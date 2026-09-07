@@ -222,16 +222,16 @@
   color: var(--fg-muted);
 
   &.ok {
-    color: #4caf50;
+    color: var(--ok);
     font-weight: 500;
   }
 
   &.warn {
-    color: #c89020;
+    color: var(--warn);
   }
 
   &.err {
-    color: #c87070;
+    color: var(--err);
   }
 
   a {
@@ -257,8 +257,8 @@
   overflow-wrap: anywhere;
 
   &.err {
-    color: #c87070;
-    border-left: 3px solid #c87070;
+    color: var(--err);
+    border-left: 3px solid var(--err);
   }
 }
 
@@ -442,12 +442,12 @@
 
   &.ok {
     background: rgb(76 175 80 / 15%);
-    color: #4caf50;
+    color: var(--ok);
   }
 
   &.warn {
     background: rgb(200 144 32 / 15%);
-    color: #c89020;
+    color: var(--warn);
   }
 }
 
@@ -463,8 +463,8 @@
   margin-top: 4px;
 
   &:hover {
-    color: #c87070;
-    border-color: #c87070;
+    color: var(--err);
+    border-color: var(--err);
   }
 }
 
@@ -491,10 +491,10 @@
 
   li.done {
     color: var(--fg);
-    border-left-color: #4caf50;
+    border-left-color: var(--ok);
 
     .step-icon {
-      color: #4caf50;
+      color: var(--ok);
     }
   }
 
@@ -511,10 +511,10 @@
   }
 
   &[data-phase='error'] li.active {
-    border-left-color: #c87070;
+    border-left-color: var(--err);
 
     .step-icon {
-      color: #c87070;
+      color: var(--err);
       animation: none;
     }
   }
@@ -560,11 +560,11 @@
 }
 
 .test-ok {
-  color: #4caf50;
+  color: var(--ok);
 }
 
 .test-fail {
-  color: #c87070;
+  color: var(--err);
 }
 
 

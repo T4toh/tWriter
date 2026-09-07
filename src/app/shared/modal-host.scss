@@ -96,7 +96,7 @@
     white-space: pre-line;
 
     &[data-variant='error'] {
-      color: #c87070;
+      color: var(--err);
     }
 
     &[data-variant='success'] {
@@ -109,7 +109,7 @@
   // que los inputs de los modales de config; se alinea al 6px 10px / 13px del
   // resto por decisión del autor. Queda solo el estado de inválido.
   input[type='text'][aria-invalid='true'] {
-    border-color: #c14b4b;
+    border-color: var(--err);
   }
 
   .field-label {
@@ -121,7 +121,7 @@
 
   .error {
     margin: 0;
-    color: #c14b4b;
+    color: var(--err);
     font-size: 12px;
   }
 }

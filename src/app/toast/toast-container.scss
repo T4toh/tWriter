@@ -26,15 +26,15 @@
   animation: slide-in 0.2s ease-out;
 
   &[data-level='success'] {
-    border-left-color: #4caf50;
+    border-left-color: var(--ok);
   }
 
   &[data-level='warn'] {
-    border-left-color: #e0a020;
+    border-left-color: var(--warn);
   }
 
   &[data-level='error'] {
-    border-left-color: #b04040;
+    border-left-color: var(--err);
   }
 }
 

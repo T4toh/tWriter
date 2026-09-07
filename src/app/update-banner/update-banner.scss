@@ -21,11 +21,11 @@
   }
 
   &.ready {
-    border-color: #5cb85c;
+    border-color: var(--ok);
   }
 
   &.error {
-    border-color: #d9534f;
+    border-color: var(--err);
   }
 
   .msg {

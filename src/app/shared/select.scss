@@ -41,7 +41,7 @@
   }
 
   &.is-invalid {
-    border-color: #c14b4b;
+    border-color: var(--err);
   }
 
   &:disabled {

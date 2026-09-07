@@ -59,8 +59,8 @@ header {
       }
 
       &[data-level='error'].on {
-        color: #c87070;
-        border-color: #c87070;
+        color: var(--err);
+        border-color: var(--err);
       }
 
       &[data-level='warn'].on {
@@ -157,7 +157,7 @@ header {
   }
 
   &[data-level='error'] .msg {
-    color: #c87070;
+    color: var(--err);
   }
 
   &[data-level='warn'] .msg {

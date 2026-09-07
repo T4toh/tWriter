@@ -39,7 +39,7 @@
 }
 
 .ctx-item.danger {
-  color: #c87070;
+  color: var(--err);
 }
 
 .ctx-item.danger:hover:not(:disabled) {
