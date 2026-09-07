@@ -22,13 +22,19 @@ Las novelas viven en un repo privado aparte (HTML + JSON). Esta app es solo el e
     - [Tree explorer](#tree-explorer)
     - [Búsqueda (Ctrl+F)](#búsqueda-ctrlf)
     - [Conversor RAE](#conversor-rae)
+    - [Comillas tipográficas (inglés)](#comillas-tipográficas-inglés)
     - [Validador RAE (inline + batch)](#validador-rae-inline--batch)
     - [Gramática + ortografía (LanguageTool)](#gramática--ortografía-languagetool)
+    - [Detector de repeticiones cercanas (es + en)](#detector-de-repeticiones-cercanas-es--en)
+    - [Tesauro de sinónimos (offline)](#tesauro-de-sinónimos-offline)
+    - [Revisión por libro](#revisión-por-libro)
     - [Importer](#importer)
       - [Notas externas](#notas-externas)
     - [Extras + covers](#extras--covers)
     - [Export EPUB](#export-epub)
     - [Temas + fuentes embebidas](#temas--fuentes-embebidas)
+    - [Apariencia (tema de la app + fuentes de UI)](#apariencia-tema-de-la-app--fuentes-de-ui)
+    - [Configuración](#configuración)
     - [Debug / observabilidad](#debug--observabilidad)
     - [Storage backend (git / cloud / local)](#storage-backend-git--cloud--local)
     - [Git auto-sync (cuando backend = git)](#git-auto-sync-cuando-backend--git)
@@ -36,7 +42,7 @@ Las novelas viven en un repo privado aparte (HTML + JSON). Esta app es solo el e
   - [Configuración avanzada](#configuración-avanzada)
     - [LanguageTool (3 backends)](#languagetool-3-backends)
       - [API público (default)](#api-público-default)
-      - [Local (Docker)](#local-docker)
+      - [Local (Docker / Podman / Apple container)](#local-docker--podman--apple-container)
       - [URL custom — self-hosted o LT Premium](#url-custom--self-hosted-o-lt-premium)
   - [Para desarrollar](#para-desarrollar)
     - [Layout de archivos del repo de novelas](#layout-de-archivos-del-repo-de-novelas)
@@ -147,7 +153,7 @@ ningún runtime, la app igual anda usando el API público de LT por default.
 ### Dependencias opcionales
 
 - **Pandoc** (para importar `.docx`/`.odt`): `sudo pacman -S pandoc` / `sudo apt install pandoc` / [pandoc.org](https://pandoc.org/installing.html) en Windows. Sin Pandoc, el importer queda inhabilitado pero el resto de la app funciona.
-- **Docker** (para LanguageTool local): ver [LanguageTool](#languagetool-3-backends). Sin Docker, la app usa el API público de LT por default.
+- **Runtime de containers** (para LanguageTool local): Docker, Podman o Apple `container` — la app autodetecta el que esté instalado y con daemon vivo. Ver [LanguageTool](#languagetool-3-backends). Sin ninguno, la app usa el API público de LT por default.
 
 ## Features
 
@@ -170,6 +176,13 @@ ningún runtime, la app igual anda usando el API público de LT por default.
 - **Auto-replace `...` → `…`**: TipTap Typography activo en runtime (ya convertía al tipear). Sumamos normalización post-import en `clean_html` (`src-tauri/src/import.rs`) — los `.docx`/`.odt` que llegaban con `...` literal ahora se guardan con `…` (U+2026) directo.
 - **Lectura idempotente (no más "dirty fantasma")**: `read_chapter` (`src-tauri/src/fs.rs::normalize_chapter_html`) colapsa el whitespace-con-newline entre tags antes de devolver el HTML al frontend. TipTap `getHTML()` no emite `\n` entre block tags, pero los `.html` importados vía Pandoc sí los tenían — sin normalizar, abrir un cap marcaba `dirty` y lanzaba autosave aunque el usuario no editara nada (después se acumulaba como "modified" en `git status` con diff puramente whitespace). La regex `>\s*\n\s*<` solo matchea cuando hay `\n` real (preserva espacios entre inlines tipo `<em>x</em> <strong>y</strong>`). El disco no se reescribe hasta que el usuario edita de verdad. Tests `fs::tests` (4) cubren block tags, inlines preservados, idempotencia y edge case inline-newline.
 
+- **Corrector del OS apagado** (`feat/control-total-tipeo`): macOS reescribía el texto adentro de la webview (autocorrección + sustituciones) y arruinaba el voseo. `spellcheck`/`autocorrect`/`autocapitalize` off heredados desde `<html>` y explícitos en los `editorProps` de los tres editores TipTap, más `macos_text.rs` apagando las sustituciones nativas (`registerDefaults` + setters de `NSTextCheckingClient` sobre la `WKWebView`, gateados por `respondsToSelector:`). Typography de TipTap queda como única fuente de comillas y rayas.
+- **Sugerencias del diccionario propio**: el diccionario per-saga además de silenciar typos ahora sugiere — `dictionary/suggest.ts` (Levenshtein con umbral por longitud, acentos plegados) mete hasta 3 candidatos con chip "tu diccionario" en el popover de gramática.
+- **Popovers bien ubicados**: `popover-position.ts` con flip arriba/abajo, clamp de X, `maxHeight` + scroll interno cuando no entra, medición real del popover (`afterRenderEffect` + `visibility:hidden`), recálculo en `resize` y cierre cuando el ancla se escapa del viewport (los flotantes son `position: fixed` anclados a coordenadas de viewport, así que scrollear los dejaba flotando sobre texto ajeno).
+- **Scrolloff del caret** (`feat/caret-scrolloff`): ProseMirror ya scrollea al tipear, pero con `scrollMargin` 5px sobre el *padding box* el caret quedaba pegado al borde inferior. `caret-scrolloff.ts` calcula insets de 2 líneas desde el `line-height` computado y las tres superficies tipeables los pasan por la `buildEditorProps()` compartida de `editor-props.ts`.
+- **Scroll-lock real en modales**: con un modal abierto la rueda sobre el backdrop ya no scrollea lo de atrás (editor / tree / landing); los panes con diff propio (RAE / Comillas) scrollean su contenido vía `grid-template-rows: minmax(0,1fr)` + `min-height:0` + `overscroll-behavior: contain`.
+- **Volver a la raíz**: botón 🏠 primero en la fila de acciones del panel izquierdo + `Cmd/Ctrl+Shift+H` (el modo focus esconde el panel). Flushea, cierra capítulo y nota y vuelve al landing — antes había que bajar a una saga para poder subir por el breadcrumb.
+
 ### Notas (Markdown)
 
 - Editor separado para `.md` con TipTap + `tiptap-markdown` (no toca el flow de capítulos HTML).
@@ -183,6 +196,9 @@ ningún runtime, la app igual anda usando el API público de LT por default.
 - **Reader en panel derecho**: click sobre `.md` (en `notas/` o `extras/`) abre la nota como render read-only al costado, sin desplazar al capítulo del centro. Botón ✏️ togglea **modo edit in-place** (toolbar reducida B/I/H1-3/listas/cita/code + autosave 1.5s) para tocar la nota sin perder el capítulo de contexto; ✓ vuelve a read-only; 🗙 cierra (flush sync si hay cambios). Mutex: si la misma nota se abre en el pane central, el reader cierra solo. Esc en edit → vuelve a read; Esc otra vez → cierra. Mutex con image viewer y font preview.
 - **Doble click** sobre `.md` abre directamente en el editor central (ahorra el click+✏️ del reader). Shift+click también. Mismo comportamiento en resultados de búsqueda y en archivos `.md` que vivan en `extras/`.
 - **Ancho del panel derecho**: botón en el header del reader cicla 4 presets (compacto 280px / normal 380px / ancho 560px / pantalla — oculta el centro). Persiste en `settings.json::rightPanelWidth`.
+
+- **Tabs "Este libro" / "Todas"** en el panel de notas (`tree/notas-del-libro.ts`, puro, 28 aserciones en su smoke runner). Las fichas están duplicadas por libro **a propósito** (son acumulativas, hay cuatro `Aedan.md`), así que el trabajo no es navegar sino acertar cuál. `Este libro` es una lista plana con las notas de `Notas/<saga>/<libro>/` + el `notas/` del libro en el árbol de novelas, y abajo las `.md` sueltas de la saga. El vínculo saga ↔ carpeta de notas se **adivina** (`calzaSaga`: pela el prefijo numérico y busca calce exacto o por prefijo) — cero configuración. El `+` con esa tab activa crea en la carpeta del libro, aunque todavía no exista.
+- **Creación con form + plantillas**: "Nueva nota…" abre un form de verdad (no un prompt de un input) con las plantillas de `shared/note-templates.ts` — data pura con su smoke runner, copiadas de las que el autor ya escribe a mano en `Notas/`.
 
 ### Tree explorer
 
@@ -204,6 +220,10 @@ ningún runtime, la app igual anda usando el API público de LT por default.
 - **Restaurar sesión**: al boot reabre el último cap/nota del pane 0 con el cursor en la posición exacta (`pmPos` de ProseMirror) y reaplica las carpetas que estaban expandidas (saga/libro/sección/folder libre + Extras + Extras subdirs + Exportados). Vive en `settings.json::lastSession` + `treeExpanded`/`treeExtrasExpanded`/`treeExtrasDirsExpanded`/`treeExportsExpanded`. Si el cap se borró/renombró entre sesiones, silent skip + clear del slot. Cap más corto (editado en otra PC) clampea el cursor al final. La vista siempre arranca arriba del capítulo — el cursor preserva posición para flechas/End, pero el scroll no salta al cursor guardado (`focus(undefined, { scrollIntoView: false })` + `scrollTop = 0`). Antes, cerrar con cursor al final reabría el cap al final. Split view (pane 1) no se restaura — sigue arrancando single como antes.
 - **Último editado a la vista**: cada capítulo muestra a la derecha un badge mono discreto con el tiempo relativo desde el último edit (`recién`, `hace 5 min`, `ayer`, `hace 3 d`, `hace 2 sem`, `hace 4 meses`). El más reciente del proyecto se marca con un border-left accent + badge resaltado para encontrarlo de un vistazo al abrir la app. Tooltip del row tiene el timestamp absoluto (`YYYY-MM-DD HH:mm`). Helpers en `src/app/core/relative-time.ts`; tick interno de 60s en `tree.ts` para que los strings se refresquen sin re-render. Data viene del `modifiedMs` que ya emitía `get_tree` — cero cambios backend.
 
+- **Doble click en carpeta → vista de tarjetas** (galería de la carpeta), y el árbol de notas es un segundo tree que no le roba el foco al principal.
+- **Mazo de tapas en el header de saga**: hasta 3 tapas apiladas (`translateY` + rotación alternada + `brightness` bajando) en vez de una sola imagen que hacía ver una saga de 4 libros como una novela suelta. El tag "heredada" sigue apareciendo solo cuando el frente es prestado del primer libro.
+- **Contadores que no mienten**: "N libros" filtra `kind === 'book'` (antes sumaba la carpeta `notas` y los `.md` sueltos) y la tarjeta de libro cuenta **capítulos** (`chapterCount`), sumando los nietos de cada sección — un libro de 3 partes × 8 capítulos decía "3 cap." en vez de 24. Las secciones con `excluded: true` suman 0.
+
 ### Búsqueda (Ctrl+F)
 
 - Panel lateral con full-text search sobre notas (`.md`) + capítulos (`.html`) + títulos de carpetas (sagas/libros/secciones/folders/notas).
@@ -217,7 +237,12 @@ ningún runtime, la app igual anda usando el API público de LT por default.
   - `kind:note duendes`, `kind:chapter duendes` → filtra por tipo.
     El botón `?` del header lista la sintaxis en tooltip.
 - **Scope persistido** (selector debajo del input): `Todo el repo / Saga actual / Libro actual / Solo capítulos / Solo notas`. `Saga actual` y `Libro actual` se resuelven contra el capítulo abierto en el pane principal (la app walkea ancestros saga/book del path activo). Si no hay cap activo, el scope cae a `Todo el repo` y aparece un hint sutil `⚠ sin cap activo`. La elección persiste en `settings.json::searchScope`.
-- **Ranking ES**: tokenizer custom `es_text` (`SimpleTokenizer + RemoveLongFilter(40) + LowerCaser + StopWordFilter::Spanish`) aplicado a `title` y `content`. Stopwords ES estándar (`el/la/los/las/de/del/que/y/o/...`, vía snowball embebido en tantivy `feature = "stopwords"`) no entran al índice — buscar `de` solo devuelve 0 hits y queries multi-término no ranquean por basura conectora. Field boost `title × 2.5` (`parser.set_field_boost`): un match en título ranquea sobre el body.
+- **Dos modos, porque las necesidades chocaban** (`≈` en la barra, persistido en `settings.searchFuzzy`):
+  - **Exacto (default)**: índice v4 con tokenizer fiel — `SimpleTokenizer + RemoveLongFilter(40) + LowerCaser`, sin fold de acentos y **sin drop de stopwords**, más QueryParser literal accent-sensitive. Encontrás el texto tal cual, que es lo que sirve para corregir frases anotadas en la Kindle: `mansion` no trae `mansión`.
+  - **Fuzzy (opt-in)**: builder fuzzy/OR con Levenshtein escalado por longitud (≤3 chars exacto, 4–7 distancia 1, ≥8 distancia 2 — tantivy 0.22 solo cachea autómatas hasta 2), tolera typos y acentos para nombres inventados (`kellai` → `Kallai`).
+  El flag `fold` viaja por todo el highlight (panel, editor, notas, md-reader): exacto accent-sensitive, fuzzy plega acentos. `foldAccents` (TS) espeja `fold_accents` (Rust) length-preserving para mantener alineados los offsets DOM/PM.
+- **Field boost `title × 2.5`** (`parser.set_field_boost`): un match en título ranquea sobre el body.
+- **El match viaja con offset**: cada `SearchHit` trae la posición real de la ocurrencia y `matchedTerms` con la palabra **del documento** que matcheó (`resolve_matched_words`), así el snippet centra en ella y el click salta a *ese* hit — no al primer token de la query, que era lo que hacía el jump inútil cuando un capítulo tenía varias apariciones.
 - **Modo debug BM25** (toggle 🐞 en header, persistido en `settings.json::searchDebug`): muestra `BM25 X.XX` debajo del título de cada hit para diagnosticar el ranking. Off por default.
 - **Forma exacta gana** (mayúsculas + `¡¿?!`): el tokenizer de tantivy stripea puntuación y lowercaseа, así que `¡Duendes!` indexa como `duendes`. Para que `¡Duendes!` priorice el grito específico y no el primer `duendes` lowercase de cualquier párrafo, agregamos tres capas: (1) **snippet centra en el literal** si aparece en el doc; (2) **boost de ranking ×2** sobre docs cuyo contenido contiene la forma rica (substring case-insensitive); (3) **jump-to-term** salta al primer match literal del raw query antes de fallback a tokens. Query sin formas ricas (`duendes` solo) sigue ranqueando puro BM25.
 - **Reindex incremental on-save**: cada `write_note` / `write_chapter` / `create_*` actualiza el índice de ese archivo. Render fresco en la próxima query, sin reindex manual.
@@ -227,6 +252,9 @@ ningún runtime, la app igual anda usando el API público de LT por default.
 - **Jump-to-term**: al clickear un hit, el editor/reader hace scroll automático al primer match dentro del contenido y selecciona el término (selección nativa del browser). Cualquier movimiento del cursor la limpia. Funciona en chapter editor, notes editor y markdown reader vía DOM `TreeWalker` (sin depender de TipTap commands).
 - HTML strip simple para indexar capítulos (tags `<p>`, `<em>`, `<strong>`, etc. se desnudan a texto plano). El render del snippet sigue siendo texto + highlight, sin re-renderizar HTML.
 - Mutex con image-viewer / font-preview / markdown-reader: el panel de búsqueda usa el mismo slot derecho y cierra a los otros tres cuando se abre.
+
+- **Reemplazar en lote** (toggle `⇄` del header del panel): reusa el selector de scope de la búsqueda (capítulo / libro / saga / todo el repo) y agrega "reemplazar por" con toggles `Aa` (mayúsculas) y `ab` (palabra completa); `≈` queda deshabilitado en este modo con el motivo al lado — un match aproximado cambiaría palabras que nadie pidió. El preview (`replace_preview`, debounce 250 ms) lee del **disco**, no del índice, así que es inmune a un índice desactualizado; se agrupa por capítulo con checkbox tri-estado por grupo y por ocurrencia. `replace_apply` snapshotea los originales antes de escribir.
+  La pieza no obvia es el **mapeo plain ↔ HTML por runs** (`src-tauri/src/replace.rs`): se busca sobre el texto plano (lo que el autor ve) y se escribe sobre el HTML, y los offsets no coinciden — el plain se construye junto con una lista de runs que se corresponden byte a byte con el HTML.
 
 ### Conversor RAE
 
@@ -249,6 +277,14 @@ inciso. "texto2"` ahora cierra la raya antes del punto y deja el texto2 sin
   con verbo dicendi (D3) como a inciso de acción sin verbo (D4). El punto
   del primer diálogo se preserva en D4 (acción) y se absorbe en D3 (verbo
   dicendi), siguiendo la distinción de [DPD raya](https://www.rae.es/dpd/raya).
+
+### Comillas tipográficas (inglés)
+
+Contraparte en inglés del conversor a rayas, para novelas importadas que quedaron con comillas rectas ASCII.
+
+- `quotes/educate.ts` (`educateQuotes`) convierte `"` → `“ ”` (open/close contextual) y `'` → `‘ ’` (cita) o `’` (apóstrofe, posesivo, elisiones `'em` / `'90s`).
+- **Tag-aware**: tokeniza tags vs. texto y educa solo el texto, así `class="scene-break"` y demás atributos quedan intactos (un `.replace` global rompía el HTML).
+- Botón "Comillas" por capítulo (gate `idioma === 'en'`) con modal diff que reusa los estilos del de RAE, y acción masiva "Arreglar comillas" en el menú de saga/libro/sección (`quotes-fix-service.ts`: confirm con conteo, escribe solo los que cambian, refresca árbol + git status). Cero Rust nuevo, cero deps npm.
 
 ### Validador RAE (inline + batch)
 
@@ -349,8 +385,38 @@ viejo, validador los detecta correctamente con `paragraph-collapsed`.
 - Variantes regionales (es-AR, es-ES, en-US, en-GB…) globales + override per-saga (`saga.json::variante_es`/`variante_en`). Click en badge del footer abre dropdown.
 - Diccionario per-saga: "+ diccionario" en popover de TYPOS filtra matches. **Re-filtrado reactivo**: `SagaContextService.dictionary()` es un signal — un effect en `editor.ts` lo observa y re-filtra los `grammarMatches` actuales sin pegarle de nuevo a LT. Cubre el race típico (el saga.json carga async después del primer `checkGrammar`, así que palabras del mundo aparecían marcadas hasta cerrar/reabrir el cap) y el agregar palabra desde el popover (limpia el squiggle on the spot).
 - **Vista dedicada del diccionario** (botón 📖 en saga-header de landing + item "Editar diccionario…" en context menu de saga): modal con contador, búsqueda live, lista alfabética (Intl.Collator), agregar con validación en vivo, borrar con confirm inline, banner opt-in "Limpiar" cuando detecta entradas problemáticas (puntuación al borde, duplicados case-insensitive, solo dígitos, fuera de los límites 2–64). El validador (`dictionary/word-validator.ts`) sanea los bordes (`.`, `,`, `…`, comillas, paréntesis…) y se aplica también en el path "+ diccionario" del popover para que no se cuelen entradas con punto al final. Persiste por acción (cada add/remove escribe el archivo). El storage es un `<saga>/diccionario.txt` (una palabra por línea) — ver [sync del diccionario](#sync-del-diccionario-entre-pcs) abajo para el detalle de cómo se fusiona entre PCs.
+- **Formas derivadas al agregar una palabra** (`dictionary/derived-forms.ts` + `derived-forms-panel`): agregar `teletransportar` tenía que silenciar también `teletransportó`, `teletransportaba`, `teletransportándose`. Dos mecanismos con una regla que los divide — **el generador nunca escribe un plural**: los plurales y los enclíticos se **pelan al filtrar** (`-s`/`-es`/`-ces` en español, `-s` en inglés) y los verbos (15 formas) y el género de los adjetivos se **generan al archivo** con preview tildable. Medido sobre las 439 entradas reales: 39 de 42 familias eran singular/plural, futuro/condicional/subjuntivo tienen 0 apariciones en tres novelas (de ahí 15 formas y no ~60), y en inglés no hay nada que conjugar. Los irregulares no se modelan — se destilda la forma que no existe antes de escribir. El flujo arranca en el popover porque el infinitivo casi nunca está cargado: se infiere el lema hacia atrás (`inferLemma`) desde la forma que marcó LT. Seguridad del pelador sobre el texto completo: 3 palabras nuevas silenciadas sobre 25.444 únicas, las tres plurales legítimos.
+- **Términos compuestos** (`dictionary/compound-terms.ts`): `Kun Lian` (un reino), `Tres Torres` (un vino) o `Amalut de las Arenas` se guardaban bien y no servían para nada, porque todos los consumidores eran de a una palabra. Ahora las entradas de varias palabras se separan al cargar y se matchean **como frase sobre el texto plano**, devolviendo los **rangos** cubiertos; los consumidores que ya trabajan con offsets sobre el plano (filtro de LT, detector de repeticiones) descartan lo que caiga adentro. El filtro es por **contención**, no por igualdad: LT marca `las Arenas` con `AGREEMENT_DET_NOUN`, un span más corto que la entrada. Y adentro de un nombre propio del mundo no se filtran solo los typos: la restricción a `category === 'TYPOS'` se levanta para los rangos compuestos.
 - **UX Docker explicativa**: stepper visual con fases `checking → pulling → starting → loading → ready` durante el arranque + bloque "Por qué Docker" con links a docker.com, languagetool.org, el repo oficial de LT y la imagen `erikvl87/languagetool` que usamos. Eventos `languagetool-progress` emitidos desde Rust con `tauri::Emitter`.
 - **LT Premium / self-hosted con auth**: en modo Custom URL podés pegar tu username + apiKey. El apiKey va al **keyring del OS** (libsecret/Keychain/Credential Manager) vía el módulo `secrets`. Ver [Configuración avanzada → LanguageTool](#languagetool-3-backends) para el detalle del keyring.
+
+### Detector de repeticiones cercanas (es + en)
+
+El agujero más claro de LanguageTool, y no es del español: LT solo detecta duplicados literales pegados (`la nave nave`, `SPANISH_WORD_REPEAT_RULE`). Verificado que `"Era una nave oscura, oscura como el vacío."` no da ni una marca, ni en `es-AR` ni en `en-US`, ni en `default` ni en `picky`.
+
+- **En TS, no en Rust** — medido: 59 KB / 10.008 palabras tardan **1,07 ms** (media de 50 corridas), menos que serializar el capítulo de ida y los hits de vuelta por el bridge. El detector toca solo el capítulo activo, que ya está en memoria del frontend (mismo criterio que `validator.ts`). "Repeticiones en el libro entero" sí es Rust: son N archivos.
+- Ventana deslizante sobre el texto plano, normalizando (minúsculas + sin diacríticos) y marcando la palabra de contenido que reaparece dentro de N palabras. Sin POS tagger, sin FreeLing ni spaCy.
+- **Calibrado contra prosa real**, no a ojo: el prototipo tiraba 6.095 hits en 59 KB (inusable). Con seis capas de exclusión — stopwords, largo mínimo, verbos dicendi, diccionario per-saga, capitalizado mid-oración y repetición deliberada — queda en **0,8 hits por 1.000 palabras en español y 0,7 en inglés** (`scripts/densidad-repeticiones.mjs` sobre dos libros enteros).
+- Las tres formas de repetición **deliberada** (construcción hecha, frase o locución repetida, anáfora) tienen un flag cada una en el modal de Configuración.
+- `repeticiones/detector.ts` es la función pura (32 casos en `scripts/run-repeticiones-smoke.mjs`); `repeticiones-extension.ts` + `repeticiones-popover.ts` son la mitad con DOM. Al abrir el popover se resalta el grupo entero, que es lo que hace entendible la sugerencia.
+
+### Tesauro de sinónimos (offline)
+
+Sinónimos en el popover de repetición como chips clickeables — LT no tiene ningún endpoint de sinónimos. También se pide solo, sin estar sobre una repetición: `⌘⇧Y` (`Ctrl+Shift+Y` fuera de Mac) sobre la palabra del cursor y "Sinónimos de «X»" en el menú contextual, que resuelve la palabra por las **coordenadas del click** porque WebKit no mueve el caret con el botón derecho (`editor/palabra-en.ts`).
+
+- Dos `.dat` MyThes bundleados como `resources`: **español** `th_es_v2.dat` (21.846 entradas, 2,8 MB, de OpenThesaurus-es vía rla-es) e **inglés** `th_en_us.dat` (140.835 entradas, 11,2 MB, WordNet 2.1 vía LibreOffice, podado con `scripts/podar-tesauro-en.mjs`). Encoding **ISO-8859-1**, decodificado a mano en Rust (latin-1 mapea 1:1 a los primeros 256 codepoints, cero crates de encoding).
+- **Acá sí conviene Rust**: son ~14 MB que no queremos mandar por el bridge ni tener en el heap del webview. Se lee el `.dat` entero una vez por idioma a un `String` cacheado en `OnceLock` y por el bridge cruza solo la entrada consultada — sin `.idx` ni `seek`, la pasada entera no se nota. `tesauro.rs` (parser + normalizaciones + `tesauro_lookup`, 19 tests inline) y `core/tesauro-service.ts` (caché de 50 consultas).
+- **Cobertura medida** contra `Buenos Aires 2077` (90 capítulos, 109 hits del detector): 14 de 20 formas realmente marcadas tienen entrada (~70%), y con las normalizaciones de enclítico (`mirarlo` → `mirar`) y plural simple (`naves` → `nave`, re-pluralizando los sinónimos) sube a ~75-80%. El resto son conjugaciones y huecos léxicos puntuales.
+- **No se lematiza a propósito**: un lema sin re-conjugar sugiere algo que no concuerda con la oración (`eres` → `ser` → ofrecer `existir` rompe la frase), y re-conjugar pide un conjugador de español propio — un subsistema entero para el último 20%.
+- El reemplazo hereda las marcas del span (`marcasParaReemplazo` en `editor.ts`, compartido con el auto-fix de RAE), así que cambiar una palabra pegada al borde de una cursiva no se come la itálica. En inglés los chips se agrupan por categoría gramatical (`sustantivo` / `verbo`).
+- **Licencias**: el español va **sin modificar un byte** con su `COPYING` LGPL 2.1 al lado (es la condición); el inglés es WordNet 2.1 (permite modificar con aviso) y se regenera corriendo el script sobre la fuente de LibreOffice, nunca a mano. Detalle en `src-tauri/resources/tesauro/LICENCIAS.md`.
+
+### Revisión por libro
+
+Botón en la tarjeta del libro → modal que escanea el libro entero con los cuatro detectores (rayas RAE, comillas tipográficas, arreglos RAE, repeticiones), muestra qué encontró cada uno y aplica los tildados. **Una acción por tipo**, no una lista unificada de hallazgos. El panel lateral "Revisar RAE" y las entradas del menú contextual quedan como estaban.
+
+- **Bulk auto-fix sin comerse el markup**: los offsets de `validateRae` son sobre texto plano y el archivo es HTML. `dialogos/plano-con-mapa.ts` construye el plano **y** el índice HTML de cada carácter en la misma pasada (incluido el doble-decode de entidades de `htmlToPlain`, que se replica a propósito porque es el comportamiento que vieron todas las violaciones calculadas hasta hoy). `dialogos/aplicar-fixes.ts` aplica en orden descendente y **saltea** todo fix cuyo rango HTML contenga un tag: antes de comerse un `</em>` en veinte capítulos, no lo aplica y lo reporta.
+- **Repeticiones va sin checkbox** — no son auto-fixables: se reescriben a mano. Pero la lista no se queda en un número: cada ocurrencia lleva `path` + offset, muestra el snippet con contexto (±40 caracteres, la forma del `rae-audit-panel`) y el click abre el capítulo **con el popover de sinónimos ya abierto** sobre la aparición, que es lo único que sirve para arreglarla. La identificación no puede ser por offset (el del plano no coincide con el del editor por los `<hr>`): es por palabra normalizada + cercanía al bloque que resaltó el ancla, vía un `pendingPopover` que espera a que el chequeo pinte las decoraciones. La lista agrupa por capítulo y colapsa.
 
 ### Importer
 
@@ -418,6 +484,15 @@ Botón 📝 en el header del tree abre un wizard separado para traer notas markd
 - Templates 6×9" / 5×8" / A5 inyectados como `@page`.
 - Cover image, dedicatoria, copyright, TOC navegable.
 - Página "Sobre el autor" generada al final con foto + bio configurables (auto-detect de `author.*`/`autor.*` desde disco).
+- **Back matter completo** (spec en `docs/superpowers/specs/2026-09-01-back-matter-epub-design.md`):
+  - **"Otros libros"**: se arma escaneando el root (`catalogo.rs`) — un libro está publicado si su `book.json` tiene `link`.
+  - **Perfil global del autor** en `autor.json` (`autor.rs`): bio ES/EN, foto, web y QR. Se hereda a todos los libros del repo.
+  - **Página legal con incisos elegibles y editables**, bilingües como el copyright (`epub.rs::texto_inciso_default` + fieldset "Página legal" del modal del libro): `reserva` (derechos reservados), `ficcion` ("cualquier parecido con personas reales… es coincidencia") e `ia` (declara que la IA se usó solo para generar imágenes y que el texto es obra del autor — hay libros sin imágenes generadas, por eso es opcional). `ficcion` arranca en true por su cuenta: antes heredaba el valor de `reserva`, así que apagar la reserva se llevaba puesto el aviso de ficción.
+  - Todas las páginas editoriales entran al índice con `class="toc-editorial"`.
+- **Imágenes reescaladas al embeberse** (crate `image`): la tapa iba a resolución de imprenta adentro del EPUB. El archivo del repo se deja intacto — es la misma tapa que se manda a imprimir.
+- **XHTML válido de verdad**: Apple Books usa un parser estricto y aborta en el primer `<br>` sin `/` (`Opening and ending tag mismatch: br`); Thorium es tolerante, por eso no se notaba. `close_void_elements()` (`epub.rs`, aplicado en `load_part()`) autocierra `<br>`/`<hr>` sueltos a la salida sin tocar atributos ni texto — arregló los 200 capítulos del repo real de una sola vez, en el export, sin escribir nada en el repo de novelas.
+- **Rutas de imagen que sobreviven el cambio de PC**: al elegir una tapa/contratapa/foto, `book_config.rs::adopt_image` la guarda **relativa** si cae bajo la carpeta del libro o de la saga, y la copia como `cover|back-cover|author.<ext>` si viene de afuera (los `book.json` viejos tenían `/home/tatoh/Downloads/…` y en la otra PC mostraban placeholder). Al leer y al exportar, `image_field_unusable()` reemplazó al chequeo de "campo vacío" en los 6 lugares que autodescubrían: un path **muerto** también dispara `find_cover_in`, así que los `book.json` viejos resuelven al `cover.png` de al lado sin tocar el repo de contenido. Al reemplazar, la elegida barre las otras extensiones del mismo stem.
+- **Progreso del export**: `export_impl` recibe un callback de progreso (igual que `search::full_reindex`, así el impl sigue sin tipos de Tauri y los tests no necesitan `AppHandle`) y `export_book` lo traduce al evento `epub-export-progress`. La tarjeta del libro ya tenía spinner; el que no mostraba nada era exportar desde el menú contextual.
 
 ### Temas + fuentes embebidas
 
@@ -436,6 +511,21 @@ Botón 📝 en el header del tree abre un wizard separado para traer notas markd
 - **Theme editor con tabs y preview live**: modal de altura fija con tabs `Tipografía / Capítulos / Editoriales / Página / Fuentes`. Controles agrupados en `ctrl-group` cards (Identidad, Cuerpo, Títulos, Italic sintético, Bold sintético, Prefijo y título, Inicio del cuerpo, Partes, etc.). Preview live por tab a la derecha: cuerpo con inline italic/bold/bold+italic, página standalone de capítulo (mock con aspect-ratio según template + posición `top/center/bottom`), páginas editoriales (TOC + dedicatoria + título), mock EPUB. Selector de fuente unificado con el editor toolbar (`<app-select>` + itemTemplate que renderea cada nombre en su tipografía, FontFace lazy on-hover). Pool de fuentes con virtual scroll (cdk) y FontFace eager-load. Scroll-lock real al body mientras está abierto.
 - Modal de config de novela: el option "Heredar de saga" muestra el id/nombre del tema que la saga tiene actualmente seteado (carga `saga.json` del padre via `find_saga_dir`).
 - Cero regresión: sin tema configurado, CSS byte-idéntico al de pre-temas.
+
+### Apariencia (tema de la app + fuentes de UI)
+
+Bloque "Apariencia" en el modal de Configuración. Ojo con no confundirlo con el theme editor de arriba: ese es la tipografía del **EPUB**, esto es el chrome de la app.
+
+- **`appTheme`** (`'system' | 'light' | 'dark'`) persistido en `settings.json` y aplicado con `data-theme` en el `<html>`. Los 29 tokens de color entran por dos vías —`prefers-color-scheme` (con `:not([data-theme])`) y el override manual— compartiendo un mixin, y `color-scheme` sigue al elegido y no al del OS, o los scrollbars y widgets nativos quedan del tema contrario. La ventana nativa acompaña: el mismo effect llama `setTheme()` de Tauri (`null` para 'system') con `core:window:allow-set-theme` en las capabilities — sin eso la barra de título quedaba clara con el tema forzado a oscuro.
+- **Fuentes bundleadas**: cinco `.woff2` del subset latin (Merriweather / Lato / Roboto Mono, ~190 kB) en `src/assets/fonts/` declaradas en `src/styles/fonts.scss`, con sus OFL y las entradas en `generar-licencias.mjs`. Antes los `--font-body` / `--font-ui` / `--font-mono` no tenían un solo `@font-face`: si el usuario no las tenía instaladas la app caía al serif/sans del sistema y nadie se enteraba.
+- **Fuente de Interfaz y Monoespaciada elegibles** entre las instaladas en la PC, con preview de cada opción en su propia tipografía al hover. La mitad pura vive en `core/app-fonts.ts` (`scripts/run-app-fonts-smoke.mjs`, 11 aserciones); elegir el default guarda `null` y **borra** la custom property, así el default sigue definido en un solo lugar (`styles.scss`).
+- **El serif de lectura no es un slot de Apariencia** (decisión del autor): la fuente del texto se elige en el toolbar del editor, y la comparten las tres superficies del mismo contenido — editor de capítulos, editor de notas y lector de Markdown. El resto de los controles del editor (tamaño, ancho, espaciado de párrafo) también se quedan en el toolbar.
+- El tema de la app **no** se filtra al EPUB exportado.
+
+### Configuración
+
+- El engranaje abre `settings-modal/` con bloques colapsables (`<details>` nativo): **General** (incluye el toggle del panel de debug, que antes vivía en el header), **Apariencia** y **Gramática** (variantes regionales, nivel de chequeo, repeticiones). Antes era un modal que solo configuraba LanguageTool.
+- `show()` recibe qué bloque desplegar: el effect que abre el modal cuando LT se cae pide `gramatica`, así el remedio no queda detrás de un click. El estado colapsado no se persiste, por lo mismo.
 
 ### Debug / observabilidad
 
@@ -482,6 +572,9 @@ ni saber qué es `git pull --rebase`.
   de cada `detect` para que los consumers vean "pendiente" hasta la
   resolución. De yapa cubre el switch root git → non-git: el `git_status`
   ya no dispara sobre la carpeta nueva con el backend viejo.
+- **Refresh post-pull**: `git_pull` / `git_pull_rebase` devuelven `Vec<PullPathChange>`, así que tras un pull se refrescan el árbol, el capítulo abierto y el índice de búsqueda solo por lo que cambió — sin reabrir la carpeta a mano.
+- **Fetch silencioso al abrir + antes de pushear**: `GitService.bootstrapSync()` corre `git fetch --prune` al detectar el repo, y `syncNow()` refetchea antes del push para no descubrir el non-FF recién en el rechazo.
+- **`run_git` endurecido contra cuelgues sin TTY**: `git.rs::run_git_with_timeout` setea `GIT_TERMINAL_PROMPT=0` + `GIT_SSH_COMMAND="ssh -o BatchMode=yes"` y mata el proceso por timeout — sin eso, un git que pide credenciales por consola dejaba la app esperando para siempre.
 - Botón "sync ahora" (⇅) en header.
 
 ### Sync del diccionario entre PCs
@@ -543,6 +636,9 @@ el status muestra vía qué runtime corre —, o por CLI:
 ./scripts/start-languagetool.sh   # primera vez tarda ~30s en cargar modelos
 ./scripts/stop-languagetool.sh
 ```
+
+Los scripts asumen **Docker**; con Podman o Apple `container` hay que levantarlo
+desde el modal de gramática, que es el que conoce los tres runtimes.
 
 Detalles bajo el hood:
 
@@ -686,7 +782,9 @@ sudo pacman -S --needed \
 sudo pacman -S pandoc
 ```
 
-#### 5. Docker (opcional, para LanguageTool local)
+#### 5. Runtime de containers (opcional, para LanguageTool local)
+
+Cualquiera de los tres sirve — la app autodetecta el que tengas. En Linux, Docker:
 
 ```bash
 sudo pacman -S docker
@@ -694,7 +792,9 @@ sudo systemctl start docker        # arrancar on-demand, no enable
 sudo usermod -aG docker $USER     # logout/login para que tome efecto
 ```
 
-Sin Docker la app igual anda — usa el API público de LanguageTool por default.
+En macOS, ver [Instalación → macOS](#macos) (Apple `container`, colima o Podman).
+
+Sin ningún runtime la app igual anda — usa el API público de LanguageTool por default.
 
 #### 6. Clonar e instalar
 
