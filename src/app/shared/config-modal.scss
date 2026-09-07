@@ -100,8 +100,7 @@
 input[type='text'],
 input[type='number'],
 input[type='url'],
-textarea,
-select {
+textarea {
   background: var(--bg-soft);
   border: 1px solid var(--border);
   color: var(--fg);
@@ -118,19 +117,6 @@ select {
   &:focus {
     border-color: var(--accent);
   }
-}
-
-select {
-  text-overflow: ellipsis;
-}
-
-select {
-  background-image: linear-gradient(45deg, transparent 50%, var(--fg-muted) 50%),
-    linear-gradient(135deg, var(--fg-muted) 50%, transparent 50%);
-  background-position: calc(100% - 14px) center, calc(100% - 9px) center;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
-  padding-right: 28px;
 }
 
 option {
