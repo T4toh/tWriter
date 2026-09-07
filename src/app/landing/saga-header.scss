@@ -23,6 +23,12 @@
 .deck-card {
   position: absolute;
   inset: 0;
+
+  /* El `width`/`height: 100%` NO es redundante con `inset: 0`, aunque lo
+     parezca: esto es un <img>, o sea un elemento reemplazado, y un absoluto
+     reemplazado con `width: auto` usa su tamaño INTRÍNSECO -- ahí `left` y
+     `right` quedan sobre-restringidos y se ignora `right`, así que la imagen
+     saldría a tamaño natural en vez de estirada. Con un div sí sobraría. */
   width: 100%;
   height: 100%;
   object-fit: cover;
