@@ -140,7 +140,8 @@
 
       // Editor flat: sin first-line indent ni justify para que escribir
       // no "salte" y los párrafos no se vean centrados. El EPUB exportado
-      // aplica text-indent: 1.5em y justify desde reedsy-subset.scss.
+      // aplica text-indent: 1.5em y justify desde `.chapter-content p`
+      // en src-tauri/resources/epub_style.css.
       text-indent: 0;
       text-align: left;
     }
