@@ -1,23 +1,10 @@
+/* Más ancho que los otros dos: el popover de RAE muestra el texto original y
+   el convertido, y con 320px las dos líneas se cortaban demasiado. */
+@use 'popover-shell';
+
 .rae-pop {
-  position: fixed;
-  z-index: 1000;
   min-width: 240px;
   max-width: 360px;
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
-  padding: 8px 10px;
-  font-family: var(--font-ui);
-  font-size: 12px;
-  line-height: 1.4;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.rae-pop--measuring {
-  visibility: hidden;
 }
 
 .rae-pop--pending {
