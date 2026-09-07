@@ -60,9 +60,9 @@
 .ij-error {
   margin: 0.5rem 0;
   padding: 0.5rem 0.75rem;
-  color: #b22;
-  background: rgb(220 60 60 / 8%);
-  border: 1px solid rgb(220 60 60 / 25%);
+  color: var(--err);
+  background: var(--err-tint);
+  border: 1px solid var(--err-tint-border);
   border-radius: 4px;
   font-size: 13px;
 }
@@ -91,7 +91,7 @@
   border-radius: 6px;
 
   &.warn {
-    border-color: rgb(220 160 60 / 50%);
+    border-color: var(--warn-tint-border);
   }
 }
 

@@ -441,12 +441,12 @@
   font-weight: 500;
 
   &.ok {
-    background: rgb(76 175 80 / 15%);
+    background: var(--ok-tint);
     color: var(--ok);
   }
 
   &.warn {
-    background: rgb(200 144 32 / 15%);
+    background: var(--warn-tint);
     color: var(--warn);
   }
 }

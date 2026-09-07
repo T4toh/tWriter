@@ -427,7 +427,7 @@
   gap: 4px;
   padding: 2px 8px;
   border-radius: 10px;
-  background: rgb(193 75 75 / 15%);
+  background: var(--err-tint);
   color: var(--err);
   font-size: 11px;
   font-weight: 500;
@@ -514,8 +514,8 @@
   }
 
   &.error {
-    background: #b04040;
-    color: white;
+    background: var(--err);
+    color: var(--bg);
   }
 
   &.focus-hint {

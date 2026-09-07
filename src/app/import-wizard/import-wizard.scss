@@ -120,7 +120,7 @@
 .iw-error {
   margin-top: 8px;
   padding: 8px;
-  background: rgb(192 80 80 / 15%);
+  background: var(--err-tint);
   color: var(--err);
   border-radius: 4px;
   font-size: 12px;
