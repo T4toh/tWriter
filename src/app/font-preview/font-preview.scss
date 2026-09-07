@@ -82,12 +82,11 @@
   font-size: 12px;
 }
 
-.fp-sample {
+/* `:not(:last-child)` y no `gap` en `.fp-body`: ese contenedor es un bloque
+   con `overflow-y: auto`, no un flex, así que usar gap pedía convertirlo y eso
+   es más cambio que el que ahorra. */
+.fp-sample:not(:last-child) {
   margin-bottom: 1.75rem;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
 }
 
 .fp-sample-label {

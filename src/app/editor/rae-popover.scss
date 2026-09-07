@@ -24,10 +24,11 @@
   border-left: 3px solid #d27a1f;
 }
 
-.rae-pop--char {
-  border-left: 3px solid #d23030;
-}
-
+/* char y structure comparten el rojo a propósito: son las dos violaciones que
+   el autor tiene que revisar sí o sí, contra el naranja de `pending` (cambio
+   propuesto) y el ámbar de `typo`. Los cuatro son de la escala de marcas del
+   editor, no del par --err/--warn de la UI. */
+.rae-pop--char,
 .rae-pop--structure {
   border-left: 3px solid #d23030;
 }

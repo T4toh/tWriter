@@ -1213,72 +1213,55 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   duele, no lo que podría llegar a compartirse. Dos copias iguales se unifican;
   dos copias parecidas que divergieron a propósito, no.
 
-  **Auditoría del SCSS, hecha el 2026-09-07** (10.113 líneas, 41 archivos).
-  Ya aplicado: reglas muertas (-104), los 148 fallbacks `var(--token, hex)` que
-  nunca se resolvían, los 11 tokens alias, y el partial
-  `shared/config-modal.scss` que saca las 236 líneas que saga-config y
-  book-config tenían idénticas. **Lo que queda, de mayor corte primero**:
-  - **Shell de modal reescrito 12 veces** (-265): `.{ij,iw,gs,ab,rl,sh,te,dict,
-    bc,sc,nf}-backdrop`/`-modal`/`-header` son byte-idénticos salvo
-    `width`/`max-height`/`z-index`. Van a `styles.scss` como
-    `.modal-backdrop`/`.modal-card`/`.modal-header` (mismo truco que `.btn`,
-    que ya está global porque la encapsulación no lo alcanza) + dos props de
-    override por modal. **Cambia el aspecto**: hay divergencias reales que
-    decidir a ojo — `autor-modal` pone el padding en la card y no en el body,
-    `theme-editor` usa `height` fija en vez de `max-height`,
-    `split-chapter`/`note-form` van en `z-index` 100 y el resto en 200,
-    `revision-libro`/`dictionary` traen `font-family` y `color` en la card.
-    Conviene partirlo: backdrop primero (-60, trivial), card y header después.
-  - **Paneles de auditoría** (-110): RAE y repeticiones comparten ~110 líneas
-    (header, close, `-panel-error`, `-panel-empty`, grupo de capítulo, filas).
-    El comentario de `repeticiones-audit-panel.scss:1` ya dice que "tienen que
-    verse como la misma familia" y hoy eso se sostiene a mano. Partial
-    `_audit-panel.scss` dejando afuera lo propio (colapsables de repeticiones,
-    `--sev` de RAE). Conviven en el slot derecho, así que se comparan de un
-    vistazo.
-  - **Bloque de input** (-110): las 22 líneas de `input/textarea/select`
-    (`bg-soft` + border + `outline:none` + `appearance:none` + `width:100%` +
-    `&:focus`) están en 6 archivos, y la flecha del select por gradiente en 4.
-    **Hay que elegir una divergencia**: `modal-host` usa `8px 10px / 14px` y
-    los demás `6px 10px / 13px`, o sea que el prompt genérico tiene inputs más
-    grandes que los modales de config.
-  - **Shells de tarjeta** (-60): 5 con la misma base de 15 líneas y el mismo
-    `&:hover`. `.saga-card` y `.folder-card` son idénticos hasta en
-    `.head .kind`. Al unificar hay que zanjar radius 6 vs 8 y gap 8 vs 10.
-  - **Colores semánticos** (0 líneas, ~50 sitios): un solo rojo escrito en
-    cuatro ortografías — `#c87070` ×30, `#c14b4b` ×6, `#e07070` ×8 y los 3
-    `#b04040` que se usan como *texto* — todos son `--err`. `#c87070` es el
-    valor oscuro de `--err` aproximado a mano y aplicado sin condicionar tema:
-    sobre `--bg` claro da ~3.2:1, así que **los errores en tema claro se leen
-    lavados y van a quedar notoriamente más oscuros**. Eso es el objetivo, no
-    un efecto lateral. Ídem `#4caf50`/`#6c9` → `--ok` y
-    `#c89020`-de-warning/`#e0a020` → `--warn`.
-    **NO tocar los 5 colores de marca del editor** (`#d23030`, `#d27a1f`,
-    `#c89020` cuando es marca, `#ffd500`, `#8257e6`): son una escala
-    deliberada y documentada en `editor.scss:645-651`, cuatro canales de marca
-    sobre paleta cálida más el violeta de repeticiones en canal separado.
-    Colapsarlos rompe la separación de canales de las marcas inline.
-    Los otros 6 usos de `#b04040` son *fill* (dot de sync, border-left de
-    toast, hover destructivo, `.fp-error`) y ese es un rol distinto del texto:
-    no van a `--err` sin pensarlo.
-  - **Popovers** (-32): el shell (`position:fixed` + `z-index:1000` +
-    `overscroll-behavior:contain` + tipografía) está triplicado, más
-    `--measuring { visibility: hidden }` ×3. Ojo que
+  **Auditoría del SCSS, hecha el 2026-09-07.** De **10.113 líneas en 41
+  archivos a 9.391 en 44** — los tres archivos nuevos son partials compartidos
+  (`shared/config-modal.scss`, `shared/form-fields.scss`,
+  `shared/audit-panel.scss`), así que el corte real es de **722 líneas**.
+  **Cerrada**, salvo un ítem que espera decisión del autor.
+  Lo aplicado, en orden: reglas muertas (-104); los 148 fallbacks
+  `var(--token, hex)` que nunca se resolvían y los 11 tokens alias; el partial
+  `shared/config-modal.scss` (-236); el shell de modal entero
+  (`.modal-backdrop` + `.modal-card` + `.modal-header`, -265); el partial
+  `shared/form-fields.scss` (-47); el shell de tarjeta `.card` (-56); el
+  partial `shared/audit-panel.scss` de los dos paneles de auditoría (-119); el
+  CSS de `select` que no tenía ningún `select` (-63); y los 46 literales de
+  color que pasaron a `--err`/`--ok`/`--warn`.
+  - **Popovers** (-32, LO ÚNICO QUE QUEDA, y decide el autor): el shell
+    (`position: fixed` + `z-index: 1000` + `overscroll-behavior: contain` +
+    tipografía) está triplicado entre `grammar-popover`, `rae-popover` y
+    `repeticiones-popover`, más `--measuring { visibility: hidden }` ×3.
     `repeticiones-popover.scss:1` tiene un comentario que declina factorizarlo
-    diciendo "son dos archivos de 40 líneas" — son tres y suman 367, así que el
-    comentario quedó viejo, pero la decisión es del autor.
-  - **Restos mecánicos** (-15): triple bloque `select` en los config-modal (-8),
-    `.rae-pop--char`/`--structure` con la misma declaración a selector con coma
-    (-4), `inset: 0` seguido de `width/height: 100%` (-4, `inset` ya dimensiona)
-    y `.fp-sample` con `margin-bottom` + `:last-child` que sale con `gap` (-3).
-  **Total pendiente ≈ -590 líneas.** El `border-radius` con 6 valores en 190
-  sitios (el par 4px/3px sin criterio distinguible) no vale pasada propia: cae
-  solo al consolidar modales, tarjetas e inputs.
+    diciendo "son dos archivos de 40 líneas": son **tres** y suman 367, así
+    que el comentario quedó viejo, pero la decisión sigue siendo del autor.
 
-  **Falsa alarma que ya se descartó**: `--panel-header-bg` *parece* alias de
-  `--bg-soft` porque en claro es `var(--bg-soft)`, pero el mixin oscuro lo
-  redefine a `#262320` mientras `--bg-soft` va a `#181614`. En oscuro no son el
-  mismo color. Ídem `--panel-bg-elev`. No colapsarlos.
+  **Dos hallazgos del reporte que eran FALSOS y habrían causado regresiones**,
+  anotados para que no vuelvan:
+  - `--panel-header-bg` *parece* alias de `--bg-soft` porque en claro es
+    `var(--bg-soft)`, pero el mixin oscuro lo redefine a `#262320` mientras
+    `--bg-soft` va a `#181614`. En oscuro no son el mismo color. Ídem
+    `--panel-bg-elev`.
+  - Los cinco `background` de error con literal (`.btn-danger`, el hover
+    destructivo del menú contextual, y los `.error` de notes-editor,
+    font-preview y editor) NO pueden pasar a `var(--err)`: llevan
+    `color: white` hardcodeado y en oscuro `--err` es `#e07a78`, o sea blanco
+    sobre salmón claro. Para que entren hay que cambiar el texto a `var(--bg)`
+    primero, como ya hace `.btn-confirm` de dictionary-modal — es un cambio
+    visible del tema oscuro y está pendiente de que el autor lo acepte.
+  - Y una tercera del mismo tipo: el `inset: 0` seguido de
+    `width`/`height: 100%` en `.deck-card` y `.crop-image` **no** es
+    redundante. Los dos son `<img>`, o sea elementos reemplazados, y un
+    absoluto reemplazado con `width: auto` usa su tamaño intrínseco: `left` y
+    `right` quedan sobre-restringidos y se ignora `right`. Con un `div` sí
+    sobraría. Documentado en los dos `.scss`.
+
+  **Lo que se decidió no hacer**: el `border-radius` con 6 valores en 190
+  sitios (el par 4px/3px sin criterio distinguible) no valía pasada propia y
+  cayó solo al consolidar modales, tarjetas e inputs. Y los dos banners de
+  error con tinte propio (`audit-panel-error` con `rgb(210 48 48 / 10%)` y
+  `ij-error` con `rgb(220 60 60 / 8%)`) quedan enteros: son pares texto+tinte
+  consistentes, y convertir solo el texto los descalza. Para que entren hace
+  falta un token de tinte, que no existe.
+
 
   **Aparte, preexistente**: `pnpm lint:css` viene rojo desde antes de esta
   pasada — 9 errores de `font-family-name-quotes` en `styles.scss` y
