@@ -1,6 +1,5 @@
 .formas-backdrop {
-  position: fixed;
-  inset: 0;
+  // Velo más claro que el de `.modal-backdrop`, de donde sale el resto.
   background: rgb(0 0 0 / 45%);
 
   // Por encima de los modales (200/201): el panel se abre ENCIMA del modal del

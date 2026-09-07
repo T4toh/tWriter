@@ -174,6 +174,25 @@ body {
   }
 }
 
+// Velo de los modales. Vivía copiado en once `.scss` de componente, idéntico en
+// los once. Además de la duplicación resuelve una fragilidad real: el
+// bloqueo de la rueda en `app.ts` matcheaba por convención de nombre
+// (`[class*="backdrop"]`), así que un backdrop nuevo que no siguiera la
+// convención quedaba afuera en silencio. Ahora el nombre de la clase ES el
+// estilo, así que olvidársela no falla callado: el modal aparece sin velo.
+
+// Los que divergen a propósito la usan igual y pisan solo su delta: `mh-`
+// (velo más oscuro y animado, escalón 300, va sobre otro modal), `crop-`
+// (210, sobre el modal de autor), `formas-` (300, sobre el diccionario) y
+// `nf-`/`sc-` (escalón 100). El `.ctx-backdrop` del menú contextual NO la usa:
+// es un cazador de clicks deliberadamente invisible y el velo lo arruinaría.
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 50%);
+  z-index: 200;
+}
+
 // Botones de diálogo. Vivían copiados en diez `.scss` de componente, con cuatro
 // variantes distintas del mismo bloque: acá arriba aplica igual (los estilos
 // globales no los encapsula Angular, solo los del componente) y hay un solo

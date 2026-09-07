@@ -1,7 +1,5 @@
+// Mismo caso que `.nf-backdrop`: escalón 100 heredado, ver el comentario allá.
 .sc-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgb(0 0 0 / 50%);
   z-index: 100;
 }
 

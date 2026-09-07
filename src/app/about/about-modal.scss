@@ -1,12 +1,5 @@
 // Mismas medidas y variables de tema que `storage-help-modal.scss`: es el mismo
 // tipo de diálogo y no hay razón para que se vean distintos.
-.ab-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgb(0 0 0 / 50%);
-  z-index: 200;
-}
-
 .ab-modal {
   position: fixed;
   z-index: 201;

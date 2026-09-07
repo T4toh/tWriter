@@ -1,7 +1,10 @@
+// Solo el escalón: el resto del velo sale de `.modal-backdrop`. El 100 es más
+// bajo que el 200 de los demás modales y que el 150 del `.privacy-banner`, así
+// que hoy ese banner flota por encima de este modal. No hay comentario que
+// diga que sea a propósito y huele a que quedó de antes de que el escalón 200
+// se estandarizara, pero cambiarlo altera el apilado, así que se conserva tal
+// cual hasta que el autor decida.
 .nf-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgb(0 0 0 / 50%);
   z-index: 100;
 }
 

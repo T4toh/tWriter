@@ -211,7 +211,7 @@ export class App {
     // `position: fixed` tapa el click pero no corta el `wheel`, que burbujea al
     // contenedor scrolleable de abajo y lo mueve. Nunca se quiere ver atrás del
     // modal, así que se bloquea y listo. Va acá en el shell y no en cada uno de
-    // los ~18 backdrops: todos son un div vacío hermano de la card, así que la
+    // los 17 backdrops: todos son un div vacío hermano de la card, así que la
     // rueda sobre el contenido del modal no matchea y scrollea normal.
     // `{ passive: false }` explícito porque para `wheel` sobre `document` el
     // default del navegador es passive, y ahí `preventDefault()` no hace nada.
@@ -486,12 +486,19 @@ export class App {
     void this.project.loadTree();
   }
 
-  /** ponytail: matchea por convención de nombre (`*-backdrop`), así que un
-   *  backdrop nuevo que no la siga queda afuera sin avisar. El fix de verdad
-   *  es una clase `.modal-backdrop` compartida, pero son 18 archivos. */
+  /** Matchea las dos clases por nombre exacto, no por comodín `*-backdrop`.
+   *
+   *  Antes era `[class*="backdrop"]`, que andaba por convención: un backdrop
+   *  nuevo que no siguiera el nombre quedaba afuera del bloqueo en silencio.
+   *  Hoy `.modal-backdrop` es la clase que además trae el velo, así que
+   *  olvidársela no falla callado — el modal aparece sin fondo y se ve.
+   *
+   *  `.ctx-backdrop` va aparte a propósito: el cazador de clicks del menú
+   *  contextual es deliberadamente invisible, así que no usa `.modal-backdrop`
+   *  (le agregaría un velo), pero la rueda sobre él se bloquea igual. */
   private readonly blockBackdropWheel = (event: WheelEvent): void => {
     const target = event.target;
-    if (target instanceof Element && target.closest('[class*="backdrop"]')) {
+    if (target instanceof Element && target.closest('.modal-backdrop, .ctx-backdrop')) {
       event.preventDefault();
     }
   };
