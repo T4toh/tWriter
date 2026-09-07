@@ -142,6 +142,61 @@ Pendientes, bugs conocidos y mejoras planificadas de tWriter. Issues concretos v
   desfasada igual que pasaba con el scroll. Es el mismo arreglo, llamando a
   `reposicionarPopovers()` desde el `resize`, pero no se tocó acá para no
   mezclarlo con el scroll sin poder probarlo.
+- [x] **Los modales no bloquean la rueda del mouse — se scrollea lo que está
+  atrás** (bug, reportado por el autor el 2026-09-07: *"Modales no bloquean la
+  rueda y puedo scrollear atrás. cabezearlo está mal"*). Con un modal abierto,
+  la rueda sobre el backdrop scrollea el contenedor de abajo (editor, tree,
+  landing) en vez de no hacer nada o scrollear el propio modal.
+
+  **Relevado el 2026-09-07**: no hay ningún scroll-lock en el repo —
+  `grep -rn "body.style.overflow\|no-scroll" src/` no da un solo hit. Cada
+  modal se arma su propio backdrop `position: fixed; inset: 0` a mano
+  (`settings-modal`, `split-chapter`, `about-modal`, `dictionary-modal`,
+  `theme-editor`, `revision-libro`, `storage-help`, `import-wizard`,
+  `import-joplin`, `autor-modal`, y `shared/modal-host.scss` para los
+  confirm/prompt de `modal-service`), y un backdrop fixed **no corta el
+  `wheel`**: el evento burbujea al ancestro scrolleable y lo scrollea igual.
+  Son ~11 backdrops sin nada en común más que el patrón, así que el fix
+  barato no es tocarlos uno por uno: una clase `.modal-scroll-lock` en
+  `styles.scss` (o `overscroll-behavior: contain` + `overflow: hidden` en el
+  backdrop) aplicada desde un solo lugar cuando hay algún modal abierto. Ojo
+  que `styles.scss:109` ya pone `overflow: hidden` global, así que el que
+  scrollea es un contenedor interno, no el `body` — hay que confirmar cuál
+  antes de elegir dónde va el lock.
+
+  **Aclarado por el autor el 2026-09-07**: no hay caso legítimo que preservar
+  —"nunca querés mirar atrás del modal y a veces scrolleás atrás sin querer"—,
+  así que el fix es bloqueo total mientras haya un modal abierto, no un
+  reposicionamiento ni un scroll "inteligente". Lo que está atrás no se
+  scrollea, punto.
+
+  **Hecho en `fix/modal-scroll-lock-y-limpiar-editor`** (verificado a mano por
+  el autor el 2026-09-07): un solo `wheel` listener en `app.ts`, no 18 backdrops
+  tocados. `preventDefault()` si el target está dentro de un
+  `[class*="backdrop"]` — la convención se cumple en los 18 y todos son un div
+  vacío hermano de la card, así que la rueda sobre el contenido del modal no
+  matchea y scrollea normal. `{ passive: false }` explícito: para `wheel` sobre
+  `document` el default del navegador es passive y ahí `preventDefault()` es un
+  no-op. De paso queda cubierto el backdrop del menú contextual.
+- [x] **Limpiar el editor al cambiar de carpeta**: hoy elegir otro root deja el
+  capítulo anterior abierto en el editor, que ya no pertenece al proyecto
+  cargado. `project-service.ts::chooseRoot` (línea 39) solo hace
+  `settings.pickRoot()` + `loadTree()`; nadie llama `chapters.close()` /
+  `closeInPane`, así que el pane 0 (y el 1 si está abierto) sigue mostrando
+  y autosalvando un path del root viejo. Fix: cerrar los panes —y el contexto
+  de notas de `nav.setUltimoCapitulo`— en `chooseRoot` cuando `picked` es
+  distinto del root anterior.
+
+  **Hecho en `fix/modal-scroll-lock-y-limpiar-editor`** (verificado a mano por
+  el autor el 2026-09-07): no fue en `chooseRoot` sino en `app.ts::changeRoot`,
+  porque `ProjectService` no puede inyectar `ChapterService` — la dependencia
+  va al revés y sería un ciclo. `pickFolder` es el único caller de `chooseRoot`
+  en todo el repo, así que el shell alcanza. Flush de los panes dirty **antes**
+  de abrir el picker (si no, cambiar de carpeta se come la edición sin
+  guardar), cierre de los dos panes de capítulo y de nota **después** y solo si
+  el root cambió de verdad; cancelar el diálogo no toca nada. También se limpia
+  `nav.ultimoCapitulo` y se resetea el browsing del landing: los dos quedaban
+  apuntando a paths del root viejo.
 - Más variantes de divisor de escena (más allá del `* * *`).
 - [x] **Auto-abrir modal de configuración de LanguageTool cuando el chequeo
   tira error** (`fix/lt-config-modal-y-split-hint`, verificado a mano por el
