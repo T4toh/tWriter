@@ -323,11 +323,11 @@
   background: var(--fg-muted);
 
   &[data-state='clean'] {
-    background: #4caf50;
+    background: var(--ok);
   }
 
   &[data-state='pending'] {
-    background: #e0a020;
+    background: var(--warn);
   }
 
   &[data-state='syncing'] {
@@ -336,7 +336,7 @@
   }
 
   &[data-state='error'] {
-    background: #b04040;
+    background: var(--err);
   }
 
   &[data-state='offline'] {
@@ -362,7 +362,7 @@
   }
 
   &.error {
-    color: #c87070;
+    color: var(--err);
   }
 
   // <details>: el summary muestra el resumen corto; al expandir sale la lista
@@ -414,10 +414,10 @@
   flex-shrink: 0;
   min-width: 64px;
 
-  &[data-kind='nuevo'] { color: #6c9; }
-  &[data-kind='borrado'] { color: #c87070; }
+  &[data-kind='nuevo'] { color: var(--ok); }
+  &[data-kind='borrado'] { color: var(--err); }
   &[data-kind='renombrado'] { color: #c9a36c; }
-  &[data-kind='conflicto'] { color: #c87070; font-weight: 600; }
+  &[data-kind='conflicto'] { color: var(--err); font-weight: 600; }
 }
 
 .sync-path {
