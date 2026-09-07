@@ -1,0 +1,253 @@
+/* Chrome compartido de los modales de configuración de saga y de libro.
+ *
+ * Los dos .scss eran el mismo archivo: 236 líneas idénticas letra por letra,
+ * mismo prefijo .bc- incluido, y los dos templates usan exactamente las mismas
+ * clases. book-config tenía de más un input[type='url'] en el grupo de inputs
+ * y los bloques .hint y .legal, que se quedan en su componente.
+ *
+ * Es plain CSS, no mixins: cada componente lo @use-a y Angular lo emite dentro
+ * de su propio scope, así que no hay nada global acá. El input[type='url'] va
+ * en el partial aunque saga no tenga uno -- el selector no matchea y evita
+ * partir el bloque en dos por una línea.
+ *
+ * Si los dos modales tienen que divergir de verdad en algo, va en el .scss del
+ * componente, no con un flag acá.
+ */
+
+.bc-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 50%);
+  z-index: 200;
+}
+
+.bc-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 201;
+  width: min(640px, 90vw);
+  max-height: 85vh;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 40%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  color: var(--fg);
+}
+
+.bc-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-soft);
+  flex-shrink: 0;
+
+  h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .path {
+    margin: 0.25em 0 0;
+    color: var(--fg-muted);
+    font-size: 12px;
+    font-family: var(--font-mono);
+  }
+}
+
+.bc-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  font-size: 13px;
+}
+
+.section-divider {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  &.split {
+    flex-direction: row;
+    gap: 0.85rem;
+
+    > label {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3em;
+    min-width: 0;
+
+    > span {
+      color: var(--fg-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+    }
+  }
+
+  label.checkbox {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5em;
+
+    > span {
+      color: var(--fg);
+      font-size: 13px;
+      text-transform: none;
+      letter-spacing: 0;
+      font-weight: normal;
+    }
+  }
+}
+
+input[type='text'],
+input[type='number'],
+input[type='url'],
+textarea,
+select {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  appearance: none;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: var(--accent);
+  }
+}
+
+select {
+  text-overflow: ellipsis;
+}
+
+select {
+  background-image: linear-gradient(45deg, transparent 50%, var(--fg-muted) 50%),
+    linear-gradient(135deg, var(--fg-muted) 50%, transparent 50%);
+  background-position: calc(100% - 14px) center, calc(100% - 9px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
+}
+
+option {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+textarea {
+  resize: vertical;
+  font-family: var(--font-body);
+  line-height: 1.5;
+}
+
+.cover-row {
+  display: flex;
+  gap: 0.5em;
+
+  input {
+    flex: 1;
+  }
+
+  button {
+    padding: 0.4em 0.9em;
+    border-radius: 4px;
+    background: var(--bg-soft);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-size: 12px;
+
+    &:hover {
+      background: var(--border);
+    }
+  }
+}
+
+.hint-soft {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--accent);
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ghost-btn {
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: var(--bg-soft);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  height: 100%;
+
+  &:hover:not(:disabled) {
+    background: var(--border);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.loading,
+.error {
+  padding: 2rem;
+  text-align: center;
+  color: var(--fg-muted);
+}
+
+.error {
+  color: #c87070;
+}
+
+.bc-actions {
+  padding: 0.75rem 1.5rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-soft);
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
