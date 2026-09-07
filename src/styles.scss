@@ -93,9 +93,17 @@
 
 /* El OS en oscuro manda... salvo que el autor haya forzado claro a mano. El
  * `:not()` es lo que hace que "Claro" gane sobre el sistema sin tener que
- * repetir toda la paleta clara. */
+ * repetir toda la paleta clara.
+ *
+ * Va como lista `:not(a, b)` y no encadenado `:not(a):not(b)`: son
+ * equivalentes --misma semántica y misma especificidad, que es la del selector
+ * más específico de la lista-- y la forma de lista es la que pide
+ * `selector-not-notation` del stylelint del repo. La lista de selectores
+ * dentro de `:not()` es Selectors 4, pero acá son dos selectores de atributo
+ * simples, que WebKit soporta desde mucho antes que la versión con selectores
+ * compuestos. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='dark']):not([data-theme='light']) {
+  :root:not([data-theme='dark'], [data-theme='light']) {
     @include tokens-oscuros;
   }
 }
