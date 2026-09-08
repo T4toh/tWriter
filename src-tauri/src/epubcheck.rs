@@ -170,6 +170,22 @@ pub struct EpubcheckEstado {
     /// Salida cruda cuando el binario existe pero termina mal (el wrapper de
     /// Homebrew sin JVM, por ejemplo). `None` si ni siquiera se pudo lanzar.
     pub salida: Option<String>,
+    /// SO donde corre la app, para que la UI ponga primera la forma de
+    /// instalarlo que le sirve a esta máquina.
+    pub plataforma: String,
+}
+
+fn plataforma() -> String {
+    if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else {
+        "otro"
+    }
+    .to_string()
 }
 
 #[tauri::command]
@@ -196,6 +212,7 @@ fn estado_impl() -> EpubcheckEstado {
                 instalar: None,
                 binario: bin.clone(),
                 salida: None,
+                plataforma: plataforma(),
             }
         }
         Ok(o) => {
@@ -214,6 +231,7 @@ fn estado_impl() -> EpubcheckEstado {
                     "" => format!("terminó con {:?} y sin salida", o.status.code()),
                     t => t.to_string(),
                 }),
+                plataforma: plataforma(),
             }
         }
         Err(e) => EpubcheckEstado {
@@ -226,6 +244,7 @@ fn estado_impl() -> EpubcheckEstado {
             } else {
                 Some(e.to_string())
             },
+            plataforma: plataforma(),
         },
     }
 }

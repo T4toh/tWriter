@@ -620,3 +620,21 @@
   max-height: 8lh;
   overflow-y: auto;
 }
+
+/* Con epubcheck ya instalado las instrucciones son para la otra PC: van
+   colapsadas para no competir con el estado. */
+.epubcheck-instalar {
+  summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--fg-muted);
+  }
+
+  summary:hover {
+    color: var(--fg);
+  }
+
+  .install-options {
+    margin-top: 6px;
+  }
+}

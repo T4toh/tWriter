@@ -494,9 +494,9 @@ export class ChapterService {
                 'El EPUB se exportó igual, pero sin validar: los errores de formato aparecen recién cuando la tienda rechaza la subida.',
                 r.instalar
                   ? `Para instalarlo:\n\n${r.instalar}`
-                  : 'Descargalo de https://github.com/w3c/epubcheck/releases (necesita Java 11+).',
+                  : 'Configuración → General tiene los comandos por sistema (macOS, Arch) y el link para bajarlo a mano.',
                 `Binario que se buscó: ${r.binario}`,
-                'El estado también está en Configuración → General, con el comando copiable.',
+                'Necesita Java 11 o más nuevo.',
               ].join('\n\n'),
             },
           );

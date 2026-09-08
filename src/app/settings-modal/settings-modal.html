@@ -31,6 +31,10 @@
                 epubcheck detectado{{ ec.version ? ' — ' + ec.version : '' }}. Cada export
                 se valida con él, el mismo chequeo que corre la tienda al recibir el archivo.
               </span>
+              <details class="epubcheck-instalar">
+                <summary>Instalarlo en otra máquina</summary>
+                <ng-container [ngTemplateOutlet]="opcionesEpubcheck" />
+              </details>
             } @else if (ec.salida; as salida) {
               <!-- El binario está pero no arranca: sin la salida cruda esto es
                    indistinguible de "no lo tengo instalado", y el remedio es
@@ -48,19 +52,33 @@
                 errores aparecen recién cuando la tienda rechaza la subida. Se buscó en
                 <code>{{ ec.binario }}</code>.
               </span>
-              @if (ec.instalar; as cmd) {
-                <app-copy-command [command]="cmd" />
-              } @else {
-                <span class="muted">
-                  <a href="https://github.com/w3c/epubcheck/releases" target="_blank" rel="noopener">
-                    Descargar epubcheck
-                  </a>
-                  (necesita Java 11+).
-                </span>
-              }
+              <ng-container [ngTemplateOutlet]="opcionesEpubcheck" />
             }
           </div>
         }
+
+        <!-- Una sola lista para los dos caminos: "no está" y "está pero quiero
+             instalarlo en la otra PC". -->
+        <ng-template #opcionesEpubcheck>
+          <ul class="install-options">
+            @for (opt of opcionesInstalar(); track opt.label) {
+              <li>
+                @if (opt.url) {
+                  <a [href]="opt.url" target="_blank" rel="noopener">{{ opt.label }}</a>
+                } @else {
+                  <span>{{ opt.label }}</span>
+                }
+                @if (opt.command; as cmd) {
+                  <app-copy-command [command]="cmd" />
+                }
+                @if (opt.nota; as nota) {
+                  <span class="muted">{{ nota }}</span>
+                }
+              </li>
+            }
+          </ul>
+          <span class="muted">Necesita Java 11 o más nuevo.</span>
+        </ng-template>
       </details>
 
       <details class="gs-bloque" [open]="aparienciaAbierta()" (toggle)="aparienciaAbierta.set($any($event.target).open)">
