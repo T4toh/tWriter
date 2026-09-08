@@ -535,13 +535,11 @@
   50% { opacity: 0.45; }
 }
 
+/* Lo único propio: este footer mete chips de estado ("conectado" / "no
+   responde") al lado del botón, y con el `stretch` por default quedarían de la
+   altura del botón. El resto sale de `.modal-actions`. */
 .gs-actions {
-  padding: 0.75rem 1.5rem;
-  border-top: 1px solid var(--border);
-  background: var(--bg-soft);
-  display: flex;
   align-items: center;
-  gap: 0.5rem;
 }
 
 .gs-actions .spacer {

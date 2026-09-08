@@ -63,6 +63,7 @@
    * oscurecer --ok y --warn en el tema claro, pero eso cambia TODOS sus usos,
    * no solo los recuadros, así que es una decisión aparte y no se tomó acá.
    * Hoy los afectados son los chips `.ok` y `.warn` de Configuración. */
+
   /* El rojo tira a bordó y es a propósito: desaturado es lo que le da el 5.32
    * sobre el fondo claro --el #c87070 de antes tiraba a salmón y por eso se
    * leía lavado-- y de paso pega con la paleta cálida, que sale de la misma
@@ -335,6 +336,36 @@ body {
     box-shadow: 0 4px 16px rgb(0 0 0 / 10%);
     transform: translateY(-1px);
   }
+}
+
+// La etiqueta de tipo de la tarjeta ("colección", "libro", "autor"…). Estaba
+// escrita idéntica en las cuatro tarjetas. Va anidada bajo `.card` y no suelta
+// porque `.kind` es un nombre demasiado genérico para el scope global; las
+// cuatro viven adentro de una `.card`, así que no hace falta tocar templates.
+.card .kind {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+// Footer de acciones del modal: la cuarta pieza del shell, que la auditoría no
+// había listado (solo tenía backdrop, card y header). Estaba escrito NUEVE
+// veces con cinco variantes del mismo bloque.
+
+// `align-items` NO va acá: ocho footers llevan solo botones, que con el
+// `stretch` por default quedan todos de la misma altura, y el único que
+// necesita `center` es el de Configuración, porque mete chips de estado al
+// lado del botón. Ponerlo en la base le cambiaría la altura a los otros ocho.
+.modal-actions {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-soft);
 }
 
 // Botones de diálogo. Vivían copiados en diez `.scss` de componente, con cuatro
