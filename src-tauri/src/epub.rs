@@ -753,7 +753,7 @@ fn export_impl(
         !catalogo.misma_saga.is_empty() || !catalogo.otros.is_empty() || bio.is_some();
     if hay_back_matter {
         spine_idx += 1;
-        let xhtml = xhtml_shell("", "", &lang_str, "blank-body");
+        let xhtml = xhtml_shell(&cfg.titulo, "", &lang_str, "blank-body");
         zip.start_file("OEBPS/6_blank.xhtml", opts).map_err(|e| e.to_string())?;
         zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
         items.push(Item {
@@ -1269,6 +1269,17 @@ fn embebido_reescalado(
 // ───────── XHTML builders ─────────
 
 fn xhtml_shell(title: &str, body: &str, lang: &str, body_class: &str) -> String {
+    // epubcheck rechaza `<title></title>` (RSC-005: "Element title must not be
+    // empty"), y Kobo corta la subida por eso. Cualquier caller puede traer el
+    // título vacío (book.json sin `titulo`, capítulo sin `titulo` en el meta,
+    // la página en blanco del back matter), así que el guard va acá y no en
+    // cada uno.
+    let fallback = if lang == "en" { "Untitled" } else { "Sin título" };
+    let title = if title.trim().is_empty() {
+        fallback
+    } else {
+        title
+    };
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
@@ -3075,6 +3086,17 @@ mod tests {
     }
 
     #[test]
+    fn xhtml_shell_nunca_emite_title_vacio() {
+        for (lang, esperado) in [("es", "Sin título"), ("en", "Untitled")] {
+            let out = xhtml_shell("   ", "", lang, "blank-body");
+            assert!(!out.contains("<title></title>"), "{}", out);
+            assert!(out.contains(&format!("<title>{}</title>", esperado)), "{}", out);
+        }
+        let out = xhtml_shell("La Ciudad", "", "es", "chapter-title-body");
+        assert!(out.contains("<title>La Ciudad</title>"));
+    }
+
+    #[test]
     fn pagina_en_blanco_separa_la_novela_del_back_matter_solo_si_hay_alguno() {
         // Caso 1: hay catálogo (back matter) → la página en blanco existe,
         // va al spine, y NO entra ni a toc.xhtml ni a toc.ncx.
@@ -3082,6 +3104,9 @@ mod tests {
         let result = export_impl(book.to_str().unwrap()).unwrap();
         let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
         assert!(entries.contains_key("OEBPS/6_blank.xhtml"));
+        // epubcheck (y Kobo) rechazan `<title></title>` en cualquier XHTML.
+        let blank = String::from_utf8(entries.get("OEBPS/6_blank.xhtml").unwrap().clone()).unwrap();
+        assert!(!blank.contains("<title></title>"), "{}", blank);
         let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
         assert!(opf.contains(r#"idref="blank-separator""#));
         let toc = String::from_utf8(entries.get("OEBPS/toc.xhtml").unwrap().clone()).unwrap();
