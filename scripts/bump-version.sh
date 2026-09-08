@@ -70,3 +70,7 @@ echo "Próximo paso:"
 echo "  git add -A && git commit -m \"chore: bump v$NEW\""
 echo "  git tag v$NEW"
 echo "  git push && git push --tags"
+echo
+echo "Y con el release ya publicado, antes de subir al AUR:"
+echo "  ( cd packaging/aur && updpkgsums )   # el sha256 es del .deb del release"
+echo "  git commit -am \"chore(aur): sha256 de v$NEW\""
