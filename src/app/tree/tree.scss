@@ -135,7 +135,7 @@
 }
 
 .row.group.ancestor:not(.current) {
-  background: rgb(200 168 120 / 12%);
+  background: var(--accent-tint);
 }
 
 .row.chapter.disabled {
@@ -306,7 +306,7 @@
 .row.drag-target {
   outline: 2px dashed var(--accent);
   outline-offset: -2px;
-  background: rgb(200 168 120 / 12%);
+  background: var(--accent-tint);
 }
 
 .extra-badge {

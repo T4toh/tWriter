@@ -33,7 +33,7 @@
 
   &:focus-visible {
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgb(200 168 120 / 25%);
+    box-shadow: 0 0 0 2px var(--accent-tint-border);
   }
 
   &.is-empty .sel-label {

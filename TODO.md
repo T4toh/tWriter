@@ -1297,13 +1297,25 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   editor de temas, `.saga-name` en diccionario). Unificar cualquiera de las dos
   sería forzarlas.
 
-  **Queda un caso del mismo patrón, sin hacer**: `tree.scss:138` y `:309` y
-  `select.scss:36` usan `rgb(200 168 120 / 12%)` y `/ 25%`, que es el `--accent`
-  del tema OSCURO (`#c8a878`) aplicado sin condicionar tema — exactamente el
-  problema que tenía `#c87070` antes de esta pasada. No entró porque no es un
-  color de estado y el fix natural es un `--accent-tint` con su par por tema.
-  En claro el `--accent` es marrón (`#5a3a1a`), así que hoy esos fondos son un
-  tostado que no corresponde a la paleta clara.
+  **Tercera capa, cerrada el 2026-09-08**: el chrome compartido de los dos
+  editores (`shared/editor-chrome.scss`, 16 bloques que estaban idénticos en
+  `editor.scss` y `notes-editor.scss`, 999 líneas a 891), y el último resto de
+  valores del tema oscuro aplicados sin condicionar tema — `rgb(200 168 120 /
+  …)` en `tree.scss` ×2 y `select.scss`, que pasaron a `--accent-tint` /
+  `--accent-tint-border`.
+  De paso salió que `debug-panel.scss` usaba `#c8a878` como color del nivel
+  `warn` del log, al lado de un `error` que ya era `var(--err)`. No lo había
+  agarrado la pasada de colores porque grepeaba los literales conocidos de warn
+  (`#c89020`, `#e0a020`) y no ese. En tema claro daba **1.93:1** sobre el fondo
+  del panel, o sea tostado sobre crema, prácticamente invisible; con
+  `var(--warn)` pasa a 3.35.
+  Ya no queda ningún literal de paleta oscura suelto en el repo.
+
+  **Lo que el barrido de bloques repetidos dejó y NO se unificó**, además de la
+  etiqueta de sección y el subtítulo mono: `.tb-btn.tb-text` PARECE compartido
+  entre los dos editores y no lo es (capítulos usa `padding: 0 10px` más
+  `margin: 0 1px`, notas `padding: 0 0.5em` sin margen), y quedan pares ×2 de
+  chips mono y de bloques de tarjeta que no llegan a doler.
 
     **`pnpm lint:css` quedó en verde.** Venía rojo desde antes de la pasada con 9
   errores, y eso tuvo costo real: con la base en rojo no se distingue un error

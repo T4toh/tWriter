@@ -64,8 +64,8 @@ header {
       }
 
       &[data-level='warn'].on {
-        color: #c8a878;
-        border-color: #c8a878;
+        color: var(--warn);
+        border-color: var(--warn);
       }
     }
 
@@ -161,7 +161,7 @@ header {
   }
 
   &[data-level='warn'] .msg {
-    color: #c8a878;
+    color: var(--warn);
   }
 
   &[data-level='info'] .msg {
