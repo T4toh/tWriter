@@ -22,6 +22,33 @@
             </span>
           </div>
         </label>
+
+        @if (epubcheck(); as ec) {
+          <div class="gs-option-text epubcheck-row">
+            <strong>Validación del EPUB</strong>
+            @if (ec.disponible) {
+              <span class="muted">
+                epubcheck detectado{{ ec.version ? ' — ' + ec.version : '' }}. Cada export
+                se valida con él, el mismo chequeo que corre la tienda al recibir el archivo.
+              </span>
+            } @else {
+              <span class="muted">
+                Sin epubcheck instalado el EPUB se exporta igual, pero sin validar: los
+                errores aparecen recién cuando la tienda rechaza la subida.
+              </span>
+              @if (ec.instalar; as cmd) {
+                <app-copy-command [command]="cmd" />
+              } @else {
+                <span class="muted">
+                  <a href="https://github.com/w3c/epubcheck/releases" target="_blank" rel="noopener">
+                    Descargar epubcheck
+                  </a>
+                  (necesita Java 11+).
+                </span>
+              }
+            }
+          </div>
+        }
       </details>
 
       <details class="gs-bloque" [open]="aparienciaAbierta()" (toggle)="aparienciaAbierta.set($any($event.target).open)">

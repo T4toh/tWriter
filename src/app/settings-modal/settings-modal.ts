@@ -33,6 +33,13 @@ import { Select, SelectGroup, SelectOption } from '../shared/select';
 import { CopyCommand } from '../shared/copy-command';
 import { GrammarMode } from '../core/types';
 
+/** Estado del validador de EPUB (`epubcheck.rs::epubcheck_estado`). */
+interface EpubcheckEstado {
+  disponible: boolean;
+  version: string | null;
+  instalar: string | null;
+}
+
 export type DockerPhase =
   | 'checking'
   | 'daemon'
@@ -205,7 +212,21 @@ export class SettingsModal {
   protected readonly aparienciaAbierta = signal<boolean>(false);
   protected readonly gramaticaAbierta = signal<boolean>(true);
 
+  // ── General: estado de epubcheck ────────────────────────────────────────
+  /** `null` mientras no se consultó. El validador es opcional: sin él el
+   *  export sale igual, solo que sin veredicto. */
+  protected readonly epubcheck = signal<EpubcheckEstado | null>(null);
+
+  private async refreshEpubcheck(): Promise<void> {
+    try {
+      this.epubcheck.set(await invoke<EpubcheckEstado>('epubcheck_estado'));
+    } catch {
+      this.epubcheck.set(null);
+    }
+  }
+
   show(seccion: SeccionSettings = 'gramatica'): void {
+    void this.refreshEpubcheck();
     this.generalAbierta.set(seccion === 'general');
     this.aparienciaAbierta.set(seccion === 'apariencia');
     this.gramaticaAbierta.set(seccion === 'gramatica');

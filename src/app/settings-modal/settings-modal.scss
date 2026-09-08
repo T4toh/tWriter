@@ -596,3 +596,12 @@
   }
 }
 
+
+/* Estado de epubcheck: misma columna de texto que las opciones con checkbox,
+   pero sin control adelante — no hay nada que togglear, el validador está o no. */
+.epubcheck-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0 0;
+}

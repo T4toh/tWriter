@@ -49,6 +49,16 @@ function makeChapterPane(): ChapterPane {
   };
 }
 
+/** Veredicto de epubcheck sobre el EPUB exportado (`epubcheck.rs`). */
+interface EpubcheckReport {
+  disponible: boolean;
+  fatals: number;
+  errors: number;
+  warnings: number;
+  mensajes: string[];
+  instalar: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ChapterService {
   private project = inject(ProjectService);
@@ -57,6 +67,8 @@ export class ChapterService {
   private git = inject(GitService);
   private toast = inject(ToastService);
   private exports = inject(ExportsService);
+  /** El "epubcheck no está instalado" se dice una vez por sesión. */
+  private epubcheckAvisado = false;
 
   /** Dos panes. pane 0 = principal (siempre activo). pane 1 = secundario (split). */
   readonly panes: readonly [ChapterPane, ChapterPane] = [makeChapterPane(), makeChapterPane()];
@@ -437,6 +449,7 @@ export class ChapterService {
       }
       await this.project.loadTree();
       void this.exports.refresh(node.path);
+      void this.validarEpub(node.name, result.epub_path);
       return result.epub_path;
     } catch (err) {
       this.debug.error('epub', `${node.name}: ${err}`);
@@ -448,6 +461,41 @@ export class ChapterService {
       // siempre. Va en `finally` para que valga también cuando el export falla.
       unlisten?.();
       this.toast.dismiss(toastId);
+    }
+  }
+
+  /** Pasa el EPUB recién generado por epubcheck, el mismo validador que corre
+   *  la tienda del otro lado. Va suelto (sin `await` del caller) porque el
+   *  export ya terminó: esto solo agrega el veredicto cuando llega. Si el
+   *  binario no está, se dice una vez y el remedio queda en Configuración —
+   *  repetirlo en cada export sería ruido.
+   *
+   *  Un error acá no puede voltear un export que salió bien, así que todo
+   *  camino de falla termina en un log y nada más. */
+  private async validarEpub(nombre: string, epubPath: string): Promise<void> {
+    try {
+      const r = await invoke<EpubcheckReport>('epubcheck_validar', { epubPath });
+      if (!r.disponible) {
+        if (!this.epubcheckAvisado) {
+          this.epubcheckAvisado = true;
+          this.toast.info('EPUB sin validar: epubcheck no está instalado (Configuración → General)');
+        }
+        this.debug.info('epub', 'epubcheck no instalado — export sin validar');
+        return;
+      }
+      for (const m of r.mensajes) this.debug.warn('epub', `${nombre}: ${m}`);
+      const rotos = r.fatals + r.errors;
+      if (rotos > 0) {
+        this.toast.error(
+          `epubcheck: ${rotos} error${rotos === 1 ? '' : 'es'} — la tienda lo va a rechazar (ver panel de debug)`,
+        );
+      } else if (r.warnings > 0) {
+        this.toast.warn(`epubcheck: sin errores, ${r.warnings} warning${r.warnings === 1 ? '' : 's'}`);
+      } else {
+        this.toast.success('epubcheck: EPUB válido');
+      }
+    } catch (err) {
+      this.debug.warn('epub', `epubcheck falló: ${err}`);
     }
   }
 
