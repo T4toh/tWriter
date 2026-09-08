@@ -414,13 +414,17 @@ blockquote p {
   text-align: center;
 }
 
-/* Énfasis adentro de un bloque ya en itálica: se invierte a redonda, que es
-   la convención tipográfica. Ojo con los capítulos importados de .docx, donde
-   la cursiva venía en el texto: ahí hay que sacar el <em> al pasar el bloque
-   a verso, o los versos salen redondos. */
+/* El <em> adentro del verso NO se invierte a redonda.
+   La convención tipográfica dice que el énfasis dentro de un bloque en
+   itálica va derecho, y así estaba — pero en este repo la cursiva de las
+   canciones vive en el texto: viene de los .docx importados, donde el autor
+   marcaba la estrofa a mano. Invertir significaba que envolver esos versos en
+   el bloque de verso los ponía derechos, o sea que aplicar el estilo requería
+   además borrar el <em> de cada verso. Ahora el bloque y el texto empujan
+   para el mismo lado: seleccionar y aplicar cita alcanza. */
 blockquote i,
 blockquote em {
-  font-style: normal;
+  font-style: italic;
 }
 
 /* ─────────────────── Dropcap ─────────────────── */
