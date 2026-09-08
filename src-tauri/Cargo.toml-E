@@ -1,0 +1,66 @@
+[package]
+name = "twriter"
+version = "0.10.0"
+description = "Editor desktop de novelas: editor TipTap, conversor RAE, gramática (LanguageTool) y EPUB."
+authors = ["Tatoh <tatukis@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/T4toh/tWriter"
+homepage = "https://github.com/T4toh/tWriter"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "twriter_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-opener = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# default-features=false saca https(openssl-sys) + ssh(libssh2-sys): el push/pull
+# usa el git de sistema (run_git_net), git2 solo hace status/commit locales. Sin
+# openssl, x86_64-apple-darwin cross-compila desde el runner ARM sin pkg-config.
+git2 = { version = "0.20", default-features = false }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+uuid = { version = "1", features = ["v4"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+tokio = { version = "1", features = ["sync", "time"] }
+rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "registry", "std"] }
+tantivy = { version = "0.22", features = ["stopwords"] }
+regex = "1"
+# Listado de fuentes del OS para el selector del editor (sin deps C — pure Rust).
+fontdb = { version = "0.23", default-features = false, features = ["fontconfig", "memmap"] }
+# Decodificar y reescalar tapas para el EPUB: las del repo son PNG de
+# imprenta (hasta 7 MB) y embeberlas tal cual infla el archivo y el costo
+# de delivery de KDP. default-features=false deja solo png+jpeg — nada de
+# formatos exóticos ni deps C.
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
+# Wallet/keyring del sistema para secretos sensibles (apiKey de LT Premium).
+# Linux: libsecret (gnome-keyring / KWallet6+). macOS: Keychain. Windows: Credential Manager.
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+# Timeout sobre `Command::spawn()` para que ningún `git` cuelgue forever
+# si la app abre sin SSH agent / sin TTY. Plataformas: Linux/macOS/Windows.
+wait-timeout = "0.2"
+
+# Apagar las sustituciones de texto nativas de macOS (autocorrección, comillas
+# inteligentes, guiones, reemplazo de texto) que muerden dentro de la WKWebView
+# y arruinan el voseo. Ambas ya venían como transitivas de Tauri.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+
+[dev-dependencies]
+tempfile = "3"
+

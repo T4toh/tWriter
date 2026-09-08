@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo test)",
+      "Bash(cargo test *)",
+      "Bash(cargo build)",
+      "Bash(cargo build *)",
+      "Bash(cargo check *)",
+      "Bash(cargo info *)",
+      "Bash(cargo search *)",
+      "Bash(pnpm build)",
+      "Bash(pnpm install)",
+      "Bash(wc *)",
+      "Bash(sed -n *)"
+    ]
+  }
+}
