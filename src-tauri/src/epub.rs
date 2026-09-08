@@ -1149,7 +1149,8 @@ fn load_part(html_path: &Path) -> Result<ChapterPart, String> {
         .to_string();
     let content = fs::read_to_string(html_path).map_err(|e| e.to_string())?;
     let meta_title = read_part_meta_title(html_path);
-    let (content_html, reparado) = rebalance_inline(&close_void_elements(&content));
+    let (rebalanceado, reparado) = rebalance_inline(&close_void_elements(&content));
+    let content_html = limpiar_inline_vacios(&rebalanceado);
     if reparado {
         tracing::warn!(target: "epub", path = %html_path.display(), "markup mal anidado reencajado para el EPUB");
     }
@@ -1297,6 +1298,39 @@ fn rebalance_inline(html: &str) -> (String, bool) {
         reparado = true;
     }
     (out, reparado)
+}
+
+/// Saca los inline que quedan envolviendo solo espacios.
+///
+/// Los deja el propio rebalanceo: si el `<em>` cruzado abarcaba el salto de
+/// línea con el que arranca el párrafo siguiente, ese párrafo se abre con un
+/// `<em>\n</em>` que no pinta nada. Es válido pero es basura, y en el HTML del
+/// autor se ve como un cambio de formato fantasma.
+fn limpiar_inline_vacios(html: &str) -> String {
+    // El crate `regex` no tiene backreferences, así que el par se compara en
+    // el closure en vez de con `\1`.
+    let re = regex::Regex::new(
+        r"(?is)<(em|i|strong|b|span|a|sub|sup)\b[^<>]*>(\s*)</(em|i|strong|b|span|a|sub|sup)>",
+    )
+    .expect("regex de inline vacío válida");
+    let mut actual = html.to_string();
+    // En bucle porque los anidados (`<em><em>\n</em></em>`) se pelan de a una
+    // capa por pasada. Termina: cada pasada borra al menos un par de tags.
+    loop {
+        let siguiente = re
+            .replace_all(&actual, |caps: &regex::Captures| {
+                if caps[1].eq_ignore_ascii_case(&caps[3]) {
+                    caps[2].to_string()
+                } else {
+                    caps[0].to_string()
+                }
+            })
+            .into_owned();
+        if siguiente == actual {
+            return actual;
+        }
+        actual = siguiente;
+    }
 }
 
 fn read_part_meta_title(html_path: &Path) -> Option<String> {
@@ -3242,6 +3276,23 @@ mod tests {
             "<p><em><em>No quiero olvidar</em></em></p><p><em><em>\nNi quiero perder</em></em></p><p><em><em>\nTus besos con desdén</em></em></p>"
         );
         assert_eq!(out.matches("<em>").count(), out.matches("</em>").count());
+    }
+
+    #[test]
+    fn los_inline_que_solo_envuelven_espacios_se_borran() {
+        // Residuo típico del rebalanceo cuando la cursiva cruzada abarcaba el
+        // salto de línea con el que arranca el párrafo siguiente.
+        assert_eq!(
+            limpiar_inline_vacios("<p><em>\n</em>Texto</p>"),
+            "<p>\nTexto</p>"
+        );
+        // Anidados: se pelan las dos capas.
+        assert_eq!(limpiar_inline_vacios("<p><em><em> </em></em>x</p>"), "<p> x</p>");
+        // Con contenido real no se toca.
+        assert_eq!(
+            limpiar_inline_vacios("<p><em>hola</em></p>"),
+            "<p><em>hola</em></p>"
+        );
     }
 
     #[test]
