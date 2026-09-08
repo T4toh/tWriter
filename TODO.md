@@ -1146,12 +1146,32 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   Cuando se haga, el campo va en `Settings` **de los dos lados** — la interfaz
   TS y el `struct` de Rust — o serde lo descarta al guardar y la preferencia se
   pierde al reiniciar, sin ningún error (ver la convención en CLAUDE.md).
-- **El editor sigue escribiendo `<br>` sin cerrar en los `.html` nuevos**. El
-  `close_void_elements()` del export es un parche a la salida, no una cura: los
-  archivos fuente quedan en HTML no-XHTML, lo que importa si algún día se leen
-  con un parser estricto en vez de con el export actual. Falta encontrar qué
-  nodo de TipTap serializa el `<br>` (`hardBreak`, probablemente con su
-  serialización default) y hacer que autocierre al guardar el capítulo.
+- **`<br>` y `<hr>` sin cerrar, y el `<hr>` sin clase: NO hay nada que
+  arreglar. Verificado el 2026-09-08.** Este ítem estuvo listado como pendiente
+  con dos afirmaciones y las dos son falsas hoy; queda acá con la evidencia para
+  no volver a abrirlo.
+  - **El EPUB es XHTML válido.** `aeac7eb` (2026-09-01) agregó
+    `close_void_elements()` porque Apple Books usa un parser estricto y abortaba
+    el renderizado en el primer `<br>` sin cerrar (Thorium lo perdonaba, por eso
+    pasó inadvertido). Comprobado desempaquetando el EPUB exportado del repo de
+    prueba y grepeando void elements sin cerrar en todo el XHTML, el OPF y el
+    NCX: cero.
+  - **El `<hr>` sin `class="scene-break"` se ve igual que el que la tiene.**
+    `insertSceneBreak()` (`editor.ts:962`) usa el `horizontalRule` default de
+    TipTap, que emite `<hr>` pelado, mientras los importados traen la clase — o
+    sea que en el mismo EPUB conviven `<hr/>` y `<hr class="scene-break"/>`.
+    Pero `epub_style.css:375` es `hr, .scene-break { border: none; text-align:
+    center; … }` y `:337` es `.chapter-content hr + p, .chapter-content
+    .scene-break + p { text-indent: 0 }`: **los dos selectores listan las dos
+    formas a propósito**, así que el estilo es idéntico. No hay diferencia
+    visible.
+  - Lo único cierto que queda es que los `.html` fuente en disco no son XHTML
+    (`<br>`, `<hr>` sin autocerrar) y que el editor no escribe la clase que el
+    subset de CLAUDE.md documenta. Ninguna de las dos tiene efecto: los lee el
+    export, que normaliza. Arreglarlo implicaría tocar la serialización de
+    TipTap y además reescribir los 200+ capítulos del repo real para dejarlos
+    consistentes — una migración de contenido por cero beneficio observable.
+    **No vale.**
 
 ## Deuda transversal
 
