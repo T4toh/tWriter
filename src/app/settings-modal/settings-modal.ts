@@ -38,6 +38,8 @@ interface EpubcheckEstado {
   disponible: boolean;
   version: string | null;
   instalar: string | null;
+  binario: string;
+  salida: string | null;
 }
 
 export type DockerPhase =

@@ -8,7 +8,7 @@ import { ExportsService } from './exports-service';
 import { GitService } from './git-service';
 import { NavigationService } from './navigation-service';
 import { ProjectService } from './project-service';
-import { ToastService } from './toast-service';
+import { ToastDetalle, ToastService } from './toast-service';
 import { ChapterMeta, EMPTY_META, PullPathChange, TreeNode } from './types';
 
 const AUTOSAVE_MS = 1500;
@@ -57,7 +57,14 @@ interface EpubcheckReport {
   warnings: number;
   mensajes: string[];
   instalar: string | null;
+  binario: string;
+  exit_code: number | null;
+  falla: string | null;
 }
+
+/** Un toast de epubcheck vive 12s en vez de los 6 del default: el mensaje
+ *  invita a clickearlo para ver el detalle y hay que llegar. */
+const EPUBCHECK_TOAST_MS = 12_000;
 
 @Injectable({ providedIn: 'root' })
 export class ChapterService {
@@ -478,24 +485,76 @@ export class ChapterService {
       if (!r.disponible) {
         if (!this.epubcheckAvisado) {
           this.epubcheckAvisado = true;
-          this.toast.info('EPUB sin validar: epubcheck no está instalado (Configuración → General)');
+          this.toast.info(
+            'EPUB sin validar: epubcheck no está instalado',
+            EPUBCHECK_TOAST_MS,
+            {
+              titulo: 'epubcheck no está instalado',
+              texto: [
+                'El EPUB se exportó igual, pero sin validar: los errores de formato aparecen recién cuando la tienda rechaza la subida.',
+                r.instalar
+                  ? `Para instalarlo:\n\n${r.instalar}`
+                  : 'Descargalo de https://github.com/w3c/epubcheck/releases (necesita Java 11+).',
+                `Binario que se buscó: ${r.binario}`,
+                'El estado también está en Configuración → General, con el comando copiable.',
+              ].join('\n\n'),
+            },
+          );
         }
-        this.debug.info('epub', 'epubcheck no instalado — export sin validar');
+        this.debug.info('epub', `epubcheck no instalado (${r.binario}) — export sin validar`);
+        return;
+      }
+      // El validador estaba pero no llegó a validar: decir "0 errores" acá
+      // sería peor que no decir nada, porque el autor sube tranquilo.
+      if (r.falla) {
+        this.debug.error('epub', `epubcheck no pudo correr (${r.binario}): ${r.falla}`);
+        this.toast.error('epubcheck no pudo validar el EPUB', EPUBCHECK_TOAST_MS, {
+          titulo: 'epubcheck no pudo validar el EPUB',
+          texto: [
+            'El validador está instalado pero terminó sin revisar el archivo, así que el EPUB queda sin veredicto.',
+            `Binario: ${r.binario}`,
+            `Exit code: ${r.exit_code ?? 'lo mató una señal'}`,
+            `Salida:\n${r.falla}`,
+          ].join('\n\n'),
+        });
         return;
       }
       for (const m of r.mensajes) this.debug.warn('epub', `${nombre}: ${m}`);
       const rotos = r.fatals + r.errors;
+      const detalle = (titulo: string): ToastDetalle => ({
+        titulo,
+        texto: [
+          `${nombre} — ${r.fatals} fatal${r.fatals === 1 ? '' : 's'}, ${r.errors} error${r.errors === 1 ? '' : 'es'}, ${r.warnings} warning${r.warnings === 1 ? '' : 's'}.`,
+          r.mensajes.join('\n\n'),
+          `Validado con ${r.binario}.`,
+        ].join('\n\n'),
+      });
       if (rotos > 0) {
         this.toast.error(
-          `epubcheck: ${rotos} error${rotos === 1 ? '' : 'es'} — la tienda lo va a rechazar (ver panel de debug)`,
+          `epubcheck: ${rotos} error${rotos === 1 ? '' : 'es'} — la tienda lo va a rechazar`,
+          EPUBCHECK_TOAST_MS,
+          detalle(`epubcheck: ${rotos} error${rotos === 1 ? '' : 'es'}`),
         );
       } else if (r.warnings > 0) {
-        this.toast.warn(`epubcheck: sin errores, ${r.warnings} warning${r.warnings === 1 ? '' : 's'}`);
+        this.toast.warn(
+          `epubcheck: sin errores, ${r.warnings} warning${r.warnings === 1 ? '' : 's'}`,
+          EPUBCHECK_TOAST_MS,
+          detalle(`epubcheck: ${r.warnings} warning${r.warnings === 1 ? '' : 's'}`),
+        );
       } else {
         this.toast.success('epubcheck: EPUB válido');
       }
     } catch (err) {
-      this.debug.warn('epub', `epubcheck falló: ${err}`);
+      // Hasta acá no llegaba nada visible: el autor veía el export en verde y
+      // creía que el EPUB estaba validado.
+      this.debug.error('epub', `epubcheck falló: ${err}`);
+      this.toast.warn('EPUB sin validar: epubcheck no pudo arrancar', EPUBCHECK_TOAST_MS, {
+        titulo: 'No se pudo correr la validación',
+        texto: [
+          'El EPUB se exportó bien, pero la validación no llegó a correr, así que no hay veredicto.',
+          String(err),
+        ].join('\n\n'),
+      });
     }
   }
 

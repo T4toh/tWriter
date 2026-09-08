@@ -605,3 +605,18 @@
   gap: 4px;
   padding: 8px 0 0;
 }
+
+.epubcheck-salida {
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 8lh;
+  overflow-y: auto;
+}
