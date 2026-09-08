@@ -1,7 +1,16 @@
 <div class="toast-stack">
   @for (t of toast.toasts(); track t.id) {
-    <div class="toast" [attr.data-level]="t.level" (click)="dismiss(t.id)">
+    <div
+      class="toast"
+      [attr.data-level]="t.level"
+      [class.con-detalle]="!!t.detalle"
+      [title]="t.detalle ? 'Ver el detalle' : 'Cerrar'"
+      (click)="onClick(t)"
+    >
       <span class="msg">{{ t.message }}</span>
+      @if (t.detalle) {
+        <span class="detalle-hint">ver detalle</span>
+      }
     </div>
   }
 </div>

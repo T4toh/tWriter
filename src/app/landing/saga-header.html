@@ -10,34 +10,32 @@
           [alt]="i === 0 ? displayName() : ''"
         />
       }
-      @if (coverFromBook()) {
-        <span class="borrowed-tag" title="Tapa heredada del primer libro">heredada</span>
-      }
     } @else {
-      <div class="cover-placeholder">
-        <span>{{ displayName() }}</span>
-      </div>
+      <div class="cover-placeholder"></div>
     }
   </div>
   <div class="info">
-    <div class="title-row">
-      <span class="kind">SAGA</span>
-      <h2 class="title">{{ displayName() }}</h2>
-    </div>
+    <span class="kind">SAGA</span>
+    <h2 class="title">{{ displayName() }}</h2>
     @if (author(); as a) {
-      <p class="author">{{ a }}</p>
+      <span class="author">{{ a }}</span>
     } @else {
-      <p class="hint">Sin autor — configurar saga para heredarlo a libros nuevos</p>
+      <span class="hint">Sin autor — configurar saga para heredarlo a libros nuevos</span>
     }
-    <div class="meta">
-      <span class="meta-item">{{ bookCount() }} libro{{ bookCount() === 1 ? '' : 's' }}</span>
+    <span class="meta">
+      {{ bookCount() }} libro{{ bookCount() === 1 ? '' : 's' }}
       @if (idioma(); as l) {
-        <span class="meta-item">· {{ formatLang(l) }}</span>
+        · {{ formatLang(l) }}
       }
       @if (hasDictionary()) {
-        <span class="meta-item">· dicc. {{ dictSize() }}</span>
+        · dicc. {{ dictSize() }}
       }
-    </div>
+    </span>
+    @if (coverFromBook()) {
+      <span class="borrowed-tag" title="La saga no tiene tapa propia: se muestra la del primer libro">
+        tapa heredada
+      </span>
+    }
   </div>
   <div class="actions">
     <button

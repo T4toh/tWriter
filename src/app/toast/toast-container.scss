@@ -42,6 +42,21 @@
   overflow-wrap: anywhere;
 }
 
+/* Sin esto el toast no se distingue de los que solo se cierran al click, y el
+   detalle queda escondido detrás de una corazonada. */
+.detalle-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.toast.con-detalle:hover .detalle-hint {
+  color: var(--fg);
+}
+
 @keyframes slide-in {
   from {
     transform: translateX(20px);

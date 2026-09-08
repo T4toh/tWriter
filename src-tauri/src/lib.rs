@@ -7,6 +7,7 @@ mod debug_bridge;
 mod demo_template;
 mod dialogs;
 mod epub;
+mod epubcheck;
 mod extras;
 mod fonts;
 mod fs;
@@ -43,6 +44,7 @@ use create::{create_book, create_chapter, create_directory, insert_part_after};
 use demo_template::generate_demo_template;
 use dialogs::{pick_file, pick_folder};
 use epub::{export_book, list_exports};
+use epubcheck::{epubcheck_estado, epubcheck_validar};
 use extras::{add_extra, has_extras, list_extras, remove_extra, rename_extra};
 use fonts::{add_font, consolidate_fonts, has_fonts, list_fonts, remove_font, rename_font};
 use fs::{
@@ -149,6 +151,8 @@ pub fn run() {
             relocate_node,
             export_book,
             list_exports,
+            epubcheck_validar,
+            epubcheck_estado,
             get_book_config,
             set_book_config,
             adopt_config_image,

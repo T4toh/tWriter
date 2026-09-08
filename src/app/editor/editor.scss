@@ -88,12 +88,25 @@
       }
     }
 
+    // Espejo del bloque de verso del EPUB (`epub_style.css`): el atajo de
+    // cita del editor marca canciones y poemas, no citas en prosa, así que
+    // se ve como se va a imprimir —centrado y en itálica— y no como un
+    // blockquote de blog. Sin border-left ni color apagado por eso mismo.
     blockquote {
-      margin: 1em 1.5em;
+      margin: 1.6em 0;
       font-style: italic;
-      color: var(--fg-muted);
-      border-left: 2px solid var(--border);
-      padding-left: 1em;
+      text-align: center;
+
+      p {
+        text-align: center;
+        text-indent: 0;
+        margin: 0;
+      }
+
+      em,
+      i {
+        font-style: normal;
+      }
     }
 
     span.dropcap {

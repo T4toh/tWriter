@@ -6,6 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   LucideBan,
@@ -33,6 +34,39 @@ import { Select, SelectGroup, SelectOption } from '../shared/select';
 import { CopyCommand } from '../shared/copy-command';
 import { GrammarMode } from '../core/types';
 
+/** Estado del validador de EPUB (`epubcheck.rs::epubcheck_estado`). */
+interface EpubcheckEstado {
+  disponible: boolean;
+  version: string | null;
+  instalar: string | null;
+  binario: string;
+  salida: string | null;
+  plataforma: string;
+}
+
+/** Cómo instalar epubcheck. Es texto fijo, no hace falta que lo arme Rust: lo
+ *  único que aporta el backend es en qué SO estamos, para poner primero la
+ *  opción que sirve acá. Windows no tiene gestor de paquetes con el jar, así
+ *  que va a mano. */
+interface OpcionInstalar {
+  plataforma: string;
+  label: string;
+  command?: string;
+  url?: string;
+  nota?: string;
+}
+
+const INSTALAR_EPUBCHECK: readonly OpcionInstalar[] = [
+  { plataforma: 'macos', label: 'macOS (Homebrew)', command: 'brew install epubcheck' },
+  { plataforma: 'linux', label: 'Arch Linux (extra)', command: 'sudo pacman -S epubcheck' },
+  {
+    plataforma: 'windows',
+    label: 'Windows y el resto',
+    url: 'https://github.com/w3c/epubcheck/releases',
+    nota: 'Descomprimir el zip y dejar epubcheck.bat en el PATH.',
+  },
+];
+
 export type DockerPhase =
   | 'checking'
   | 'daemon'
@@ -56,7 +90,7 @@ export type SeccionSettings = 'general' | 'apariencia' | 'gramatica';
   selector: 'app-settings-modal',
   standalone: true,
   imports: [
-    FormsModule, Select, CopyCommand,
+    FormsModule, Select, CopyCommand, NgTemplateOutlet,
     LucideBan, LucideCheck, LucideCircle, LucideCircleAlert, LucideEye, LucideEyeOff,
     LucideLock, LucideX,
   ],
@@ -205,7 +239,29 @@ export class SettingsModal {
   protected readonly aparienciaAbierta = signal<boolean>(false);
   protected readonly gramaticaAbierta = signal<boolean>(true);
 
+  // ── General: estado de epubcheck ────────────────────────────────────────
+  /** `null` mientras no se consultó. El validador es opcional: sin él el
+   *  export sale igual, solo que sin veredicto. */
+  protected readonly epubcheck = signal<EpubcheckEstado | null>(null);
+
+  /** Las tres formas de instalarlo, con la de esta máquina primera. */
+  protected readonly opcionesInstalar = computed<readonly OpcionInstalar[]>(() => {
+    const os = this.epubcheck()?.plataforma ?? '';
+    return [...INSTALAR_EPUBCHECK].sort(
+      (a, b) => Number(b.plataforma === os) - Number(a.plataforma === os),
+    );
+  });
+
+  private async refreshEpubcheck(): Promise<void> {
+    try {
+      this.epubcheck.set(await invoke<EpubcheckEstado>('epubcheck_estado'));
+    } catch {
+      this.epubcheck.set(null);
+    }
+  }
+
   show(seccion: SeccionSettings = 'gramatica'): void {
+    void this.refreshEpubcheck();
     this.generalAbierta.set(seccion === 'general');
     this.aparienciaAbierta.set(seccion === 'apariencia');
     this.gramaticaAbierta.set(seccion === 'gramatica');

@@ -22,6 +22,63 @@
             </span>
           </div>
         </label>
+
+        @if (epubcheck(); as ec) {
+          <div class="gs-option-text epubcheck-row">
+            <strong>Validación del EPUB</strong>
+            @if (ec.disponible) {
+              <span class="muted">
+                epubcheck detectado{{ ec.version ? ' — ' + ec.version : '' }}. Cada export
+                se valida con él, el mismo chequeo que corre la tienda al recibir el archivo.
+              </span>
+              <details class="epubcheck-instalar">
+                <summary>Instalarlo en otra máquina</summary>
+                <ng-container [ngTemplateOutlet]="opcionesEpubcheck" />
+              </details>
+            } @else if (ec.salida; as salida) {
+              <!-- El binario está pero no arranca: sin la salida cruda esto es
+                   indistinguible de "no lo tengo instalado", y el remedio es
+                   otro (falta la JVM que el wrapper hace `exec`, no el paquete). -->
+              <span class="muted">
+                <code>{{ ec.binario }}</code> existe pero no llegó a correr, así que los
+                exports salen sin validar. Suele ser Java: el <code>epubcheck</code> de
+                Homebrew es un script que hace <code>exec</code> de una JVM.
+              </span>
+              <pre class="epubcheck-salida">{{ salida }}</pre>
+              <app-copy-command command="brew install openjdk" />
+            } @else {
+              <span class="muted">
+                Sin epubcheck instalado el EPUB se exporta igual, pero sin validar: los
+                errores aparecen recién cuando la tienda rechaza la subida. Se buscó en
+                <code>{{ ec.binario }}</code>.
+              </span>
+              <ng-container [ngTemplateOutlet]="opcionesEpubcheck" />
+            }
+          </div>
+        }
+
+        <!-- Una sola lista para los dos caminos: "no está" y "está pero quiero
+             instalarlo en la otra PC". -->
+        <ng-template #opcionesEpubcheck>
+          <ul class="install-options">
+            @for (opt of opcionesInstalar(); track opt.label) {
+              <li>
+                @if (opt.url) {
+                  <a [href]="opt.url" target="_blank" rel="noopener">{{ opt.label }}</a>
+                } @else {
+                  <span>{{ opt.label }}</span>
+                }
+                @if (opt.command; as cmd) {
+                  <app-copy-command [command]="cmd" />
+                }
+                @if (opt.nota; as nota) {
+                  <span class="muted">{{ nota }}</span>
+                }
+              </li>
+            }
+          </ul>
+          <span class="muted">Necesita Java 11 o más nuevo.</span>
+        </ng-template>
       </details>
 
       <details class="gs-bloque" [open]="aparienciaAbierta()" (toggle)="aparienciaAbierta.set($any($event.target).open)">

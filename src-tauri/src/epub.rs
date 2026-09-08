@@ -753,7 +753,7 @@ fn export_impl(
         !catalogo.misma_saga.is_empty() || !catalogo.otros.is_empty() || bio.is_some();
     if hay_back_matter {
         spine_idx += 1;
-        let xhtml = xhtml_shell("", "", &lang_str, "blank-body");
+        let xhtml = xhtml_shell(&cfg.titulo, "", &lang_str, "blank-body");
         zip.start_file("OEBPS/6_blank.xhtml", opts).map_err(|e| e.to_string())?;
         zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
         items.push(Item {
@@ -1010,6 +1010,28 @@ fn export_impl(
         e.to_string()
     })?;
 
+    // El EPUB salió bien formado igual, pero el .html sigue mal anidado en
+    // disco: el próximo export lo va a reparar de nuevo, y otras herramientas
+    // (Apple Books con su parser estricto) no perdonan lo que nosotros
+    // arreglamos al pasar.
+    let reparados: Vec<String> = chapters
+        .iter()
+        .chain(epilogo.iter())
+        .flat_map(|c| {
+            c.parts
+                .iter()
+                .filter(|p| p.reparado)
+                .map(move |p| format!("{} — parte {}", c.title, p.stem))
+        })
+        .collect();
+    if !reparados.is_empty() {
+        avisos.push(format!(
+            "Itálicas o negritas mal anidadas (cruzan párrafos) en {}: el EPUB salió bien, pero conviene reabrir y guardar {} en el editor para arreglar el archivo.",
+            reparados.join(", "),
+            if reparados.len() == 1 { "esa parte" } else { "esas partes" },
+        ));
+    }
+
     tracing::info!(target: "epub", path = %epub_path.display(), capitulos = total_chapter_files, "export listo");
     Ok(ExportResult {
         epub_path: epub_path.to_string_lossy().into_owned(),
@@ -1031,6 +1053,10 @@ struct ChapterPart {
     /// Título de meta.json si existe, para mostrar como header.
     meta_title: Option<String>,
     content_html: String,
+    /// El markup del capítulo venía mal anidado y hubo que reencajarlo para
+    /// que el XHTML sea válido. El EPUB sale bien, pero el .html en disco
+    /// sigue roto, así que el autor tiene que saberlo.
+    reparado: bool,
 }
 
 struct TocEntry {
@@ -1123,10 +1149,16 @@ fn load_part(html_path: &Path) -> Result<ChapterPart, String> {
         .to_string();
     let content = fs::read_to_string(html_path).map_err(|e| e.to_string())?;
     let meta_title = read_part_meta_title(html_path);
+    let (rebalanceado, reparado) = rebalance_inline(&close_void_elements(&content));
+    let content_html = limpiar_inline_vacios(&rebalanceado);
+    if reparado {
+        tracing::warn!(target: "epub", path = %html_path.display(), "markup mal anidado reencajado para el EPUB");
+    }
     Ok(ChapterPart {
         stem,
         meta_title,
-        content_html: close_void_elements(&content),
+        content_html,
+        reparado,
     })
 }
 
@@ -1154,6 +1186,151 @@ fn close_void_elements(html: &str) -> String {
         }
     })
     .into_owned()
+}
+
+/// Etiquetas inline del subset (CLAUDE.md) que pueden quedar abiertas cruzando
+/// un límite de bloque. `a`/`span` entran porque el importador de docx los
+/// genera aunque el editor no los ofrezca.
+const INLINE_TAGS: [&str; 8] = ["em", "i", "strong", "b", "span", "a", "sub", "sup"];
+
+/// Bloques del subset. Un inline no puede seguir abierto cuando uno de estos
+/// cierra.
+const BLOCK_TAGS: [&str; 8] = ["p", "blockquote", "h1", "h2", "h3", "li", "figcaption", "div"];
+
+/// Reencaja las itálicas y negritas que cruzan un límite de párrafo.
+///
+/// El HTML tolerante acepta `<p><em>Uno</p><p>Dos</em></p>` y lo renderiza
+/// como se espera; XML no, y el EPUB es XML: epubcheck aborta con
+/// `RSC-016 ... The element type "em" must be terminated by the matching
+/// end-tag "</em>"` y la tienda rechaza la subida. El caso real salió de una
+/// canción importada de .docx, donde la cursiva abarcaba las cuatro líneas de
+/// la estrofa y quedaba abierta a través de los `<p>`.
+///
+/// La reparación es la que hace cualquier navegador: cerrar los inline que
+/// quedan abiertos al cerrar el bloque y reabrirlos al abrir el siguiente, así
+/// que el texto se sigue viendo en cursiva de punta a punta. También se
+/// descartan los cierres huérfanos y se cierra lo que quede abierto al final.
+///
+/// Se hace a la salida del EPUB y no en el archivo fuente: el .html del
+/// capítulo es del autor y no lo tocamos por atrás.
+fn rebalance_inline(html: &str) -> (String, bool) {
+    let re = regex::Regex::new(r"(?i)</?([a-z][a-z0-9]*)\b[^<>]*>")
+        .expect("regex de tags válida");
+    let mut out = String::with_capacity(html.len());
+    // Inline abiertos, del más externo al más interno.
+    let mut abiertos: Vec<String> = Vec::new();
+    // Los que hay que reabrir cuando arranque el próximo bloque.
+    let mut pendientes: Vec<String> = Vec::new();
+    let mut reparado = false;
+    let mut cursor = 0usize;
+
+    for m in re.find_iter(html) {
+        out.push_str(&html[cursor..m.start()]);
+        cursor = m.end();
+        let tag = m.as_str();
+        let nombre = re
+            .captures(tag)
+            .and_then(|c| c.get(1).map(|g| g.as_str().to_lowercase()))
+            .unwrap_or_default();
+        let cierre = tag.starts_with("</");
+        let auto_cerrado = tag.trim_end_matches('>').trim_end().ends_with('/');
+
+        if BLOCK_TAGS.contains(&nombre.as_str()) {
+            if cierre {
+                // Cerrar de adentro para afuera lo que siga abierto.
+                for t in abiertos.iter().rev() {
+                    out.push_str(&format!("</{}>", t));
+                    reparado = true;
+                }
+                pendientes = std::mem::take(&mut abiertos);
+                out.push_str(tag);
+            } else {
+                out.push_str(tag);
+                if !auto_cerrado {
+                    for t in std::mem::take(&mut pendientes) {
+                        out.push_str(&format!("<{}>", t));
+                        abiertos.push(t);
+                    }
+                }
+            }
+            continue;
+        }
+
+        if !INLINE_TAGS.contains(&nombre.as_str()) || auto_cerrado {
+            out.push_str(tag);
+            continue;
+        }
+
+        if !cierre {
+            abiertos.push(nombre);
+            out.push_str(tag);
+            continue;
+        }
+
+        match abiertos.iter().rposition(|t| *t == nombre) {
+            // Cierre huérfano: sin apertura no hay nada que cerrar, y dejarlo
+            // rompe el XML igual que la apertura sin cierre.
+            None => reparado = true,
+            Some(i) if i == abiertos.len() - 1 => {
+                abiertos.pop();
+                out.push_str(tag);
+            }
+            // Cruzado (`<em><strong></em></strong>`): cerramos los de arriba,
+            // cerramos este, y reabrimos los de arriba en su orden.
+            Some(i) => {
+                let arriba: Vec<String> = abiertos.split_off(i + 1);
+                for t in arriba.iter().rev() {
+                    out.push_str(&format!("</{}>", t));
+                }
+                abiertos.pop();
+                out.push_str(tag);
+                for t in arriba {
+                    out.push_str(&format!("<{}>", t));
+                    abiertos.push(t);
+                }
+                reparado = true;
+            }
+        }
+    }
+    out.push_str(&html[cursor..]);
+    for t in abiertos.iter().rev() {
+        out.push_str(&format!("</{}>", t));
+        reparado = true;
+    }
+    (out, reparado)
+}
+
+/// Saca los inline que quedan envolviendo solo espacios.
+///
+/// Los deja el propio rebalanceo: si el `<em>` cruzado abarcaba el salto de
+/// línea con el que arranca el párrafo siguiente, ese párrafo se abre con un
+/// `<em>\n</em>` que no pinta nada. Es válido pero es basura, y en el HTML del
+/// autor se ve como un cambio de formato fantasma.
+fn limpiar_inline_vacios(html: &str) -> String {
+    // El crate `regex` no tiene backreferences, así que el par se compara en
+    // el closure en vez de con `\1`.
+    let re = regex::Regex::new(
+        r"(?is)<(em|i|strong|b|span|a|sub|sup)\b[^<>]*>(\s*)</(em|i|strong|b|span|a|sub|sup)>",
+    )
+    .expect("regex de inline vacío válida");
+    let mut actual = html.to_string();
+    // En bucle porque los anidados (`<em><em>\n</em></em>`) se pelan de a una
+    // capa por pasada. Termina: cada pasada borra al menos un par de tags.
+    loop {
+        let siguiente = re
+            .replace_all(&actual, |caps: &regex::Captures| {
+                if caps[1].eq_ignore_ascii_case(&caps[3]) {
+                    caps[2].to_string()
+                } else {
+                    caps[0].to_string()
+                }
+            })
+            .into_owned();
+        if siguiente == actual {
+            return actual;
+        }
+        actual = siguiente;
+    }
 }
 
 fn read_part_meta_title(html_path: &Path) -> Option<String> {
@@ -1269,6 +1446,17 @@ fn embebido_reescalado(
 // ───────── XHTML builders ─────────
 
 fn xhtml_shell(title: &str, body: &str, lang: &str, body_class: &str) -> String {
+    // epubcheck rechaza `<title></title>` (RSC-005: "Element title must not be
+    // empty"), y Kobo corta la subida por eso. Cualquier caller puede traer el
+    // título vacío (book.json sin `titulo`, capítulo sin `titulo` en el meta,
+    // la página en blanco del back matter), así que el guard va acá y no en
+    // cada uno.
+    let fallback = if lang == "en" { "Untitled" } else { "Sin título" };
+    let title = if title.trim().is_empty() {
+        fallback
+    } else {
+        title
+    };
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
@@ -2926,6 +3114,7 @@ mod tests {
             stem: "1".into(),
             meta_title: None,
             content_html: String::new(),
+            reparado: false,
         };
         assert_eq!(part_label(&part, "parte", "es"), "Parte 1");
         assert_eq!(part_label(&part, "parte", "en"), "Part 1");
@@ -3075,6 +3264,105 @@ mod tests {
     }
 
     #[test]
+    fn una_italica_que_cruza_parrafos_se_reencaja_en_cada_uno() {
+        // El caso real: una canción importada de .docx con la cursiva abarcando
+        // las cuatro líneas de la estrofa. epubcheck lo mataba con RSC-016.
+        let (out, reparado) = rebalance_inline(
+            "<p><em><em>No quiero olvidar</p><p>\nNi quiero perder</p><p>\nTus besos con desdén</em></em></p>",
+        );
+        assert!(reparado);
+        assert_eq!(
+            out,
+            "<p><em><em>No quiero olvidar</em></em></p><p><em><em>\nNi quiero perder</em></em></p><p><em><em>\nTus besos con desdén</em></em></p>"
+        );
+        assert_eq!(out.matches("<em>").count(), out.matches("</em>").count());
+    }
+
+    #[test]
+    fn los_inline_que_solo_envuelven_espacios_se_borran() {
+        // Residuo típico del rebalanceo cuando la cursiva cruzada abarcaba el
+        // salto de línea con el que arranca el párrafo siguiente.
+        assert_eq!(
+            limpiar_inline_vacios("<p><em>\n</em>Texto</p>"),
+            "<p>\nTexto</p>"
+        );
+        // Anidados: se pelan las dos capas.
+        assert_eq!(limpiar_inline_vacios("<p><em><em> </em></em>x</p>"), "<p> x</p>");
+        // Con contenido real no se toca.
+        assert_eq!(
+            limpiar_inline_vacios("<p><em>hola</em></p>"),
+            "<p><em>hola</em></p>"
+        );
+    }
+
+    #[test]
+    fn el_markup_bien_anidado_no_se_toca() {
+        let bueno = "<p>Dijo <em>hola</em> y <strong>se fue</strong>.</p><hr class=\"scene-break\"/><p>Otro <i>día</i>.</p>";
+        let (out, reparado) = rebalance_inline(bueno);
+        assert_eq!(out, bueno);
+        assert!(!reparado, "no había nada que reparar");
+    }
+
+    #[test]
+    fn los_inline_cruzados_entre_si_se_desanidan() {
+        let (out, reparado) = rebalance_inline("<p><em>uno <strong>dos</em> tres</strong></p>");
+        assert!(reparado);
+        assert_eq!(out, "<p><em>uno <strong>dos</strong></em><strong> tres</strong></p>");
+    }
+
+    #[test]
+    fn un_cierre_huerfano_se_descarta() {
+        // Sin apertura, `</em>` rompe el XML igual que una apertura sin cierre.
+        let (out, reparado) = rebalance_inline("<p>texto</em> más</p>");
+        assert!(reparado);
+        assert_eq!(out, "<p>texto más</p>");
+    }
+
+    #[test]
+    fn lo_que_queda_abierto_al_final_se_cierra() {
+        let (out, reparado) = rebalance_inline("<p>final <em>abierto</p>");
+        assert!(reparado);
+        assert_eq!(out, "<p>final <em>abierto</em></p>");
+    }
+
+    #[test]
+    fn el_export_avisa_del_markup_reencajado() {
+        let (_root, book) = repo_con_publicados();
+        let cap = book.join("Cap1");
+        std::fs::create_dir_all(&cap).unwrap();
+        std::fs::write(
+            cap.join("1.html"),
+            "<p><em>cruza</p><p>dos párrafos</em></p>",
+        )
+        .unwrap();
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        assert!(
+            result.avisos.iter().any(|a| a.contains("mal anidadas")),
+            "avisos: {:?}",
+            result.avisos
+        );
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let parte = entries
+            .keys()
+            .find(|k| k.contains("ch1_p1"))
+            .expect("la parte del capítulo está en el zip")
+            .clone();
+        let xhtml = String::from_utf8(entries.get(&parte).unwrap().clone()).unwrap();
+        assert_eq!(xhtml.matches("<em>").count(), xhtml.matches("</em>").count());
+    }
+
+    #[test]
+    fn xhtml_shell_nunca_emite_title_vacio() {
+        for (lang, esperado) in [("es", "Sin título"), ("en", "Untitled")] {
+            let out = xhtml_shell("   ", "", lang, "blank-body");
+            assert!(!out.contains("<title></title>"), "{}", out);
+            assert!(out.contains(&format!("<title>{}</title>", esperado)), "{}", out);
+        }
+        let out = xhtml_shell("La Ciudad", "", "es", "chapter-title-body");
+        assert!(out.contains("<title>La Ciudad</title>"));
+    }
+
+    #[test]
     fn pagina_en_blanco_separa_la_novela_del_back_matter_solo_si_hay_alguno() {
         // Caso 1: hay catálogo (back matter) → la página en blanco existe,
         // va al spine, y NO entra ni a toc.xhtml ni a toc.ncx.
@@ -3082,6 +3370,9 @@ mod tests {
         let result = export_impl(book.to_str().unwrap()).unwrap();
         let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
         assert!(entries.contains_key("OEBPS/6_blank.xhtml"));
+        // epubcheck (y Kobo) rechazan `<title></title>` en cualquier XHTML.
+        let blank = String::from_utf8(entries.get("OEBPS/6_blank.xhtml").unwrap().clone()).unwrap();
+        assert!(!blank.contains("<title></title>"), "{}", blank);
         let opf = String::from_utf8(entries.get("OEBPS/content.opf").unwrap().clone()).unwrap();
         assert!(opf.contains(r#"idref="blank-separator""#));
         let toc = String::from_utf8(entries.get("OEBPS/toc.xhtml").unwrap().clone()).unwrap();

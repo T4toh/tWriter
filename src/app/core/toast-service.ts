@@ -2,10 +2,18 @@ import { Injectable, signal } from '@angular/core';
 
 export type ToastLevel = 'info' | 'success' | 'warn' | 'error';
 
+/** Lo que se abre al clickear el toast. Existe porque un toast tiene lugar
+ *  para una línea: el veredicto entra, las 20 líneas de epubcheck no. */
+export interface ToastDetalle {
+  titulo: string;
+  texto: string;
+}
+
 export interface Toast {
   id: number;
   level: ToastLevel;
   message: string;
+  detalle?: ToastDetalle;
 }
 
 const DEFAULT_DURATION_MS = 4000;
@@ -15,9 +23,14 @@ export class ToastService {
   readonly toasts = signal<Toast[]>([]);
   private nextId = 1;
 
-  show(message: string, level: ToastLevel = 'info', durationMs = DEFAULT_DURATION_MS): void {
+  show(
+    message: string,
+    level: ToastLevel = 'info',
+    durationMs = DEFAULT_DURATION_MS,
+    detalle?: ToastDetalle,
+  ): void {
     const id = this.nextId++;
-    const toast: Toast = { id, level, message };
+    const toast: Toast = { id, level, message, detalle };
     this.toasts.update((ts) => [...ts, toast]);
     setTimeout(() => this.dismiss(id), durationMs);
   }
@@ -37,20 +50,20 @@ export class ToastService {
     this.toasts.update((ts) => ts.map((t) => (t.id === id ? { ...t, message } : t)));
   }
 
-  success(message: string, durationMs?: number): void {
-    this.show(message, 'success', durationMs);
+  success(message: string, durationMs?: number, detalle?: ToastDetalle): void {
+    this.show(message, 'success', durationMs, detalle);
   }
 
-  info(message: string, durationMs?: number): void {
-    this.show(message, 'info', durationMs);
+  info(message: string, durationMs?: number, detalle?: ToastDetalle): void {
+    this.show(message, 'info', durationMs, detalle);
   }
 
-  warn(message: string, durationMs?: number): void {
-    this.show(message, 'warn', durationMs);
+  warn(message: string, durationMs?: number, detalle?: ToastDetalle): void {
+    this.show(message, 'warn', durationMs, detalle);
   }
 
-  error(message: string, durationMs?: number): void {
-    this.show(message, 'error', durationMs ?? 6000);
+  error(message: string, durationMs?: number, detalle?: ToastDetalle): void {
+    this.show(message, 'error', durationMs ?? 6000, detalle);
   }
 
   dismiss(id: number): void {

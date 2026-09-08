@@ -389,12 +389,35 @@ hr::before,
   letter-spacing: 0.5em;
 }
 
-/* ─────────────────── Blockquote ─────────────────── */
+/* ─────────────────── Verso: canciones y poemas ─────────────────── */
+/* `blockquote` es el bloque de verso de la novela —la canción del bardo, un
+   poema, una inscripción—, no una cita en prosa: no hay ninguna en el corpus.
+   Se estila el tag pelado a propósito, así el autor lo aplica con el atajo de
+   cita que el editor ya trae y no hace falta marcado propio.
+
+   Un <p> por verso y un párrafo vacío para separar estrofas. La itálica sale
+   del bloque, así que el texto no necesita <em>: eso era el arreglo a mano de
+   antes (versos centrados uno por uno, con <br> de relleno entre estrofas). */
 blockquote {
-  margin: 1em 1.5em;
+  margin: 1.6em 0;
   font-style: italic;
+  text-align: center;
 }
 
+/* Los versos no llevan la sangría de primera línea ni el justificado de la
+   prosa: se centran como bloque. `margin: 0` los deja como renglones seguidos
+   y el espacio entre estrofas lo da el párrafo vacío. */
+.chapter-content blockquote p,
+blockquote p {
+  margin: 0;
+  text-indent: 0;
+  text-align: center;
+}
+
+/* Énfasis adentro de un bloque ya en itálica: se invierte a redonda, que es
+   la convención tipográfica. Ojo con los capítulos importados de .docx, donde
+   la cursiva venía en el texto: ahí hay que sacar el <em> al pasar el bloque
+   a verso, o los versos salen redondos. */
 blockquote i,
 blockquote em {
   font-style: normal;

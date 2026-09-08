@@ -596,3 +596,45 @@
   }
 }
 
+
+/* Estado de epubcheck: misma columna de texto que las opciones con checkbox,
+   pero sin control adelante — no hay nada que togglear, el validador está o no. */
+.epubcheck-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0 0;
+}
+
+.epubcheck-salida {
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 8lh;
+  overflow-y: auto;
+}
+
+/* Con epubcheck ya instalado las instrucciones son para la otra PC: van
+   colapsadas para no competir con el estado. */
+.epubcheck-instalar {
+  summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--fg-muted);
+  }
+
+  summary:hover {
+    color: var(--fg);
+  }
+
+  .install-options {
+    margin-top: 6px;
+  }
+}

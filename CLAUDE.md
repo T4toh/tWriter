@@ -58,6 +58,22 @@ Cada capítulo en el repo `Novelas/` es:
 
 El editor TipTap se configura para producir/aceptar **solo este subset HTML**. Cualquier feature nueva del editor debe respetar la lista.
 
+**`blockquote` es el bloque de verso**, no una cita en prosa: canciones,
+poemas, inscripciones. Sale centrado y en itálica, con un `<p>` por verso y
+un párrafo vacío para separar estrofas (`epub_style.css` + el espejo en
+`editor.scss`). Se estila el tag pelado a propósito — no hay ni una cita en
+prosa en el corpus — así el autor lo marca con el atajo de cita que trae
+StarterKit, sin extensión ni botón propio. Si algún día aparece una cita de
+verdad, ahí sí hace falta separar los dos casos con una clase.
+
+**El export garantiza XHTML bien formado**, no importa cómo esté el archivo
+fuente: `load_part` pasa cada parte por `close_void_elements` →
+`rebalance_inline` → `limpiar_inline_vacios`. El caso que lo motivó son las
+itálicas que cruzan párrafos (`<p><em>Uno</p><p>Dos</em></p>`, que el HTML
+tolerante acepta y el EPUB rechaza con RSC-016): se reencajan cerrando y
+reabriendo en cada bloque, y el export **avisa** qué partes tuvo que
+reparar, porque el `.html` en disco sigue roto.
+
 ## Comandos
 
 ```bash
@@ -140,6 +156,14 @@ El scaffold inicial usa nombres `app.component.*` — refactorizar a convencione
 
 - **Pandoc**: bundleado como `external bin` en `src-tauri/binaries/pandoc-<target>`, declarado en `tauri.conf.json`. Usado solo al importar `.docx`/`.odt`.
 - **LanguageTool**: NO sidecar. Corre como Docker container del usuario (`localhost:8081`). La feature de gramática se habilita solo si se detecta el endpoint.
+- **epubcheck**: NO bundleado (es un jar y necesita JVM). Se detecta el
+  binario instalado —`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`, con
+  fallback al PATH, igual que `pandoc_bin`— y cada export se valida con él
+  (`epubcheck.rs`). Sin epubcheck el EPUB sale igual, sin veredicto, y
+  Configuración → General muestra cómo instalarlo por sistema. Ojo: existir no
+  alcanza, el wrapper de Homebrew hace `exec` de una JVM, así que el exit code
+  manda; salir mal **sin** una línea de diagnóstico es falla de la herramienta,
+  no un EPUB inválido.
 - **CSS del EPUB**: `src-tauri/resources/epub_style.css` es un `resource`, no
   un `include_str!`. Se lee en runtime (`epub.rs::css_template`): en debug
   desde `CARGO_MANIFEST_DIR`, en release vía `BaseDirectory::Resource`.

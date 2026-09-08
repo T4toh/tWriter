@@ -1,25 +1,27 @@
+// Barra de una línea: mazo chico a la izquierda, nombre + detalles al lado,
+// controles al otro extremo. Antes era una tarjeta con la tapa a 90px, o sea
+// 135px de alto por el 2/3, y la info nunca llegaba a llenar eso: quedaba un
+// bloque alto medio vacío arriba de la estantería.
 .saga-header {
-  position: relative;
   display: flex;
-  gap: 14px;
-  padding: 14px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  max-width: 720px;
-  margin: 0 auto;
 }
 
 .cover-slot {
   position: relative;
-  width: 90px;
+  width: 28px;
   flex-shrink: 0;
   aspect-ratio: 2 / 3;
 }
 
 // Mazo: la del frente ocupa el slot, las de atrás asoman por arriba con una
-// rotación leve. El bleed vertical entra en el padding del header y el
-// horizontal en el gap con .info, así que no empuja el layout.
+// rotación leve. El bleed entra en el padding del header, así que no empuja
+// el layout ni lo corta el borde.
 .deck-card {
   position: absolute;
   inset: 0;
@@ -33,18 +35,18 @@
   height: 100%;
   object-fit: cover;
   display: block;
-  border-radius: 3px;
+  border-radius: 2px;
   background: var(--bg-soft);
   border: 1px solid var(--border);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 15%);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 15%);
 
   &[data-pos='1'] {
-    transform: translateY(-7px) rotate(-3deg) scale(0.96);
+    transform: translateY(-3px) rotate(-3deg) scale(0.96);
     filter: brightness(0.88);
   }
 
   &[data-pos='2'] {
-    transform: translateY(-13px) rotate(4deg) scale(0.92);
+    transform: translateY(-6px) rotate(4deg) scale(0.92);
     filter: brightness(0.78);
   }
 }
@@ -53,58 +55,35 @@
   opacity: 0.7;
 }
 
-.borrowed-tag {
-  position: absolute;
-  z-index: 10;
-  bottom: 4px;
-  left: 4px;
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: rgb(0 0 0 / 70%);
-  color: white;
-  padding: 1px 5px;
-  border-radius: 2px;
-  font-weight: 600;
-}
-
+// A 28px no cabe texto, y el nombre ya está al lado: el placeholder es solo
+// el hueco de la tapa que falta.
 .cover-placeholder {
   width: 100%;
   height: 100%;
-  border-radius: 3px;
+  border-radius: 2px;
   background: var(--bg-soft);
   border: 1px solid var(--border);
   box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px;
-  text-align: center;
-  font-size: 11px;
-  color: var(--fg-muted);
-  font-style: italic;
-
-  span {
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 4;
-    -webkit-box-orient: vertical;
-    line-height: 1.2;
-  }
 }
 
 .info {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
   min-width: 0;
-}
-
-.title-row {
   display: flex;
   align-items: baseline;
-  gap: 0.6em;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+// Separador entre los tramos de la línea. El `SAGA` va pegado al nombre (es
+// su etiqueta, no un dato más), y el `·` de idioma/diccionario ya viene
+// dentro de `.meta`.
+.author::before,
+.hint::before,
+.meta::before {
+  content: '·';
+  margin-right: 8px;
+  color: var(--fg-muted);
 }
 
 .kind {
@@ -118,41 +97,43 @@
 
 .title {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.2;
   color: var(--fg);
 }
 
 .author {
-  margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--fg);
 }
 
 .hint {
-  margin: 0;
   font-size: 11px;
   color: var(--fg-muted);
   font-style: italic;
 }
 
 .meta {
-  margin-top: auto;
   font-size: 11px;
   color: var(--fg-muted);
   font-family: var(--font-mono);
-  padding-top: 4px;
 }
 
-.meta-item {
-  margin-right: 4px;
+.borrowed-tag {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-weight: 600;
 }
 
 .actions {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+  flex-shrink: 0;
   display: flex;
   gap: 4px;
 }
