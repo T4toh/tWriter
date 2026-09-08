@@ -10,6 +10,7 @@ import {
   stripInflection,
 } from '../dictionary/derived-forms';
 import { ChapterService } from './chapter-service';
+import { ReglaDesactivada } from './types';
 
 export interface SagaConfig {
   nombre: string;
@@ -18,6 +19,7 @@ export interface SagaConfig {
   variante_es?: string | null;
   variante_en?: string | null;
   diccionario?: string[] | null;
+  reglas_lt_desactivadas?: ReglaDesactivada[] | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -57,6 +59,12 @@ export class SagaContextService {
     const v = this.config()?.variante_en;
     return v && v.trim() ? v : null;
   });
+  /** Reglas de LT desactivadas en la saga activa. `GrammarService` manda los
+   *  ids como `disabledRules`; el modal de config de saga muestra la lista
+   *  entera para poder revivir una. */
+  readonly reglasLtDesactivadas = computed<ReglaDesactivada[]>(
+    () => this.config()?.reglas_lt_desactivadas ?? [],
+  );
 
   constructor() {
     effect(() => {
@@ -134,6 +142,54 @@ export class SagaContextService {
     const next: SagaConfig = { ...cfg, [key]: code };
     await invoke('set_saga_config', { sagaPath: path, config: next });
     this.config.set(next);
+  }
+
+  /** Mata una regla de LT para esta saga. Guarda la oración que la disparó
+   *  como registro del falso positivo. Idempotente: si el id ya estaba, no
+   *  reescribe (el ejemplo viejo es el primero que se vio, y sirve igual). */
+  async setReglaLtDesactivada(
+    regla: string,
+    ejemplo: string,
+  ): Promise<{ ok: boolean; reason?: string }> {
+    const path = this.sagaPath();
+    const cfg = this.config();
+    if (!path || !cfg) return { ok: false, reason: 'No hay novela activa' };
+    const actuales = cfg.reglas_lt_desactivadas ?? [];
+    if (actuales.some((r) => r.regla === regla)) return { ok: true };
+    const next: SagaConfig = {
+      ...cfg,
+      reglas_lt_desactivadas: [...actuales, { regla, ejemplo }],
+    };
+    return this.persistConfig(path, next);
+  }
+
+  /** Revive una regla desactivada (desde el modal de config de saga). */
+  async quitarReglaLtDesactivada(regla: string): Promise<{ ok: boolean; reason?: string }> {
+    const path = this.sagaPath();
+    const cfg = this.config();
+    if (!path || !cfg) return { ok: false, reason: 'No hay novela activa' };
+    const next: SagaConfig = {
+      ...cfg,
+      reglas_lt_desactivadas: (cfg.reglas_lt_desactivadas ?? []).filter(
+        (r) => r.regla !== regla,
+      ),
+    };
+    return this.persistConfig(path, next);
+  }
+
+  /** Misma guarda que `addToDictionary`: si el autor cambió de saga mientras
+   *  el invoke estaba en vuelo, `next` es de la saga anterior y no se instala. */
+  private async persistConfig(
+    path: string,
+    next: SagaConfig,
+  ): Promise<{ ok: boolean; reason?: string }> {
+    try {
+      await invoke('set_saga_config', { sagaPath: path, config: next });
+      if (this.sagaPath() === path) this.config.set(next);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, reason: String(err) };
+    }
   }
 
   async addToDictionary(word: string): Promise<{ ok: boolean; reason?: string }> {

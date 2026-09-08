@@ -29,6 +29,9 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
         [style.max-height.px]="clippedMaxHeight()"
         (click)="$event.stopPropagation()"
       >
+        <div class="grammar-pop-head">
+          <span class="grammar-pop-rule">{{ m.ruleId }}</span>
+        </div>
         <div class="msg">{{ m.message }}</div>
         @if (hasAnySuggestion()) {
           <ul class="reps">
@@ -51,6 +54,14 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
         <footer class="grammar-pop-footer">
           <div class="footer-actions">
             <button type="button" class="ignore-btn" (click)="dismiss.emit()">Ignorar</button>
+            <button
+              type="button"
+              class="ignore-btn"
+              (click)="disableRule.emit()"
+              [title]="'Desactivar la regla ' + m.ruleId + ' en toda esta novela'"
+            >
+              Nunca más esta regla
+            </button>
             @if (canAddToDict()) {
               <button
                 type="button"
@@ -93,6 +104,7 @@ export class GrammarPopover {
   apply = output<string>();
   dismiss = output<void>();
   addToDict = output<void>();
+  disableRule = output<void>();
   canDeriveForms = input<boolean>(false);
   addToDictWithForms = output<void>();
   suggestions = computed(() => {

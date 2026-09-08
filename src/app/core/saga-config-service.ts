@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
-import { ThemeRef, TreeNode } from './types';
+import { ReglaDesactivada, ThemeRef, TreeNode } from './types';
 
 export type ChapterPrefix = 'none' | 'decimal' | 'roman';
 
@@ -21,6 +21,7 @@ export interface SagaConfig {
   formato_parte?: 'raw' | 'parte' | 'punto' | null;
   finalizada?: boolean | null;
   theme?: ThemeRef | null;
+  reglas_lt_desactivadas?: ReglaDesactivada[] | null;
 }
 
 @Injectable({ providedIn: 'root' })
