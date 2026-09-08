@@ -154,7 +154,13 @@ El scaffold inicial usa nombres `app.component.*` — refactorizar a convencione
 
 ## Sidecars y servicios externos
 
-- **Pandoc**: bundleado como `external bin` en `src-tauri/binaries/pandoc-<target>`, declarado en `tauri.conf.json`. Usado solo al importar `.docx`/`.odt`.
+- **Pandoc**: NO bundleado, aunque este archivo lo dijo hasta el 2026-09-08.
+  No existe `src-tauri/binaries/` ni un `externalBin` en `tauri.conf.json`: lo
+  que hay es `import::pandoc_bin()`, que prueba `/opt/homebrew/bin/pandoc`,
+  `/usr/local/bin/pandoc` y `/usr/bin/pandoc` y cae al PATH. O sea que el
+  usuario lo instala (`brew install pandoc`, u `optdepends` en el AUR) y la
+  importación de `.docx`/`.odt` se habilita si está. Mismo patrón que
+  epubcheck.
 - **LanguageTool**: NO sidecar. Corre como Docker container del usuario (`localhost:8081`). La feature de gramática se habilita solo si se detecta el endpoint.
 - **epubcheck**: NO bundleado (es un jar y necesita JVM). Se detecta el
   binario instalado —`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`, con

@@ -60,11 +60,16 @@ jobs:
 
             **Linux (Debian / Ubuntu)**: descargar `.deb` y `sudo apt install ./twriter_*.deb`.
 
+            **Herramientas opcionales (todas las plataformas)**: la app anda sin ellas y avisa adentro cuándo faltan.
+            · `pandoc` — importar `.docx`/`.odt`.
+            · `epubcheck` — validar el EPUB al exportarlo, el mismo chequeo que corre la tienda al recibirlo (`sudo pacman -S epubcheck` en Arch, `brew install epubcheck` en macOS, [release](https://github.com/w3c/epubcheck/releases) a mano en Windows; necesita Java 11+).
+            · un runtime de containers — LanguageTool para gramática (ver abajo en macOS).
+
             **Windows**: descargar `.msi` o `.exe` (NSIS).
 
             **macOS (Apple Silicon)**: descargar el `.dmg` con `aarch64`. **macOS (Intel)**: descargar el `.dmg` con `x64`.
             La app está firmada ad-hoc (sin notarización de Apple): en el primer arranque hacé **click derecho → Abrir**, o corré `xattr -dr com.apple.quarantine /Applications/tWriter.app`.
-            Para importar `.docx`/`.odt` necesitás pandoc: `brew install pandoc`.
+            Las herramientas opcionales van con Homebrew: `brew install pandoc epubcheck`.
 
             **macOS — LanguageTool (gramática)**: la app levanta LanguageTool en un container y autodetecta el runtime que tengas. Elegí uno: Apple container (`brew install container && container system start`), colima (`brew install colima docker && colima start`) o Podman (`brew install podman && podman machine init && podman machine start`). Si usás Docker y antes tuviste Docker Desktop desinstalado, borrá la línea `"credsStore": "desktop"` de `~/.docker/config.json` (rompe el `docker pull`).
           releaseDraft: true
