@@ -109,6 +109,8 @@ interface ToolbarState {
   bold: boolean;
   italic: boolean;
   underline: boolean;
+  /** Bloque de verso (`blockquote`): canciones, poemas, inscripciones. */
+  verso: boolean;
   alignLeft: boolean;
   alignCenter: boolean;
   alignRight: boolean;
@@ -121,6 +123,7 @@ const EMPTY_STATE: ToolbarState = {
   bold: false,
   italic: false,
   underline: false,
+  verso: false,
   alignLeft: false,
   alignCenter: false,
   alignRight: false,
@@ -931,6 +934,11 @@ export class Editor implements AfterViewInit, OnDestroy {
     }
     entries.push(
       { kind: 'separator' },
+      {
+        label: s.verso ? 'Quitar bloque de verso' : 'Bloque de verso (canción)',
+        kbd: atajo('B', true),
+        onClick: () => this.toggleVerso(),
+      },
       { label: 'Salto de escena', kbd: '— —', onClick: () => this.insertSceneBreak() },
     );
     if (tesauro) {
@@ -953,6 +961,15 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   protected toggleUnderline(): void {
     this.tiptap?.chain().focus().toggleUnderline().run();
+  }
+
+  /** Envuelve/desenvuelve la selección en el bloque de verso (`blockquote`):
+   *  centrado, itálica y aire contra la prosa salen del estilo, así que marcar
+   *  una canción es esto y nada más — nada de centrar verso por verso ni
+   *  poner la cursiva a mano. Es el mismo comando que `Mod+Shift+B` y que
+   *  escribir `> ` al empezar el párrafo. */
+  protected toggleVerso(): void {
+    this.tiptap?.chain().focus().toggleBlockquote().run();
   }
 
   protected setAlign(align: 'left' | 'center' | 'right'): void {
@@ -2194,6 +2211,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       bold: e.isActive('bold'),
       italic: e.isActive('italic'),
       underline: e.isActive('underline'),
+      verso: e.isActive('blockquote'),
       alignLeft: e.isActive({ textAlign: 'left' }),
       alignCenter: e.isActive({ textAlign: 'center' }),
       alignRight: e.isActive({ textAlign: 'right' }),
