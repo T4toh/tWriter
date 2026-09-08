@@ -1,67 +1,4 @@
-:host {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 0 8px;
-  height: 41px;
-  box-sizing: border-box;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-soft);
-  flex-shrink: 0;
-}
-
-.tb-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--fg-muted);
-  border-radius: 4px;
-  cursor: pointer;
-  font-family: var(--font-ui);
-  font-size: 13px;
-  padding: 0;
-}
-
-.tb-btn:hover {
-  background: var(--border);
-  color: var(--fg);
-}
-
-.tb-btn.active {
-  background: var(--accent);
-  color: var(--bg);
-}
-
-.tb-btn.active:hover {
-  background: var(--accent);
-  filter: brightness(1.1);
-}
-
-.tb-btn .ico {
-  font-weight: 600;
-  font-size: 13px;
-  line-height: 1;
-}
-
-.tb-btn .ico.bold {
-  font-weight: 700;
-}
-
-.tb-btn .ico.italic {
-  font-style: italic;
-  font-family: var(--font-body);
-}
+@use '../shared/editor-chrome';
 
 .tb-btn .ico.strike {
   text-decoration: line-through;
@@ -73,36 +10,6 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.05em;
-}
-
-.tb-btn.width-toggle .ico {
-  font-size: 16px;
-  letter-spacing: -0.05em;
-}
-
-.font-size-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--fg-muted);
-  min-width: 18px;
-  text-align: center;
-}
-
-.sep {
-  width: 1px;
-  height: 18px;
-  background: var(--border);
-  margin: 0 4px;
-}
-
-.spacer {
-  flex: 1;
-}
-
-.editor-stack {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
 }
 
 .editor-host {
@@ -243,24 +150,6 @@
   > p {
     font-style: italic;
   }
-}
-
-.status-bar {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.5rem 1rem;
-  border-top: 1px solid var(--border);
-  background: var(--bg-soft);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  color: var(--fg-muted);
-  flex-shrink: 0;
-}
-
-.title {
-  font-weight: 500;
-  color: var(--fg);
 }
 
 .badge {
