@@ -103,6 +103,14 @@ export interface GrammarMatch {
   replacements: string[];
 }
 
+/** Regla de LT que el autor mató para una saga, con la oración que la disparó.
+ *  Espeja `ReglaDesactivada` de `saga_config.rs`. El `ejemplo` no lo usa el
+ *  check: es el registro del falso positivo. */
+export interface ReglaDesactivada {
+  regla: string;
+  ejemplo: string;
+}
+
 export type RaeCategory = 'pending-conversion' | 'char' | 'structure' | 'typo';
 export type RaeSeverity = 'error' | 'warning';
 

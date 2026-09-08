@@ -66,6 +66,33 @@
             />
           </label>
         </div>
+        @if (reglasLtDesactivadas().length > 0) {
+          <div class="row section-divider">
+            <span class="section-label">Reglas de LanguageTool desactivadas</span>
+          </div>
+          <div class="row">
+            <ul class="reglas-lt">
+              @for (r of reglasLtDesactivadas(); track r.regla) {
+                <li>
+                  <div class="regla-lt-texto">
+                    <span class="regla-lt-id">{{ r.regla }}</span>
+                    @if (r.ejemplo) {
+                      <span class="regla-lt-ejemplo">{{ r.ejemplo }}</span>
+                    }
+                  </div>
+                  <button
+                    type="button"
+                    (click)="quitarReglaLt(r.regla)"
+                    title="Volver a activar esta regla"
+                  >
+                    Reactivar
+                  </button>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
         <div class="row">
           <label>
             <span>Tapa de saga (imagen)</span>

@@ -12,6 +12,16 @@ use crate::theme::ThemeRef;
 /// legacy `diccionario` de saga.json (que se sigue leyendo solo para migrar).
 const DICT_FILE: &str = "diccionario.txt";
 
+/// Una regla de LanguageTool que el autor mató, con la oración que la disparó.
+/// El `ejemplo` no lo usa el check: es el registro del falso positivo, para
+/// poder reportarlo upstream sin llevar un txt aparte.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct ReglaDesactivada {
+    pub regla: String,
+    #[serde(default)]
+    pub ejemplo: String,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct SagaConfig {
     #[serde(default)]
@@ -56,6 +66,12 @@ pub struct SagaConfig {
     /// Tema base + overrides per-campo. Heredado por libros que no definan `theme` propio.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<ThemeRef>,
+    /// Reglas de LanguageTool desactivadas para esta saga. Viajan a `/v2/check`
+    /// como `disabledRules` (ver `grammar.rs::disabled_rules_param`). A
+    /// diferencia del diccionario, viven acá y no en un `.txt` aparte: son
+    /// pocas y no se editan desde dos PCs a la vez como las palabras.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reglas_lt_desactivadas: Option<Vec<ReglaDesactivada>>,
 }
 
 #[tauri::command]
@@ -262,6 +278,32 @@ mod tests {
                 .map(|s| s.to_string()),
         );
         assert_eq!(out, vec!["alfa", "Beta", "Zeta"]);
+    }
+
+    #[test]
+    fn reglas_lt_desactivadas_sobreviven_el_round_trip_por_disco() {
+        // Si el campo faltara en el struct, serde lo descartaría al guardar y
+        // la regla desactivada volvería a marcar en el próximo arranque, sin
+        // ningún error (la trampa documentada en CLAUDE.md para settings.json).
+        let dir = temp_saga();
+        let path: String = dir.to_string_lossy().into();
+        let cfg = SagaConfig {
+            nombre: "S".into(),
+            reglas_lt_desactivadas: Some(vec![ReglaDesactivada {
+                regla: "TU_TILDE".into(),
+                ejemplo: "No te disculpes, me ha sorprendido tu… conjuro.".into(),
+            }]),
+            ..Default::default()
+        };
+        set_saga_config(path.clone(), cfg).unwrap();
+        let got = get_saga_config(path).unwrap();
+        let reglas = got.reglas_lt_desactivadas.expect("campo perdido al guardar");
+        assert_eq!(reglas.len(), 1);
+        assert_eq!(reglas[0].regla, "TU_TILDE");
+        assert_eq!(
+            reglas[0].ejemplo,
+            "No te disculpes, me ha sorprendido tu… conjuro."
+        );
     }
 
     #[test]

@@ -15,6 +15,9 @@ interface GrammarCfg {
   variantEn: string;
   /** `level=picky` en `/v2/check`: reglas extra de texto formal. */
   picky: boolean;
+  /** Ids de reglas que el autor mató en la saga activa. Van como
+   *  `disabledRules` en `/v2/check` (el backend arma el CSV). */
+  disabledRules: string[];
 }
 
 /** Qué pasó y con qué se arregla. Espeja `Remedy` de `grammar.rs`. */
@@ -126,6 +129,7 @@ export class GrammarService {
       variantEs: this.sagaCtx.varianteEs() ?? this.settings.grammarVariantEs(),
       variantEn: this.sagaCtx.varianteEn() ?? this.settings.grammarVariantEn(),
       picky: this.settings.grammarPicky(),
+      disabledRules: this.sagaCtx.reglasLtDesactivadas().map((r) => r.regla),
     };
   }
 

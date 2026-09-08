@@ -665,6 +665,11 @@ pub struct GrammarConfig {
     /// LanguageTool Premium / self-hosted con auth. Solo aplica si `mode == "custom"`.
     #[serde(default, rename = "ltUsername")]
     pub lt_username: Option<String>,
+    /// Ids de reglas de LT que el autor mató para esta saga (falsos positivos).
+    /// Van como `disabledRules` en `/v2/check`. `None` o lista vacía == no
+    /// mandar el param.
+    #[serde(default, rename = "disabledRules")]
+    pub disabled_rules: Option<Vec<String>>,
     /// Override transitorio del apiKey, solo usado por el modal de gramática para
     /// poder hacer "Probar conexión" antes de persistir. En operación normal
     /// (check_grammar de cada chunk) este campo viene `None` y el backend lo
@@ -682,6 +687,7 @@ impl std::fmt::Debug for GrammarConfig {
             .field("variant_es", &self.variant_es)
             .field("variant_en", &self.variant_en)
             .field("picky", &self.picky)
+            .field("disabled_rules", &self.disabled_rules)
             .field("lt_username", &self.lt_username)
             .field("lt_api_key", &self.lt_api_key.as_ref().map(|_| "***"))
             .finish()
@@ -888,6 +894,24 @@ fn level_for(cfg: &GrammarConfig) -> &'static str {
     }
 }
 
+/// `disabledRules` del request, o `None` si no hay ninguna. LT interpreta un
+/// `disabledRules=` vacío como "desactivá nada de lo que traés por default",
+/// que no es lo mismo que omitirlo, así que la lista vacía no manda el param.
+fn disabled_rules_param(cfg: &GrammarConfig) -> Option<String> {
+    let ids = cfg.disabled_rules.as_ref()?;
+    let csv = ids
+        .iter()
+        .map(|id| id.trim())
+        .filter(|id| !id.is_empty())
+        .collect::<Vec<_>>()
+        .join(",");
+    if csv.is_empty() {
+        None
+    } else {
+        Some(csv)
+    }
+}
+
 async fn post_check(
     client: &reqwest::Client,
     base: &str,
@@ -903,6 +927,9 @@ async fn post_check(
     ];
     if lang == "auto" {
         params.push(("preferredVariants", preferred_variants(cfg)));
+    }
+    if let Some(ids) = disabled_rules_param(cfg) {
+        params.push(("disabledRules", ids));
     }
     // Premium / self-hosted auth: solo en modo custom, ambos campos requeridos.
     // NUNCA loggear el apiKey en plain text.
@@ -1516,6 +1543,44 @@ mod tests {
 
         let off: GrammarConfig = serde_json::from_str(r#"{"mode":"local","picky":false}"#).unwrap();
         assert_eq!(level_for(&off), "default");
+    }
+
+    #[test]
+    fn disabled_rules_param_solo_cuando_hay_reglas() {
+        // Sin la clave (saga sin reglas desactivadas, o config vieja) el param
+        // NO se manda: `disabledRules=` vacío en LT desactiva el default de la
+        // request y no es lo mismo que no mandarlo.
+        let cfg: GrammarConfig = serde_json::from_str(r#"{"mode":"local"}"#).unwrap();
+        assert_eq!(disabled_rules_param(&cfg), None);
+
+        let vacio: GrammarConfig =
+            serde_json::from_str(r#"{"mode":"local","disabledRules":[]}"#).unwrap();
+        assert_eq!(disabled_rules_param(&vacio), None);
+
+        let una: GrammarConfig =
+            serde_json::from_str(r#"{"mode":"local","disabledRules":["TU_TILDE"]}"#).unwrap();
+        assert_eq!(disabled_rules_param(&una), Some("TU_TILDE".to_string()));
+
+        // Varias van CSV, que es el formato que pide /v2/check.
+        let varias: GrammarConfig = serde_json::from_str(
+            r#"{"mode":"local","disabledRules":["TU_TILDE","AGREEMENT_POSTPONED_ADJ"]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            disabled_rules_param(&varias),
+            Some("TU_TILDE,AGREEMENT_POSTPONED_ADJ".to_string())
+        );
+
+        // Basura defensiva: ids vacíos o con espacios sobrantes. Un id vacío
+        // colado en la lista dejaría una coma suelta en el CSV.
+        let sucia: GrammarConfig = serde_json::from_str(
+            r#"{"mode":"local","disabledRules":["  ","  TU_TILDE  ","",  "OTRA"]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            disabled_rules_param(&sucia),
+            Some("TU_TILDE,OTRA".to_string())
+        );
     }
 
     #[test]

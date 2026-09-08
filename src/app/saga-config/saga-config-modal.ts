@@ -95,6 +95,18 @@ export class SagaConfigModal {
     this.update('variante_en', value === '' ? null : value);
   }
 
+  protected readonly reglasLtDesactivadas = computed(
+    () => this.config()?.reglas_lt_desactivadas ?? [],
+  );
+
+  /** Revive una regla de LT. Se aplica al guardar, como el resto del modal. */
+  protected quitarReglaLt(regla: string): void {
+    this.update(
+      'reglas_lt_desactivadas',
+      this.reglasLtDesactivadas().filter((r) => r.regla !== regla),
+    );
+  }
+
   constructor() {
     effect(() => {
       const node = this.editing();
@@ -254,6 +266,13 @@ export class SagaConfigModal {
         mostrar_numero_parte: cfg.mostrar_numero_parte ?? null,
         formato_parte: cfg.formato_parte ?? null,
         finalizada: cfg.finalizada ?? null,
+        // Mismo cuidado que el diccionario: el whitelist de arriba es la lista
+        // COMPLETA de lo que se guarda, así que un campo que el modal no edita
+        // pero tampoco preserva se borra al guardar, sin ningún error.
+        reglas_lt_desactivadas:
+          cfg.reglas_lt_desactivadas && cfg.reglas_lt_desactivadas.length > 0
+            ? cfg.reglas_lt_desactivadas
+            : null,
         theme: this.buildThemeRef(),
       };
       const finalPath = await this.nodeActions.renameFolderIfNeeded(node, cleaned.nombre);

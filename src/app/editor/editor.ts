@@ -32,6 +32,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
 import TextAlign from '@tiptap/extension-text-align';
 import { ChapterService, PaneId } from '../core/chapter-service';
+import { auditAnchor } from '../core/audit-snippet';
 import { CursorRestoreService } from '../core/cursor-restore-service';
 import { SagaContextService } from '../core/saga-context-service';
 import { DebugService } from '../core/debug-service';
@@ -1268,6 +1269,27 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.grammarMatches.update((list) => list.filter((m) => m.id !== dismissedId));
     this.applyDecorations(this.grammarMatches());
     this.grammarPopover.set(null);
+  }
+
+  /** "Nunca más esta regla": la persiste en la saga y limpia TODAS sus marcas
+   *  del capítulo, no solo la del popover — el próximo check ya no las trae. */
+  protected async disableCurrentRule(): Promise<void> {
+    const popover = this.grammarPopover();
+    if (!popover || !this.tiptap) return;
+    const regla = popover.match.ruleId;
+    const { plain } = extractPlainText(this.tiptap.state.doc);
+    // El ejemplo es el registro del falso positivo: la oración sin cruzar el
+    // borde del párrafo, que es justo lo que `auditAnchor` ya recorta.
+    const ejemplo = auditAnchor(plain, popover.match.offset, popover.match.length);
+    const result = await this.sagaCtx.setReglaLtDesactivada(regla, ejemplo);
+    this.grammarPopover.set(null);
+    if (!result.ok) {
+      this.toast.error(result.reason ?? 'No se pudo desactivar la regla');
+      return;
+    }
+    this.grammarMatches.update((list) => list.filter((m) => m.ruleId !== regla));
+    this.applyDecorations(this.grammarMatches());
+    this.toast.success(`Regla ${regla} desactivada en esta novela`);
   }
 
   protected async addCurrentToDictionary(): Promise<void> {
