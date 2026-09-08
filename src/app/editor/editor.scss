@@ -103,9 +103,12 @@
         margin: 0;
       }
 
+      // Igual que en el EPUB: el <em> del verso no se invierte a redonda. La
+      // cursiva de las canciones viene en el texto (de los .docx), así que
+      // invertirla obligaba a borrarla para poder aplicar el bloque.
       em,
       i {
-        font-style: normal;
+        font-style: italic;
       }
     }
 
