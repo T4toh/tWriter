@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { detectLang } from '../dialogos/detect';
 import { DebugService } from './debug-service';
-import { ExportProgress, textoDeFase } from './export-progreso';
+import { ExportProgress, resumenDeAviso, textoDeFase } from './export-progreso';
 import { ExportsService } from './exports-service';
 import { GitService } from './git-service';
 import { NavigationService } from './navigation-service';
@@ -452,7 +452,17 @@ export class ChapterService {
       // tiene por qué abrir el archivo para enterarse.
       for (const aviso of result.avisos ?? []) {
         this.debug.warn('epub', `${node.name}: ${aviso}`);
-        this.toast.warn(aviso);
+        // Los avisos son frases enteras (qué pasó, dónde y qué hacer): en el
+        // toast entra la cabeza y el resto se lee al clickearlo.
+        const corto = resumenDeAviso(aviso);
+        if (corto === aviso) {
+          this.toast.warn(aviso);
+        } else {
+          this.toast.warn(corto, EPUBCHECK_TOAST_MS, {
+            titulo: `${node.name} — aviso del export`,
+            texto: aviso,
+          });
+        }
       }
       await this.project.loadTree();
       void this.exports.refresh(node.path);

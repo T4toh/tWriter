@@ -34,7 +34,7 @@ if (r.status !== 0) {
   process.exit(r.status ?? 1);
 }
 
-const { textoDeFase } = await import(pathToFileURL(join(outDir, 'export-progreso.js')).href);
+const { textoDeFase, resumenDeAviso } = await import(pathToFileURL(join(outDir, 'export-progreso.js')).href);
 
 const casos = [
   [{ libro: '/x/Libro', fase: 'Leyendo capítulos', hecho: 0, total: 0 }, 'Leyendo capítulos…',
@@ -53,7 +53,27 @@ for (const [payload, esperado, desc] of casos) {
   const got = textoDeFase(payload);
   if (got !== esperado) { fallos += 1; console.error(`FALLA ${desc}: "${got}" != "${esperado}"`); }
 }
-console.log(fallos === 0 ? `${casos.length} casos OK` : `${fallos} fallas`);
+
+// resumenDeAviso: lo que entra al toast; el resto se lee en el detalle.
+const avisoLargo =
+  'Itálicas o negritas mal anidadas (cruzan párrafos) en Magia Blanca (1): el EPUB salió bien, pero conviene reabrir y guardar esa parte en el editor.';
+const casosAviso = [
+  ['Falta la tapa del libro.', 'Falta la tapa del libro.',
+    'aviso corto: se devuelve igual, sin detalle'],
+  ['  Falta la tapa.  ', 'Falta la tapa.',
+    'se recorta el espacio de los bordes'],
+  [avisoLargo,
+    'Itálicas o negritas mal anidadas (cruzan párrafos) en Magia Blanca (1): el EPUB salió bien, pero conviene…',
+    'aviso largo: corta en el último espacio, sin partir palabras'],
+  ['x'.repeat(140), `${'x'.repeat(110)}…`,
+    'sin espacios: corta duro en el máximo'],
+];
+for (const [aviso, esperado, desc] of casosAviso) {
+  const got = resumenDeAviso(aviso);
+  if (got !== esperado) { fallos += 1; console.error(`FALLA ${desc}: "${got}" != "${esperado}"`); }
+}
+const total = casos.length + casosAviso.length;
+console.log(fallos === 0 ? `${total} casos OK` : `${fallos} fallas`);
 
 rmSync(outDir, { recursive: true, force: true });
 process.exit(fallos === 0 ? 0 : 1);
