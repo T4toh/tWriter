@@ -632,8 +632,9 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   3. **Apagar `EN_REPEATEDWORDS_*` y `PROFANITY*` con `disabledRules`** si se
      prende `picky`: en la muestra inglesa `picky` sumó 10 hits de
      `EN_REPEATEDWORDS_*` (que **pisan el detector de repeticiones propio**) y
-     7 de `PROFANITY*` (diálogo de ficción). Confirma con datos el item de
-     `disabledRules` de más abajo.
+     7 de `PROFANITY*` (diálogo de ficción). Los dos se pueden apagar hoy
+     desde el popover ("Nunca más esta regla"), pero uno por uno: esto sería
+     apagarlos de entrada al prender `picky`.
   4. **Revisar en 6 meses**: si la lista de reglas que disparan sigue siendo
      esas 21, tirar LT, quedarse con hunspell (`zspell`) + las reglas propias,
      y bajar 174 MB. La decisión queda abierta y mantenerla abierta no cuesta.
@@ -766,12 +767,12 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
     el early-return por `lastCheckedPlain` se comería el recheck). El mismo
     effect cubre los cambios de variante regional, que arrastraban el mismo
     bug.
-  - `disabledRules` / `enabledOnly` — el silenciado per-saga hoy solo puede
-    tapar **palabras** (diccionario, filtro de `TYPOS` en `editor.ts`). Con
-    `disabledRules` se podría silenciar una **regla** entera que moleste en
-    prosa de ficción, persistida en `saga.json`. Requiere exponer el
-    `rule.id` en el popover para que el autor sepa qué desactivar.
-    **Regla concreta ya identificada**: con `picky` prendido, LT marca `Shit`
+  - ~~`disabledRules`~~ **hecho** (ver README → Gramática): el popover muestra
+    el `ruleId` y "Nunca más esta regla" lo persiste en
+    `saga.json::reglas_lt_desactivadas`. Queda pendiente `enabledOnly`, que es
+    la punta opuesta —correr SOLO un set de reglas— y no tiene caso de uso
+    todavía.
+    **Regla concreta ya identificada**, que hoy se apaga desde el popover: con `picky` prendido, LT marca `Shit`
     en diálogo con `PROFANITY_XML` (categoría `STYLE`, "This word is
     considered offensive"). Verificado que es picky-only (en `default` no
     aparece) y que `disabledRules=PROFANITY_XML` la apaga limpio. No es un
@@ -917,8 +918,8 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   la norma (una regla que cubre 4 casos de una construcción abierta y sugiere la
   variante muerta), pero es la clase de discusión que termina en un hilo sobre
   qué dice la RAE, y no hay ganas. **Se apaga y listo**: es el caso testigo del
-  `disabledRules` por saga del ítem de acá abajo — novela con diálogo argentino
-  desactiva `NO_SEPARADO`.
+  `disabledRules` por saga, que ya está hecho (ver README → Gramática) — novela
+  con diálogo argentino desactiva `NO_SEPARADO` desde el popover.
   Si alguna vez cambia de idea: `node scripts/scan-regla-lt.mjs NO_SEPARADO
   ~/novelas es-AR` da los hits sobre la obra real, que es la evidencia con la
   que se armaría. Nada de esto bloquea a `0004`/`0005`, que sí son bugs de
@@ -961,49 +962,10 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   Ojo con la versión: el README ancla los números de línea a **LT 6.8** y el
   container que respondió es **6.7**. Verificar antes de aplicar cualquier `sed`.
   Mientras los PR no estén mergeados, estos dos son exactamente los casos que
-  justifican el "ignorar esta regla" del ítem de acá abajo: `disabledRules` es
-  el paliativo, el parche es el arreglo.
-
-- [ ] **Los falsos positivos de LanguageTool no se pueden ni nombrar ni matar —
-  y no queda registro de ninguno** (reportado el 2026-09-02 mientras se escribía)
-  **Repro**: «Quiero pasear sin mi armadura más seguido, Chispi.» LT marca
-  `seguido` y sugiere `seguida` — "Revise la concordancia de «seguido» con los
-  nombres precedentes". Concuerda el participio con `armadura`, el sustantivo
-  femenino más cercano, cuando `más seguido` es una **locución adverbial** (=
-  más a menudo) y el sujeto es tácito, `yo`. LT no analiza sujeto: matchea un
-  patrón de sustantivo + participio, así que con sujeto tácito la regla no
-  tiene con qué concordar y agarra el sustantivo de al lado.
-  **No es un problema de variante**: `map_lang` (`grammar.rs:780-787`) ya manda
-  `es-AR` cuando el capítulo es español, así que la regla dispara igual con la
-  variante rioplatense declarada. Descartado ese camino.
-  **Lo que duele no es el FP puntual, es que no hay nada que hacer con él**:
-  - "Ignorar" (`grammar-popover.ts:53` → `dismissGrammarMatch`,
-    `editor.ts:1184-1188`) solo saca el match de la lista en memoria. No
-    persiste: vuelve en el próximo chequeo, en ese párrafo y en todos los demás
-    donde aparezca la misma construcción, para siempre.
-  - El popover de LT **no muestra el `ruleId`**, aunque el dato viaja entero
-    desde Rust (`grammar.rs:646-647` y `873`) hasta `GrammarMatch`
-    (`types.ts:95-103`). El popover de RAE sí lo muestra
-    (`rae-popover.ts:38`). Sin el id no se puede desactivar la regla, ni
-    reportarla upstream, ni siquiera saber si dos FP distintos son la misma
-    regla.
-  - `/v2/check` acepta `disabledRules` (lista de ids separada por comas) y el
-    request no lo manda nunca: los params son solo `text`, `language`, `level`
-    (+ auth en modo custom), `grammar.rs:899-903`.
-  **Fix de raíz, chico**: (a) mostrar el `ruleId` en el popover de LT, igual que
-  el de RAE — es un `<span>` y desbloquea todo lo demás; (b) que "Ignorar" tenga
-  una segunda opción, "esta regla nunca más", que guarde el id por saga y se
-  mande como `disabledRules` en el próximo check. La lista de reglas
-  desactivadas **es** el registro de FP que hoy no existe, sin llevar un txt
-  aparte: cada entrada queda con el id y la oración que la disparó.
-  **A decidir**: si la desactivación es por saga o global — una regla que molesta
-  en una novela rioplatense probablemente moleste en todas, pero por saga es más
-  conservador y ya hay dónde guardarlo (`saga.json` / config de saga, como el
-  diccionario). Y si conviene además un nivel intermedio "ignorar esta
-  ocurrencia" persistido por offset, que se rompe al editar el párrafo — capaz
-  no vale la pena y alcanza con las dos puntas.
-  Emparentado con `## Proofreading`: son la misma necesidad de "encontré algo
-  mientras escribía, que quede anotado sin frenar la escritura".
+  justifican el "Nunca más esta regla" del popover: `disabledRules` es el
+  paliativo, el parche es el arreglo. Ojo con la granularidad al apagarlos: la
+  API desactiva la regla entera, no la subregla (el id que devuelve es
+  `AGREEMENT_POSTPONED_ADJ`, sin el `[3]`).
 
 ## Búsqueda
 
