@@ -4,6 +4,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { detectLang } from '../dialogos/detect';
 import { DebugService } from './debug-service';
 import { ExportProgress, resumenDeAviso, textoDeFase } from './export-progreso';
+import { sinPrefijoNumerico } from './nombre-carpeta';
 import { ExportsService } from './exports-service';
 import { GitService } from './git-service';
 import { NavigationService } from './navigation-service';
@@ -459,7 +460,7 @@ export class ChapterService {
           this.toast.warn(aviso);
         } else {
           this.toast.warn(corto, EPUBCHECK_TOAST_MS, {
-            titulo: `${node.name} — aviso del export`,
+            titulo: `${sinPrefijoNumerico(node.name)} — aviso del export`,
             texto: aviso,
           });
         }

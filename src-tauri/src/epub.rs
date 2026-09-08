@@ -1021,7 +1021,7 @@ fn export_impl(
             c.parts
                 .iter()
                 .filter(|p| p.reparado)
-                .map(move |p| format!("{} ({})", c.title, p.stem))
+                .map(move |p| format!("{} — parte {}", c.title, p.stem))
         })
         .collect();
     if !reparados.is_empty() {
