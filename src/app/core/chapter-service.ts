@@ -422,10 +422,11 @@ export class ChapterService {
    *  hasta el toast final: no se sabía si estaba trabajando o si el click no
    *  había agarrado. El toast cubre los dos caminos de entrada —la tarjeta del
    *  libro y el menú contextual—, y la tarjeta además tiene su spinner. */
-  async exportEpub(node: TreeNode): Promise<string | null> {
+  async exportEpub(node: TreeNode, muestra: number | null = null): Promise<string | null> {
     if (node.kind !== 'book') return null;
-    const toastId = this.toast.progreso('Exportando EPUB…');
+    const toastId = this.toast.progreso(muestra ? 'Exportando muestra…' : 'Exportando EPUB…');
     let unlisten: UnlistenFn | null = null;
+    this.exports.marcarExportando(node.path, true);
     try {
       unlisten = await listen<ExportProgress>('epub-export-progress', (event) => {
         // El evento es global. Exportar dos novelas a la vez se puede —el
@@ -439,7 +440,7 @@ export class ChapterService {
         epub_path: string;
         chapters: number;
         avisos: string[];
-      }>('export_book', { bookPath: node.path });
+      }>('export_book', { bookPath: node.path, muestra });
       const filename = result.epub_path.split('/').pop() ?? 'epub';
       this.debug.info(
         'epub',
@@ -475,6 +476,7 @@ export class ChapterService {
       this.panes[0].error.set(String(err));
       return null;
     } finally {
+      this.exports.marcarExportando(node.path, false);
       // El toast no se auto-cierra: si esto no corre queda pegado para
       // siempre. Va en `finally` para que valga también cuando el export falla.
       unlisten?.();

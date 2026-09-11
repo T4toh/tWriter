@@ -48,6 +48,7 @@ import { ImportWizard } from './import-wizard/import-wizard';
 import { UpdateBanner } from './update-banner/update-banner';
 import { StorageHelpModal } from './storage-help/storage-help-modal';
 import { AboutModal } from './about/about-modal';
+import { ExportModal } from './export/export-modal';
 import { AutorModal } from './autor/autor-modal';
 import { AboutService } from './core/about-service';
 import { Spinner } from './shared/spinner';
@@ -86,7 +87,7 @@ import {
   imports: [
     Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, RevisionLibroModal, SagaConfigModal, DictionaryModal, SplitChapterModal,
     NoteFormModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, RepeticionesAuditPanel, ToastContainer,
-    SettingsModal, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, AboutModal, AutorModal, Spinner, ModalHost, ContextMenuHost,
+    SettingsModal, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, AboutModal, ExportModal, AutorModal, Spinner, ModalHost, ContextMenuHost,
     LucideArrowDownToLine, LucideArrowUpDown, LucideChevronDown, LucideChevronRight,
     LucideCircleQuestionMark, LucideDownload, LucideDynamicIcon, LucideFolder, LucideHouse, LucideMoveHorizontal,
     LucideMoveVertical, LucideNotebook, LucideNotebookPen, LucidePlus, LucideRefreshCw,

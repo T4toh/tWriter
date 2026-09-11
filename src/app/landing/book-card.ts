@@ -12,6 +12,7 @@ import { LucideArrowDownToLine, LucideListChecks, LucideSettings } from '@lucide
 import { BookConfig, BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { CoverCache } from '../core/cover-cache';
+import { ExportsService } from '../core/exports-service';
 import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { RevisionLibroService } from '../core/revision-libro-service';
 import { TreeNode } from '../core/types';
@@ -26,6 +27,7 @@ import { Spinner } from '../shared/spinner';
 export class BookCard {
   private cfgService = inject(BookConfigService);
   private chapter = inject(ChapterService);
+  private exports = inject(ExportsService);
   private coverCache = inject(CoverCache);
   private revision = inject(RevisionLibroService);
 
@@ -36,7 +38,7 @@ export class BookCard {
    *  todo el ancho sería absurda. */
   readonly layout = input<'vertical' | 'horizontal'>('vertical');
   readonly select = output<TreeNode>();
-  protected readonly exporting = signal<boolean>(false);
+  protected readonly exporting = computed<boolean>(() => this.exports.exportando().has(this.node().path));
 
   protected readonly config = signal<BookConfig | null>(null);
   protected readonly coverDataUrl = signal<string | null>(null);
@@ -108,15 +110,10 @@ export class BookCard {
     this.revision.abrirPara(this.node());
   }
 
-  protected async exportEpub(event: MouseEvent): Promise<void> {
+  protected exportEpub(event: MouseEvent): void {
     event.stopPropagation();
     if (this.exporting()) return;
-    this.exporting.set(true);
-    try {
-      await this.chapter.exportEpub(this.node());
-    } finally {
-      this.exporting.set(false);
-    }
+    this.exports.abrirPara(this.node());
   }
 
   private async load(path: string): Promise<void> {

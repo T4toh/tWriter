@@ -1025,6 +1025,20 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 
 ## EPUB
 
+- **El índice (`toc.xhtml`) se ve feo** (autor, 2026-09-11). Es funcional y
+  toma la fuente del tema; el problema es solo visual, y todavía no está
+  dicho qué exactamente: falta una captura en el reader para decidir. Lo que
+  hay hoy: `nav h1` centrado sans, capítulos en bold sans (`li.toc-part`),
+  partes indentadas 1.5em (`ol.toc-sub`), editoriales al 75 % con un
+  `border-top` (`epub_style.css:442-489`, markup en
+  `epub.rs::build_toc_xhtml`). Opciones a evaluar con la captura al lado:
+  1. Sacarlo del flujo lineal (`linear="no"` en el spine): Kindle y Kobo
+     arman su menú propio desde el nav, así que la página impresa es
+     opcional. Es lo que hacen muchos EPUB comerciales en Kindle.
+  2. Restilar: mismo serif del cuerpo en vez de sans, sin bold, número de
+     capítulo en versalitas y título en itálica, más aire entre entradas.
+  3. Colapsar las partes: mostrar solo capítulos en la página visible y dejar
+     los hijos únicamente en el `nav` (los readers los siguen mostrando).
 - **Formatear para libro físico (interior para imprenta)** (idea del autor,
   2026-09-11). Hoy el único artefacto es el EPUB. Para KDP / IngramSpark /
   imprenta local hace falta un **PDF de interior** con cosas que el EPUB no
@@ -1054,25 +1068,6 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   problema aparte que depende del conteo de páginas final). Preguntar al
   autor si el destino es KDP (tiene reglas fijas de márgenes por rango de
   páginas, se pueden codificar) antes de diseñar la UI.
-- **Exportar sample para tiendas** (idea del autor, 2026-09-11). Un EPUB de
-  muestra con los primeros capítulos (~10 % del libro o N capítulos a
-  elección) más **todo el back matter**: «Sobre el autor» y «Otros libros»,
-  que es justamente lo que se quiere que el lector vea aunque no compre. Sirve
-  para las previews de las tiendas, para regalar en la web propia o en un
-  newsletter, y para Reedsy Discovery / BookFunnel.
-
-  Reuso casi total: `export_impl` ya arma portada, front matter, capítulos y
-  `7_otros_libros.xhtml` + `8_about_author.xhtml`; el sample es el mismo
-  pipeline con un **corte en `collect_chapters`** (`epub.rs:407`) y un título
-  «(Muestra)» / «(Sample)» en el `dc:title` para que no lo confunda con el
-  libro en la biblioteca del lector. Lo único nuevo que suma valor: una
-  **página final de cierre** después del último capítulo incluido («Seguí
-  leyendo en…» / «Continue reading at…») con el link a la tienda, que sale
-  del `book.json` (campo nuevo `tienda_url`, o el `isbn` si no hay link; va
-  en la interfaz `Settings`/`BookConfig` de los dos lados como manda
-  CLAUDE.md). El blurb del item de arriba es lo que iría en esa página si
-  existe. Opción en el modal de export: «Libro completo» / «Muestra (N
-  capítulos)», nada más.
 - **Abrir la carpeta del EPUB exportado / abrirlo en el visor**: al terminar el
   export la app dice dónde quedó el archivo y ahí muere; el autor tiene que ir a
   buscarlo a mano. Sumar en el aviso de export exitoso dos acciones: "Mostrar en

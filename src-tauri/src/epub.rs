@@ -359,15 +359,31 @@ struct Item {
     properties: Option<String>,
 }
 
-/// Exporta un libro a EPUB en `<book>/exports/<title>.epub`.
+/// Exporta un libro a EPUB en `<book>/Exportados/<title>.epub`.
+///
+/// `muestra = Some(n)` exporta solo los primeros `n` capítulos como EPUB de
+/// muestra: título con sufijo, sin epílogo, y una página de cierre con el
+/// link del libro antes del back matter. Las tiendas (Amazon, Kobo, Google)
+/// arman su propia vista previa del EPUB completo y no reciben este archivo;
+/// sirve para la web del autor, Apple Books (que sí acepta una muestra
+/// propia) y plataformas tipo BookFunnel.
 #[tauri::command]
-pub async fn export_book(app: AppHandle, book_path: String) -> Result<ExportResult, String> {
+pub async fn export_book(
+    app: AppHandle,
+    book_path: String,
+    muestra: Option<u32>,
+) -> Result<ExportResult, String> {
     let plantilla_css = css_template(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
         let mut emit_cb = |p: ExportProgress| {
             let _ = app.emit("epub-export-progress", p);
         };
-        export_impl(&book_path, &plantilla_css, Some(&mut emit_cb))
+        export_impl(
+            &book_path,
+            &plantilla_css,
+            muestra.map(|n| n as usize),
+            Some(&mut emit_cb),
+        )
     })
     .await
     .map_err(|e| format!("task: {}", e))?
@@ -376,6 +392,7 @@ pub async fn export_book(app: AppHandle, book_path: String) -> Result<ExportResu
 fn export_impl(
     book_path: &str,
     plantilla_css: &str,
+    muestra: Option<usize>,
     mut progreso: Option<&mut dyn FnMut(ExportProgress)>,
 ) -> Result<ExportResult, String> {
     // Mismo patrón que `search::full_reindex`: el impl no conoce Tauri, así que
@@ -404,17 +421,40 @@ fn export_impl(
     tracing::info!(target: "epub", titulo = %cfg.titulo, "iniciando export");
 
     avisar!("Leyendo capítulos");
-    let (chapters, epilogo) = collect_chapters(&book_dir, cfg.epilogo.as_deref())?;
+    let (mut chapters, mut epilogo) = collect_chapters(&book_dir, cfg.epilogo.as_deref())?;
     if chapters.is_empty() && epilogo.is_none() {
         tracing::error!(target: "epub", titulo = %cfg.titulo, "libro sin capítulos .html");
         return Err("libro sin capítulos .html".to_string());
     }
     tracing::info!(target: "epub", titulo = %cfg.titulo, capitulos = chapters.len(), epilogo = epilogo.is_some(), "capítulos recolectados");
 
+    let es_en = cfg.idioma.as_deref() == Some("en");
+    // La muestra corta en fin de capítulo y nunca lleva el epílogo: un
+    // epílogo sin la novela en el medio no tiene sentido. Cero se clampa a
+    // uno para que siempre salga algo de texto.
+    if let Some(n) = muestra {
+        chapters.truncate(n.max(1));
+        epilogo = None;
+    }
+    let sufijo_muestra = muestra.map(|_| if es_en { "Sample" } else { "Muestra" });
+    // Solo el `dc:title` y el nombre de archivo llevan el sufijo: en la
+    // biblioteca del lector la muestra y el libro comprado tienen que
+    // distinguirse, pero la portada interior sigue siendo la del libro.
+    let cfg_opf = match sufijo_muestra {
+        Some(sufijo) => BookConfig {
+            titulo: format!("{} — {}", cfg.titulo, sufijo),
+            ..cfg.clone()
+        },
+        None => cfg.clone(),
+    };
+
     let exports_dir = book_dir.join("Exportados");
     fs::create_dir_all(&exports_dir).map_err(|e| e.to_string())?;
     let safe_title = sanitize_filename(&cfg.titulo);
-    let epub_path = exports_dir.join(format!("{}.epub", safe_title));
+    let epub_path = match sufijo_muestra {
+        Some(sufijo) => exports_dir.join(format!("{} - {}.epub", safe_title, sufijo)),
+        None => exports_dir.join(format!("{}.epub", safe_title)),
+    };
 
     let file = File::create(&epub_path).map_err(|e| e.to_string())?;
     let mut zip = ZipWriter::new(file);
@@ -736,6 +776,38 @@ fn export_impl(
         toc_entries.push(entry);
     }
 
+    // 5a-bis) Cierre de la muestra: dónde seguir leyendo. Va pegado al último
+    // capítulo incluido, antes del back matter, y entra al índice como
+    // editorial. Sin `link` en book.json la página sale igual pero sin href,
+    // y el export avisa: el remedio es cargar el link en la configuración
+    // del libro.
+    if muestra.is_some() {
+        let link = cfg.link.as_deref().map(str::trim).filter(|l| !l.is_empty());
+        if link.is_none() {
+            avisos.push(
+                "La muestra salió sin link a la novela completa: cargá el link del libro en Configuración del libro → Publicación."
+                    .to_string(),
+            );
+        }
+        spine_idx += 1;
+        let xhtml = build_seguir_leyendo_xhtml(&cfg, link);
+        zip.start_file("OEBPS/5_seguir_leyendo.xhtml", opts).map_err(|e| e.to_string())?;
+        zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
+        items.push(Item {
+            id: "seguir-leyendo".into(),
+            href: "5_seguir_leyendo.xhtml".into(),
+            media_type: "application/xhtml+xml".into(),
+            spine_order: Some(spine_idx),
+            properties: None,
+        });
+        toc_entries.push(TocEntry {
+            href: "5_seguir_leyendo.xhtml".into(),
+            label: if is_en { "Keep reading" } else { "Seguir leyendo" }.into(),
+            children: Vec::new(),
+            editorial: true,
+        });
+    }
+
     // 5a-ter) Página en blanco que cierra la novela. Solo va si después
     // viene back matter (catálogo o "Sobre el autor"); si no hay nada
     // detrás, la página en blanco sería un defecto visual sin propósito.
@@ -1001,7 +1073,7 @@ fn export_impl(
     });
 
     // 8) content.opf
-    let opf = build_opf(&cfg, &items, &book_uuid);
+    let opf = build_opf(&cfg_opf, &items, &book_uuid);
     zip.start_file("OEBPS/content.opf", opts).map_err(|e| e.to_string())?;
     zip.write_all(opf.as_bytes()).map_err(|e| e.to_string())?;
 
@@ -1528,6 +1600,48 @@ fn build_title_xhtml(cfg: &BookConfig) -> String {
         cfg.idioma.as_deref().unwrap_or("es"),
         "title-body",
     )
+}
+
+/// Página de cierre de la muestra. La URL va también como texto, igual que
+/// en "Sobre el autor": quien lee en el celular no puede escanear ni copiar
+/// un link que no ve.
+fn build_seguir_leyendo_xhtml(cfg: &BookConfig, link: Option<&str>) -> String {
+    let lang = cfg.idioma.as_deref().unwrap_or("es");
+    let is_en = lang == "en";
+    let heading = if is_en { "Keep reading" } else { "¿Querés seguir leyendo?" };
+    let intro = if is_en {
+        format!(
+            "This is a sample of <em>{}</em>. The complete novel is available at:",
+            xml_escape(&cfg.titulo)
+        )
+    } else {
+        format!(
+            "Esto fue una muestra de <em>{}</em>. La novela completa está en:",
+            xml_escape(&cfg.titulo)
+        )
+    };
+    let destino = match link {
+        Some(l) => format!(
+            "<p class=\"autor-web-url\"><a href=\"{}\">{}</a></p>",
+            xml_escape(l),
+            xml_escape(l.trim_start_matches("https://").trim_start_matches("http://"))
+        ),
+        None => {
+            let texto = if is_en {
+                "your usual bookstore."
+            } else {
+                "tu tienda de libros habitual."
+            };
+            format!("<p>{}</p>", texto)
+        }
+    };
+    let body = format!(
+        "<div class=\"seguir-leyendo\">\n<h1 class=\"about-author-title\">{}</h1>\n<p>{}</p>\n{}\n</div>",
+        xml_escape(heading),
+        intro,
+        destino
+    );
+    xhtml_shell(&cfg.titulo, &body, lang, "about-author-body")
 }
 
 fn build_copyright_xhtml(cfg: &BookConfig) -> String {
@@ -2250,7 +2364,82 @@ mod tests {
     }
 
     fn export_impl(book_path: &str) -> Result<ExportResult, String> {
-        super::export_impl(book_path, &plantilla_css(), None)
+        super::export_impl(book_path, &plantilla_css(), None, None)
+    }
+
+    fn libro_de_tres_capitulos(tmp: &std::path::Path, book_json: &str) -> PathBuf {
+        let book = tmp.join("book");
+        for n in 1..=3 {
+            let dir = book.join(format!("{} - Cap{}", n, n));
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("1.html"), format!("<p>Texto {}.</p>", n)).unwrap();
+        }
+        std::fs::write(book.join("book.json"), book_json).unwrap();
+        book
+    }
+
+    #[test]
+    fn muestra_corta_los_capitulos_y_cierra_con_el_link() {
+        let tmp = TempDir::new().unwrap();
+        let book = libro_de_tres_capitulos(
+            tmp.path(),
+            r#"{"titulo":"Test","link":"https://tatoh.ar/libros/test","epilogo":"3 - Cap3"}"#,
+        );
+        let r = super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(2), None)
+            .expect("export ok");
+        assert!(r.epub_path.ends_with("Test - Muestra.epub"), "{}", r.epub_path);
+        assert_eq!(r.chapters, 2, "dos partes escritas, ni la tercera ni el epílogo");
+        assert!(r.avisos.is_empty(), "{:?}", r.avisos);
+
+        let entries = read_epub_entries(std::path::Path::new(&r.epub_path));
+        let nombres: Vec<&str> = entries.keys().map(|k| k.as_str()).collect();
+        assert!(nombres.iter().any(|n| n.contains("_ch2_p1.xhtml")), "{:?}", nombres);
+        assert!(!nombres.iter().any(|n| n.contains("_ch3_")), "{:?}", nombres);
+        assert!(!nombres.iter().any(|n| n.contains("epilog")), "{:?}", nombres);
+
+        let cierre = String::from_utf8(entries["OEBPS/5_seguir_leyendo.xhtml"].clone()).unwrap();
+        assert!(cierre.contains(r#"href="https://tatoh.ar/libros/test""#), "{}", cierre);
+        assert!(cierre.contains("seguir leyendo"), "{}", cierre);
+
+        let opf = String::from_utf8(entries["OEBPS/content.opf"].clone()).unwrap();
+        assert!(opf.contains("<dc:title>Test — Muestra</dc:title>"), "{}", opf);
+        // El cierre va al spine detrás del último capítulo y antes del back matter.
+        let pos = |id: &str| opf.find(&format!("idref=\"{}\"", id)).unwrap_or(usize::MAX);
+        assert!(pos("ch2_p1") < pos("seguir-leyendo"), "{}", opf);
+
+        let toc = String::from_utf8(entries["OEBPS/toc.xhtml"].clone()).unwrap();
+        assert!(toc.contains("5_seguir_leyendo.xhtml"), "{}", toc);
+    }
+
+    #[test]
+    fn muestra_sin_link_avisa_y_no_inventa_href() {
+        let tmp = TempDir::new().unwrap();
+        let book = libro_de_tres_capitulos(tmp.path(), r#"{"titulo":"Test","idioma":"en"}"#);
+        let r = super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(1), None)
+            .expect("export ok");
+        assert!(r.epub_path.ends_with("Test - Sample.epub"), "{}", r.epub_path);
+        assert_eq!(r.chapters, 1);
+        assert!(
+            r.avisos.iter().any(|a| a.contains("link")),
+            "tiene que avisar que la muestra salió sin link: {:?}",
+            r.avisos
+        );
+        let entries = read_epub_entries(std::path::Path::new(&r.epub_path));
+        let cierre = String::from_utf8(entries["OEBPS/5_seguir_leyendo.xhtml"].clone()).unwrap();
+        assert!(!cierre.contains("<a "), "{}", cierre);
+        assert!(cierre.contains("Keep reading"), "{}", cierre);
+    }
+
+    #[test]
+    fn muestra_cero_o_mayor_que_el_libro_no_rompe() {
+        let tmp = TempDir::new().unwrap();
+        let book = libro_de_tres_capitulos(tmp.path(), r#"{"titulo":"Test"}"#);
+        let r = super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(0), None)
+            .expect("export ok");
+        assert_eq!(r.chapters, 1, "cero se clampa a un capítulo");
+        let r = super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(99), None)
+            .expect("export ok");
+        assert_eq!(r.chapters, 3);
     }
 
     fn build_css(template: &str, theme: &ResolvedTheme) -> String {
@@ -2471,7 +2660,7 @@ mod tests {
 
         let mut pasos: Vec<ExportProgress> = Vec::new();
         let mut cb = |p: ExportProgress| pasos.push(p);
-        super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(&mut cb))
+        super::export_impl(book.to_str().unwrap(), &plantilla_css(), None, Some(&mut cb))
             .expect("export ok");
 
         assert!(
