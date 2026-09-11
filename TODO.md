@@ -1025,20 +1025,6 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 
 ## EPUB
 
-- **El índice (`toc.xhtml`) se ve feo** (autor, 2026-09-11). Es funcional y
-  toma la fuente del tema; el problema es solo visual, y todavía no está
-  dicho qué exactamente: falta una captura en el reader para decidir. Lo que
-  hay hoy: `nav h1` centrado sans, capítulos en bold sans (`li.toc-part`),
-  partes indentadas 1.5em (`ol.toc-sub`), editoriales al 75 % con un
-  `border-top` (`epub_style.css:442-489`, markup en
-  `epub.rs::build_toc_xhtml`). Opciones a evaluar con la captura al lado:
-  1. Sacarlo del flujo lineal (`linear="no"` en el spine): Kindle y Kobo
-     arman su menú propio desde el nav, así que la página impresa es
-     opcional. Es lo que hacen muchos EPUB comerciales en Kindle.
-  2. Restilar: mismo serif del cuerpo en vez de sans, sin bold, número de
-     capítulo en versalitas y título en itálica, más aire entre entradas.
-  3. Colapsar las partes: mostrar solo capítulos en la página visible y dejar
-     los hijos únicamente en el `nav` (los readers los siguen mostrando).
 - **Formatear para libro físico (interior para imprenta)** (idea del autor,
   2026-09-11). Hoy el único artefacto es el EPUB. Para KDP / IngramSpark /
   imprenta local hace falta un **PDF de interior** con cosas que el EPUB no

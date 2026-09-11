@@ -137,8 +137,11 @@ body.chapter-content-body {
 }
 
 /* Nav (TOC) */
+/* Índice: mismo margen que "Sobre el autor". El resto de las reglas del
+   nav están en la sección TOC, más abajo. */
 body.nav-body {
-  padding: 0;
+  padding: 2em 1.5em;
+  box-sizing: border-box;
 }
 
 /* About the author: heading arriba, foto chica, bio en bloque. El bloque
@@ -448,10 +451,19 @@ span.dropcap {
 }
 
 /* ─────────────────── TOC nav ─────────────────── */
+/* Una página de índice de novela: capítulos con el numeral en una columna
+   angosta y el título al lado, en la fuente del cuerpo. Las partes
+   numeradas no se imprimen (van con `hidden` en el markup; el reader las
+   sigue teniendo en su menú) — con ocho capítulos de seis partes la página
+   eran 56 líneas, 48 de ellas un número pelado. Sin flex ni grid: la
+   columna es un inline-block con ancho fijo más sangría francesa, que los
+   lectores viejos entienden. */
 nav h1 {
   font-family: sans-serif;
   font-weight: normal;
-  margin-bottom: 1.5em;
+  font-size: 1.6em;
+  letter-spacing: 0.05em;
+  margin: 0 0 2em;
   text-align: center;
 }
 
@@ -462,39 +474,66 @@ nav ol ol {
   margin: 0;
 }
 
-nav ol.toc {
-  font-size: 1em;
+/* Sin subrayado en todo el índice: son entradas de una lista, no prosa con
+   links, y el subrayado solo en las editoriales hacía ruido. */
+nav a {
+  text-decoration: none;
+  color: inherit;
 }
 
 nav ol.toc > li.toc-part {
-  margin-top: 1em;
-  margin-bottom: 0.4em;
+  margin: 0 0 0.9em;
+  line-height: 1.4;
 }
 
-nav ol.toc > li.toc-part > a {
-  font-weight: bold;
+/* La columna existe solo con prefijo en el tema (`toc-con-numeros`): con el
+   prefijo en `none` los títulos van al margen. */
+nav ol.toc-con-numeros > li.toc-part > a {
+  display: block;
+  padding-left: 3em;
+  text-indent: -3em;
+}
+
+nav .toc-num {
+  display: inline-block;
+  width: 3em;
+  text-indent: 0;
   font-family: sans-serif;
-  text-decoration: none;
-  color: inherit;
+  font-size: 0.85em;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+nav .toc-title {
+  font-size: 1.05em;
 }
 
 nav ol.toc-sub {
-  padding-left: 1.5em;
-  margin: 0.3em 0;
+  padding-left: 3em;
+  margin: 0.2em 0 0;
 }
 
 nav ol.toc-sub > li.toc-chapter {
-  margin: 0.25em 0;
+  margin: 0.15em 0;
+  font-size: 0.9em;
 }
 
-nav ol.toc-sub > li.toc-chapter > a {
-  text-decoration: none;
-  color: inherit;
+nav ol.toc > li.toc-editorial {
+  font-size: 0.85em;
+  opacity: 0.6;
+  margin: 0.4em 0;
 }
 
-nav ol.toc > li.toc-editorial { font-size: 0.9em; opacity: 0.75; }
-nav ol.toc > li.toc-editorial + li.toc-part { margin-top: 0.8em; }
-nav ol.toc > li.toc-part + li.toc-editorial { margin-top: 1em; padding-top: 0.8em; border-top: 1px solid currentcolor; }
+nav ol.toc-con-numeros > li.toc-editorial {
+  padding-left: 3em;
+}
+
+nav ol.toc > li.toc-editorial + li.toc-part { margin-top: 1.6em; }
+nav ol.toc > li.toc-part + li.toc-editorial {
+  margin-top: 1.6em;
+  padding-top: 1.2em;
+  border-top: 1px solid currentcolor;
+}
 
 /* Misc */
 .center-align { text-align: center; text-indent: 0; }
