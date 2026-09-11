@@ -1,0 +1,59 @@
+@if (exports.pendiente(); as node) {
+  <div class="modal-backdrop" (click)="cerrar()"></div>
+  <div
+    class="modal-card ex-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="ex-title"
+    (click)="$event.stopPropagation()"
+  >
+    <header class="modal-header">
+      <h2 id="ex-title">Exportar «{{ titulo() }}»</h2>
+    </header>
+
+    <div class="ex-body">
+      <label class="ex-check">
+        <input type="checkbox" [ngModel]="completo()" (ngModelChange)="completo.set($event)" />
+        <span>Libro completo</span>
+      </label>
+
+      <label class="ex-check">
+        <input type="checkbox" [ngModel]="muestra()" (ngModelChange)="muestra.set($event)" />
+        <span>Muestra para la web</span>
+      </label>
+
+      @if (muestra()) {
+        <div class="ex-muestra">
+          <label class="ex-label" for="ex-n">Capítulos incluidos</label>
+          @if (opcionesN().length > 0) {
+            <app-select id="ex-n" [ngModel]="nStr()" (ngModelChange)="setN($event)" [options]="opcionesN()" />
+          } @else {
+            <p class="ex-hint">Este libro no tiene capítulos que exportar.</p>
+          }
+          <p class="ex-hint">
+            Corta en fin de capítulo y no lleva epílogo. Cierra con «Seguir leyendo» apuntando al
+            link del libro, seguido de «Otros libros» y «Sobre el autor».
+          </p>
+          @if (sinLink()) {
+            <p class="ex-hint ex-warn">
+              Este libro no tiene link cargado: la página de cierre va a salir sin enlace. Se carga
+              en Configuración del libro.
+            </p>
+          }
+        </div>
+      }
+    </div>
+
+    <footer class="ex-actions">
+      <button type="button" class="btn btn-secondary" (click)="cerrar()">Cancelar</button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        [disabled]="!completo() && !muestra()"
+        (click)="exportar()"
+      >
+        Exportar
+      </button>
+    </footer>
+  </div>
+}

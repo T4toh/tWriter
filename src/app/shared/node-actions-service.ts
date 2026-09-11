@@ -16,6 +16,7 @@ import {
 } from '@lucide/angular';
 import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
+import { ExportsService } from '../core/exports-service';
 import { ExtraEntry, ExtrasService } from '../core/extras-service';
 import { FontsService } from '../core/fonts-service';
 import { ImageViewerService } from '../core/image-viewer-service';
@@ -52,6 +53,7 @@ export class NodeActionsService {
   private project = inject(ProjectService);
   private nav = inject(NavigationService);
   private chapter = inject(ChapterService);
+  private exports = inject(ExportsService);
   private note = inject(NoteService);
   private settings = inject(SettingsService);
   private bookCfg = inject(BookConfigService);
@@ -555,8 +557,8 @@ export class NodeActionsService {
     await this.chapter.moveNode(node, 'down');
   }
 
-  async exportEpub(node: TreeNode): Promise<void> {
-    await this.chapter.exportEpub(node);
+  exportEpub(node: TreeNode): void {
+    this.exports.abrirPara(node);
   }
 
   async auditRae(node: TreeNode): Promise<void> {
