@@ -217,10 +217,11 @@ fn build_theme_rules_block(theme: &ResolvedTheme) -> String {
         .filter(|s| !s.is_empty());
     if let Some(eh) = editorial_heading {
         // Emitido DESPUÉS del bloque heading_font para pisar `nav h1` y
-        // `nav ol.toc > li.toc-part > a` cuando editorial está set (mismo
-        // selector pelado en specificity, gana orden de cascada).
+        // `nav .toc-num` cuando editorial está set (mismo selector pelado en
+        // specificity, gana orden de cascada). El título del capítulo en el
+        // índice (`.toc-title`) hereda la fuente del cuerpo a propósito.
         out.push_str(
-            "p.title-page-title, nav h1, nav ol.toc > li.toc-part > a, h1.about-author-title, .otros-libros h1 {\n",
+            "p.title-page-title, nav h1, nav .toc-num, h1.about-author-title, .otros-libros h1 {\n",
         );
         out.push_str(&format!("  font-family: \"{}\", sans-serif;\n", eh));
         out.push_str("}\n");
@@ -641,20 +642,22 @@ fn export_impl(
             spine_order: Some(spine_idx),
             properties: None,
         });
-        let toc_label = match (&prefix, show_chapter_title) {
-            (Some(p), true) => format!("{} {}", p, chapter.title),
-            (Some(p), false) => p.clone(),
-            (None, true) => chapter.title.clone(),
+        let (toc_prefix, toc_label) = match (&prefix, show_chapter_title) {
+            (Some(p), true) => (Some(p.clone()), chapter.title.clone()),
+            (Some(p), false) => (Some(p.clone()), String::new()),
+            (None, true) => (None, chapter.title.clone()),
             (None, false) => {
                 let word = if is_en { "Chapter" } else { "Capítulo" };
-                format!("{} {}", word, ch_idx + 1)
+                (None, format!("{} {}", word, ch_idx + 1))
             }
         };
         let mut entry = TocEntry {
             href: title_href,
             label: toc_label,
+            prefix: toc_prefix,
             children: Vec::new(),
             editorial: false,
+            ocultar_hijos: chapter.parts.iter().all(|p| p.meta_title.is_none()),
         };
 
         // Parts
@@ -695,8 +698,10 @@ fn export_impl(
             entry.children.push(TocEntry {
                 href: part_href,
                 label: toc_label,
+                prefix: None,
                 children: Vec::new(),
                 editorial: false,
+                ocultar_hijos: false,
             });
         }
         toc_entries.push(entry);
@@ -728,8 +733,10 @@ fn export_impl(
         let mut entry = TocEntry {
             href: title_href,
             label: toc_label,
+            prefix: None,
             children: Vec::new(),
             editorial: false,
+            ocultar_hijos: ep.parts.iter().all(|p| p.meta_title.is_none()),
         };
 
         for (p_idx, part) in ep.parts.iter().enumerate() {
@@ -769,8 +776,10 @@ fn export_impl(
             entry.children.push(TocEntry {
                 href: part_href,
                 label: toc_label,
+                prefix: None,
                 children: Vec::new(),
                 editorial: false,
+                ocultar_hijos: false,
             });
         }
         toc_entries.push(entry);
@@ -803,8 +812,10 @@ fn export_impl(
         toc_entries.push(TocEntry {
             href: "5_seguir_leyendo.xhtml".into(),
             label: if is_en { "Keep reading" } else { "Seguir leyendo" }.into(),
+            prefix: None,
             children: Vec::new(),
             editorial: true,
+            ocultar_hijos: false,
         });
     }
 
@@ -988,8 +999,10 @@ fn export_impl(
     let ed = |href: &str, label: &str| TocEntry {
         href: href.to_string(),
         label: label.to_string(),
+        prefix: None,
         children: Vec::new(),
         editorial: true,
+        ocultar_hijos: false,
     };
     let mut front: Vec<TocEntry> = vec![ed("2_copyright.xhtml", "Copyright")];
     if items.iter().any(|i| i.id == "dedication") {
@@ -1133,12 +1146,35 @@ struct ChapterPart {
 
 struct TocEntry {
     href: String,
+    /// Título sin el numeral. Puede quedar vacío cuando el tema esconde el
+    /// título del capítulo y solo muestra el prefijo.
     label: String,
+    /// Numeral del capítulo según el tema (`I`, `3`), o None si el tema no
+    /// prefija. En la página del índice va en una columna aparte, así los
+    /// títulos quedan alineados.
+    prefix: Option<String>,
     children: Vec<TocEntry>,
     /// Página editorial (copyright, dedicatoria, catálogo, bio) en vez de
     /// capítulo. Se renderea atenuada y agrupada, para que el listado de
     /// capítulos siga dominando la pantalla.
     editorial: bool,
+    /// Las partes son solo números («1», «2», «3»): en la página del índice
+    /// no aportan nada y triplican el largo, así que la sub-lista sale con
+    /// `hidden`. El reader la sigue usando en su menú (EPUB 3 lo pide así),
+    /// solo deja de imprimirse. Si alguna parte tiene título propio, se ve.
+    ocultar_hijos: bool,
+}
+
+impl TocEntry {
+    /// El texto plano de la entrada, para el NCX y para quien no lee CSS:
+    /// numeral y título separados por un espacio.
+    fn texto(&self) -> String {
+        match (&self.prefix, self.label.is_empty()) {
+            (Some(p), true) => p.clone(),
+            (Some(p), false) => format!("{} {}", p, self.label),
+            (None, _) => self.label.clone(),
+        }
+    }
 }
 
 fn collect_chapters(
@@ -2024,14 +2060,33 @@ fn build_toc_xhtml(cfg: &BookConfig, entries: &[TocEntry]) -> String {
         } else {
             "toc-part toc-body"
         };
+        // Numeral y título en spans separados para que el CSS los alinee en
+        // columnas, con un espacio real en el medio: el menú del reader lee
+        // el texto plano y sin el espacio mostraba «IPrimer Trabajo».
+        let texto = match &e.prefix {
+            Some(p) if e.label.is_empty() => {
+                format!("<span class=\"toc-num\">{}</span>", xml_escape(p))
+            }
+            Some(p) => format!(
+                "<span class=\"toc-num\">{}</span> <span class=\"toc-title\">{}</span>",
+                xml_escape(p),
+                xml_escape(&e.label)
+            ),
+            None if e.editorial => xml_escape(&e.label),
+            None => format!("<span class=\"toc-title\">{}</span>", xml_escape(&e.label)),
+        };
         lis.push_str(&format!(
             "<li class=\"{}\"><a href=\"{}\">{}</a>",
             clase,
             xml_escape(&e.href),
-            xml_escape(&e.label)
+            texto
         ));
         if !e.children.is_empty() {
-            lis.push_str("<ol class=\"toc-sub\">\n");
+            if e.ocultar_hijos {
+                lis.push_str("<ol class=\"toc-sub\" hidden=\"hidden\">\n");
+            } else {
+                lis.push_str("<ol class=\"toc-sub\">\n");
+            }
             for child in &e.children {
                 lis.push_str(&format!(
                     "<li class=\"toc-chapter toc-body\"><a href=\"{}\">{}</a></li>\n",
@@ -2045,14 +2100,22 @@ fn build_toc_xhtml(cfg: &BookConfig, entries: &[TocEntry]) -> String {
     }
     let lang = cfg.idioma.as_deref().unwrap_or("es");
     let toc_label = if lang == "en" { "Contents" } else { "Índice" };
+    // La columna del numeral solo existe si algún capítulo lo tiene; con el
+    // prefijo en `none` los títulos van al margen, sin sangría fantasma.
+    let clase_ol = if entries.iter().any(|e| e.prefix.is_some()) {
+        "toc toc-con-numeros"
+    } else {
+        "toc"
+    };
     let body = format!(
         r#"<nav id="toc" epub:type="toc" role="doc-toc">
 <h1>{}</h1>
-<ol class="toc">
+<ol class="{}">
 {}
 </ol>
 </nav>"#,
         xml_escape(toc_label),
+        clase_ol,
         lis
     );
     xhtml_shell(&cfg.titulo, &body, lang, "nav-body")
@@ -2072,7 +2135,7 @@ fn build_ncx_with_entries(cfg: &BookConfig, entries: &[TocEntry], book_uuid: &st
 "#,
             chapter_order,
             chapter_order,
-            xml_escape(&entry.label),
+            xml_escape(&entry.texto()),
             xml_escape(&entry.href)
         ));
         order += 1;
@@ -2085,7 +2148,7 @@ fn build_ncx_with_entries(cfg: &BookConfig, entries: &[TocEntry], book_uuid: &st
 "#,
                 order,
                 order,
-                xml_escape(&child.label),
+                xml_escape(&child.texto()),
                 xml_escape(&child.href)
             ));
             order += 1;
@@ -2898,7 +2961,7 @@ mod tests {
         ));
         assert!(block.contains("font-family: \"Cormorant\", serif;"));
         assert!(block.contains(
-            "p.title-page-title, nav h1, nav ol.toc > li.toc-part > a, h1.about-author-title, .otros-libros h1 {"
+            "p.title-page-title, nav h1, nav .toc-num, h1.about-author-title, .otros-libros h1 {"
         ));
         assert!(block.contains("font-family: \"Playfair\", sans-serif;"));
     }
@@ -2985,7 +3048,7 @@ mod tests {
         // nav h1 + parte-headings ya NO viven en el bloque heading_font — son
         // editorial. Cuando editorial NO se setea, nav cae al cascade del body.
         assert!(!block.contains("nav h1"));
-        assert!(!block.contains("nav ol.toc > li.toc-part > a"));
+        assert!(!block.contains("nav .toc-num"));
     }
 
     #[test]
@@ -3094,6 +3157,61 @@ mod tests {
         .unwrap();
         let xhtml = build_copyright_xhtml(&cfg);
         assert!(!xhtml.contains("No copiar."));
+    }
+
+    fn entrada(prefix: Option<&str>, label: &str, hijos: Vec<TocEntry>, ocultar: bool) -> TocEntry {
+        TocEntry {
+            href: "x.xhtml".into(),
+            label: label.into(),
+            prefix: prefix.map(str::to_string),
+            children: hijos,
+            editorial: false,
+            ocultar_hijos: ocultar,
+        }
+    }
+
+    #[test]
+    fn toc_separa_numeral_y_titulo_con_un_espacio_real() {
+        let cfg = BookConfig { titulo: "T".into(), ..Default::default() };
+        let hijos = vec![entrada(None, "1", vec![], false), entrada(None, "2", vec![], false)];
+        let xhtml = build_toc_xhtml(&cfg, &[entrada(Some("I"), "Primer Trabajo", hijos, true)]);
+        assert!(
+            xhtml.contains(r#"<span class="toc-num">I</span> <span class="toc-title">Primer Trabajo</span>"#),
+            "{}",
+            xhtml
+        );
+        assert!(xhtml.contains(r#"<ol class="toc toc-con-numeros">"#), "{}", xhtml);
+        // Partes numeradas: ocultas en la página, presentes para el reader.
+        assert!(xhtml.contains(r#"<ol class="toc-sub" hidden="hidden">"#), "{}", xhtml);
+        assert!(xhtml.contains(">1</a>") && xhtml.contains(">2</a>"), "{}", xhtml);
+    }
+
+    #[test]
+    fn toc_muestra_las_partes_cuando_tienen_titulo_propio() {
+        let cfg = BookConfig { titulo: "T".into(), ..Default::default() };
+        let hijos = vec![entrada(None, "La huida", vec![], false)];
+        let xhtml = build_toc_xhtml(&cfg, &[entrada(Some("I"), "Uno", hijos, false)]);
+        assert!(xhtml.contains(r#"<ol class="toc-sub">"#), "{}", xhtml);
+        assert!(!xhtml.contains("hidden"), "{}", xhtml);
+    }
+
+    #[test]
+    fn toc_sin_prefijo_no_arma_columna() {
+        let cfg = BookConfig { titulo: "T".into(), ..Default::default() };
+        let xhtml = build_toc_xhtml(&cfg, &[entrada(None, "Uno", vec![], false)]);
+        assert!(xhtml.contains(r#"<ol class="toc">"#), "{}", xhtml);
+        assert!(!xhtml.contains("toc-num"), "{}", xhtml);
+        assert!(xhtml.contains(r#"<span class="toc-title">Uno</span>"#), "{}", xhtml);
+    }
+
+    #[test]
+    fn toc_texto_plano_para_el_ncx() {
+        assert_eq!(entrada(Some("I"), "Uno", vec![], false).texto(), "I Uno");
+        assert_eq!(entrada(Some("I"), "", vec![], false).texto(), "I");
+        assert_eq!(entrada(None, "Copyright", vec![], false).texto(), "Copyright");
+        let cfg = BookConfig { titulo: "T".into(), ..Default::default() };
+        let ncx = build_ncx_with_entries(&cfg, &[entrada(Some("II"), "Dos", vec![], false)], "u");
+        assert!(ncx.contains("<text>II Dos</text>"), "{}", ncx);
     }
 
     #[test]
