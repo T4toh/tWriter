@@ -1025,6 +1025,54 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 
 ## EPUB
 
+- **Formatear para libro físico (interior para imprenta)** (idea del autor,
+  2026-09-11). Hoy el único artefacto es el EPUB. Para KDP / IngramSpark /
+  imprenta local hace falta un **PDF de interior** con cosas que el EPUB no
+  tiene ni puede tener: tamaño de página fijo, **márgenes espejados** con
+  medianil (gutter) según cantidad de páginas, folios y cabeceras corridas
+  (título del libro en par, capítulo en impar), control de viudas/huérfanas,
+  páginas en blanco para que cada capítulo arranque en impar, y fuentes
+  embebidas.
+
+  Qué hay para reusar: los templates `6x9`/`5x8`/`a5` de `page_rule_for`
+  (`epub.rs:134`) ya son tamaños de trim de imprenta, y `epub_style.css` es un
+  CSS paginado a medias. Camino más corto a evaluar antes de escribir nada:
+  1. **Paged.js** dentro del webview de Tauri (mismo HTML de las partes +
+     `@page :left/:right` para espejar) y "imprimir a PDF" desde la ventana.
+     Cero binarios nuevos; el riesgo es la calidad tipográfica de Chromium/
+     WebKitGTK (sin partición de palabras decente en español ni control de
+     viudas real).
+  2. **Typst** como sidecar detectado igual que pandoc/epubcheck: HTML → Typst
+     es una conversión chica (el subset es `p`/`em`/`strong`/`hr`/`h1`/
+     `blockquote`), y Typst resuelve hyphenation, viudas, folios y espejado
+     nativo. Es el que da salida de imprenta de verdad.
+  3. Pandoc → PDF vía LaTeX: ya se detecta pandoc, pero arrastra una TeX Live
+     de 1 GB; descartado salvo que el autor ya la tenga.
+
+  Alcance mínimo que vale: elegir trim + margen interior/exterior, exportar
+  PDF, y que la tapa sea otro tema (la tapa de imprenta con lomo es un
+  problema aparte que depende del conteo de páginas final). Preguntar al
+  autor si el destino es KDP (tiene reglas fijas de márgenes por rango de
+  páginas, se pueden codificar) antes de diseñar la UI.
+- **Exportar sample para tiendas** (idea del autor, 2026-09-11). Un EPUB de
+  muestra con los primeros capítulos (~10 % del libro o N capítulos a
+  elección) más **todo el back matter**: «Sobre el autor» y «Otros libros»,
+  que es justamente lo que se quiere que el lector vea aunque no compre. Sirve
+  para las previews de las tiendas, para regalar en la web propia o en un
+  newsletter, y para Reedsy Discovery / BookFunnel.
+
+  Reuso casi total: `export_impl` ya arma portada, front matter, capítulos y
+  `7_otros_libros.xhtml` + `8_about_author.xhtml`; el sample es el mismo
+  pipeline con un **corte en `collect_chapters`** (`epub.rs:407`) y un título
+  «(Muestra)» / «(Sample)» en el `dc:title` para que no lo confunda con el
+  libro en la biblioteca del lector. Lo único nuevo que suma valor: una
+  **página final de cierre** después del último capítulo incluido («Seguí
+  leyendo en…» / «Continue reading at…») con el link a la tienda, que sale
+  del `book.json` (campo nuevo `tienda_url`, o el `isbn` si no hay link; va
+  en la interfaz `Settings`/`BookConfig` de los dos lados como manda
+  CLAUDE.md). El blurb del item de arriba es lo que iría en esa página si
+  existe. Opción en el modal de export: «Libro completo» / «Muestra (N
+  capítulos)», nada más.
 - **Abrir la carpeta del EPUB exportado / abrirlo en el visor**: al terminar el
   export la app dice dónde quedó el archivo y ahí muere; el autor tiene que ir a
   buscarlo a mano. Sumar en el aviso de export exitoso dos acciones: "Mostrar en
