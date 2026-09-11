@@ -478,17 +478,15 @@ export class Editor implements AfterViewInit, OnDestroy {
 
       // Limpiar las marcas del capítulo anterior antes de cargar el nuevo
       // para que no se vea "todo marcado" durante el round-trip a LT.
+      this.cerrarPopovers();
       this.grammarMatches.set([]);
       this.applyDecorations([]);
-      this.grammarPopover.set(null);
       this.lastCheckedPlain = null;
       this.raeViolations.set([]);
       this.applyRaeDecorations([]);
-      this.raePopover.set(null);
       this.lastRaePlain = null;
       this.repeticiones.set([]);
       this.applyRepeticionesDecorations([]);
-      this.repPopover.set(null);
       this.lastRepPlain = null;
       if (this.grammarDebounceHandle !== null) {
         clearTimeout(this.grammarDebounceHandle);
@@ -1335,6 +1333,20 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.grammarPopover.set(null);
   }
 
+  /** Cierra los tres popovers del editor. Único lugar que conoce el trío:
+   *  cada apertura lo llama antes de abrir el suyo y el cierre por click
+   *  afuera también. Antes cada sitio repetía el mismo bloque a mano y
+   *  `openGrammarPopover` se había olvidado de repeticiones, así que
+   *  Repetición + gramática quedaban abiertos uno al lado del otro. */
+  private cerrarPopovers(): void {
+    this.grammarPopover.set(null);
+    this.raePopover.set(null);
+    if (this.repPopover()) {
+      this.repPopover.set(null);
+      this.limpiarGrupo();
+    }
+  }
+
   protected abrirFormasDerivadas(): void {
     const popover = this.grammarPopover();
     if (!popover || !this.tiptap) return;
@@ -1498,8 +1510,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private abrirPopoverRepeticionEn(r: RepeticionPos): void {
     const editor = this.tiptap;
     if (!editor) return;
-    if (this.grammarPopover()) this.closeGrammarPopover();
-    if (this.raePopover()) this.raePopover.set(null);
+    this.cerrarPopovers();
     const coords = editor.view.coordsAtPos(r.from);
     this.repPopover.set({
       repeticion: r,
@@ -1622,9 +1633,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private abrirTesauro(objetivo: ObjetivoTesauro): void {
     const editor = this.tiptap;
     if (!editor) return;
-    if (this.grammarPopover()) this.closeGrammarPopover();
-    if (this.raePopover()) this.raePopover.set(null);
-    this.limpiarGrupo();
+    this.cerrarPopovers();
     const coords = editor.view.coordsAtPos(objetivo.from);
     this.repPopover.set({
       repeticion: null,
@@ -1836,12 +1845,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.openRepPopover(repSpan!, repeticion, event);
       return;
     }
-    if (this.raePopover()) this.raePopover.set(null);
-    if (this.grammarPopover()) this.closeGrammarPopover();
-    if (this.repPopover()) {
-      this.repPopover.set(null);
-      this.limpiarGrupo();
-    }
+    this.cerrarPopovers();
   }
 
   /**
@@ -1864,19 +1868,13 @@ export class Editor implements AfterViewInit, OnDestroy {
     // Defensa en profundidad: si algún día un elemento interno del popover
     // dejara de burbujear hasta su root, el guard evita que se cierre solo.
     if (target?.closest('.editor-pop')) return;
-    if (this.grammarPopover()) this.closeGrammarPopover();
-    if (this.raePopover()) this.raePopover.set(null);
-    if (this.repPopover()) {
-      this.repPopover.set(null);
-      this.limpiarGrupo();
-    }
+    this.cerrarPopovers();
   }
 
   private openRepPopover(span: HTMLElement, r: RepeticionPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
-    if (this.grammarPopover()) this.closeGrammarPopover();
-    if (this.raePopover()) this.raePopover.set(null);
+    this.cerrarPopovers();
     const rect = span.getBoundingClientRect();
     this.repPopover.set({
       repeticion: r,
@@ -1948,11 +1946,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private openRaePopover(span: HTMLElement, v: RaeViolationPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
-    if (this.grammarPopover()) this.closeGrammarPopover();
-    if (this.repPopover()) {
-      this.repPopover.set(null);
-      this.limpiarGrupo();
-    }
+    this.cerrarPopovers();
     const rect = span.getBoundingClientRect();
     this.raePopover.set({
       violation: v,
@@ -1963,7 +1957,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private openGrammarPopover(span: HTMLElement, m: GrammarMatchPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
-    if (this.raePopover()) this.raePopover.set(null);
+    this.cerrarPopovers();
     const rect = span.getBoundingClientRect();
     // El diccionario de la saga hasta ahora solo silenciaba falsos positivos.
     // Para los TYPOS también aporta candidatos: si el autor escribió mal un
