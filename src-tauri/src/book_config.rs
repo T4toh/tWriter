@@ -467,10 +467,12 @@ mod tests {
 
         assert!(image_field_unusable(libro.path(), None));
         assert!(image_field_unusable(libro.path(), Some("  ")));
-        // El caso real: absoluto de la PC vieja.
+        // El caso real: absoluto de la PC vieja. Un path que no puede
+        // existir en ninguna máquina: si apuntara al home real, el test
+        // fallaría justo en la PC donde esa imagen sí está.
         assert!(image_field_unusable(
             libro.path(),
-            Some("/home/tatoh/Downloads/La Princesa V3.png")
+            Some("/pc-vieja/Downloads/La Princesa V3.png")
         ));
         assert!(image_field_unusable(libro.path(), Some("no-esta.png")));
         assert!(!image_field_unusable(libro.path(), Some("cover.png")));
