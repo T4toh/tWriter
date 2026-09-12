@@ -484,10 +484,10 @@ Botón 📝 en el header del tree abre un wizard separado para traer notas markd
 - CSS subset estilo Reedsy embebido.
 - Templates 6×9" / 5×8" / A5 inyectados como `@page`.
 - Cover image, dedicatoria, copyright, TOC navegable.
-- Página "Sobre el autor" generada al final con foto + bio configurables (auto-detect de `author.*`/`autor.*` desde disco).
+- Página "Sobre el autor" generada al final: título, epígrafe opcional en itálica, bio, y una **firma** al pie (foto chica, nombre, QR + web en una línea). La foto va abajo a propósito: leída al terminar la novela, la página cierra como una carta. Auto-detect de `author.*`/`autor.*` desde disco.
 - **Back matter completo** (spec en `docs/superpowers/specs/2026-09-01-back-matter-epub-design.md`):
-  - **"Otros libros"**: se arma escaneando el root (`catalogo.rs`) — un libro está publicado si su `book.json` tiene `link`.
-  - **Perfil global del autor** en `autor.json` (`autor.rs`): bio ES/EN, foto, web y QR. Se hereda a todos los libros del repo.
+  - **"Otros libros"**: se arma escaneando el root (`catalogo.rs`) — un libro está publicado si su `book.json` tiene `link`. Si el `numero_en_serie + 1` está publicado, va **solo en su página** como «La historia sigue en» con tapa grande y la URL escrita (en tinta electrónica el link del título no se ve). Después la galería de a dos (`inline-block`, sin flex/grid): el resto de la serie en orden y, de cada otra saga, solo el primer publicado — la puerta de entrada, no el catálogo entero.
+  - **Perfil global del autor** en `autor.json` (`autor.rs`): bio y epígrafe ES/EN, foto, web y QR. Se hereda a todos los libros del repo.
   - **Página legal con incisos elegibles y editables**, bilingües como el copyright (`epub.rs::texto_inciso_default` + fieldset "Página legal" del modal del libro): `reserva` (derechos reservados), `ficcion` ("cualquier parecido con personas reales… es coincidencia") e `ia` (declara que la IA se usó solo para generar imágenes y que el texto es obra del autor — hay libros sin imágenes generadas, por eso es opcional). `ficcion` arranca en true por su cuenta: antes heredaba el valor de `reserva`, así que apagar la reserva se llevaba puesto el aviso de ficción.
   - Todas las páginas editoriales entran al índice con `class="toc-editorial"`.
 - **Imágenes reescaladas al embeberse** (crate `image`): la tapa iba a resolución de imprenta adentro del EPUB. El archivo del repo se deja intacto — es la misma tapa que se manda a imprimir.

@@ -18,6 +18,10 @@ pub struct AutorConfig {
     /// espurios en el repo de novelas, que va por git.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub bio: BTreeMap<String, String>,
+    /// Frase corta que va en itálica bajo el título de "Sobre el autor",
+    /// por idioma como la bio. Opcional: sin ella la página arranca en la bio.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub epigrafe: BTreeMap<String, String>,
     /// Path relativo a la raíz (ej: "autor.jpg") o absoluto.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub foto: Option<String>,
@@ -40,13 +44,22 @@ impl AutorConfig {
     /// Bio del idioma pedido; si no está, la de cualquier otro idioma
     /// cargado. Las bios en blanco no cuentan.
     pub fn bio_en(&self, idioma: &str) -> Option<&str> {
-        let util = |s: &&String| !s.trim().is_empty();
-        self.bio
-            .get(idioma)
-            .filter(util)
-            .or_else(|| self.bio.values().find(util))
-            .map(|s| s.trim())
+        por_idioma(&self.bio, idioma)
     }
+
+    /// Mismo criterio que `bio_en`.
+    pub fn epigrafe_en(&self, idioma: &str) -> Option<&str> {
+        por_idioma(&self.epigrafe, idioma)
+    }
+}
+
+fn por_idioma<'a>(campo: &'a BTreeMap<String, String>, idioma: &str) -> Option<&'a str> {
+    let util = |s: &&String| !s.trim().is_empty();
+    campo
+        .get(idioma)
+        .filter(util)
+        .or_else(|| campo.values().find(util))
+        .map(|s| s.trim())
 }
 
 pub fn leer(root: &Path) -> AutorConfig {
@@ -127,6 +140,21 @@ mod tests {
         cfg.bio.insert("en".into(), "english".into());
         assert_eq!(cfg.bio_en("en"), Some("english"));
         assert_eq!(cfg.bio_en("es"), Some("español"));
+    }
+
+    #[test]
+    fn epigrafe_sigue_la_misma_regla_de_idioma_que_la_bio() {
+        let mut cfg = AutorConfig::default();
+        cfg.epigrafe.insert("es".into(), "frase".into());
+        assert_eq!(cfg.epigrafe_en("es"), Some("frase"));
+        assert_eq!(cfg.epigrafe_en("en"), Some("frase"));
+        assert_eq!(AutorConfig::default().epigrafe_en("es"), None);
+    }
+
+    #[test]
+    fn epigrafe_ausente_no_se_serializa() {
+        let json = serde_json::to_string(&AutorConfig::default()).unwrap();
+        assert!(!json.contains("epigrafe"));
     }
 
     #[test]

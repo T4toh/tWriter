@@ -24,9 +24,16 @@ pub struct LibroPublicado {
 
 #[derive(Debug, Default, PartialEq)]
 pub struct Catalogo {
-    /// Otros libros publicados de la misma saga que el que se exporta.
+    /// El `numero_en_serie + 1` del libro que se exporta, si está publicado.
+    /// Va destacado solo, antes de la lista: es el que el lector quiere al
+    /// terminar. No se repite en `misma_saga`.
+    pub siguiente: Option<LibroPublicado>,
+    /// Otros libros publicados de la misma saga que el que se exporta,
+    /// sin el `siguiente`.
     pub misma_saga: Vec<LibroPublicado>,
-    /// Publicados del resto de las sagas.
+    /// De cada otra saga, solo el primer publicado (por `numero_en_serie`):
+    /// es la puerta de entrada a esa serie, el resto no suma en el back
+    /// matter de un libro ajeno.
     pub otros: Vec<LibroPublicado>,
     /// Nombre de la saga actual, para el encabezado del primer bloque.
     pub saga_actual: Option<String>,
@@ -35,6 +42,9 @@ pub struct Catalogo {
 pub fn escanear(root: &Path, libro_actual: &Path) -> Catalogo {
     let actual = canonicalizar(libro_actual);
     let saga_actual_dir = libro_actual.parent().map(canonicalizar);
+    let numero_siguiente = leer_book_config(libro_actual)
+        .and_then(|cfg| cfg.numero_en_serie)
+        .map(|n| n + 1);
 
     let mut cat = Catalogo::default();
     for saga_dir in subdirectorios(root) {
@@ -47,9 +57,15 @@ pub fn escanear(root: &Path, libro_actual: &Path) -> Catalogo {
         let mut libros = publicados_de(&saga_dir, &actual);
         if es_la_actual {
             cat.saga_actual = nombre_de_saga(&saga_dir);
+            if let Some(pos) = libros
+                .iter()
+                .position(|l| l.numero_en_serie.is_some() && l.numero_en_serie == numero_siguiente)
+            {
+                cat.siguiente = Some(libros.remove(pos));
+            }
             cat.misma_saga.append(&mut libros);
-        } else {
-            cat.otros.append(&mut libros);
+        } else if !libros.is_empty() {
+            cat.otros.push(libros.swap_remove(0));
         }
     }
     cat
@@ -202,6 +218,73 @@ mod tests {
         let cat = escanear(root, &actual);
         let titulos: Vec<&str> = cat.misma_saga.iter().map(|l| l.titulo.as_str()).collect();
         assert_eq!(titulos, vec!["A", "C", "B"]);
+    }
+
+    #[test]
+    fn destaca_como_siguiente_al_numero_mas_uno_y_lo_saca_de_la_lista() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let s = saga(root, "1 - Meridian");
+        libro(&s, "1 - A", r#"{"titulo":"A","link":"https://x/a","numero_en_serie":1}"#);
+        let actual = libro(&s, "2 - B", r#"{"titulo":"B","link":"https://x/b","numero_en_serie":2}"#);
+        libro(&s, "3 - C", r#"{"titulo":"C","link":"https://x/c","numero_en_serie":3}"#);
+        libro(&s, "4 - D", r#"{"titulo":"D","link":"https://x/d","numero_en_serie":4}"#);
+
+        let cat = escanear(root, &actual);
+        assert_eq!(cat.siguiente.as_ref().map(|l| l.titulo.as_str()), Some("C"));
+        let titulos: Vec<&str> = cat.misma_saga.iter().map(|l| l.titulo.as_str()).collect();
+        assert_eq!(titulos, vec!["A", "D"]);
+    }
+
+    #[test]
+    fn sin_siguiente_publicado_no_destaca_nada() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let s = saga(root, "1 - Meridian");
+        libro(&s, "1 - A", r#"{"titulo":"A","link":"https://x/a","numero_en_serie":1}"#);
+        let actual = libro(&s, "2 - B", r#"{"titulo":"B","link":"https://x/b","numero_en_serie":2}"#);
+        // El 3 existe pero no está publicado (sin link): no es "siguiente".
+        libro(&s, "3 - C", r#"{"titulo":"C","numero_en_serie":3}"#);
+        // Y el 4 sí está publicado pero no es n+1.
+        libro(&s, "4 - D", r#"{"titulo":"D","link":"https://x/d","numero_en_serie":4}"#);
+
+        let cat = escanear(root, &actual);
+        assert!(cat.siguiente.is_none());
+        let titulos: Vec<&str> = cat.misma_saga.iter().map(|l| l.titulo.as_str()).collect();
+        assert_eq!(titulos, vec!["A", "D"]);
+    }
+
+    #[test]
+    fn el_libro_actual_sin_numero_no_tiene_siguiente() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let s = saga(root, "1 - Meridian");
+        let actual = libro(&s, "1 - A", r#"{"titulo":"A","link":"https://x/a"}"#);
+        libro(&s, "2 - B", r#"{"titulo":"B","link":"https://x/b","numero_en_serie":1}"#);
+
+        let cat = escanear(root, &actual);
+        assert!(cat.siguiente.is_none());
+        assert_eq!(cat.misma_saga.len(), 1);
+    }
+
+    #[test]
+    fn de_las_otras_sagas_solo_entra_el_primer_publicado() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let s1 = saga(root, "1 - Meridian");
+        let s2 = saga(root, "2 - Milky Way");
+        let s3 = saga(root, "3 - Neon");
+        let actual = libro(&s1, "1 - Uno", r#"{"titulo":"Uno","link":"https://x/1"}"#);
+        // El #1 no está publicado: entra el #2, que es el primero que sí.
+        libro(&s2, "1 - MW1", r#"{"titulo":"MW1","numero_en_serie":1}"#);
+        libro(&s2, "2 - MW2", r#"{"titulo":"MW2","link":"https://x/mw2","numero_en_serie":2}"#);
+        libro(&s2, "3 - MW3", r#"{"titulo":"MW3","link":"https://x/mw3","numero_en_serie":3}"#);
+        libro(&s3, "1 - N1", r#"{"titulo":"N1","link":"https://x/n1","numero_en_serie":1}"#);
+        libro(&s3, "2 - N2", r#"{"titulo":"N2","link":"https://x/n2","numero_en_serie":2}"#);
+
+        let cat = escanear(root, &actual);
+        let titulos: Vec<&str> = cat.otros.iter().map(|l| l.titulo.as_str()).collect();
+        assert_eq!(titulos, vec!["MW2", "N1"]);
     }
 
     #[test]

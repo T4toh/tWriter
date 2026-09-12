@@ -1113,14 +1113,12 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   portada en silencio (`epub.rs::embed_image` devuelve `Ok(None)`). Contra la
   convención "el remedio se da adentro de la app": tiene que mostrar el path que
   no existe y el botón "Elegir otra", y el export avisar que salió sin portada.
-- Lista "Otros libros del mismo autor" en EPUB (contratapa ya está embebida).
 - Preview tipo Kindle (B/N, distintos tamaños — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
 - Pesos extra de fuente (300 Light, 600 SemiBold, 900 Black). Hoy solo Regular/Bold/Italic/BoldItalic; pesos custom requieren edit manual del `theme.json`.
 - Auto-migración de tema renombrado: hoy renombrar un tema deja sagas/libros con `base` dangling (warning). Implementar scan recursivo de `*.json` y rewrite del `base`.
 - Colores en el tema (body color, heading color, scene-break color). Hoy el tema es solo tipografía + márgenes.
 - Theme presets compartibles entre repos distintos (export/import como zip).
 - Revisiones de EPUB: hoy sobreescribe siempre `Exportados/<titulo>.epub`. Sumar "guardar últimas N revisiones" (default 5) — renombrar la actual a `<titulo>-revN.epub` antes de generar la nueva.
-- Diseño de la página "Sobre el autor": hoy funcional pero genérico (foto circular + bio justified). Pensar layout más editorial (dos columnas, variantes de retrato, epígrafe).
 - Bio + foto del autor a nivel saga (heredados a libros nuevos) y/o `settings.json` (defaults globales del repo). Hoy solo `book.json`.
 - [ ] **Formato de fecha configurable** (pedido del autor el 2026-09-04)
   Hoy `shared/fecha-corta-pipe.ts` está fijo en `es-AR` con día/mes/año de dos

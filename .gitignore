@@ -52,3 +52,8 @@ packaging/aur/src/
 packaging/aur/*.pkg.tar.zst
 packaging/aur/*.pkg.tar.xz
 packaging/aur/*.deb
+
+# mockups del brainstorming visual
+.superpowers/
+# capturas del MCP de playwright
+.playwright-mcp/
