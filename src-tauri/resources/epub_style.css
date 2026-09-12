@@ -185,6 +185,41 @@ h1.about-author-title {
   text-align: center;
 }
 
+/* Epígrafe: una frase corta en itálica bajo el título, atenuada para que
+   no compita con la bio. Sin sangría, es una línea suelta. */
+p.about-author-epigrafe {
+  font-style: italic;
+  opacity: 0.75;
+  margin: 0 0 1.6em;
+  text-align: center;
+  text-indent: 0;
+}
+
+/* Centrada, no justificada: es un párrafo corto suelto en una página, y
+   justificarlo abre calles feas. Sin max-width, por lo mismo que arriba. */
+.about-author-bio p {
+  margin: 0 0 1em;
+  text-align: center;
+  text-indent: 0;
+}
+
+/* Firma al pie: foto chica, nombre en itálica, QR + web en una línea. Va
+   después de la bio a propósito — leída al terminar la novela, la página
+   es una despedida y la firma la cierra como la de una carta. El filete
+   corto arriba la separa del texto. */
+.autor-firma {
+  margin-top: 2.2em;
+  padding-top: 1.2em;
+  border-top: 1px solid;
+  /* Ancho del filete: el borde no se puede acortar, así que se acorta el
+     bloque y se centra. En % porque acá el padre es el flujo del body,
+     que sí tiene ancho definido (no es el caso de la foto, ver abajo). */
+  width: 60%;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
 /* Sin object-fit: no hace nada útil sin un height explícito con el que
    recortar — con solo max-width + height:auto la imagen ya respeta su
    propio aspect ratio, y evita depender de una propiedad con soporte
@@ -198,26 +233,31 @@ h1.about-author-title {
    pantallas angostas. */
 .about-author-photo {
   display: block;
-  margin: 0 auto 1.2em;
-  width: 8em;
-  max-width: 45%;
+  margin: 0 auto 0.6em;
+  width: 4.5em;
+  max-width: 35%;
   height: auto;
 }
 
-/* Centrada, no justificada: es un párrafo corto suelto en una página, y
-   justificarlo abre calles feas. Sin max-width, por lo mismo que arriba. */
-.about-author-bio p {
-  margin: 0 0 1em;
-  text-align: center;
+p.autor-firma-nombre {
+  font-style: italic;
+  margin: 0 0 0.5em;
   text-indent: 0;
 }
 
-/* Centrado sobre el eje de la página, como una firma al pie — el resto de
-   la página (foto, título, bio) ya está centrado, no tiene sentido que este
-   bloque cuelgue del margen derecho. */
-.autor-web { margin-top: 1.6em; text-align: center; }
-img.autor-qr { width: 150px; max-width: 40%; }
-p.autor-web-url { margin: 0.3em 0 0 0; font-size: 0.9em; }
+/* QR y URL en la misma línea, el QR a la altura del texto: son una sola
+   pieza ("acá me encontrás"), no dos bloques. */
+p.autor-web-url {
+  margin: 0;
+  font-size: 0.9em;
+  text-indent: 0;
+}
+img.autor-qr {
+  width: 3.2em;
+  height: 3.2em;
+  vertical-align: middle;
+  margin-right: 0.5em;
+}
 
 /* Cierre de la muestra: comparte el body de "Sobre el autor" (centrado,
    arranca arriba). Los párrafos son frases sueltas, sin sangría. */
@@ -228,24 +268,74 @@ p.autor-web-url { margin: 0.3em 0 0 0; font-size: 0.9em; }
 }
 
 /* Otros libros: nada de flexbox ni grid — los lectores viejos los ignoran
-   y el resultado queda peor que el apilado simple con float. */
-.otros-libros h2 { margin-top: 1.6em; text-align: center; }
-ul.libro-list { list-style: none; margin: 0; padding: 0; }
-/* padding + regla arriba en vez de margin-bottom: la tapa suele ser más alta
-   que el título+subtítulo, así que un margin-bottom del <li> se suma a ese
-   sobrante y el espacio entre entradas queda irregular (grande si la tapa es
-   alta, apenas nada si el texto es largo). padding simétrico da un espacio
-   fijo pase lo que pase, y la línea separa una entrada de la próxima sin
-   dejarlas "a la deriva". */
-/* Entrada centrada, no con la tapa flotada a la izquierda: con uno o dos
-   libros por bloque el float dejaba el texto pegado al costado y media
-   página vacía a la derecha. Centrado acompaña al resto del back matter,
-   que ya está centrado. */
-li.libro { margin: 0; padding: 1em 0; text-align: center; }
-li.libro + li.libro { border-top: 1px solid; }
-img.libro-tapa { display: block; margin: 0 auto 0.6em; width: 100px; max-width: 40%; }
-p.libro-titulo { margin: 0; font-weight: bold; line-height: 1.3; }
-p.libro-subtitulo { margin: 0.2em 0 0 0; font-size: 0.9em; line-height: 1.3; }
+   y el resultado queda peor que el apilado simple. La galería de a dos va
+   con inline-block, que es CSS 2.1 y lo respeta hasta el reader más viejo. */
+
+/* Mismo margen y centrado que "Sobre el autor": son la misma familia de
+   páginas de cierre y tienen que verse como tales. */
+body.otros-libros-body {
+  text-align: center;
+  padding: 2em 1em;
+  box-sizing: border-box;
+}
+.otros-libros h1 {
+  font-family: sans-serif;
+  font-size: 1.6em;
+  font-weight: normal;
+  letter-spacing: 0.05em;
+  margin: 0 0 0.5em;
+  text-align: center;
+}
+
+/* El siguiente de la serie, solo en su página: es el libro que el lector
+   quiere al terminar este, y merece la tapa grande y la URL escrita (en
+   tinta electrónica el link del título no se ve ni se toca). */
+.libro-siguiente {
+  text-align: center;
+  page-break-after: always;
+}
+.libro-siguiente h2,
+.otros-libros h2 {
+  font-family: sans-serif;
+  font-size: 0.75em;
+  font-weight: normal;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  margin: 1.6em 0 0.9em;
+  text-align: center;
+}
+.libro-siguiente h2 { margin-top: 0; }
+img.libro-tapa-grande {
+  display: block;
+  margin: 0 auto 0.8em;
+  width: 11em;
+  max-width: 60%;
+  height: auto;
+}
+.libro-siguiente p.libro-titulo { font-size: 1.15em; }
+p.libro-link {
+  margin: 0.4em 0 0;
+  font-size: 0.85em;
+  text-indent: 0;
+}
+
+/* Galería: cada entrada es un inline-block del 46% (dos por fila con aire
+   entre medio), centradas por el text-align del <ul>. Con una sola entrada
+   queda centrada sola. vertical-align: top para que una tapa más alta no
+   descuelgue el texto de la de al lado. */
+ul.libro-list { list-style: none; margin: 0; padding: 0; text-align: center; }
+li.libro {
+  display: inline-block;
+  width: 46%;
+  vertical-align: top;
+  margin: 0 0 1.2em;
+  padding: 0 1%;
+  text-align: center;
+}
+img.libro-tapa { display: block; margin: 0 auto 0.6em; width: 6em; max-width: 70%; height: auto; }
+p.libro-titulo { margin: 0; font-weight: bold; line-height: 1.3; text-indent: 0; }
+p.libro-subtitulo { margin: 0.2em 0 0 0; font-size: 0.9em; line-height: 1.3; text-indent: 0; }
 
 /* ─────────────────── Title page elementos ─────────────────── */
 .title-page-author {
@@ -375,8 +465,10 @@ u { text-decoration: underline; }
    lector de ebook espera para saber dónde tocar. */
 a,
 p.libro-titulo a,
+p.libro-link a,
 p.autor-web-url a,
 .otros-libros a,
+.libro-siguiente a,
 .about-author a {
   color: inherit;
   text-decoration: underline;

@@ -11,13 +11,23 @@
           </label>
 
           <label class="field">
+            <span>Epígrafe en español</span>
+            <input type="text" placeholder="Una frase corta, va en itálica bajo el título" [ngModel]="texto('epigrafe', 'es')" (ngModelChange)="setTexto('epigrafe', 'es', $event)" />
+          </label>
+
+          <label class="field">
+            <span>Epígrafe en inglés</span>
+            <input type="text" [ngModel]="texto('epigrafe', 'en')" (ngModelChange)="setTexto('epigrafe', 'en', $event)" />
+          </label>
+
+          <label class="field">
             <span>Bio en español</span>
-            <textarea rows="3" [ngModel]="bio('es')" (ngModelChange)="setBio('es', $event)"></textarea>
+            <textarea rows="3" [ngModel]="texto('bio', 'es')" (ngModelChange)="setTexto('bio', 'es', $event)"></textarea>
           </label>
 
           <label class="field">
             <span>Bio en inglés</span>
-            <textarea rows="3" [ngModel]="bio('en')" (ngModelChange)="setBio('en', $event)"></textarea>
+            <textarea rows="3" [ngModel]="texto('bio', 'en')" (ngModelChange)="setTexto('bio', 'en', $event)"></textarea>
           </label>
 
           <label class="field">
@@ -53,10 +63,10 @@
         <section class="preview-col">
           <span class="preview-label">Vista previa — página "Sobre el autor"</span>
           <div class="preview-page">
-            @if (fotoPreviewUrl(); as url) {
-              <img class="preview-photo" [src]="url" [alt]="c.nombre || 'Autor'" />
-            }
             <h1 class="preview-heading">Sobre el autor</h1>
+            @if (previewEpigrafe(); as epigrafe) {
+              <p class="preview-epigrafe">{{ epigrafe }}</p>
+            }
             <div class="preview-bio">
               @for (p of previewParrafos(); track $index) {
                 <p>{{ p }}</p>
@@ -64,12 +74,22 @@
                 <p class="preview-empty">Sin bio todavía.</p>
               }
             </div>
-            @if (previewWebHost(); as host) {
-              <div class="preview-web">
-                @if (qrPreviewUrl(); as qrUrl) {
-                  <img class="preview-qr" [src]="qrUrl" alt="" />
+            @if (fotoPreviewUrl() || c.nombre || previewWebHost()) {
+              <div class="preview-firma">
+                @if (fotoPreviewUrl(); as url) {
+                  <img class="preview-photo" [src]="url" [alt]="c.nombre || 'Autor'" />
                 }
-                <p class="preview-web-url">{{ host }}</p>
+                @if (c.nombre) {
+                  <p class="preview-firma-nombre">{{ c.nombre }}</p>
+                }
+                @if (previewWebHost(); as host) {
+                  <p class="preview-web-url">
+                    @if (qrPreviewUrl(); as qrUrl) {
+                      <img class="preview-qr" [src]="qrUrl" alt="" />
+                    }
+                    {{ host }}
+                  </p>
+                }
               </div>
             }
           </div>

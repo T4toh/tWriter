@@ -221,7 +221,7 @@ fn build_theme_rules_block(theme: &ResolvedTheme) -> String {
         // specificity, gana orden de cascada). El título del capítulo en el
         // índice (`.toc-title`) hereda la fuente del cuerpo a propósito.
         out.push_str(
-            "p.title-page-title, nav h1, nav .toc-num, h1.about-author-title, .otros-libros h1 {\n",
+            "p.title-page-title, nav h1, nav .toc-num, h1.about-author-title, .otros-libros h1, .otros-libros h2, .libro-siguiente h2 {\n",
         );
         out.push_str(&format!("  font-family: \"{}\", sans-serif;\n", eh));
         out.push_str("}\n");
@@ -832,8 +832,10 @@ fn export_impl(
         .map(str::trim)
         .filter(|s| !s.is_empty());
     let bio = bio_libro.or_else(|| perfil.bio_en(cfg.idioma.as_deref().unwrap_or("es")));
-    let hay_back_matter =
-        !catalogo.misma_saga.is_empty() || !catalogo.otros.is_empty() || bio.is_some();
+    let hay_back_matter = catalogo.siguiente.is_some()
+        || !catalogo.misma_saga.is_empty()
+        || !catalogo.otros.is_empty()
+        || bio.is_some();
     if hay_back_matter {
         spine_idx += 1;
         let xhtml = xhtml_shell(&cfg.titulo, "", &lang_str, "blank-body");
@@ -850,19 +852,23 @@ fn export_impl(
 
     // 5c) Otros libros del autor. El catálogo sale de escanear el root: un
     // libro está publicado si su book.json tiene `link`.
-    if !catalogo.misma_saga.is_empty() || !catalogo.otros.is_empty() {
+    if catalogo.siguiente.is_some()
+        || !catalogo.misma_saga.is_empty()
+        || !catalogo.otros.is_empty()
+    {
         // Indexado por posición y no por `link`: dos libros publicados pueden
         // compartir el mismo link (ej: placeholder mientras no existe la
         // página del libro), y un HashMap<link, _> haría que el segundo pise
-        // la miniatura del primero.
-        let total = catalogo.misma_saga.len() + catalogo.otros.len();
-        let mut tapas: Vec<Option<String>> = vec![None; total];
-        for (idx, libro) in catalogo
-            .misma_saga
+        // la miniatura del primero. Mismo orden que recorre el builder:
+        // el siguiente (si hay) primero, después la serie, después el resto.
+        let libros: Vec<&crate::catalogo::LibroPublicado> = catalogo
+            .siguiente
             .iter()
+            .chain(catalogo.misma_saga.iter())
             .chain(catalogo.otros.iter())
-            .enumerate()
-        {
+            .collect();
+        let mut tapas: Vec<Option<String>> = vec![None; libros.len()];
+        for (idx, libro) in libros.iter().enumerate() {
             let Some(origen) = &libro.tapa else {
                 // El libro está publicado pero su imagen no está en disco.
                 // No es motivo para abortar el export, pero sí para decirlo.
@@ -872,10 +878,12 @@ fn export_impl(
                 ));
                 continue;
             };
+            // El siguiente va solo y grande; las demás son miniaturas.
+            let es_hero = idx == 0 && catalogo.siguiente.is_some();
             let Some(dest) = embebido_reescalado(
                 origen,
                 &format!("cat-{}", idx),
-                400,
+                if es_hero { 600 } else { 400 },
                 false,
                 &mut zip,
                 opts,
@@ -951,6 +959,7 @@ fn export_impl(
         let xhtml = build_about_author_xhtml(
             &cfg,
             bio,
+            perfil.epigrafe_en(cfg.idioma.as_deref().unwrap_or("es")),
             foto_filename.as_deref(),
             perfil.web.as_deref(),
             qr_filename.as_deref(),
@@ -1760,9 +1769,16 @@ fn build_dedication_xhtml(text: &str) -> String {
 
 /// Página "Sobre el autor". Todas las piezas son opcionales salvo la bio,
 /// que es lo que decide si la página existe (lo resuelve el llamador).
+///
+/// Orden: título, epígrafe, bio y una **firma** al pie (foto chica, nombre,
+/// QR + web en una línea). La foto va abajo y no arriba a propósito: leída
+/// al terminar la novela, la página es una despedida, y la firma cierra
+/// como la de una carta. El QR va pegado a la URL escrita porque quien lee
+/// en el celular no puede escanear su propia pantalla, pero sí leerla.
 fn build_about_author_xhtml(
     cfg: &BookConfig,
     bio: &str,
+    epigrafe: Option<&str>,
     foto: Option<&str>,
     web: Option<&str>,
     qr: Option<&str>,
@@ -1771,15 +1787,10 @@ fn build_about_author_xhtml(
     let is_en = lang == "en";
     let heading = if is_en { "About the Author" } else { "Sobre el autor" };
 
-    let autor_alt = cfg.autor.as_deref().unwrap_or("").trim();
-    let img = foto
-        .map(|f| {
-            format!(
-                r#"<img class="about-author-photo" src="{}" alt="{}"/>"#,
-                xml_escape(f),
-                xml_escape(autor_alt)
-            )
-        })
+    let epigrafe_html = epigrafe
+        .map(str::trim)
+        .filter(|e| !e.is_empty())
+        .map(|e| format!("<p class=\"about-author-epigrafe\">{}</p>\n", xml_escape(e)))
         .unwrap_or_default();
 
     let parrafos: String = bio
@@ -1789,49 +1800,69 @@ fn build_about_author_xhtml(
         .map(|l| format!("<p>{}</p>\n", xml_escape(l)))
         .collect();
 
-    // El QR solo tiene sentido si hay a dónde apuntar. La URL va igual como
-    // texto: el que lee en el celular no puede escanear su propia pantalla.
-    let enlace = match web {
-        Some(w) if !w.trim().is_empty() => {
+    let nombre = cfg.autor.as_deref().map(str::trim).filter(|n| !n.is_empty());
+    let img = foto
+        .map(|f| {
+            format!(
+                "<img class=\"about-author-photo\" src=\"{}\" alt=\"{}\"/>\n",
+                xml_escape(f),
+                xml_escape(nombre.unwrap_or(""))
+            )
+        })
+        .unwrap_or_default();
+    let nombre_html = nombre
+        .map(|n| format!("<p class=\"autor-firma-nombre\">{}</p>\n", xml_escape(n)))
+        .unwrap_or_default();
+
+    // El QR solo tiene sentido si hay a dónde apuntar. Va inline con la URL,
+    // en la misma línea: es una sola pieza ("acá me encontrás"), no dos.
+    let enlace = match web.map(str::trim).filter(|w| !w.is_empty()) {
+        Some(w) => {
             let qr_html = qr
                 .map(|q| {
                     format!(
-                        r#"<a href="{}"><img class="autor-qr" src="{}" alt=""/></a>"#,
+                        "<a href=\"{}\"><img class=\"autor-qr\" src=\"{}\" alt=\"\"/></a>",
                         xml_escape(w),
                         xml_escape(q)
                     )
                 })
                 .unwrap_or_default();
             format!(
-                "<div class=\"autor-web\">{}<p class=\"autor-web-url\"><a href=\"{}\">{}</a></p></div>\n",
+                "<p class=\"autor-web-url\">{}<a href=\"{}\">{}</a></p>\n",
                 qr_html,
                 xml_escape(w),
                 xml_escape(w.trim_start_matches("https://").trim_start_matches("http://"))
             )
         }
-        _ => String::new(),
+        None => String::new(),
+    };
+
+    // Sin ninguna de las tres piezas no hay firma: un div vacío con margen
+    // dejaría un hueco al pie.
+    let firma = if img.is_empty() && nombre_html.is_empty() && enlace.is_empty() {
+        String::new()
+    } else {
+        format!("<div class=\"autor-firma\">\n{}{}{}</div>\n", img, nombre_html, enlace)
     };
 
     let body = format!(
-        r#"<div class="about-author">
-<h1 class="about-author-title">{}</h1>
-{}
-<div class="about-author-bio">
-{}</div>
-{}</div>"#,
+        "<div class=\"about-author\">\n<h1 class=\"about-author-title\">{}</h1>\n{}<div class=\"about-author-bio\">\n{}</div>\n{}</div>",
         xml_escape(heading),
-        img,
+        epigrafe_html,
         parrafos,
-        enlace
+        firma
     );
     xhtml_shell(heading, &body, lang, "about-author-body")
 }
 
-/// Página "Otros libros": los publicados de la misma saga y los del resto.
-/// `tapas` trae, en el mismo orden que `misma_saga.chain(otros)`, el nombre
-/// del archivo de la miniatura de cada libro ya embebida en el EPUB (`None`
-/// si no tiene). Indexado por posición y no por `link`: dos libros con el
-/// mismo `link` (placeholder mientras no existe su página) no deben colisionar.
+/// Página "Otros libros". Primero, si existe, el **siguiente** de la serie
+/// solo y grande, con la URL escrita: es el libro que el lector quiere al
+/// terminar este, y en tinta electrónica el link del título no se ve. Después
+/// la lista: los publicados de la misma saga y la puerta de entrada al resto.
+/// `tapas` trae, en el mismo orden que `siguiente.chain(misma_saga).chain(otros)`,
+/// el nombre del archivo de la imagen de cada libro ya embebida en el EPUB
+/// (`None` si no tiene). Indexado por posición y no por `link`: dos libros con
+/// el mismo `link` (placeholder mientras no existe su página) no deben colisionar.
 fn build_otros_libros_xhtml(
     cfg: &BookConfig,
     cat: &crate::catalogo::Catalogo,
@@ -1841,6 +1872,40 @@ fn build_otros_libros_xhtml(
     let is_en = lang == "en";
     let heading = if is_en { "Also by the Author" } else { "Otros libros" };
 
+    let ficha = |l: &crate::catalogo::LibroPublicado, tapa: Option<&String>, clase_tapa: &str| -> String {
+        let mut s = String::new();
+        if let Some(archivo) = tapa {
+            s.push_str(&format!(
+                r#"<a href="{}"><img class="{}" src="{}" alt="{}"/></a>"#,
+                xml_escape(&l.link),
+                clase_tapa,
+                xml_escape(archivo),
+                xml_escape(&l.titulo)
+            ));
+        }
+        s.push_str(&format!(
+            "<p class=\"libro-titulo\"><a href=\"{}\">{}</a></p>",
+            xml_escape(&l.link),
+            xml_escape(&l.titulo)
+        ));
+        if let Some(sub) = &l.subtitulo {
+            s.push_str(&format!("<p class=\"libro-subtitulo\">{}</p>", xml_escape(sub)));
+        }
+        s
+    };
+
+    let hero = match &cat.siguiente {
+        Some(l) => format!(
+            "<div class=\"libro-siguiente\">\n<h2>{}</h2>\n{}<p class=\"libro-link\"><a href=\"{}\">{}</a></p>\n</div>\n",
+            if is_en { "The story continues in" } else { "La historia sigue en" },
+            ficha(l, tapas.first().and_then(Option::as_ref), "libro-tapa-grande"),
+            xml_escape(&l.link),
+            xml_escape(l.link.trim_start_matches("https://").trim_start_matches("http://")),
+        ),
+        None => String::new(),
+    };
+    let offset_lista = usize::from(cat.siguiente.is_some());
+
     let bloque = |titulo: &str, libros: &[crate::catalogo::LibroPublicado], offset: usize| -> String {
         if libros.is_empty() {
             return String::new();
@@ -1848,22 +1913,7 @@ fn build_otros_libros_xhtml(
         let mut s = format!("<h2>{}</h2>\n<ul class=\"libro-list\">\n", xml_escape(titulo));
         for (i, l) in libros.iter().enumerate() {
             s.push_str("<li class=\"libro\">");
-            if let Some(Some(archivo)) = tapas.get(offset + i) {
-                s.push_str(&format!(
-                    r#"<a href="{}"><img class="libro-tapa" src="{}" alt="{}"/></a>"#,
-                    xml_escape(&l.link),
-                    xml_escape(archivo),
-                    xml_escape(&l.titulo)
-                ));
-            }
-            s.push_str(&format!(
-                "<p class=\"libro-titulo\"><a href=\"{}\">{}</a></p>",
-                xml_escape(&l.link),
-                xml_escape(&l.titulo)
-            ));
-            if let Some(sub) = &l.subtitulo {
-                s.push_str(&format!("<p class=\"libro-subtitulo\">{}</p>", xml_escape(sub)));
-            }
+            s.push_str(&ficha(l, tapas.get(offset + i).and_then(Option::as_ref), "libro-tapa"));
             s.push_str("</li>\n");
         }
         s.push_str("</ul>\n");
@@ -1886,17 +1936,14 @@ fn build_otros_libros_xhtml(
         (None, false) => "Más de esta serie".to_string(),
         (None, true) => "More from This Series".to_string(),
     };
-    let titulo_otros = if is_en {
-        "Other Books by the Author"
-    } else {
-        "Otros libros del autor"
-    };
+    let titulo_otros = if is_en { "Other Series" } else { "Otras series" };
 
     let body = format!(
-        "<div class=\"otros-libros\">\n<h1>{}</h1>\n{}{}</div>",
+        "{}<div class=\"otros-libros\">\n<h1>{}</h1>\n{}{}</div>",
+        hero,
         xml_escape(heading),
-        bloque(&titulo_saga, &cat.misma_saga, 0),
-        bloque(titulo_otros, &cat.otros, cat.misma_saga.len()),
+        bloque(&titulo_saga, &cat.misma_saga, offset_lista),
+        bloque(titulo_otros, &cat.otros, offset_lista + cat.misma_saga.len()),
     );
     xhtml_shell(heading, &body, lang, "otros-libros-body")
 }
@@ -2961,7 +3008,7 @@ mod tests {
         ));
         assert!(block.contains("font-family: \"Cormorant\", serif;"));
         assert!(block.contains(
-            "p.title-page-title, nav h1, nav .toc-num, h1.about-author-title, .otros-libros h1 {"
+            "p.title-page-title, nav h1, nav .toc-num, h1.about-author-title, .otros-libros h1, .otros-libros h2, .libro-siguiente h2 {"
         ));
         assert!(block.contains("font-family: \"Playfair\", sans-serif;"));
     }
@@ -3260,6 +3307,7 @@ mod tests {
         let xhtml = build_about_author_xhtml(
             &cfg,
             "Nací en Cipolletti.\nVivo escribiendo.",
+            None,
             Some("author.jpg"),
             None,
             None,
@@ -3272,13 +3320,73 @@ mod tests {
     }
 
     #[test]
+    fn about_author_cierra_con_firma_foto_nombre_y_web_despues_de_la_bio() {
+        let cfg = BookConfig {
+            titulo: "Test".into(),
+            autor: Some("Ignacio Arano".into()),
+            ..Default::default()
+        };
+        let xhtml = build_about_author_xhtml(
+            &cfg,
+            "Bio.",
+            None,
+            Some("author.jpg"),
+            Some("https://tatoh.ar"),
+            Some("author-qr.png"),
+        );
+        let bio = xhtml.find("<div class=\"about-author-bio\">").unwrap();
+        let firma = xhtml.find("<div class=\"autor-firma\">").unwrap();
+        assert!(bio < firma, "la firma va al pie, después de la bio");
+        let firma_html = &xhtml[firma..];
+        assert!(firma_html.contains("<img class=\"about-author-photo\" src=\"author.jpg\""));
+        assert!(firma_html.contains("<p class=\"autor-firma-nombre\">Ignacio Arano</p>"));
+        assert!(firma_html.contains("<img class=\"autor-qr\" src=\"author-qr.png\""));
+        assert!(firma_html.contains(">tatoh.ar</a>"));
+        // La foto ya no va arriba: una sola <img class="about-author-photo">.
+        assert_eq!(xhtml.matches("about-author-photo").count(), 1);
+    }
+
+    #[test]
+    fn about_author_sin_nombre_ni_foto_ni_web_no_deja_firma_vacia() {
+        let cfg = BookConfig { titulo: "Test".into(), ..Default::default() };
+        let xhtml = build_about_author_xhtml(&cfg, "Bio.", None, None, None, None);
+        assert!(!xhtml.contains("autor-firma"));
+    }
+
+    #[test]
+    fn about_author_epigrafe_va_entre_el_titulo_y_la_bio() {
+        let cfg = BookConfig { titulo: "Test".into(), ..Default::default() };
+        let xhtml = build_about_author_xhtml(
+            &cfg,
+            "Bio.",
+            Some("Crear mundos & ver dónde van"),
+            None,
+            None,
+            None,
+        );
+        let h1 = xhtml.find("about-author-title").unwrap();
+        let epi = xhtml
+            .find("<p class=\"about-author-epigrafe\">Crear mundos &amp; ver dónde van</p>")
+            .unwrap();
+        let bio = xhtml.find("about-author-bio").unwrap();
+        assert!(h1 < epi && epi < bio);
+    }
+
+    #[test]
+    fn about_author_sin_epigrafe_no_deja_el_parrafo() {
+        let cfg = BookConfig { titulo: "Test".into(), ..Default::default() };
+        let xhtml = build_about_author_xhtml(&cfg, "Bio.", Some("   "), None, None, None);
+        assert!(!xhtml.contains("about-author-epigrafe"));
+    }
+
+    #[test]
     fn about_author_xhtml_english_heading() {
         let cfg = BookConfig {
             titulo: "Test".into(),
             idioma: Some("en".into()),
             ..Default::default()
         };
-        let xhtml = build_about_author_xhtml(&cfg, "Bio.", None, None, None);
+        let xhtml = build_about_author_xhtml(&cfg, "Bio.", None, None, None, None);
         assert!(xhtml.contains("About the Author"));
         // Sin photo: no aparece <img>.
         assert!(!xhtml.contains("<img"));
@@ -3402,7 +3510,7 @@ mod tests {
     #[test]
     fn about_author_sin_web_no_muestra_ni_texto_ni_qr() {
         let cfg = BookConfig { titulo: "X".into(), ..Default::default() };
-        let xhtml = build_about_author_xhtml(&cfg, "bio", None, None, Some("author-qr.png"));
+        let xhtml = build_about_author_xhtml(&cfg, "bio", None, None, None, Some("author-qr.png"));
         assert!(!xhtml.contains("autor-qr"));
         assert!(!xhtml.contains("autor-web"));
     }
@@ -3410,7 +3518,7 @@ mod tests {
     #[test]
     fn about_author_con_web_y_sin_qr_muestra_solo_el_texto() {
         let cfg = BookConfig { titulo: "X".into(), ..Default::default() };
-        let xhtml = build_about_author_xhtml(&cfg, "bio", None, Some("https://tatoh.ar"), None);
+        let xhtml = build_about_author_xhtml(&cfg, "bio", None, None, Some("https://tatoh.ar"), None);
         assert!(xhtml.contains("https://tatoh.ar"));
         assert!(!xhtml.contains("autor-qr"));
     }
@@ -3547,7 +3655,7 @@ mod tests {
         let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
         let page = String::from_utf8(entries.get("OEBPS/7_otros_libros.xhtml").unwrap().clone()).unwrap();
         assert!(page.contains("Más de Meridian"));
-        assert!(page.contains("Otros libros del autor"));
+        assert!(page.contains("Otras series"));
         assert!(page.contains("https://tatoh.ar/libros/hermano"));
         assert!(page.contains("https://tatoh.ar/libros/luces"));
         assert!(page.contains("Meridian #2"));
@@ -3707,6 +3815,7 @@ mod tests {
     #[test]
     fn otros_libros_omite_el_bloque_de_saga_cuando_esta_vacio() {
         let cat = crate::catalogo::Catalogo {
+            siguiente: None,
             misma_saga: Vec::new(),
             otros: vec![crate::catalogo::LibroPublicado {
                 titulo: "Luces".into(),
@@ -3720,12 +3829,109 @@ mod tests {
         let cfg = BookConfig { titulo: "X".into(), ..Default::default() };
         let xhtml = build_otros_libros_xhtml(&cfg, &cat, &[]);
         assert!(!xhtml.contains("Más de Meridian"));
-        assert!(xhtml.contains("Otros libros del autor"));
+        assert!(xhtml.contains("Otras series"));
+    }
+
+    fn libro_c() -> crate::catalogo::LibroPublicado {
+        crate::catalogo::LibroPublicado {
+            titulo: "Tercero".into(),
+            subtitulo: Some("Meridian #3".into()),
+            link: "https://x/c".into(),
+            tapa: None,
+            numero_en_serie: Some(3),
+        }
+    }
+
+    #[test]
+    fn otros_libros_destaca_al_siguiente_antes_de_la_lista() {
+        let cat = crate::catalogo::Catalogo {
+            siguiente: Some(libro_c()),
+            misma_saga: Vec::new(),
+            otros: Vec::new(),
+            saga_actual: Some("Meridian".into()),
+        };
+        let cfg = BookConfig { titulo: "X".into(), ..Default::default() };
+        // La tapa del siguiente va en la posición 0 de `tapas`.
+        let xhtml = build_otros_libros_xhtml(&cfg, &cat, &[Some("cat-0.jpg".into())]);
+        let hero = xhtml.find("<div class=\"libro-siguiente\">").expect("falta el hero");
+        let lista = xhtml.find("<h1>Otros libros</h1>").expect("falta la lista");
+        assert!(hero < lista, "el siguiente va antes de la lista");
+        let hero_html = &xhtml[hero..lista];
+        assert!(hero_html.contains("<h2>La historia sigue en</h2>"));
+        assert!(hero_html.contains("<img class=\"libro-tapa-grande\" src=\"cat-0.jpg\""));
+        assert!(hero_html.contains("<p class=\"libro-titulo\"><a href=\"https://x/c\">Tercero</a></p>"));
+        assert!(hero_html.contains("<p class=\"libro-subtitulo\">Meridian #3</p>"));
+        // La URL escrita: en tinta electrónica el link del título no se ve.
+        assert!(hero_html.contains("<p class=\"libro-link\"><a href=\"https://x/c\">x/c</a></p>"));
+        // Y no se repite en la lista.
+        assert!(!xhtml[lista..].contains("Tercero"));
+    }
+
+    #[test]
+    fn otros_libros_sin_siguiente_no_deja_el_hero() {
+        let cat = crate::catalogo::Catalogo {
+            siguiente: None,
+            misma_saga: vec![libro_c()],
+            otros: Vec::new(),
+            saga_actual: Some("Meridian".into()),
+        };
+        let cfg = BookConfig { titulo: "X".into(), ..Default::default() };
+        let xhtml = build_otros_libros_xhtml(&cfg, &cat, &[None]);
+        assert!(!xhtml.contains("libro-siguiente"));
+        assert!(!xhtml.contains("libro-link"));
+        assert!(xhtml.contains("Tercero"));
+    }
+
+    #[test]
+    fn otros_libros_siguiente_en_ingles() {
+        let cat = crate::catalogo::Catalogo {
+            siguiente: Some(libro_c()),
+            misma_saga: Vec::new(),
+            otros: Vec::new(),
+            saga_actual: None,
+        };
+        let cfg = BookConfig {
+            titulo: "X".into(),
+            idioma: Some("en".into()),
+            ..Default::default()
+        };
+        let xhtml = build_otros_libros_xhtml(&cfg, &cat, &[None]);
+        assert!(xhtml.contains("<h2>The story continues in</h2>"));
+    }
+
+    #[test]
+    fn export_impl_destaca_al_siguiente_con_tapa_grande() {
+        let (_root, book) = repo_con_publicados();
+        // Actual es el #1: Hermano (#2) pasa a ser "el siguiente".
+        std::fs::write(book.join("book.json"), r#"{"titulo":"Actual","numero_en_serie":1}"#).unwrap();
+        let hermano = book.parent().unwrap().join("2 - Hermano");
+        let grande = ::image::RgbImage::from_pixel(2000, 3000, ::image::Rgb([10, 20, 30]));
+        ::image::DynamicImage::ImageRgb8(grande)
+            .save(hermano.join("cover.png"))
+            .unwrap();
+        std::fs::write(
+            hermano.join("book.json"),
+            r#"{"titulo":"Hermano","link":"https://tatoh.ar/libros/hermano","tapa":"cover.png","numero_en_serie":2}"#,
+        )
+        .unwrap();
+
+        let result = export_impl(book.to_str().unwrap()).unwrap();
+        let entries = read_epub_entries(std::path::Path::new(&result.epub_path));
+        let page = String::from_utf8(entries.get("OEBPS/7_otros_libros.xhtml").unwrap().clone()).unwrap();
+        assert!(page.contains("<div class=\"libro-siguiente\">"));
+        assert!(page.contains(">Hermano<"));
+        // Sin más hermanos publicados, el bloque de la serie no aparece.
+        assert!(!page.contains("Más de Meridian"));
+        // La tapa del hero se embebe más grande que las miniaturas de la lista.
+        let tapa = entries.keys().find(|k| k.starts_with("OEBPS/cat-")).expect("sin tapa");
+        let decoded = ::image::load_from_memory(entries.get(tapa).unwrap()).unwrap();
+        assert_eq!(decoded.width(), 600);
     }
 
     #[test]
     fn otros_libros_en_ingles() {
         let cat = crate::catalogo::Catalogo {
+            siguiente: None,
             misma_saga: vec![crate::catalogo::LibroPublicado {
                 titulo: "Deployment".into(),
                 subtitulo: None,
@@ -3752,6 +3958,7 @@ mod tests {
     #[test]
     fn otros_libros_prefiere_serie_del_libro_sobre_el_nombre_de_la_saga() {
         let cat = crate::catalogo::Catalogo {
+            siguiente: None,
             misma_saga: vec![crate::catalogo::LibroPublicado {
                 titulo: "Hermano".into(),
                 subtitulo: None,

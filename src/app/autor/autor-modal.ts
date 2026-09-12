@@ -61,13 +61,8 @@ export class AutorModal {
   /** Bio a mostrar en el preview: la del libro no existe acá — se muestra la
    *  de español y, si está vacía, se cae a inglés. Mismo criterio que
    *  `AutorConfig::bio_en` en Rust (usado por el EPUB), sin selector de idioma. */
-  protected readonly previewBio = computed<string>(() => {
-    const bio = this.config()?.bio;
-    if (!bio) return '';
-    const es = bio['es']?.trim();
-    if (es) return es;
-    return bio['en']?.trim() ?? '';
-  });
+  protected readonly previewBio = computed<string>(() => porIdioma(this.config()?.bio));
+  protected readonly previewEpigrafe = computed<string>(() => porIdioma(this.config()?.epigrafe));
 
   /** Un `<p>` por línea no vacía — así arma la página el EPUB
    *  (`build_about_author_xhtml` en `epub.rs`), no como un solo bloque. */
@@ -133,17 +128,17 @@ export class AutorModal {
     if (cur) this.config.set({ ...cur, [key]: value });
   }
 
-  protected bio(idioma: 'es' | 'en'): string {
-    return this.config()?.bio?.[idioma] ?? '';
+  protected texto(campo: 'bio' | 'epigrafe', idioma: 'es' | 'en'): string {
+    return this.config()?.[campo]?.[idioma] ?? '';
   }
 
-  protected setBio(idioma: 'es' | 'en', valor: string): void {
+  protected setTexto(campo: 'bio' | 'epigrafe', idioma: 'es' | 'en', valor: string): void {
     const cur = this.config();
     if (!cur) return;
-    const bio = { ...(cur.bio ?? {}) };
-    if (valor.trim()) bio[idioma] = valor;
-    else delete bio[idioma];
-    this.config.set({ ...cur, bio });
+    const map = { ...(cur[campo] ?? {}) };
+    if (valor.trim()) map[idioma] = valor;
+    else delete map[idioma];
+    this.config.set({ ...cur, [campo]: map });
   }
 
   /** Foto de "Sobre el autor": si ya es cuadrada se adopta tal cual (sin UI);
@@ -347,4 +342,11 @@ export class AutorModal {
   protected close(): void {
     this.svc.close();
   }
+}
+
+/** Español y, si está vacío, inglés. Mismo criterio que `AutorConfig::bio_en`
+ *  en Rust (usado por el EPUB), sin selector de idioma. */
+function porIdioma(map: Record<string, string> | undefined): string {
+  if (!map) return '';
+  return map['es']?.trim() || map['en']?.trim() || '';
 }

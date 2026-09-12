@@ -5,6 +5,8 @@ import { SettingsService } from './settings-service';
 export interface AutorConfig {
   nombre?: string | null;
   bio?: Record<string, string>;
+  /** Frase corta en itálica bajo el título de "Sobre el autor", por idioma. */
+  epigrafe?: Record<string, string>;
   foto?: string | null;
   web?: string | null;
   qr?: string | null;
