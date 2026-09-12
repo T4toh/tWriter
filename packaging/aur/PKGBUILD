@@ -29,7 +29,7 @@ source=("${pkgname}-${pkgver}.deb::https://github.com/T4toh/tWriter/releases/dow
 #   cd packaging/aur && updpkgsums   # pacman-contrib
 # y commitear el PKGBUILD antes de subirlo al AUR. `bump-version.sh` lo
 # recuerda al final.
-sha256sums=('d3e19514faedeaaf0f3d2d155519bd04ce3b2d21bbdcd47bf0e5c9ef9a64f28f')
+sha256sums=('f063e56bafb8f2a81c27669c38331db1679c10b6c17ecf25ba566668d7115cd9')
 
 package() {
     cd "${srcdir}"

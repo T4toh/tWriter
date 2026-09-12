@@ -7,7 +7,52 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Crea el draft UNA vez y le pasa el id a los builds. Sin esto los cuatro
+  # jobs buscaban el draft en paralelo, no lo encontraban, y cada uno creaba
+  # el suyo: dos drafts con la mitad de los assets y un latest.json a medias.
+  create-release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.create.outputs.release_id }}
+    steps:
+      - name: Crear draft
+        id: create
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cat > body.md <<'EOF'
+          **Linux (Arch / CachyOS)**: instalá vía AUR — `yay -S twriter-bin`. Auto-update con `yay -Syu`.
+
+          **Linux (Debian / Ubuntu)**: descargar `.deb` y `sudo apt install ./twriter_*.deb`.
+
+          **Herramientas opcionales (todas las plataformas)**: la app anda sin ellas y avisa adentro cuándo faltan.
+          · `pandoc` — importar `.docx`/`.odt`.
+          · `epubcheck` — validar el EPUB al exportarlo, el mismo chequeo que corre la tienda al recibirlo (`sudo pacman -S epubcheck` en Arch, `brew install epubcheck` en macOS, [release](https://github.com/w3c/epubcheck/releases) a mano en Windows; necesita Java 11+).
+          · un runtime de containers — LanguageTool para gramática (ver abajo en macOS).
+
+          **Windows**: descargar el `.exe` (instalador NSIS).
+
+          **macOS (Apple Silicon)**: descargar el `.dmg` con `aarch64`. **macOS (Intel)**: descargar el `.dmg` con `x64`.
+          La app está firmada ad-hoc (sin notarización de Apple): en el primer arranque hacé **click derecho → Abrir**, o corré `xattr -dr com.apple.quarantine /Applications/tWriter.app`.
+          Las herramientas opcionales van con Homebrew: `brew install pandoc epubcheck`.
+
+          **macOS — LanguageTool (gramática)**: la app levanta LanguageTool en un container y autodetecta el runtime que tengas. Elegí uno: Apple container (`brew install container && container system start`), colima (`brew install colima docker && colima start`) o Podman (`brew install podman && podman machine init && podman machine start`). Si usás Docker y antes tuviste Docker Desktop desinstalado, borrá la línea `"credsStore": "desktop"` de `~/.docker/config.json` (rompe el `docker pull`).
+          EOF
+          # Idempotente: si el draft ya existe (re-run del workflow), lo reusa.
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+                 --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n1)
+          if [ -z "$id" ]; then
+            gh release create "$TAG" --draft --title "tWriter $TAG" --notes-file body.md
+            id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+                   --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n1)
+          fi
+          echo "release_id=$id" >> "$GITHUB_OUTPUT"
+
   build-linux:
+    needs: create-release
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -53,29 +98,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'tWriter ${{ github.ref_name }}'
-          releaseBody: |
-            **Linux (Arch / CachyOS)**: instalá vía AUR — `yay -S twriter-bin`. Auto-update con `yay -Syu`.
-
-            **Linux (Debian / Ubuntu)**: descargar `.deb` y `sudo apt install ./twriter_*.deb`.
-
-            **Herramientas opcionales (todas las plataformas)**: la app anda sin ellas y avisa adentro cuándo faltan.
-            · `pandoc` — importar `.docx`/`.odt`.
-            · `epubcheck` — validar el EPUB al exportarlo, el mismo chequeo que corre la tienda al recibirlo (`sudo pacman -S epubcheck` en Arch, `brew install epubcheck` en macOS, [release](https://github.com/w3c/epubcheck/releases) a mano en Windows; necesita Java 11+).
-            · un runtime de containers — LanguageTool para gramática (ver abajo en macOS).
-
-            **Windows**: descargar `.msi` o `.exe` (NSIS).
-
-            **macOS (Apple Silicon)**: descargar el `.dmg` con `aarch64`. **macOS (Intel)**: descargar el `.dmg` con `x64`.
-            La app está firmada ad-hoc (sin notarización de Apple): en el primer arranque hacé **click derecho → Abrir**, o corré `xattr -dr com.apple.quarantine /Applications/tWriter.app`.
-            Las herramientas opcionales van con Homebrew: `brew install pandoc epubcheck`.
-
-            **macOS — LanguageTool (gramática)**: la app levanta LanguageTool en un container y autodetecta el runtime que tengas. Elegí uno: Apple container (`brew install container && container system start`), colima (`brew install colima docker && colima start`) o Podman (`brew install podman && podman machine init && podman machine start`). Si usás Docker y antes tuviste Docker Desktop desinstalado, borrá la línea `"credsStore": "desktop"` de `~/.docker/config.json` (rompe el `docker pull`).
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
 
   build-windows:
+    needs: create-release
     runs-on: windows-latest
     permissions:
       contents: write
@@ -112,12 +138,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'tWriter ${{ github.ref_name }}'
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
 
   build-macos:
+    needs: create-release
     permissions:
       contents: write
     strategy:
@@ -167,7 +191,4 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: --target ${{ matrix.target }}
-          tagName: ${{ github.ref_name }}
-          releaseName: 'tWriter ${{ github.ref_name }}'
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}

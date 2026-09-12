@@ -102,8 +102,7 @@ Sin auto-update — recheckear releases manualmente.
 
 Descargar de releases:
 
-- `.msi` (instalador limpio, recomendado para uso normal), **o**
-- `.exe` (NSIS, instalador alternativo)
+- `.exe` (instalador NSIS; no se genera `.msi`)
 
 Auto-update Tauri-native: la app chequea `releases/latest/download/latest.json` y muestra banner in-app cuando hay versión nueva. Aceptar el banner descarga e instala sin pasar por el browser.
 
@@ -859,10 +858,11 @@ git add -A && git commit -m "chore: bump v0.2.0"
 git tag v0.2.0
 git push && git push --tags
 
-# 2) Esperar a que el GitHub Action publique el .deb / .msi / .exe
+# 2) Esperar a que el GitHub Action publique el .deb / .exe / .dmg en un draft
 gh run watch
 
-# 3) Revisar el draft release y publicarlo manual (changelog, etc.)
+# 3) Revisar el draft release (un solo draft con 11 assets, latest.json con 8
+#    plataformas) y publicarlo manual (changelog, etc.)
 
 # 4) Test local del PKGBUILD: valida pkgver, recalcula sha256,
 #    namcap, makepkg -si. Falla si el .deb no está en el release.
