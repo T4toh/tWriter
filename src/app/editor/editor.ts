@@ -78,6 +78,7 @@ import {
   setGrammarMatches,
 } from './grammar-extension';
 import { SearchHighlight, setSearchHighlights } from './search-highlight-extension';
+import { NoHardBreak } from './no-hard-break-extension';
 import { AnchorBox } from './popover-position';
 import { buildEditorProps } from './editor-props';
 import { GrammarPopover } from './grammar-popover';
@@ -1995,6 +1996,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         RaeExtension,
         RepeticionesExtension,
         SearchHighlight,
+        NoHardBreak,
       ],
       content,
       editable,
