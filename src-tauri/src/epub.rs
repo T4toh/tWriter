@@ -154,7 +154,7 @@ fn build_font_face_block(fonts: &[FontEmbed]) -> String {
         // KFX converter de Kindle valida estricto y rechaza format() inesperado.
         let weight = if f.weight >= 700 { "bold" } else { "normal" };
         out.push_str(&format!(
-            "@font-face {{\n  font-family: \"{}\";\n  font-style: {};\n  font-weight: {};\n  src: url(\"fonts/{}\");\n}}\n",
+            "@font-face {{\n  font-family: \"{}\";\n  font-style: {};\n  font-weight: {};\n  src: url('fonts/{}');\n}}\n",
             f.family, f.style, weight, f.filename,
         ));
     }
@@ -1267,7 +1267,7 @@ fn load_part(html_path: &Path) -> Result<ChapterPart, String> {
     let content = fs::read_to_string(html_path).map_err(|e| e.to_string())?;
     let meta_title = read_part_meta_title(html_path);
     let (rebalanceado, reparado) = rebalance_inline(&close_void_elements(&content));
-    let content_html = limpiar_inline_vacios(&rebalanceado);
+    let content_html = align_style_to_class(&limpiar_inline_vacios(&rebalanceado));
     if reparado {
         tracing::warn!(target: "epub", path = %html_path.display(), "markup mal anidado reencajado para el EPUB");
     }
@@ -1277,6 +1277,21 @@ fn load_part(html_path: &Path) -> Result<ChapterPart, String> {
         content_html,
         reparado,
     })
+}
+
+/// `<p style="text-align: center">` → `<p class="center-align">` (ídem right/left).
+/// El editor (TipTap TextAlign) escribe la alineación como style inline, y el
+/// CSS del EPUB le sacaba la sangría con `p[style*="text-align: center"]`.
+/// Google Play Books borra los selectores de atributo de la hoja, así que ahí
+/// los párrafos centrados quedaban con `text-indent`. Con una clase, la regla
+/// sobrevive a cualquier sanitizador. Otros valores (justify) se dejan.
+fn align_style_to_class(html: &str) -> String {
+    let re = regex::Regex::new(r#"(?i)<p style="text-align:\s*(center|right|left);?"\s*>"#)
+        .expect("regex de text-align válida");
+    re.replace_all(html, |caps: &regex::Captures| {
+        format!(r#"<p class="{}-align">"#, caps[1].to_ascii_lowercase())
+    })
+    .into_owned()
 }
 
 /// Autocierra `<br>` y `<hr>` sueltos (`<br/>`) para que el XHTML sea válido.
@@ -2625,9 +2640,9 @@ mod tests {
         assert!(css.contains("margin: 0.5in"));
         // @font-face por archivo. Sin format() para compatibilidad KFX.
         assert!(css.contains("@font-face"));
-        assert!(css.contains("src: url(\"fonts/Merriweather-Regular.ttf\")"));
-        assert!(css.contains("src: url(\"fonts/Merriweather-Bold.ttf\")"));
-        assert!(css.contains("src: url(\"fonts/Lato-Bold.ttf\")"));
+        assert!(css.contains("src: url('fonts/Merriweather-Regular.ttf')"));
+        assert!(css.contains("src: url('fonts/Merriweather-Bold.ttf')"));
+        assert!(css.contains("src: url('fonts/Lato-Bold.ttf')"));
         // Keywords no números.
         assert!(css.contains("font-weight: bold"));
         assert!(css.contains("font-weight: normal"));
@@ -3691,6 +3706,25 @@ mod tests {
             "<p><em><em>No quiero olvidar</em></em></p><p><em><em>\nNi quiero perder</em></em></p><p><em><em>\nTus besos con desdén</em></em></p>"
         );
         assert_eq!(out.matches("<em>").count(), out.matches("</em>").count());
+    }
+
+    #[test]
+    fn align_style_to_class_mapea_center_right_left() {
+        assert_eq!(
+            align_style_to_class(r#"<p style="text-align: center;">a</p>"#),
+            r#"<p class="center-align">a</p>"#
+        );
+        assert_eq!(
+            align_style_to_class(r#"<p style="text-align: right">b</p>"#),
+            r#"<p class="right-align">b</p>"#
+        );
+        assert_eq!(
+            align_style_to_class(r#"<p style="text-align: left;">c</p>"#),
+            r#"<p class="left-align">c</p>"#
+        );
+        // justify y párrafos sin style quedan iguales.
+        let j = r#"<p style="text-align: justify;">d</p><p>e</p>"#;
+        assert_eq!(align_style_to_class(j), j);
     }
 
     #[test]
