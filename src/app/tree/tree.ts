@@ -864,7 +864,13 @@ export class Tree implements OnDestroy {
   // ───── Context menus (delegan al NodeActionsService) ─────
 
   protected onContextMenu(event: MouseEvent, node: TreeNode): void {
-    this.ctxMenu.open(event, this.actions.buildNodeMenu(node));
+    const esContenedor =
+      node.kind === 'saga' || node.kind === 'book' || node.kind === 'section';
+    const menu =
+      this.variant() === 'notes' && esContenedor
+        ? this.actions.buildNotesContainerMenu(node)
+        : this.actions.buildNodeMenu(node);
+    this.ctxMenu.open(event, menu);
   }
 
   protected onExtraContextMenu(event: MouseEvent, scopePath: string, entry: ExtraEntry): void {

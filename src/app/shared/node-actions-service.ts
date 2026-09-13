@@ -75,6 +75,20 @@ export class NodeActionsService {
 
   // ───── Builders ─────
 
+  /** Menú para saga/libro/sección vistos desde el árbol de notas. Ahí esos
+   *  nodos son solo la jerarquía que contiene las `notas/`, pero su `path`
+   *  sigue siendo la carpeta real del libro: el menú completo ofrecía «Borrar
+   *  carpeta» y borraba la novela entera. Acá solo se puede crear una nota. */
+  buildNotesContainerMenu(node: TreeNode): CtxMenuEntry[] {
+    return [
+      {
+        label: 'Nueva nota…',
+        kbd: 'notas/',
+        onClick: () => this.createNoteIn(`${node.path}/notas`),
+      },
+    ];
+  }
+
   buildNodeMenu(node: TreeNode): CtxMenuEntry[] {
     if (node.kind === 'note') {
       return [
