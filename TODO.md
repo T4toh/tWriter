@@ -1455,6 +1455,19 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 
 ## Proofreading
 
+- [ ] **Más estados para la novela** (pedido del autor el 2026-09-12). Hoy
+  `book.json` solo tiene `finalizada: bool` (terminada de escribir, oculta el
+  creador de capítulos) y el autor no sabe cuántas veces revisó un libro, si le
+  falta proofreading o si ya está publicado. Estados que necesita, en orden:
+  **en curso → terminada** (de escribir) **→ necesita revisar** (proofreading)
+  **→ revisada → publicada**. Los nombres son negociables, el ciclo no.
+  Reemplaza a `finalizada` (migrar: `true` → `terminada`, ausente → `en curso`;
+  el creador de capítulos se oculta desde `terminada` en adelante). Campo nuevo
+  tipado en los dos lados (`book-config-service.ts` + `book_config.rs`), se
+  edita desde el modal de configuración del libro y se muestra en la landing
+  y en el tree. Ver también si vale la pena un contador de rondas de revisión
+  o una fecha por estado, que es lo que responde «cuántas veces la revisé».
+
 - [ ] **El ciclo de correcciones vive en un txt y es un garrón** (para pensar
   fuerte un día, todavía no hay diseño)
   Flujo actual: se lee en la Kindle, se anotan las frases a cambiar en un `.txt`
