@@ -45,7 +45,7 @@ jobs:
           id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
                  --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n1)
           if [ -z "$id" ]; then
-            gh release create "$TAG" --draft --title "tWriter $TAG" --notes-file body.md
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "tWriter $TAG" --notes-file body.md
             id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
                    --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n1)
           fi
