@@ -58,6 +58,15 @@ Cada capítulo en el repo `Novelas/` es:
 
 El editor TipTap se configura para producir/aceptar **solo este subset HTML**. Cualquier feature nueva del editor debe respetar la lista.
 
+**No hay `<br>` en el subset.** `NoHardBreak` (`no-hard-break-extension.ts`)
+convierte todo `hardBreak` en corte de párrafo apenas entra al doc, venga de
+Shift+Enter, de un pegado, o de Enter común cuando WebKitGTK acaba de cerrar
+una composición del IME (ProseMirror detecta "Safari" por el vendor de
+WebKit y le cede ese Enter al browser, que mete un `<br>`). Camino a Casa se
+escribió entero en el editor y salió con 874 `<br>`: párrafos pegados que en
+el EPUB quedan sin sangría porque `text-indent` solo toma la primera línea.
+`scripts/migrar-br-a-parrafos.mjs` limpia un repo de novelas ya afectado.
+
 **`blockquote` es el bloque de verso**, no una cita en prosa: canciones,
 poemas, inscripciones. Sale centrado y en itálica, con un `<p>` por verso y
 un párrafo vacío para separar estrofas (`epub_style.css` + el espejo en
@@ -85,6 +94,7 @@ pnpm tauri build      # build app empaquetada (Linux/AppImage/.deb)
 cargo test --manifest-path src-tauri/Cargo.toml   # tests Rust
 node scripts/run-<algo>-smoke.mjs                 # tests del frontend (ver abajo)
 node scripts/run-tesauro-smoke.mjs                # casos de palabraEn() bajo el cursor
+node scripts/run-hardbreak-smoke.mjs              # hardBreak → corte de párrafo
 ```
 
 Primera build de Rust tarda ~5 min. Después es incremental.
