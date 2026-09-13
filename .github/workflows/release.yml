@@ -45,9 +45,17 @@ jobs:
           id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
                  --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n1)
           if [ -z "$id" ]; then
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "tWriter $TAG" --notes-file body.md
-            id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
-                   --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n1)
+            # El id sale de la respuesta del POST. Volver a listar recién
+            # creado no lo encontraba (v0.14.0): id vacío, tauri-action decía
+            # «No releaseId or tagName provided, skipping all uploads» y los
+            # cuatro builds terminaban en verde sin subir nada.
+            id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
+                   -f tag_name="$TAG" -f name="tWriter $TAG" -F draft=true \
+                   -F body=@body.md --jq .id)
+          fi
+          if [ -z "$id" ]; then
+            echo "::error::no pude obtener el release_id para $TAG"
+            exit 1
           fi
           echo "release_id=$id" >> "$GITHUB_OUTPUT"
 
