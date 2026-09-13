@@ -1465,8 +1465,17 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   el creador de capítulos se oculta desde `terminada` en adelante). Campo nuevo
   tipado en los dos lados (`book-config-service.ts` + `book_config.rs`), se
   edita desde el modal de configuración del libro y se muestra en la landing
-  y en el tree. Ver también si vale la pena un contador de rondas de revisión
-  o una fecha por estado, que es lo que responde «cuántas veces la revisé».
+  y en el tree.
+  **Las revisiones no son un estado, son un historial** (confirmado por el
+  autor el 2026-09-12: «el proofreading nunca termina y siempre encuentro algo
+  más»). Así que «revisada» sale del ciclo y entra `revisiones: [fecha, ...]`
+  en `book.json`, con un botón «Marcar revisión» en el modal que agrega la fecha
+  de hoy. El estado queda **en curso → terminada → publicada**, y la landing
+  muestra al lado «3 revisiones, última el 2026-08-30». «Necesita revisar» se
+  deriva solo: terminada o publicada con cero revisiones, o con la última
+  revisión anterior a la última edición de un capítulo (`ultima_edicion` del
+  `.meta.json`, ya existe) — eso también avisa cuando un libro publicado se
+  tocó después de la última revisión.
 
 - [ ] **El ciclo de correcciones vive en un txt y es un garrón** (para pensar
   fuerte un día, todavía no hay diseño)
