@@ -141,7 +141,9 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 > contra `/home/tatoh/novelas` y encontró que de las 1.667 reglas de español
 > dispararon **21**, y de las 6.098 de inglés dispararon **3**.
 
-- **Auditoría de gramática por libro** (pedido del autor, 2026-09-14). Tercer
+- **Auditoría de gramática por libro** (pedido del autor, 2026-09-14).
+  **Implementado en `feat/auditoria-gramatica`, pendiente de verificación
+  manual del autor con LT levantado; sacar de acá al mergear.** Tercer
   panel de auditoría, hermano de `rae-audit-service` /
   `repeticiones-audit-service`: correr LanguageTool sobre un alcance (saga,
   libro o sección) y listar los matches por capítulo con salto al offset, para

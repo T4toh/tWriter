@@ -18,6 +18,7 @@ import { PaneSplitService } from './core/pane-split-service';
 import { ProjectService } from './core/project-service';
 import { RaeAuditService } from './core/rae-audit-service';
 import { RepeticionesAuditService } from './core/repeticiones-audit-service';
+import { GrammarAuditService } from './core/grammar-audit-service';
 import { RustLogBridge } from './core/rust-log-bridge';
 import { SearchService } from './core/search-service';
 import { APP_FONT_VAR, AppFontSlot, resolveAppFontStack } from './core/app-fonts';
@@ -41,6 +42,7 @@ import { MarkdownReader } from './markdown-reader/markdown-reader';
 import { SearchPanel } from './search-panel/search-panel';
 import { RaeAuditPanel } from './rae-audit/rae-audit-panel';
 import { RepeticionesAuditPanel } from './repeticiones-audit/repeticiones-audit-panel';
+import { GrammarAuditPanel } from './grammar-audit/grammar-audit-panel';
 import { ToastContainer } from './toast/toast-container';
 import { SettingsModal } from './settings-modal/settings-modal';
 import { ImportJoplin } from './import-joplin/import-joplin';
@@ -86,7 +88,7 @@ import {
   selector: 'app-root',
   imports: [
     Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, RevisionLibroModal, SagaConfigModal, DictionaryModal, SplitChapterModal,
-    NoteFormModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, RepeticionesAuditPanel, ToastContainer,
+    NoteFormModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, RepeticionesAuditPanel, GrammarAuditPanel, ToastContainer,
     SettingsModal, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, AboutModal, ExportModal, AutorModal, Spinner, ModalHost, ContextMenuHost,
     LucideArrowDownToLine, LucideArrowUpDown, LucideChevronDown, LucideChevronRight,
     LucideCircleQuestionMark, LucideDownload, LucideDynamicIcon, LucideFolder, LucideHouse, LucideMoveHorizontal,
@@ -108,6 +110,7 @@ export class App {
   protected search = inject(SearchService);
   protected raeAudit = inject(RaeAuditService);
   protected repeticionesAudit = inject(RepeticionesAuditService);
+  protected grammarAudit = inject(GrammarAuditService);
 
   private project = inject(ProjectService);
   protected settings = inject(SettingsService);

@@ -1,0 +1,29 @@
+/* El shell sale de `shared/audit-panel.scss`, compartido con los paneles de
+   RAE y repeticiones. Lo propio de acá es la metadata de cada match de LT. */
+@use '../shared/audit-panel';
+
+/* La cabecera de capítulo es el `<summary>` del colapsable, como en
+   repeticiones. */
+.audit-chapter-head {
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    color: var(--accent);
+  }
+}
+
+.ga-cat {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+
+.ga-mensaje {
+  color: var(--fg);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

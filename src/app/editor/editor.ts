@@ -93,6 +93,7 @@ import { RaePopover } from './rae-popover';
 import { detectRepeticiones, DEFAULTS as REP_DEFAULTS } from '../repeticiones/detector';
 import { findCompoundRanges, isInsideCompound } from '../dictionary/compound-terms';
 import { RepeticionesAuditService } from '../core/repeticiones-audit-service';
+import { GrammarAuditService } from '../core/grammar-audit-service';
 import {
   RangoPm,
   RepeticionPos,
@@ -159,6 +160,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected grammar = inject(GrammarService);
   protected sagaCtx = inject(SagaContextService);
   private repeticionesAudit = inject(RepeticionesAuditService);
+  private grammarAudit = inject(GrammarAuditService);
   protected systemFonts = inject(SystemFontsService);
   private fontsService = inject(FontsService);
   private ctxMenu = inject(ContextMenuService);
@@ -822,6 +824,23 @@ export class Editor implements AfterViewInit, OnDestroy {
       });
     });
 
+    // Ídem para el panel de gramática: el pedido se consume al final de
+    // `checkGrammar`, y el `force` saltea el corto de "el plano no cambió" —
+    // si el auto-check está apagado o ya corrió, sin esto el pedido quedaría
+    // colgado.
+    effect(() => {
+      const pedido = this.grammarAudit.pendingPopover();
+      if (!pedido || pedido.path !== this.active()?.path) return;
+      if (!this.viewReady() || !this.tiptap) return;
+      untracked(() => {
+        if (!this.canCheckGrammar()) {
+          this.grammarAudit.limpiarPopoverPendiente();
+          return;
+        }
+        void this.checkGrammar(true);
+      });
+    });
+
     // El respiro del caret escala con la línea, así que cambia con la fuente.
     // `setOptions` termina en `view.updateState(state)` sin flag de scroll →
     // path "preserve" de ProseMirror: reaplica los props sin mover la vista.
@@ -1222,6 +1241,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.grammarMatches.set(filtered);
       this.applyDecorations(filtered);
       this.lastCheckedPlain = plain;
+      this.consumirPopoverGramaticaPendiente(plain, filtered);
     } catch {
       // grammar.lastError ya tiene el mensaje
     }
@@ -1967,9 +1987,37 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
+  /** El panel de gramática pidió abrir el popover sobre un match. Se ubica
+   *  por `ruleId` dentro del ancla, no por offset: el panel calcula sobre
+   *  `htmlToPlain` y esto vive en `extractPlainText`, y los dos planos se
+   *  desfasan. Se limpia SIEMPRE, se encuentre o no, para que un ancla que ya
+   *  no existe no deje el pedido armado hasta el próximo capítulo. */
+  private consumirPopoverGramaticaPendiente(plain: string, positioned: GrammarMatchPos[]): void {
+    const pedido = untracked(() => this.grammarAudit.pendingPopover());
+    if (!pedido) return;
+    if (pedido.path !== this.active()?.path) return;
+    this.grammarAudit.limpiarPopoverPendiente();
+
+    const desde = plain.indexOf(pedido.anchor);
+    const hasta = desde < 0 ? -1 : desde + pedido.anchor.length;
+    const candidatos = positioned.filter((m) => m.ruleId === pedido.ruleId);
+    if (candidatos.length === 0) return;
+    const objetivo =
+      desde < 0
+        ? candidatos[0]
+        : candidatos.find((m) => m.offset >= desde && m.offset < hasta) ?? candidatos[0];
+    this.abrirPopoverGramaticaEn(objetivo);
+  }
+
   private openGrammarPopover(m: GrammarMatchPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
+    this.abrirPopoverGramaticaEn(m);
+  }
+
+  /** Abre el popover de gramática sin depender del span clickeado: las
+   *  coordenadas salen de `anchorAt`, igual que el de repeticiones. */
+  private abrirPopoverGramaticaEn(m: GrammarMatchPos): void {
     this.cerrarPopovers();
     // El diccionario de la saga hasta ahora solo silenciaba falsos positivos.
     // Para los TYPOS también aporta candidatos: si el autor escribió mal un

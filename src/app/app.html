@@ -316,6 +316,10 @@
     <aside class="panel panel-right">
       <app-repeticiones-audit-panel />
     </aside>
+  } @else if (grammarAudit.isOpen()) {
+    <aside class="panel panel-right">
+      <app-grammar-audit-panel />
+    </aside>
   } @else if (search.open()) {
     <aside class="panel panel-right">
       <app-search-panel />

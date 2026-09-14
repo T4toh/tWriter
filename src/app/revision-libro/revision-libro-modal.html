@@ -75,6 +75,14 @@
           }
           <span class="rl-nota">no se arreglan solas: se reescriben a mano en el editor</span>
         </div>
+        <div class="rl-fila rl-fila-reporte">
+          <span class="rl-nombre">Gramática</span>
+          <span class="rl-conteo">se chequea al abrir, capítulo por capítulo</span>
+          <button type="button" class="rl-ver" (click)="verGramatica()" title="Pasar LanguageTool por todos los capítulos y ver los avisos uno por uno, con el salto al lugar">
+            ver <svg lucideArrowRight [size]="11"></svg>
+          </button>
+          <span class="rl-nota">necesita LanguageTool andando</span>
+        </div>
       </div>
     } @else if (!svc.escaneando()) {
       <p class="rl-vacio">Tocá «Escanear» para ver qué se puede corregir en esta novela.</p>
