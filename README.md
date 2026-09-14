@@ -66,13 +66,13 @@ Releases en <https://github.com/T4toh/tWriter/releases>.
 
 ### Arch / CachyOS
 
-**Opción A: AUR** (cuando esté publicado, ver "Publicar a AUR" abajo):
+**Opción A: AUR** ([`twriter-bin`](https://aur.archlinux.org/packages/twriter-bin)):
 
 ```bash
 yay -S twriter-bin     # o paru, pikaur, etc
 ```
 
-**Opción B: PKGBUILD local** (uso actual del autor):
+**Opción B: PKGBUILD local** (para probar un release antes de publicarlo al AUR):
 
 ```bash
 git clone https://github.com/T4toh/tWriter
@@ -153,6 +153,7 @@ ningún runtime, la app igual anda usando el API público de LT por default.
 
 - **Pandoc** (para importar `.docx`/`.odt`): `sudo pacman -S pandoc` / `sudo apt install pandoc` / [pandoc.org](https://pandoc.org/installing.html) en Windows. Sin Pandoc, el importer queda inhabilitado pero el resto de la app funciona.
 - **Runtime de containers** (para LanguageTool local): Docker, Podman o Apple `container` — la app autodetecta el que esté instalado y con daemon vivo. Ver [LanguageTool](#languagetool-3-backends). Sin ninguno, la app usa el API público de LT por default.
+- **epubcheck** (validar el EPUB exportado): `brew install epubcheck` / `sudo pacman -S epubcheck` / [release de epubcheck](https://github.com/w3c/epubcheck/releases) en Windows (dejar el `.bat` en el PATH). Necesita Java 11+. Sin epubcheck el EPUB sale igual, sin veredicto; Configuración → General muestra el estado y cómo instalarlo en esta máquina.
 
 ## Features
 
@@ -165,6 +166,8 @@ ningún runtime, la app igual anda usando el API público de LT por default.
 - **Layout flat**: el editor renderea párrafos sin `text-indent` y con `text-align: left` para que escribir no "salte" word-spacing por línea ni se vean indents que confunden. El EPUB exportado mantiene `text-indent: 1.5em` + `text-align: justify` desde `.chapter-content p` en `src-tauri/resources/epub_style.css` — formato editorial al exportar, layout cómodo al escribir.
 - **Selector de fuente del editor**: dropdown estilo LibreOffice/Word con búsqueda. Cuatro grupos: **Recientes** (top 5, persistido en `settings.json::editorFontRecents`), **Del tema** (body / heading / editorial del tema resuelto del capítulo activo — saga + libro override), **Presets** (`Serif / Sans / Mono / Sistema`, los 4 stacks hardcodeados originales), **Pool del repo** (familias deduplicadas de `<root>/fonts/`) y **Sistema (N)** (todas las familias instaladas en el OS, listadas via crate `fontdb` 0.23 en `src-tauri/src/system_fonts.rs::list_system_fonts`, cache lazy `Mutex<Option<Vec>>` + `refresh_system_fonts` para re-scan). Cada ítem renderea su nombre en su propia tipografía (FontFace API on-hover via `SystemFontsService::loadFace`, idempotente). Valor persistido en `settings.json::editorFontFamily` como `string` libre (los 4 keywords presets siguen siendo válidos). CSS var `--editor-font-family` sobre `.ProseMirror` aplica el stack resuelto vía `resolveEditorFontStack()` (preset → stack hardcoded, sino familia + fallback serif). **Fallback + badge**: si la familia guardada no existe en OS ni pool ni presets (típico al sincronizar settings entre PCs), el editor cae a serif default y el footer muestra badge `⚠ <nombre>` con tooltip explicativo; el valor en settings no se sobrescribe (al volver a la otra PC vuelve a aplicarse). Para el `<app-select>` se sumaron `groups` y `itemTemplate` manteniendo compat con el shape `options` plano.
 - **Gap cursor desactivado**: `StarterKit.configure({ gapcursor: false })` para evitar el marker vertical huérfano que aparecía en zonas vacías del editor (entre hr/h1/párrafos, click fuera del texto).
+- **Sin `<br>` en los capítulos** (`no-hard-break-extension.ts`): el subset HTML no tiene salto de línea blando, así que `NoHardBreak` convierte todo `hardBreak` en corte de párrafo apenas entra al doc — venga de Shift+Enter, de un pegado, de `setContent` o del Enter que ProseMirror le cede a WebKitGTK justo después de cerrar una composición del IME (con fcitx5 cada acento cierra una). Sin esto, un párrafo "pegado" con `<br>` sale sin sangría en el EPUB porque `text-indent` solo toma la primera línea. `scripts/run-hardbreak-smoke.mjs` cubre la mitad pura; `scripts/migrar-br-a-parrafos.mjs` limpia un repo de novelas ya afectado.
+- **Bloque de verso** (`blockquote`): para canciones, poemas e inscripciones — no para citas en prosa. Botón en la toolbar y en el menú contextual, un `<p>` por verso y un párrafo vacío para separar estrofas. En el EPUB sale centrado y en itálica (y la itálica del texto no se invierte). `scripts/run-verso-smoke.mjs` cubre el toggle (lift + wrap + join).
 - Modo focus (F11 / Esc): oculta tree, deja toolbar y footer.
 - Indicador de idioma en footer (badge color) + toggle ES/EN.
 - Diálogos custom (prompt/confirm/alert) coherentes con el resto de los modales — sin headers feos de WebKit.
@@ -186,7 +189,7 @@ ningún runtime, la app igual anda usando el API público de LT por default.
 
 - Editor separado para `.md` con TipTap + `tiptap-markdown` (no toca el flow de capítulos HTML).
 - Toolbar: B/I/S/code inline + H1/H2/H3 + listas bullet/numerada + blockquote + code block + hr. Sin RAE, LT ni idioma.
-- Convivencia con capítulos: mutex de un solo editor a la vez. El icono y footer marcan claramente "Nota".
+- Convivencia con capítulos: un pane muestra una sola cosa a la vez (capítulo o nota); con split view se puede tener capítulo + nota lado a lado. El icono y footer marcan claramente "Nota".
 - `.md` aparecen en cualquier ubicación del árbol (root, carpeta libre, saga, libro, sección); las carpetas `<saga>/notas/` y `<book>/notas/` se renderizan como 📒 expandibles. Carpetas libres en root (sin saga.json/book.json) se renderizan como 📁.
 - Creación libre en root: click derecho en el área vacía del tree → "Nueva carpeta…" o "Nueva nota…" arman estructura paralela al TOC para worldbuilding/research. Click derecho sobre una carpeta 📁 permite anidar recursivo.
 - `notas/` y los `.md` quedan auto-excluidos del export EPUB y de la vista de tarjetas (la vista de tarjetas es para contenido del libro).
@@ -217,6 +220,7 @@ ningún runtime, la app igual anda usando el API público de LT por default.
 - Badge "excluido" para `.twriter-ignore`.
 - Selector de carpeta raíz persistido + auto-load del último capítulo abierto.
 - **Restaurar sesión**: al boot reabre el último cap/nota del pane 0 con el cursor en la posición exacta (`pmPos` de ProseMirror) y reaplica las carpetas que estaban expandidas (saga/libro/sección/folder libre + Extras + Extras subdirs + Exportados). Vive en `settings.json::lastSession` + `treeExpanded`/`treeExtrasExpanded`/`treeExtrasDirsExpanded`/`treeExportsExpanded`. Si el cap se borró/renombró entre sesiones, silent skip + clear del slot. Cap más corto (editado en otra PC) clampea el cursor al final. La vista siempre arranca arriba del capítulo — el cursor preserva posición para flechas/End, pero el scroll no salta al cursor guardado (`focus(undefined, { scrollIntoView: false })` + `scrollTop = 0`). Antes, cerrar con cursor al final reabría el cap al final. Split view (pane 1) no se restaura — sigue arrancando single como antes.
+- **Stats que sobreviven a un rename de carpeta** (`stats.rs::reconciliar_stats`, al cargar el árbol): renombrar una carpeta fuera de la app (a mano, desde la otra PC o por el cliente de sync) dejaba claves de `stats.json` apuntando a paths muertos, y con eso se evaporaban las palabras y la última edición de esos capítulos. Se remapea solo cuando hay **un** capítulo real que difiere en un segmento de carpeta y todavía no tiene stat propio; con dos o más candidatos no se adivina. Las claves sin match no se borran (un checkout de otra rama hace desaparecer capítulos y borrarlas sería tirar histórico real). No depende de git: pasa igual en roots de Dropbox o locales.
 - **Último editado a la vista**: cada capítulo muestra a la derecha un badge mono discreto con el tiempo relativo desde el último edit (`recién`, `hace 5 min`, `ayer`, `hace 3 d`, `hace 2 sem`, `hace 4 meses`). El más reciente del proyecto se marca con un border-left accent + badge resaltado para encontrarlo de un vistazo al abrir la app. Tooltip del row tiene el timestamp absoluto (`YYYY-MM-DD HH:mm`). Helpers en `src/app/core/relative-time.ts`; tick interno de 60s en `tree.ts` para que los strings se refresquen sin re-render. Data viene del `modifiedMs` que ya emitía `get_tree` — cero cambios backend.
 
 - **Doble click en carpeta → vista de tarjetas** (galería de la carpeta), y el árbol de notas es un segundo tree que no le roba el foco al principal.
@@ -381,6 +385,7 @@ viejo, validador los detecta correctamente con `paragraph-collapsed`.
   explícito del usuario, no por una caída momentánea. Tests `grammar::tests`
   (5) cubren em-dash + acento + boundary panic.
 - Auto-check auto-on en modo local/custom tras ping ok. Toggle persistido (`settings.json::grammarAutoDisabled`). Público queda off por ToS.
+- **Modo exigente (`picky`)**: toggle en Configuración → Gramática, off por default, persistido como `grammarPicky`. Activa las reglas de texto formal de LT (`TOO_LONG_SENTENCE`, redundancias) — medido, solo suma matches en inglés; el ruleset ES de LT no cambia con `picky`, y el texto del toggle lo avisa. Cambiar el nivel o la variante regional fuerza un recheck aunque el texto no haya cambiado.
 - Variantes regionales (es-AR, es-ES, en-US, en-GB…) globales + override per-saga (`saga.json::variante_es`/`variante_en`). Click en badge del footer abre dropdown.
 - **Falsos positivos: nombrarlos y matarlos** (`saga.json::reglas_lt_desactivadas`). "Ignorar" solo saca el match de la lista en memoria y vuelve en el próximo chequeo, así que el popover ahora muestra el **`ruleId`** —el dato ya viajaba entero desde `grammar.rs` hasta `GrammarMatch`, solo no se renderizaba— y suma **"Nunca más esta regla"**, que lo persiste junto con la oración que lo disparó. Esa lista *es* el registro de FP: con el id se reporta upstream, con el ejemplo se decide si conviene. Los ids se mandan como `disabledRules` en `/v2/check`, que el request no usaba nunca. Alcance **por saga** y no global: `saga.json` ya es donde vive la variante regional, así que la desactivación viaja por git con el repo de novelas en vez de quedarse en el `settings.json` de una máquina. Se reactivan desde el modal de config de saga, al lado de las variantes. Ojo con la granularidad: `/v2/check` desactiva la regla **entera**, no la subregla (el id que devuelve la API es `AGREEMENT_POSTPONED_ADJ`, sin el `[3]` que se ve en los reportes).
 - Diccionario per-saga: "+ diccionario" en popover de TYPOS filtra matches. **Re-filtrado reactivo**: `SagaContextService.dictionary()` es un signal — un effect en `editor.ts` lo observa y re-filtra los `grammarMatches` actuales sin pegarle de nuevo a LT. Cubre el race típico (el saga.json carga async después del primer `checkGrammar`, así que palabras del mundo aparecían marcadas hasta cerrar/reabrir el cap) y el agregar palabra desde el popover (limpia el squiggle on the spot).
@@ -504,6 +509,8 @@ Botón 📝 en el header del tree abre un wizard separado para traer notas markd
 - **Rutas de imagen que sobreviven el cambio de PC**: al elegir una tapa/contratapa/foto, `book_config.rs::adopt_image` la guarda **relativa** si cae bajo la carpeta del libro o de la saga, y la copia como `cover|back-cover|author.<ext>` si viene de afuera (los `book.json` viejos tenían `/home/tatoh/Downloads/…` y en la otra PC mostraban placeholder). Al leer y al exportar, `image_field_unusable()` reemplazó al chequeo de "campo vacío" en los 6 lugares que autodescubrían: un path **muerto** también dispara `find_cover_in`, así que los `book.json` viejos resuelven al `cover.png` de al lado sin tocar el repo de contenido. Al reemplazar, la elegida barre las otras extensiones del mismo stem.
 - **Índice legible** (`toc.xhtml`): numeral del capítulo en una columna angosta con la fuente de títulos del tema y el título al lado en la del cuerpo, separados por un espacio real (el menú del reader lee el texto plano). Las partes que son solo números salen con `hidden` en la sub-lista —mecanismo del spec EPUB 3: no se imprimen en la página pero el reader las sigue mostrando en su menú; verificado en calibre— y aparecen si alguna tiene título propio en su `meta.json`. Respeta el prefijo del tema (`roman`/`decimal`/`none`: sin prefijo no hay columna) y el idioma del libro. Links sin subrayar, editoriales atenuadas y alineadas con los títulos, margen de página como «Sobre el autor».
 - **Modal de export: libro completo, muestra, o los dos** (default los dos). La **muestra** son los primeros N capítulos —por defecto los que suman ~10 % de las palabras, la proporción de la vista previa de Amazon—, cortada en fin de capítulo y sin epílogo. Lleva `dc:title` y nombre de archivo con sufijo `— Muestra`/`— Sample` (la portada interior queda igual), una página de cierre «Seguir leyendo» con el `link` del `book.json`, y el back matter completo («Otros libros» + «Sobre el autor»). Sin `link` sale igual y el export avisa. Las tiendas (Amazon, Kobo, Google) arman su propia vista previa del EPUB completo y no reciben este archivo; sirve para la web del autor, Apple Books (que sí acepta una muestra propia) y plataformas tipo BookFunnel. `export_book(bookPath, muestra: Option<u32>)`; default de capítulos en `export/muestra.ts` (`scripts/run-muestra-smoke.mjs`).
+- **Validación con epubcheck** (`epubcheck.rs`): después de cada export corre el validador del W3C —el mismo que corre la tienda al recibir el archivo— y dice el veredicto en un toast; el detalle (las N líneas de epubcheck) se abre con un click y va también al panel 🐛. No se bundlea (es un jar y necesita JVM): se detecta el binario instalado como `pandoc_bin`, y sin él el EPUB sale igual, sin veredicto. Ojo: existir no alcanza — el wrapper de Homebrew hace `exec` de una JVM, así que el exit code manda, y salir mal **sin** una línea de diagnóstico se reporta como falla de la herramienta, no como EPUB inválido. La validación corre suelta y nunca voltea un export que salió bien.
+- **CSS que sobrevive al sanitizador de Google Play Books**: Google borra lo que no entiende de la hoja y avisaba tres cosas. Los selectores de atributo `p[style*="text-align"]` eran la única regla que sacaba la sangría a los párrafos alineados desde el editor — ahora el export traduce el style inline a `.center-align`/`.right-align`/`.left-align` (`align_style_to_class`). `object-fit`/`object-position` en la tapa pasan a `width`/`height: auto` + `max-*`. Y las `url()` de `@font-face` van con comillas simples. `-webkit-hyphens` se queda a propósito: Apple Books solo entiende el prefijado.
 - **Progreso del export**: `export_impl` recibe un callback de progreso (igual que `search::full_reindex`, así el impl sigue sin tipos de Tauri y los tests no necesitan `AppHandle`) y `export_book` lo traduce al evento `epub-export-progress`. La tarjeta del libro ya tenía spinner; el que no mostraba nada era exportar desde el menú contextual.
 
 ### Temas + fuentes embebidas
@@ -538,10 +545,12 @@ Bloque "Apariencia" en el modal de Configuración. Ojo con no confundirlo con el
 
 - El engranaje abre `settings-modal/` con bloques colapsables (`<details>` nativo): **General** (incluye el toggle del panel de debug, que antes vivía en el header), **Apariencia** y **Gramática** (variantes regionales, nivel de chequeo, repeticiones). Antes era un modal que solo configuraba LanguageTool.
 - `show()` recibe qué bloque desplegar: el effect que abre el modal cuando LT se cae pide `gramatica`, así el remedio no queda detrás de un click. El estado colapsado no se persiste, por lo mismo.
+- **General → epubcheck**: estado del validador (instalado / instalado pero sin JVM / ausente, distinguidos por la salida real del binario) y las tres formas de instalarlo con la de esta máquina primera —`brew install epubcheck`, `sudo pacman -S epubcheck`, descarga del release para Windows y el resto— en chips copiables. Con epubcheck ya instalado el bloque queda colapsado como "Instalarlo en otra máquina". Rust solo aporta la plataforma para el orden: adivinar el gestor de paquetes de un Linux cualquiera sigue prohibido.
+- **Acerca de** (botón en el header): versión de la app y las licencias de todas las dependencias (npm + crates), generadas en el build por `scripts/generar-licencias.mjs` a `licencias.json`, agrupadas por licencia y colapsables por paquete.
 
 ### Debug / observabilidad
 
-- Panel 🐛 toggleable en header (35vh fixed bottom, monospace).
+- Panel 🐛 (35vh fixed bottom, monospace); se prende desde Configuración → General.
 - Log timestamped (HH:MM:SS.mmm) con niveles info / warn / error, source y mensaje + details opcionales.
 - **Bridge Rust → frontend** vía `tracing` crate. `EmitLayer` custom forwardea cada `tracing::info!/warn!/error!` al evento Tauri `debug-log`. El listener Angular (`RustLogBridge`) lo empuja al mismo `DebugService`. Targets cubiertos: `fs`, `git`, `epub`, `import`, `import-wizard`, `grammar`, `theme`, `create`, `reorder`, `dialog`, `boot`. Filtro por env: `RUST_LOG=twriter_lib=info,warn,error` por default.
 - Services frontend instrumentados: `ChapterService`, `UpdaterService`, `GrammarService`, `ThemesService`, `ProjectService`, `ImportWizardService`. App component captura `chapter/project/git.error()` vía effects.
@@ -555,7 +564,7 @@ Bloque "Apariencia" en el modal de Configuración. Ojo con no confundirlo con el
 
 tWriter auto-detecta cómo está versionada/sincronizada la carpeta raíz y adapta la UI:
 
-- **Git** (`.git/` presente): auto-commit cada 5 min, status polling 30s, botones ⇅/⤓ visibles, badge dot con color por estado.
+- **Git** (`.git/` presente): sync por eventos de foco + auto-commit cada 5 min de red de seguridad, botones ⇅/⤓ visibles, badge dot con color por estado.
 - **Cloud** (path bajo `Dropbox/`, `pCloud/`, `Nextcloud/`, `OneDrive/`, `Google Drive/`, `iCloud Drive/`, `Syncthing/`, `MEGA/`): badge con el nombre del servicio. La app solo escribe archivos — el cliente del servicio sincroniza.
 - **Local**: badge `💾 Local`. Cero versionado, cero sync — el usuario respalda por su cuenta.
 
@@ -570,8 +579,8 @@ ni saber qué es `git pull --rebase`.
 
 - `git2` crate (libgit2) para status + commit. Push/pull delegan al binario `git` del sistema (más estable para SSH/agent que libssh2).
 - SSH agent + fallback a `~/.ssh/id_ed25519/id_rsa/id_ecdsa`.
-- Auto-commit cada 5 min cuando hay cambios.
-- Status polling 30 s; cuando detecta `behind > 0` corre auto-pull en background. La decisión `ff-only` vs `rebase --autostash` mira tanto `ahead > 0` como `has_changes`: si hay working tree dirty (típico cuando el editor está abierto sobre un cap que también cambió remoto), pull plano abortaría — vamos directo a `--rebase --autostash` para sobrevivir el race sin que el usuario tenga que cerrar la app.
+- **Sync por eventos, no por poll**: al recuperar el foco de la ventana → `fetch` silencioso + refresh de status; al perderlo → `flushAndSync` con debounce de 30 s y cooldown de 2 min entre pushes; al cerrar → `flushAndSync` con timeout de 10 s y modal "¿Cerrar igual?" si falla. Listeners de `online`/`offline` pausan y reanudan. El poll de status de 30 s que había antes se eliminó; quedan un refresh suave de status cada 60 s (detecta commits hechos desde una terminal) y un auto-commit cada 5 min como red de seguridad para sesiones largas sin transiciones de foco.
+- Cuando el status detecta `behind > 0` corre auto-pull en background. La decisión `ff-only` vs `rebase --autostash` mira tanto `ahead > 0` como `has_changes`: si hay working tree dirty (típico cuando el editor está abierto sobre un cap que también cambió remoto), pull plano abortaría — vamos directo a `--rebase --autostash` para sobrevivir el race sin que el usuario tenga que cerrar la app.
 - **Auto-upstream on pull**: si la rama local no tiene upstream seteado (caso típico: clonaste desde otra PC con `git clone` pero la branch nunca pusheó), `git pull` plano falla con `"There is no tracking information for the current branch"`. `git_pull_impl` / `git_pull_rebase_impl` detectan esto vía `git rev-parse --abbrev-ref @{u}`, ejecutan el pull pasando `origin <branch>` explícito, y al éxito setean el upstream con `git branch --set-upstream-to=origin/<branch>`. Los próximos pulls usan el camino vanilla. Tests `pull_sets_upstream_when_missing` + `pull_rebase_sets_upstream_when_missing` cubren ambos paths.
 - **Push auto-rebase**: si el remoto avanzó desde otra PC, `git push` falla con non-FF; el backend corre `git pull --rebase --autostash` y reintenta el push una vez. Si el rebase choca, lo aborta y la UI muestra "Conflicto entre esta PC y el remoto. Abrí el panel 🐛 para detalle." (sin terminal jargon).
 - **`.twriter/` auto-ignorado al boot** (`git_ensure_twriter_ignored`): agrega `.twriter/` al `.gitignore` si falta y corre `git rm -r --cached .twriter` si está trackeado. Idempotente — los cambios quedan uncommitted y los pickea el próximo auto-commit. Evita conflictos add/add del índice tantivy entre PCs.
@@ -824,10 +833,14 @@ Primera build de Rust ~5 min (compila `git2`, `webkit`, `zip`, etc.). Después e
 ```bash
 pnpm tauri dev      # frontend :1420 + backend Rust
 pnpm build          # solo Angular
-pnpm tauri build    # paquete (.AppImage / .deb)
-ng test             # Karma tests (Angular)
+pnpm tauri build    # paquete (.deb / .exe / .dmg según OS)
 cargo test --manifest-path src-tauri/Cargo.toml   # tests Rust
+node scripts/run-<algo>-smoke.mjs                 # tests del frontend (ver abajo)
+pnpm lint:css       # stylelint sobre los .scss de la app
+pnpm lint:css:epub  # solo corrección (propiedad desconocida, etc.) sobre epub_style.css
 ```
+
+**No hay runner de tests para el frontend**: `angular.json` no define target `test` y no hay karma/jasmine/vitest instalados, así que `ng test` no corre nada. Lo que corre son los smoke runners de `scripts/run-*-smoke.mjs`, que compilan los TS necesarios con `tsc` a un tmpdir e importan el JS resultante — y por eso solo sirven para **funciones puras**: nada que toque el DOM, `@tiptap/core` o el schema de ProseMirror se puede cargar desde node. Código nuevo del frontend se parte en una mitad pura con su smoke runner (patrón de `scripts/run-rae-smoke.mjs`) y una mitad con DOM que se valida con `pnpm build` + verificación manual.
 
 En **Arch / CachyOS** (system libs con secciones ELF `.relr.dyn`) el `strip` que linuxdeploy embebe falla. Workaround para `tauri build`:
 
@@ -839,11 +852,10 @@ CI (Ubuntu 22.04) no necesita este flag — system libs ahí son ELF clásico.
 
 ### Distribución
 
-- CI: `.github/workflows/release.yml`. Trigger: `git push --tags v*.*.*`. Linux job buildea `.deb`, Windows job buildea `.msi` + `.exe`. Ambos firmados ed25519.
-- **Linux Arch / CachyOS**: PKGBUILD `twriter-bin` local en `packaging/aur/`. Pull el `.deb` del release, instala vía pacman. Update: `./packaging/aur/test.sh <version>`.
+- CI: `.github/workflows/release.yml`. Trigger: `git push --tags v*.*.*`. Linux job buildea `.deb`, Windows job buildea `.exe` (NSIS; `tauri.conf.json::bundle.targets` no incluye `msi`), macOS job (`macos-14`) buildea `.dmg` para `aarch64` y `x86_64`. Todo firmado ed25519 para el updater.
+- **Linux Arch / CachyOS**: `twriter-bin` en el AUR, publicado desde `packaging/aur/publish.sh`. `test.sh` prueba el PKGBUILD local contra el `.deb` del release.
 - **Linux Debian / Ubuntu**: descargar `.deb`, `sudo apt install ./twriter_*.deb`. Sin auto-update.
-- **Windows**: descargar `.msi` o `.exe`. Auto-update Tauri-native vía banner in-app contra `releases/latest/download/latest.json`.
-- **macOS**: diferido hasta que arregle la pantalla del MacBook Pro.
+- **Windows** y **macOS**: `.exe` / `.dmg` del release. Auto-update Tauri-native vía banner in-app contra `releases/latest/download/latest.json`.
 
 #### Cortar release
 

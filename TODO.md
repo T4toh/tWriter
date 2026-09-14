@@ -86,12 +86,11 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
     gramática 2000 ms, RAE 1500 ms, repeticiones 1500 ms, autosave 1500 ms.
     Cuando disparan son O(n), pero una vez por pausa, no por tecla.
 
-  Del lado del árbol: `chapter_word_count` cae a leer y contar el HTML cuando
-  la clave no está en `stats.json` (`stats.rs:296`), o sea que **cada
-  `get_tree()` releía todos los capítulos con la clave huérfana**. Eso lo
-  arregla la reconciliación de stats del item de Tree/Importer. Queda como
+  Del lado del árbol: las claves huérfanas de `stats.json` tras un rename ya
+  las remapea `reconciliar_stats` (ver README → Tree explorer). Queda como
   costo estructural que un capítulo nunca guardado por la app se recuente en
-  cada carga del árbol; si alguna vez molesta, cachear por mtime.
+  cada carga del árbol (`chapter_word_count` lee y cuenta el HTML cuando no
+  hay clave); si alguna vez molesta, cachear por mtime.
 - **El `resize` reposiciona los popovers con el ancla vieja**: el cierre por
   scroll y el reposicionamiento ya andan (`popover-position.ts`), pero cada
   popover maneja el `resize` por su cuenta (`afterRenderEffect` + listener de
@@ -334,8 +333,9 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   server, no a un patrón puntual. Dos cosas que salen de esto: (a) para aportar
   upstream hay que reproducirlo determinísticamente (pegarle concurrente al
   mismo texto), (b) del lado nuestro el aviso es pobre: `check()`
-  guarda el mensaje en `grammar.lastError` y `editor.html:377` lo pinta como
-  indicador crudo en el footer (`LanguageTool 500 Internal Server Error: …`),
+  guarda el mensaje en `grammar.lastError` y el footer de `editor.html`
+  (`@if (grammarError(); as err)`) lo pinta como
+  indicador crudo (`LanguageTool 500 Internal Server Error: …`),
   o sea jargon de HTTP en un lugar fácil de no ver, mientras el capítulo queda
   **entero sin marcas** porque el `check` tira. Merece el trato accionable del
   CLAUDE.md: decir que el chequeo de *este* capítulo falló y ofrecer reintentar,
@@ -665,15 +665,15 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   daemon, ya perdimos — vale para él mismo, que tiene todo para correr un
   Ollama y aun así lo considera demasiado. Ordenado por cuán realista es:
 
-  > **Actualizado el 2026-08-20 (segunda vuelta).** Esta lista se escribió sin
-  > considerar la opción que gana: **bundlear LT mismo como sidecar** (ver el
-  > item "LT embebido como sidecar — MEDIDO Y VIABLE"). 174 MB, arranca en
-  > 1,07 s, cero setup del usuario, y es el mismo motor que ya usamos. Harper
-  > queda **descartado** con datos, no por el idioma (ver "Alternativas de
-  > motor evaluadas y descartadas"). `zspell`/`hunspell` sigue en pie pero
-  > cambió de rol: ya no es "la red por si LT se cae" — con LT embebido no se
-  > cae — sino la pieza que quedaría **si en 6 meses se decide tirar LT** y
-  > bajar los 174 MB, apoyada en las reglas propias en TS.
+  > **Actualizado el 2026-08-20 y corregido el 2026-08-21.** El 08-20 esta
+  > lista se reescribió alrededor de **bundlear LT como sidecar**; el 08-21 el
+  > autor lo **descartó** por el costo de mantener el pipeline de build (ver
+  > "LT embebido como sidecar — DESCARTADO"). Docker se queda. Harper queda
+  > **descartado** con datos, no por el idioma (ver "Alternativas de motor
+  > evaluadas y descartadas"). `zspell`/`hunspell` sigue en pie con su rol
+  > original: la red para seguir marcando typos cuando LT está caído, y la
+  > pieza que quedaría si en 6 meses se decide tirar LT, apoyada en las
+  > reglas propias en TS.
 
   - **`zspell` (Rust puro) o `hunspell-rs` + diccionarios de LibreOffice**
     (`es_AR` de la RLA, `en_US`/`en_GB`). Ortografía **solamente**, cero
@@ -754,19 +754,9 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
        400 en Opus 5. Sin prefill de assistant (también 400).
 - **Capacidades de LanguageTool que hoy NO usamos** (relevadas contra el
   swagger oficial + probadas contra el container local, LT 6.8 OSS):
-  - [x] `level=picky` en `/v2/check` — **implementado**: toggle "Modo exigente
-    (picky)" en el modal de gramática, off por default, persistido como
-    `grammarPicky` en `settings.json`. El nivel se resuelve en
-    `grammar.rs::level_for`. Verificado que **funciona** en el container libre:
-    activa reglas extra de texto formal (`TOO_LONG_SENTENCE` aparece en `picky`
-    y no en `default`). **Pero solo en inglés**: probado con muestras de
-    redundancia y de oración larga en español, `picky` no agregó ni un match
-    sobre `default` — el ruleset ES de LT es mucho más flaco; el texto del
-    toggle lo avisa. Al cambiarlo, un effect en `editor.ts` dispara
-    `checkGrammar(true)` (el `force` es necesario: el texto no cambió, así que
-    el early-return por `lastCheckedPlain` se comería el recheck). El mismo
-    effect cubre los cambios de variante regional, que arrastraban el mismo
-    bug.
+  - ~~`level=picky`~~ **hecho** (ver README → Gramática): toggle "Modo
+    exigente", `grammarPicky` en `settings.json`, `grammar.rs::level_for`.
+    Solo suma matches en inglés.
   - ~~`disabledRules`~~ **hecho** (ver README → Gramática): el popover muestra
     el `ruleId` y "Nunca más esta regla" lo persiste en
     `saga.json::reglas_lt_desactivadas`. Queda pendiente `enabledOnly`, que es
@@ -1002,27 +992,6 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   material suficiente para que las variantes se diferencien en algo más que el
   espaciado.
 
-- **Chequeo de sintaxis para `epub_style.css`** (2026-09-02). La hoja del EPUB
-  queda **fuera** de stylelint a propósito: se lee en hardware de tinta
-  electrónica y tiene sus propias reglas —`float` en vez de flexbox, nada de
-  `object-fit`, nada de anchos porcentuales—, así que un estándar pensado para
-  navegadores no aplica. Esa decisión se mantiene.
-  Lo que sí falta es otra cosa: verificar que la hoja sea **sintácticamente
-  válida**. En un EPUB una propiedad mal escrita no falla ni avisa: simplemente
-  no hace nada, y te enterás cuando ves la página rara en el Kindle. Es el modo
-  de falla más caro que tiene este archivo, porque el ciclo de descubrimiento
-  es exportar, pasar el archivo al lector y mirar.
-  **Ojo con la solución obvia**: un parser de CSS no alcanza. `colr: red` es
-  sintaxis válida —una declaración con un nombre de propiedad inexistente— y
-  cualquier parser la acepta. Un test de Rust que parsee la hoja atraparía
-  llaves sin cerrar, pero no el typo, que es el caso real.
-  Lo que sirve es un chequeo con base de datos de propiedades: `property-no-unknown`
-  de stylelint. O sea una **segunda config de stylelint** apuntada solo a esta
-  hoja, con cero reglas de estilo y solo las de corrección (propiedad
-  desconocida, declaración duplicada, bloque vacío, valor inválido). Nada que
-  opine sobre `float` ni sobre flexbox: esas son decisiones tomadas. Cero
-  dependencias nuevas — es el mismo stylelint que ya está instalado.
-
 ## EPUB
 
 - **Formatear para libro físico (interior para imprenta)** (idea del autor,
@@ -1091,21 +1060,13 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   que ya hace `AutorConfig::bio_en`: reusar esa función en vez de escribir la
   misma resolución por tercera vez.
 
-- **Sacar el autor del libro: hoy vive en tres lugares** (pedido del autor,
-  2026-09-01). Después del back matter, el nombre del autor está en `book.json`
-  (`autor`), en `saga.json` (`autor`) y en `autor.json` (`nombre`), que es el
-  perfil global que agregó `autor.rs`. Tres fuentes para un dato que en un repo
-  de novelas es uno solo: el que escribe. La resolución debería ser
-  `autor.json` primero y los otros dos solo como respaldo para repos que
-  todavía no tengan perfil global. **Decidido con el autor el 2026-09-01**: el
-  campo sale del modal del libro, no se queda como override — con `autor.json`
-  existiendo es duplicación, y el override por novela se agrega después si
-  hace falta, apoyado en el mecanismo nuevo y no en el viejo. Ojo con el orden de trabajo: `epub.rs` usa `cfg.autor` en
-  cuatro lugares (portadilla, copyright, metadata OPF, y un fallback que lo
-  completa desde la saga en `epub.rs:1794`), así que primero va la resolución
-  con fallback y recién después se limpian los `book.json` en disco —
-  al revés, los libros salen sin autor en el EPUB. Los 21 `book.json` de
-  `~/novelas` tienen el campo cargado, así que la migración toca todos.
+- **Limpiar `autor` de los `book.json` del repo de novelas**. La parte de la
+  app ya está: `epub.rs` resuelve `autor.json` → `book.json` → `saga.json` y
+  el campo salió del modal del libro (decidido con el autor el 2026-09-01).
+  Lo que queda es de contenido: los 21 `book.json` de `~/novelas` todavía
+  tienen `autor` cargado y ahora es un fallback muerto. Borrarlo es un `jq`
+  sobre el repo de novelas, no toca este repo; y solo tiene sentido cuando
+  las dos PCs corran una versión que ya lea `autor.json`.
 
 - **Tapa que no existe: avisar en vez de placeholder mudo.** Lo que quedó afuera
   del item de arriba: si no hay **ninguna** imagen al lado, `CoverCache.urlFor`
@@ -1119,7 +1080,6 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 - Colores en el tema (body color, heading color, scene-break color). Hoy el tema es solo tipografía + márgenes.
 - Theme presets compartibles entre repos distintos (export/import como zip).
 - Revisiones de EPUB: hoy sobreescribe siempre `Exportados/<titulo>.epub`. Sumar "guardar últimas N revisiones" (default 5) — renombrar la actual a `<titulo>-revN.epub` antes de generar la nueva.
-- Bio + foto del autor a nivel saga (heredados a libros nuevos) y/o `settings.json` (defaults globales del repo). Hoy solo `book.json`.
 - [ ] **Formato de fecha configurable** (pedido del autor el 2026-09-04)
   Hoy `shared/fecha-corta-pipe.ts` está fijo en `es-AR` con día/mes/año de dos
   dígitos (`04/09/26`). Debería salir de Ajustes.
@@ -1164,176 +1124,55 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 
 ## Deuda transversal
 
-- [x] **Pasada de generalidades: hay bocha de código repetido, CSS y esas
-  yerbas** (pedido del autor el 2026-09-04, después de encontrar el chip de
-  botón duplicado entre `book-card` y `saga-header` con medidas distintas)
-  No es un refactor grande de una sentada: es una auditoría que liste lo que
-  está duplicado, con criterio de qué se unifica y qué no, y después se va
-  comiendo de a pedazos. **Lo ya detectado, para no volver a buscarlo**:
-  - `findNodeByPath` estaba copiada **seis** veces (`app.ts`, `tree.ts`,
-    `search-panel.ts`, `node-actions-service.ts`, `rae-audit-panel.ts` y el
-    panel de repeticiones) — el conteo viejo de acá decía cinco y se había
-    comido `node-actions-service`. **Resuelta**: todas importan de
-    `core/tree-utils.ts`, no queda ninguna copia. La única que divergía era la
-    de `app.ts`, con un `?? []` sobre `children` que resultó defensa muerta
-    (`fs.rs` declara `children: Vec<TreeNode>` sin `skip_serializing_if`, así
-    que serde siempre manda el campo); se conservó igual en el helper y el
-    porqué quedó en su comentario.
-  - `.card-btn` estaba duplicado en `book-card.scss` y `saga-header.scss` con
-    medidas distintas (26/16 contra 22/14), que es lo que los hacía ver
-    disparejos. Subido a `src/styles.scss`, al lado de `.btn` — que ya se había
-    subido por lo mismo, con su comentario explicando el criterio. Queda por
-    ver si el patrón aguanta o si conviene un componente `<app-card-btn>`.
-  - `yieldToEventLoop` **apareció el tercer auditor** (`quotes-fix-service`,
-    además de `rae-audit-service` y `repeticiones-audit-service`), que era el
-    criterio anotado acá para extraerlo. **Resuelta**: salió a
-    `core/yield-to-event-loop.ts`, con el porqué del `setTimeout(0)` contra
-    `queueMicrotask`/`rAF` documentado ahí. Lo que **sigue duplicado** es el
-    loop de escaneo que lo rodea: `progress` + guard de scope + publicación
-    incremental es casi el mismo en los tres. Eso no se unificó todavía porque
-    las tres firmas de `progress` difieren; si se toca un cuarto auditor, ahí
-    sí conviene el helper de loop.
-  - `formatDate` estaba copiada **cuatro** veces (`book-card`, `saga-card`,
-    `folder-card`, `landing`), semánticamente idéntica y escrita con llaves
-    distintas. **Resuelta borrándola**, no unificándola: era una
-    reimplementación a mano de `DatePipe`, que ya trae `shortDate`. Los cuatro
-    templates usan el pipe. De paso salió que la app **no registraba locale**,
-    así que `LOCALE_ID` era `en-US` y cualquier pipe de fecha o número formateaba
-    al revés (`9/5/26` en vez de `5/9/26`); ahora `app.config.ts` registra es-AR.
-    Es el mejor ejemplo de la sección: antes de unificar una función duplicada,
-    preguntarse si el framework ya la trae.
-  - `auditSnippet`/`auditAnchor` ya se unificaron en `core/audit-snippet.ts` —
-    ese es el ejemplo de cómo debería quedar el resto: módulo puro, con smoke
-    runner, y el comentario del porqué en un solo lugar.
-  **Qué mirar cuando se haga**: los `.scss` de componente que redefinen lo que
-  ya existe como token o como clase global (`--surface-2`, `.btn`, `.card-btn`);
-  y los helpers de path/árbol repetidos por componente. Los `@media
-  (prefers-color-scheme: dark)` sueltos **ya se descartaron como frente**: se
-  grepeó el 2026-09-07 y el único archivo que los tiene es `src/styles.scss`,
-  o sea que el bug del chip de la saga (componente en la paleta contraria al
-  forzar «Claro» con el OS en oscuro) no tiene hermanos escondidos.
-  **Lo que sí apareció midiendo**: colores hex hardcodeados en los `.scss` de
-  componente en vez de token — `#c87070` ×30, `#333` ×20, `#888` ×11,
-  `#4a9eff` ×11, `#d23030` ×10, `#b04040` ×9, `#e07070` ×8, `#c89020` ×8. Ojo
-  al unificar: los cuatro rojizos pueden ser una escala deliberada de estados
-  (error/warning/hover) y no drift, así que hay que mirar qué representa cada
-  uno antes de colapsarlos a un token.
-  **Criterio para no pasarse de rosca**: se unifica lo que ya está duplicado y
-  duele, no lo que podría llegar a compartirse. Dos copias iguales se unifican;
-  dos copias parecidas que divergieron a propósito, no.
+- **Contraste AA de `--ok` y `--warn` en tema claro** (quedó de la auditoría
+  del SCSS, cerrada el 2026-09-08 — el detalle está en `git log -p TODO.md`).
+  `--ok` sobre su tinte da ~4.3:1 y `--warn` ~3.4:1, los dos por debajo del
+  4.5 de AA para texto normal; bajar el alfa del tinte no alcanza porque los
+  tokens ya arrancan cerca de la línea sobre el fondo pelado (4.75 y 3.69).
+  La salida es oscurecer `--ok` y `--warn` en el tema claro, pero eso cambia
+  TODOS sus usos y no solo los recuadros, así que es una decisión aparte. Hoy
+  los afectados son los chips `.ok` y `.warn` de Configuración.
+- **Loop de escaneo duplicado en los tres auditores** (`rae-audit-service`,
+  `repeticiones-audit-service`, `grammar-audit-service`): `progress` + guard
+  de scope + publicación incremental es casi el mismo en los tres, y no se
+  unificó porque las tres firmas de `progress` difieren. Si aparece un cuarto
+  auditor, ahí sí conviene el helper de loop. `yieldToEventLoop` ya está
+  compartido en `core/yield-to-event-loop.ts`.
+- **Criterio para cualquier pasada de duplicación futura**: se unifica lo que
+  ya está duplicado y duele, no lo que podría llegar a compartirse. Dos copias
+  iguales se unifican; dos copias parecidas que divergieron a propósito, no. Y
+  antes de unificar una función duplicada, preguntarse si el framework ya la
+  trae (`formatDate` ×4 se resolvió borrándola: era `DatePipe`).
 
-  **Auditoría del SCSS, hecha el 2026-09-07. CERRADA.** De **10.113 líneas en
-  41 archivos a 9.414 en 45**. Los cuatro archivos nuevos son partials
-  compartidos (`shared/config-modal.scss`, `shared/form-fields.scss`,
-  `shared/audit-panel.scss`, `editor/popover-shell.scss`), así que el corte
-  real es de **~700 líneas** de duplicación, más los helpers de TS
-  (`core/tree-utils.ts`, `core/yield-to-event-loop.ts`).
+## Documentación
 
-  Lo aplicado, en orden: reglas muertas (-104); los 148 fallbacks
-  `var(--token, hex)` que nunca se resolvían y los 11 tokens alias; el partial
-  `shared/config-modal.scss` (-236); el shell de modal entero
-  (`.modal-backdrop` + `.modal-card` + `.modal-header`, -265); el partial
-  `shared/form-fields.scss` (-47); el shell de tarjeta `.card` (-56); el
-  partial `shared/audit-panel.scss` de los dos paneles de auditoría (-119); el
-  CSS de `select` que no tenía ningún `select` (-63); los 46 literales de color
-  que pasaron a `--err`/`--ok`/`--warn`; la caja de los tres popovers del
-  editor (`editor/popover-shell.scss`); los cinco fills de error y los
-  recuadros con tinte, con los tokens `--*-tint`; y `pnpm lint:css`, que quedó
-  en verde y ahora sirve de línea de base.
-
-  **Tres de las unificaciones resolvieron además una fragilidad de JS**, que
-  era el mejor argumento de cada una y no estaba en el reporte: el bloqueo de
-  la rueda sobre el velo y el cierre por click afuera de los popovers
-  enumeraban clases a mano (`[class*="backdrop"]` y
-  `closest('.grammar-pop, .rae-pop, .rep-pop')`), así que un modal o un popover
-  nuevo perdía el comportamiento en silencio; y los dos paneles de auditoría ya
-  habían divergido sin que nadie lo viera (el título de capítulo de RAE tenía
-  la clase en el template y ninguna regla, así que desbordaba). Ahora la clase
-  que da el estilo es la misma que engancha el comportamiento: olvidarla se ve
-  a la primera.
-
-  **Lo que queda anotado y NO se hizo, por si vuelve a aparecer en un audit**:
-  `--ok` sobre su tinte da ~4.3:1 en tema claro y `--warn` ~3.4:1, los dos por
-  debajo del 4.5 de AA para texto normal, y bajar el alfa del tinte no alcanza
-  porque los tokens ya arrancan cerca de la línea sobre el fondo pelado (4.75 y
-  3.69). La salida sería oscurecer `--ok` y `--warn` en el tema claro, pero eso
-  cambia TODOS sus usos y no solo los recuadros, así que es una decisión aparte.
-  Hoy los afectados son los chips `.ok` y `.warn` de Configuración.
-
-  **Tres hallazgos del reporte que eran FALSOS y habrían causado regresiones**,
-  anotados para que no vuelvan:
-  - `--panel-header-bg` *parece* alias de `--bg-soft` porque en claro es
-    `var(--bg-soft)`, pero el mixin oscuro lo redefine a `#262320` mientras
-    `--bg-soft` va a `#181614`. En oscuro no son el mismo color. Ídem
-    `--panel-bg-elev`.
-  - Los cinco `background` de error (`.btn-danger`, el hover destructivo del
-    menú contextual, y los `.error` de notes-editor, font-preview y editor) no
-    podían pasar a `var(--err)` **tal cual**: llevaban `color: white`
-    hardcodeado, y en oscuro `--err` es `#e07a78`, o sea blanco sobre salmón
-    claro (2.91:1). Se resolvió cambiando el texto a `var(--bg)` junto con el
-    fondo, que es lo que ya hacía `.btn-confirm` de dictionary-modal: así el
-    par se invierte con el tema y da 5.32 en claro y 5.78 en oscuro. La regla
-    quedó escrita en `styles.scss`. Un fill de estado NUNCA lleva `white` fijo.
-  - Y una tercera del mismo tipo: el `inset: 0` seguido de
-    `width`/`height: 100%` en `.deck-card` y `.crop-image` **no** es
-    redundante. Los dos son `<img>`, o sea elementos reemplazados, y un
-    absoluto reemplazado con `width: auto` usa su tamaño intrínseco: `left` y
-    `right` quedan sobre-restringidos y se ignora `right`. Con un `div` sí
-    sobraría. Documentado en los dos `.scss`.
-
-  **Lo que se decidió no hacer**: el `border-radius` con 6 valores en 190
-  sitios (el par 4px/3px sin criterio distinguible) no valía pasada propia y
-  cayó solo al consolidar modales, tarjetas e inputs. Los dos banners de error con tinte propio
-  ya entraron: los tokens `--*-tint` existen y el par texto+fondo sigue el tema.
-  De paso salió que la pasada de colores había dejado **cuatro** recuadros
-  descalzados --`color: var(--ok/--warn/--err)` con un `rgb()` derivado del
-  literal viejo, en settings-modal ×2, import-wizard y editor--, que es
-  exactamente el problema que los tokens de tinte previenen.
-
-
-  **Segunda capa, encontrada el 2026-09-07 con un barrido de bloques idénticos
-  repetidos entre archivos** (el reporte del audit solo había encontrado los
-  bloques grandes): el **footer de acciones del modal** estaba escrito NUEVE
-  veces con cinco variantes — era la cuarta pieza del shell y el reporte solo
-  había listado backdrop, card y header — y la **etiqueta de tipo de la
-  tarjeta** cuatro veces idéntica. Los dos resueltos con `.modal-actions` y
-  `.card .kind` globales.
-
-  Lo que ese barrido encontró y se decidió NO unificar, para no volver a
-  mirarlo: la **etiqueta de sección** de los modales de config (×3) difiere en
-  `color` entre autor y los otros dos, y el **subtítulo mono del header** (×3)
-  usa nombres de clase que significan cosas distintas (`.path` en config y
-  editor de temas, `.saga-name` en diccionario). Unificar cualquiera de las dos
-  sería forzarlas.
-
-  **Tercera capa, cerrada el 2026-09-08**: el chrome compartido de los dos
-  editores (`shared/editor-chrome.scss`, 16 bloques que estaban idénticos en
-  `editor.scss` y `notes-editor.scss`, 999 líneas a 891), y el último resto de
-  valores del tema oscuro aplicados sin condicionar tema — `rgb(200 168 120 /
-  …)` en `tree.scss` ×2 y `select.scss`, que pasaron a `--accent-tint` /
-  `--accent-tint-border`.
-  De paso salió que `debug-panel.scss` usaba `#c8a878` como color del nivel
-  `warn` del log, al lado de un `error` que ya era `var(--err)`. No lo había
-  agarrado la pasada de colores porque grepeaba los literales conocidos de warn
-  (`#c89020`, `#e0a020`) y no ese. En tema claro daba **1.93:1** sobre el fondo
-  del panel, o sea tostado sobre crema, prácticamente invisible; con
-  `var(--warn)` pasa a 3.35.
-  Ya no queda ningún literal de paleta oscura suelto en el repo.
-
-  **Lo que el barrido de bloques repetidos dejó y NO se unificó**, además de la
-  etiqueta de sección y el subtítulo mono: `.tb-btn.tb-text` PARECE compartido
-  entre los dos editores y no lo es (capítulos usa `padding: 0 10px` más
-  `margin: 0 1px`, notas `padding: 0 0.5em` sin margen), y quedan pares ×2 de
-  chips mono y de bloques de tarjeta que no llegan a doler.
-
-    **`pnpm lint:css` quedó en verde.** Venía rojo desde antes de la pasada con 9
-  errores, y eso tuvo costo real: con la base en rojo no se distingue un error
-  nuevo del ruido, y durante la pasada se coló un `//` suelto en un commit por
-  eso mismo. Ahora sirve de línea de base.
+- [ ] **Wiki o sitio de docs; el README quedó demasiado grande** (pedido del
+  autor el 2026-09-14). Hoy `README.md` tiene ~1.000 líneas y mezcla cuatro
+  cosas para cuatro lectores distintos: instalación (usuario nuevo), features
+  con detalle de implementación (mantenedor), configuración avanzada de LT
+  (usuario que ya usa la app) y setup de desarrollo + release (autor). Cada
+  PR le suma un párrafo a Features y nadie lo lee de punta a punta.
+  Lo que hace falta:
+  - **Explicar el flujo** de punta a punta, que hoy no está escrito en ningún
+    lado como recorrido: importar o crear → escribir → RAE → gramática y
+    repeticiones → revisión por libro → export EPUB → publicar. El README
+    lista features por área, no el camino que recorre una novela.
+  - **Separar por lector**: instalación y primer uso; guía del flujo; referencia
+    de configuración (LT, temas, layout del repo de novelas); y lo de
+    desarrollo (setup, tests, release, AUR), que se puede quedar en el repo.
+  - **Dónde**: GitHub Wiki es lo más barato (cero build, editable desde la web)
+    pero no viaja con el repo ni se versiona con los PR. Alternativa: `docs/`
+    en Markdown dentro del repo, que se puede publicar con GitHub Pages sin
+    tooling (o con `mkdocs` si se quiere navegación); ya existe `docs/` con los
+    specs y los patches de LT. Decidir con el autor antes de mover nada.
+  - **El README queda como landing**: qué es, captura, instalación por OS, link
+    a la guía. El detalle de implementación por feature (lo que hoy es la
+    sección Features) va a la referencia, y CLAUDE.md sigue siendo lo que lee
+    el agente, no el usuario.
 
 ## Archivos
 
-- Changelog screen in-app: panel/modal accesible desde el header (junto a 🐛) parseando `CHANGELOG.md` o release notes de GitHub. Útil para gente nueva post-AUR.
+- Changelog screen in-app: panel/modal accesible desde el header (junto a «Acerca de») parseando `CHANGELOG.md` o release notes de GitHub. Útil para gente nueva post-AUR.
 - **En el modal "Acerca de", cuando se retome** (ideas del autor al construirlo, no
   para ahora): el chequeo de versión nueva — hoy vive en el `UpdateBanner` y el
   plugin `updater`, así que sería exponer el "buscar actualizaciones" a mano desde
@@ -1351,21 +1190,6 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   repo de novelas, (b) sumar export/import manual, (c) sync explícito
   por gist/Dropbox. La (a) es la más seamless pero mezcla preferencias
   per-PC (font recents) con per-repo (tema, idioma).
-- **Tests que colisionan entre sí en paralelo** (medido el 2026-09-01, no
-  supuesto). Cuatro módulos tienen su propio helper `tempdir()` a mano que
-  arma el nombre con `SystemTime::now().as_nanos()` y nada más: `git.rs:703`,
-  `theme.rs:912`, `epub.rs:3114` y `stats.rs:202`. Dos tests que arrancan en el
-  mismo nanosegundo se pisan el directorio, y `cargo test` en paralelo falla de
-  forma intermitente — visto en `git::tests::pull_rebase_sets_upstream_when_missing`.
-  Además cada corrida deja un directorio colgado en `/tmp` para siempre, porque
-  nadie limpia al final.
-  El arreglo es **borrar código, no agregarlo**: `tempfile` ya es
-  dev-dependency y ya lo usan cinco módulos. `tempfile::tempdir()` es a prueba
-  de colisiones por construcción (`O_EXCL` con reintento) y se borra sola al
-  dropear el guard. La rama `feat/epub-back-matter` ya convirtió las dos copias
-  que había agregado (`autor.rs`, `catalogo.rs`); quedan estas cuatro. Ojo al
-  convertir: hay que retener el `TempDir` mientras el test use paths adentro,
-  o se borra el directorio a mitad y el test falla peor que ahora.
 
 ## Observabilidad / Stats
 
@@ -1375,7 +1199,6 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 
 ## Git / Sync
 
-- **Event-driven sync** (nuevo, agregado en la misma PR): focus → fetch, blur (debounced 30s + cooldown 2min) → flushAndSync, close → flushAndSync con timeout 10s + modal "¿Cerrar igual?" si falla. Listeners de `online`/`offline` también. El poll de status de 30s se eliminó; queda el poll de 5min como red de seguridad para sesiones largas sin transiciones de foco.
 - **Bug — cambio de carpetas en remoto no refresca el árbol**: si en otra
   PC se crean/renombran/mueven carpetas, hay que recargar el árbol a mano
   para verlas. El refresh post-pull (`loadTree()` sobre `PullPathChange`)
