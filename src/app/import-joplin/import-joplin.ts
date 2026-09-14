@@ -1,4 +1,4 @@
-import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ImportJoplinService } from '../core/import-joplin-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
@@ -9,7 +9,6 @@ import { atajo } from '../shared/atajo';
   selector: 'app-import-joplin',
   imports: [FormsModule],
   templateUrl: './import-joplin.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './import-joplin.scss',
 })
 export class ImportJoplin {

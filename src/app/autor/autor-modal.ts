@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal, WritableSignal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, effect, inject, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { invoke } from '@tauri-apps/api/core';
 import { AutorConfig, AutorService } from '../core/autor-service';
@@ -38,7 +38,6 @@ function clamp(v: number, min: number, max: number): number {
   selector: 'app-autor-modal',
   imports: [FormsModule],
   templateUrl: './autor-modal.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './autor-modal.scss',
 })
 export class AutorModal {

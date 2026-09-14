@@ -1,5 +1,5 @@
 import { FechaCortaPipe } from '../shared/fecha-corta-pipe';
-import { Component, computed, input, output, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, input, output } from '@angular/core';
 import {
   LucideBookMarked,
   LucideDynamicIcon,
@@ -25,7 +25,6 @@ const MAX_CHIPS = 8;
   selector: 'app-folder-card',
   imports: [FechaCortaPipe, LucideDynamicIcon],
   templateUrl: './folder-card.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './folder-card.scss',
 })
 export class FolderCard {

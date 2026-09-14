@@ -1,10 +1,9 @@
-import { Component, HostListener, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, HostListener, inject } from '@angular/core';
 import { ImageViewerService } from '../core/image-viewer-service';
 
 @Component({
   selector: 'app-image-viewer',
   templateUrl: './image-viewer.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './image-viewer.scss',
 })
 export class ImageViewer {

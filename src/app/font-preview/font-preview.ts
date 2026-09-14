@@ -4,8 +4,7 @@ import {
   computed,
   effect,
   inject,
-  signal,
-  ChangeDetectionStrategy
+  signal
 } from '@angular/core';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { FontPreviewService } from '../core/font-preview-service';
@@ -23,7 +22,6 @@ const ALPHA_NUM =
 @Component({
   selector: 'app-font-preview',
   templateUrl: './font-preview.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './font-preview.scss',
 })
 export class FontPreview {

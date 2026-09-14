@@ -1,4 +1,4 @@
-import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { LucideX } from '@lucide/angular';
 import { UpdaterService } from '../core/updater-service';
 
@@ -6,7 +6,6 @@ import { UpdaterService } from '../core/updater-service';
   selector: 'app-update-banner',
   imports: [LucideX],
   templateUrl: './update-banner.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './update-banner.scss',
 })
 export class UpdateBanner {
