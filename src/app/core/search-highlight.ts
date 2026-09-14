@@ -482,6 +482,13 @@ export function findAllMatchesInPlain(
   return hits;
 }
 
+/** `true` si la query trae algo que no es letra, número ni espacio: la raya
+ *  de `—dijo`, los signos de `¿por qué?`. Es la mitad "puntuación" del
+ *  `hasRichForm` de `findAllMatchesInPlain` (que además cuenta mayúsculas). */
+export function hasPunctuation(query: string): boolean {
+  return /[^\p{L}\p{N}\s]/u.test(query);
+}
+
 /** Separa una query en términos individuales (split por whitespace, sin puntuación). */
 export function tokenize(query: string): string[] {
   return query

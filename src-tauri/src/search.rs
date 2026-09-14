@@ -982,6 +982,9 @@ pub enum MatchLevel {
     AllWords,
     /// Ningún doc tenía todas las palabras; estos tienen alguna (rescate OR).
     SomeWords,
+    /// La query traía puntuación (`—dijo`, `¿por qué?`) y ningún doc la tiene
+    /// tal cual; estos tienen las palabras sin la puntuación.
+    NoLiteral,
 }
 
 /// Lo que se descartó por tener las palabras desperdigadas, para que el panel
@@ -1170,6 +1173,14 @@ pub fn search_query_impl(
     // con operadores (`"..."`, `OR`, `-x`, `kind:`), que ya matchean lo que
     // piden y cuyo literal ni existe en el texto.
     let multi_word = terms.len() > 1 && is_plain_query(q);
+    // Filtro literal por puntuación. Tantivy tokeniza y tira la raya, así que
+    // `—dijo` indexa igual que `dijo` y trae todo capítulo con un «dijo» suelto.
+    // Si el autor tipeó la puntuación, la quiere: se quedan los docs que tienen
+    // el string tal cual (que es lo mismo que resalta el editor). Solo con
+    // puntuación, no con mayúsculas: `Kellai` en fuzzy no está literal en
+    // ningún lado y sin embargo es un hit válido.
+    let punct_literal = is_plain_query(q)
+        && q.chars().any(|c| !c.is_alphanumeric() && !c.is_whitespace());
     let any_phrase = scored.iter().any(|(_, phrase, _)| *phrase);
     let any_nearby = scored
         .iter()
@@ -1179,6 +1190,24 @@ pub fn search_query_impl(
             (
                 scored.into_iter().map(|(h, _, _)| h).collect(),
                 MatchLevel::SomeWords,
+                None,
+            )
+        } else if punct_literal && any_phrase {
+            (
+                scored
+                    .into_iter()
+                    .filter(|(_, phrase, _)| *phrase)
+                    .map(|(h, _, _)| h)
+                    .collect(),
+                MatchLevel::Phrase,
+                None,
+            )
+        } else if punct_literal {
+            // Nada tiene el literal: se devuelven los hits por palabra, pero
+            // avisando, porque el editor no va a resaltar nada adentro.
+            (
+                scored.into_iter().map(|(h, _, _)| h).collect(),
+                MatchLevel::NoLiteral,
                 None,
             )
         } else if !multi_word {
@@ -1823,6 +1852,35 @@ mod tests {
         let res = search_query_impl("\"duendes de la mansión\"", 50, None, false, false).unwrap();
         assert!(!res.hits.is_empty(), "la phrase query debería matchear");
         assert_eq!(res.match_level, MatchLevel::Phrase);
+    }
+
+    #[test]
+    fn punct_literal_filters_to_docs_with_the_exact_string() {
+        let _g = TEST_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        reset_state();
+        // El repro real: sacar los «—dijo» pelados. Tantivy tira la raya, así
+        // que sin el filtro `—dijo` trae los tres capítulos.
+        let dir = make_repo_chapters(&[
+            ("1", "—Vamos —dijo Aedan, y se levantó."),
+            ("2", "Nadie dijo nada. El carruaje siguió."),
+            ("3", "—¿Y? —preguntó Yiri. Él ya lo había dicho todo."),
+        ]);
+        full_reindex(dir.path(), None).unwrap();
+        let res = search_query_impl("—dijo", 50, None, false, false).unwrap();
+        assert_eq!(res.match_level, MatchLevel::Phrase);
+        assert_eq!(res.hits.len(), 1, "solo cap 1 tiene «—dijo»: {:?}", res.hits);
+        assert!(res.hits[0].path.ends_with("1.html"));
+        // Mismo filtro con el fuzzy prendido.
+        let res = search_query_impl("—dijo", 50, None, false, true).unwrap();
+        assert_eq!(res.hits.len(), 1, "en fuzzy también: {:?}", res.hits);
+        // Sin ningún literal: vuelven los hits por palabra, avisando.
+        let res = search_query_impl("«dijo»", 50, None, false, false).unwrap();
+        assert_eq!(res.match_level, MatchLevel::NoLiteral);
+        assert_eq!(res.hits.len(), 2, "los dos caps con «dijo»: {:?}", res.hits);
+        // Una palabra sin puntuación sigue igual que antes.
+        let res = search_query_impl("dijo", 50, None, false, false).unwrap();
+        assert_eq!(res.match_level, MatchLevel::Phrase);
+        assert_eq!(res.hits.len(), 2);
     }
 
     #[test]

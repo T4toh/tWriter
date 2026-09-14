@@ -7,7 +7,7 @@ import { DebugService } from './debug-service';
 import { MarkdownReaderService } from './markdown-reader-service';
 import { NoteService } from './note-service';
 import { ProjectService } from './project-service';
-import { findAllMatchesInPlain, tokenize } from './search-highlight';
+import { findAllMatchesInPlain, hasPunctuation, tokenize } from './search-highlight';
 import { SearchScope as SearchScopeKey, SettingsService } from './settings-service';
 import { ToastService } from './toast-service';
 
@@ -44,7 +44,7 @@ export interface SearchHit {
 /** Qué tan bien matchean los hits devueltos. El panel avisa en los dos niveles
  *  flojos: sin eso, una lista de resultados mediocres se lee igual que una
  *  buena. Ver `MatchLevel` en `search.rs`. */
-export type MatchLevel = 'phrase' | 'nearby' | 'allWords' | 'someWords';
+export type MatchLevel = 'phrase' | 'nearby' | 'allWords' | 'someWords' | 'noLiteral';
 
 /** Lo que se descartó por tener las palabras desperdigadas. Presente sólo con
  *  `matchLevel === 'allWords'`, donde no se devuelve ningún hit. */
@@ -508,7 +508,10 @@ export class SearchService {
     // (la auditoría RAE) no quiere que una variante sin tilde de un párrafo
     // anterior le gane al bloque correcto.
     const fold = foldOverride ?? this.settings.searchFuzzy();
-    const override = termsOverride?.filter((t) => t.length > 0) ?? [];
+    // Con puntuación en la query (`—dijo`) el literal manda: `matchedTerms`
+    // trae `dijo` pelado y saltaría al primer «dijo» del capítulo, no al
+    // primero con raya. Mismo criterio que `findAllMatchesInPlain`.
+    const override = hasPunctuation(q) ? [] : (termsOverride?.filter((t) => t.length > 0) ?? []);
     if (override.length > 0) {
       // Términos reales del doc (matchedTerms) — ya literales, sin fold.
       this.pendingHighlight.set({
