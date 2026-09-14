@@ -36,10 +36,10 @@ function check(nombre, got, want) {
 
 // Hora local a propósito: es lo que ve el autor en la grilla.
 const ms = new Date(2026, 8, 4, 15, 30).getTime(); // 4 de septiembre de 2026
-check('dmy rellena día y mes', formatFechaCorta(ms, 'dmy'), '04/09/26');
-check('ymd año completo', formatFechaCorta(ms, 'ymd'), '2026-09-04');
-check('dmy año de dos dígitos en 2004', formatFechaCorta(new Date(2004, 0, 1).getTime(), 'dmy'), '01/01/04');
-check('ymd fin de año', formatFechaCorta(new Date(2026, 11, 31).getTime(), 'ymd'), '2026-12-31');
+check('dmy rellena día y mes', formatFechaCorta(ms, 'dmy'), '04/09/2026');
+check('ymd mismo separador, orden invertido', formatFechaCorta(ms, 'ymd'), '2026/09/04');
+check('dmy año completo en 2004', formatFechaCorta(new Date(2004, 0, 1).getTime(), 'dmy'), '01/01/2004');
+check('ymd fin de año', formatFechaCorta(new Date(2026, 11, 31).getTime(), 'ymd'), '2026/12/31');
 check('isDateFormat acepta dmy', isDateFormat('dmy'), true);
 check('isDateFormat rechaza basura', isDateFormat('mdy'), false);
 check('isDateFormat rechaza undefined', isDateFormat(undefined), false);
