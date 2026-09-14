@@ -79,6 +79,7 @@ import {
 } from './grammar-extension';
 import { SearchHighlight, setSearchHighlights } from './search-highlight-extension';
 import { NoHardBreak } from './no-hard-break-extension';
+import { Verso, aplicarVerso } from './verso-extension';
 import { AnchorBox } from './popover-position';
 import { buildEditorProps } from './editor-props';
 import { GrammarPopover } from './grammar-popover';
@@ -965,10 +966,13 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** Envuelve/desenvuelve la selección en el bloque de verso (`blockquote`):
    *  centrado, itálica y aire contra la prosa salen del estilo, así que marcar
    *  una canción es esto y nada más — nada de centrar verso por verso ni
-   *  poner la cursiva a mano. Es el mismo comando que `Mod+Shift+B` y que
-   *  escribir `> ` al empezar el párrafo. */
+   *  poner la cursiva a mano. Mismo comando que `Mod+Shift+B` (ver
+   *  `verso-extension.ts`); `> ` al empezar el párrafo sigue siendo el de
+   *  StarterKit. */
   protected toggleVerso(): void {
-    this.tiptap?.chain().focus().toggleBlockquote().run();
+    if (!this.tiptap) return;
+    this.tiptap.commands.focus();
+    aplicarVerso(this.tiptap);
   }
 
   protected setAlign(align: 'left' | 'center' | 'right'): void {
@@ -1512,13 +1516,12 @@ export class Editor implements AfterViewInit, OnDestroy {
     const editor = this.tiptap;
     if (!editor) return;
     this.cerrarPopovers();
-    const coords = editor.view.coordsAtPos(r.from);
     this.repPopover.set({
       repeticion: r,
       // La palabra tal cual está escrita: `r.palabra` viene normalizada y
       // mostrarla así se lee como un bug de la app.
       palabra: editor.state.doc.textBetween(r.from, r.to, ' ').trim() || r.palabra,
-      anchor: { left: coords.left, top: coords.top, bottom: coords.bottom },
+      anchor: this.anchorAt(r.from),
       from: r.from,
       to: r.to,
     });
@@ -1827,15 +1830,15 @@ export class Editor implements AfterViewInit, OnDestroy {
     // su fix a mano vía el botón "Aplicar RAE" del capítulo entero, así que
     // no necesita también ganarle a gramática acá.
     if (raeViolation && grammarMatch && raeViolation.category === 'pending-conversion') {
-      this.openGrammarPopover(grammarSpan!, grammarMatch, event);
+      this.openGrammarPopover(grammarMatch, event);
       return;
     }
     if (raeViolation) {
-      this.openRaePopover(raeSpan!, raeViolation, event);
+      this.openRaePopover(raeViolation, event);
       return;
     }
     if (grammarMatch) {
-      this.openGrammarPopover(grammarSpan!, grammarMatch, event);
+      this.openGrammarPopover(grammarMatch, event);
       return;
     }
     // La repetición va última siempre: es una sugerencia de estilo, nunca un
@@ -1843,7 +1846,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     // convive con las otras (usa `text-decoration`, no `border-bottom`), pero
     // un offset abre un solo popover.
     if (repeticion) {
-      this.openRepPopover(repSpan!, repeticion, event);
+      this.openRepPopover(repeticion, event);
       return;
     }
     this.cerrarPopovers();
@@ -1872,17 +1875,27 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.cerrarPopovers();
   }
 
-  private openRepPopover(span: HTMLElement, r: RepeticionPos, event: MouseEvent): void {
+  /** Ancla del popover por posición del doc, no por el span de la decoración.
+   *  Con doble click, WebKit despacha el `click` sobre el span del mousedown
+   *  aunque ProseMirror ya lo haya redibujado (la selección de palabra y el
+   *  resaltado del grupo cambian las decoraciones): el nodo está desmontado,
+   *  su `getBoundingClientRect()` da ceros y el popover aparecía en la
+   *  esquina. `coordsAtPos` mira el doc vivo. */
+  private anchorAt(pos: number): AnchorBox {
+    const c = this.tiptap!.view.coordsAtPos(pos);
+    return { left: c.left, top: c.top, bottom: c.bottom };
+  }
+
+  private openRepPopover(r: RepeticionPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
     this.cerrarPopovers();
-    const rect = span.getBoundingClientRect();
     this.repPopover.set({
       repeticion: r,
       // La palabra tal cual está escrita: `r.palabra` viene normalizada (sin
       // tildes, en minúscula) y mostrarla así se lee como un bug de la app.
       palabra: this.tiptap?.state.doc.textBetween(r.from, r.to, ' ').trim() ?? r.palabra,
-      anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
+      anchor: this.anchorAt(r.from),
       from: r.from,
       to: r.to,
     });
@@ -1944,22 +1957,20 @@ export class Editor implements AfterViewInit, OnDestroy {
     setGrupoRepeticion(view, rangos);
   }
 
-  private openRaePopover(span: HTMLElement, v: RaeViolationPos, event: MouseEvent): void {
+  private openRaePopover(v: RaeViolationPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
     this.cerrarPopovers();
-    const rect = span.getBoundingClientRect();
     this.raePopover.set({
       violation: v,
-      anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
+      anchor: this.anchorAt(v.from),
     });
   }
 
-  private openGrammarPopover(span: HTMLElement, m: GrammarMatchPos, event: MouseEvent): void {
+  private openGrammarPopover(m: GrammarMatchPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
     this.cerrarPopovers();
-    const rect = span.getBoundingClientRect();
     // El diccionario de la saga hasta ahora solo silenciaba falsos positivos.
     // Para los TYPOS también aporta candidatos: si el autor escribió mal un
     // nombre propio del mundo, LT nunca lo va a ofrecer.
@@ -1972,7 +1983,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         : [];
     this.grammarPopover.set({
       match: m,
-      anchor: { left: rect.left, top: rect.top, bottom: rect.bottom },
+      anchor: this.anchorAt(m.from),
       from: m.from,
       to: m.to,
       dictSuggestions,
@@ -1997,6 +2008,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         RepeticionesExtension,
         SearchHighlight,
         NoHardBreak,
+        Verso,
       ],
       content,
       editable,

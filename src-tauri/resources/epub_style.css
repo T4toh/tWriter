@@ -38,12 +38,13 @@ body.cover-body {
 
 body.cover-body img {
   display: block;
-  width: 100%;
-  height: 100vh;
+  /* Sin object-fit (Google Play lo borra de la hoja): con width/height auto
+     y solo los max-*, la imagen mantiene su aspect ratio y el flex del body
+     la centra. */
+  width: auto;
+  height: auto;
   max-width: 100%;
   max-height: 100vh;
-  object-fit: contain;
-  object-position: center;
 }
 
 /* Title page: contenido vertical+horizontal centrado */
@@ -440,12 +441,6 @@ h1.part-title {
   text-indent: 0;
 }
 
-.chapter-content p[style*="text-align: center"],
-.chapter-content p[style*="text-align: right"],
-.chapter-content p[style*="text-align: left"] {
-  text-indent: 0;
-}
-
 /* Párrafo vacío = renglón en blanco (espejo del editor). Sin esto, el reader
    colapsa `<p></p>` a altura 0 por `margin: 0` arriba. nbsp da line-box. */
 .chapter-content p:empty::before {
@@ -628,7 +623,10 @@ nav ol.toc > li.toc-part + li.toc-editorial {
 }
 
 /* Misc */
+/* Alineación puesta desde el editor; el export traduce el style inline a estas
+   clases (epub.rs::align_style_to_class). */
 .center-align { text-align: center; text-indent: 0; }
 .right-align { text-align: right; text-indent: 0; }
+.left-align { text-align: left; text-indent: 0; }
 
 /* @THEME_RULES */
