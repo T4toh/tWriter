@@ -1,0 +1,85 @@
+@if (scope(); as s) {
+  <header class="audit-panel-head">
+    <div class="audit-panel-title">
+      <svg class="audit-panel-icon" lucideSpellCheck [size]="16"></svg>
+      <div class="audit-panel-labels">
+        <span class="audit-panel-scope">Gramática — {{ s.name }}</span>
+        <span class="audit-panel-sub">
+          @if (loading()) {
+            @if (progress(); as p) {
+              {{ p.done }} / {{ p.total }} capítulos
+            } @else {
+              Escaneando…
+            }
+          } @else if (error()) {
+            Error
+          } @else if (total() > 0) {
+            {{ total() }} avisos en {{ grupos().length }} capítulos
+          } @else {
+            Sin avisos de gramática
+          }
+        </span>
+      </div>
+    </div>
+    @if (grupos().length > 1) {
+      <button
+        type="button"
+        class="audit-panel-close"
+        (click)="toggleTodos()"
+        [title]="todos() === false ? 'Abrir todos los capítulos' : 'Colapsar todos los capítulos'"
+      >
+        @if (todos() === false) {
+          <svg lucideChevronsUpDown [size]="14"></svg>
+        } @else {
+          <svg lucideChevronsDownUp [size]="14"></svg>
+        }
+      </button>
+    }
+    <button type="button" class="audit-panel-close" (click)="close()" title="Cerrar">
+      <svg lucideX [size]="14"></svg>
+    </button>
+  </header>
+
+  @if (error(); as e) {
+    <div class="audit-panel-error">{{ e }}</div>
+  }
+
+  @if (fallidos().length > 0) {
+    <div class="audit-panel-error">
+      LanguageTool no pudo chequear {{ fallidos().length }} capítulo{{ fallidos().length === 1 ? '' : 's' }}.
+      Cerrá y volvé a abrir la auditoría para reintentar solo esos.
+    </div>
+  }
+
+  @if (emptyAfterLoad()) {
+    <div class="audit-panel-empty">
+      LanguageTool no marcó nada en este alcance. Los nombres propios del
+      diccionario de la saga y las reglas desactivadas no cuentan.
+    </div>
+  }
+
+  <ul class="audit-panel-list">
+    @for (g of grupos(); track g.chapter.path) {
+      <li class="audit-chapter">
+        <details class="ga-chapter-details" [attr.open]="g.abierto ? '' : null">
+          <summary class="audit-chapter-head">
+            <span class="audit-chapter-title">{{ g.chapter.title }}</span>
+            <span class="audit-chapter-count">{{ g.chapter.matches.length }}</span>
+          </summary>
+          <ul class="audit-row-list">
+            @for (m of g.chapter.matches; track $index) {
+              <li class="audit-row" (click)="openChapterAt(g.chapter, m)">
+                <div class="audit-row-meta">
+                  <span class="ga-palabra">{{ texto(g.chapter, m) }}</span>
+                  <span class="ga-cat">{{ m.category }}</span>
+                </div>
+                <div class="ga-mensaje">{{ mensaje(m) }}</div>
+                <div class="audit-row-snippet">{{ snippet(g.chapter, m) }}</div>
+              </li>
+            }
+          </ul>
+        </details>
+      </li>
+    }
+  </ul>
+}

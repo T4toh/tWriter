@@ -1,7 +1,7 @@
 <div
   class="shell"
   [class.focus]="settings.focusMode()"
-  [class.with-viewer]="search.open() || imageViewer.viewing() !== null || fontPreview.viewing() !== null || markdownReader.viewing() !== null || raeAudit.isOpen() || repeticionesAudit.isOpen()"
+  [class.with-viewer]="search.open() || imageViewer.viewing() !== null || fontPreview.viewing() !== null || markdownReader.viewing() !== null || raeAudit.isOpen() || repeticionesAudit.isOpen() || grammarAudit.isOpen()"
   [attr.data-rpw]="settings.rightPanelWidth()"
 >
   <aside class="panel panel-left">
@@ -315,6 +315,10 @@
   } @else if (repeticionesAudit.isOpen()) {
     <aside class="panel panel-right">
       <app-repeticiones-audit-panel />
+    </aside>
+  } @else if (grammarAudit.isOpen()) {
+    <aside class="panel panel-right">
+      <app-grammar-audit-panel />
     </aside>
   } @else if (search.open()) {
     <aside class="panel panel-right">

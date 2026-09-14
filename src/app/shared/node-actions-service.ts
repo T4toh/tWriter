@@ -12,6 +12,7 @@ import {
   LucidePencil,
   LucideQuote,
   LucideRepeat,
+  LucideSpellCheck,
   LucideRuler,
 } from '@lucide/angular';
 import { BookConfigService } from '../core/book-config-service';
@@ -23,6 +24,7 @@ import { ImageViewerService } from '../core/image-viewer-service';
 import { MarkdownReaderService } from '../core/markdown-reader-service';
 import { RaeAuditService } from '../core/rae-audit-service';
 import { RepeticionesAuditService } from '../core/repeticiones-audit-service';
+import { GrammarAuditService } from '../core/grammar-audit-service';
 import { QuotesFixService } from '../core/quotes-fix-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
 import { NavigationService } from '../core/navigation-service';
@@ -66,6 +68,7 @@ export class NodeActionsService {
   private mdReader = inject(MarkdownReaderService);
   private raeAudit = inject(RaeAuditService);
   private repeticionesAudit = inject(RepeticionesAuditService);
+  private grammarAudit = inject(GrammarAuditService);
   private quotesFix = inject(QuotesFixService);
   private toast = inject(ToastService);
   private modal = inject(ModalService);
@@ -370,6 +373,11 @@ export class NodeActionsService {
         onClick: () => this.auditRepeticiones(node),
       });
       entries.push({
+        label: 'Revisar gramática',
+        icon: LucideSpellCheck,
+        onClick: () => this.auditGramatica(node),
+      });
+      entries.push({
         label: 'Arreglar comillas',
         icon: LucideQuote,
         onClick: () => this.fixQuotesBulk(node),
@@ -581,6 +589,10 @@ export class NodeActionsService {
 
   async auditRepeticiones(node: TreeNode): Promise<void> {
     await this.repeticionesAudit.open({ path: node.path, name: node.name });
+  }
+
+  async auditGramatica(node: TreeNode): Promise<void> {
+    await this.grammarAudit.open({ path: node.path, name: node.name });
   }
 
   async fixQuotesBulk(node: TreeNode): Promise<void> {

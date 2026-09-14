@@ -80,6 +80,11 @@ export class RaeAuditPanel {
       // párrafo anterior le gane al bloque de la violación.
       this.search.requestHighlight(chapter.path, anchor, undefined, false);
     }
+    // Si el capítulo ya está abierto, NO recargarlo: `chapter.open` vuelve a
+    // hacer `setContent`, y el resaltado que el editor ya consumió sobre el DOM
+    // viejo se pierde con el reset de scroll — el salto no se mueve del
+    // anterior. Mismo guard que el panel de búsqueda.
+    if (this.chapter.panes[0].active()?.path === chapter.path) return;
     await this.chapter.open(node);
   }
 }

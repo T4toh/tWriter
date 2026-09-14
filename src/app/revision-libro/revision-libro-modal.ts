@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } 
 import { LucideArrowRight } from '@lucide/angular';
 import { RaeAuditService } from '../core/rae-audit-service';
 import { RepeticionesAuditService } from '../core/repeticiones-audit-service';
+import { GrammarAuditService } from '../core/grammar-audit-service';
 import {
   ConteoCapitulos,
   ConteoDetector,
@@ -21,6 +22,7 @@ export class RevisionLibroModal {
   protected readonly svc = inject(RevisionLibroService);
   private raeAudit = inject(RaeAuditService);
   private repeticionesAudit = inject(RepeticionesAuditService);
+  private grammarAudit = inject(GrammarAuditService);
 
   protected readonly rayas = signal<boolean>(false);
   protected readonly comillas = signal<boolean>(false);
@@ -115,6 +117,15 @@ export class RevisionLibroModal {
     if (!node) return;
     this.svc.cerrar();
     void this.repeticionesAudit.open({ path: node.path, name: node.name });
+  }
+
+  /** Gramática no entra en el escaneo (cada capítulo es un POST a LT), así
+   *  que la fila no tiene conteo: abre la auditoría directo. */
+  protected verGramatica(): void {
+    const node = this.svc.libro();
+    if (!node) return;
+    this.svc.cerrar();
+    void this.grammarAudit.open({ path: node.path, name: node.name });
   }
 
   /** Rayas/comillas: no hay conteo real de cambios (ver `ConteoCapitulos`),
