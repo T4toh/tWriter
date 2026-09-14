@@ -7,6 +7,7 @@ import {
   ExcepcionesDeliberadas,
 } from '../repeticiones/detector';
 import { AppFontSlot } from './app-fonts';
+import { DATE_FORMAT_DEFAULT, DateFormat, isDateFormat } from '../shared/fecha-corta';
 
 
 export type EditorWidth = 'narrow' | 'wide' | 'full';
@@ -106,6 +107,8 @@ interface Settings {
   editorFontRecents?: string[];
   editorParagraphSpacing?: ParagraphSpacing;
   appTheme?: AppTheme;
+  /** Fecha corta de la landing. Ausente = día/mes/año. */
+  dateFormat?: DateFormat;
   /** Fuentes de la app por slot. `null`/ausente = el default de `styles.scss`. */
   appFontUi?: string | null;
   appFontMono?: string | null;
@@ -158,6 +161,7 @@ export class SettingsService {
   readonly editorFontRecents = signal<string[]>([]);
   readonly editorParagraphSpacing = signal<ParagraphSpacing>(SPACING_DEFAULT);
   readonly appTheme = signal<AppTheme>('system');
+  readonly dateFormat = signal<DateFormat>(DATE_FORMAT_DEFAULT);
   /** Fuente elegida por slot. `null` = el default de la app. */
   readonly appFontUi = signal<string | null>(null);
   readonly appFontMono = signal<string | null>(null);
@@ -222,6 +226,7 @@ export class SettingsService {
       );
       this.editorParagraphSpacing.set(s.editorParagraphSpacing ?? SPACING_DEFAULT);
       this.appTheme.set(s.appTheme ?? 'system');
+      this.dateFormat.set(isDateFormat(s.dateFormat) ? s.dateFormat : DATE_FORMAT_DEFAULT);
       this.appFontUi.set(s.appFontUi ?? null);
       this.appFontMono.set(s.appFontMono ?? null);
       this.grammarMode.set((s.grammarMode as GrammarMode) ?? 'public');
@@ -386,6 +391,11 @@ export class SettingsService {
     void this.persist();
   }
 
+  setDateFormat(formato: DateFormat): void {
+    this.dateFormat.set(formato);
+    void this.persist();
+  }
+
   /** `null` vuelve el slot al default de la app. */
   setAppFont(slot: AppFontSlot, family: string | null): void {
     const valor = family?.trim() ? family.trim() : null;
@@ -510,6 +520,7 @@ export class SettingsService {
       editorFontRecents: this.editorFontRecents().length ? this.editorFontRecents() : undefined,
       editorParagraphSpacing: this.editorParagraphSpacing(),
       appTheme: this.appTheme(),
+      dateFormat: this.dateFormat(),
       appFontUi: this.appFontUi(),
       appFontMono: this.appFontMono(),
       grammarMode: this.grammarMode(),
