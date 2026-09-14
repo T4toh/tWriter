@@ -95,6 +95,7 @@ cargo test --manifest-path src-tauri/Cargo.toml   # tests Rust
 node scripts/run-<algo>-smoke.mjs                 # tests del frontend (ver abajo)
 node scripts/run-tesauro-smoke.mjs                # casos de palabraEn() bajo el cursor
 node scripts/run-hardbreak-smoke.mjs              # hardBreak → corte de párrafo
+node scripts/run-verso-smoke.mjs                  # toggle de bloque de verso (lift+wrap+join)
 ```
 
 Primera build de Rust tarda ~5 min. Después es incremental.
