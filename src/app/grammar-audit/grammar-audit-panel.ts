@@ -71,6 +71,11 @@ export class GrammarAuditPanel {
       // «+ diccionario», que es lo que el autor vino a hacer.
       this.svc.pedirPopover(chapter.path, m.ruleId, anchor);
     }
+    // Si el capítulo ya está abierto, NO recargarlo: `chapter.open` vuelve a
+    // hacer `setContent`, y el resaltado que el editor ya consumió sobre el DOM
+    // viejo se pierde con el reset de scroll — el salto no se mueve del
+    // anterior. Mismo guard que el panel de búsqueda.
+    if (this.chapter.panes[0].active()?.path === chapter.path) return;
     await this.chapter.open(node);
   }
 }
