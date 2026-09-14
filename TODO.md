@@ -1109,35 +1109,21 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 
 ## Deuda transversal
 
-- [ ] **Evaluar pasar los componentes a OnPush** (quedó del salto a Angular
-  22, 2026-09-14). En v22 el default es OnPush; la migración puso
-  `changeDetection: ChangeDetectionStrategy.Eager` explícito en los 26
-  componentes que no declaraban estrategia, solo para no cambiar
-  comportamiento. Casi todo el estado ya es signals, así que OnPush debería
-  ser gratis en la mayoría; los sospechosos son los hosts de TipTap
-  (`editor`, `notes-editor`, `markdown-reader`) y lo que muta estado desde
-  callbacks de ProseMirror sin pasar por un signal. Hacerlo componente por
-  componente, sacando el `Eager` y probando con la app arriba; si alguno no
-  se refresca, ese se queda Eager con un comentario que diga por qué. Capaz
-  no rinde nada visible: el beneficio es menos change detection por
-  keystroke, medible solo en capítulos largos.
-  **Estado 2026-09-14**: auditoría estática de los 26 hecha (rama
-  `chore/onpush`): cero campos planos leídos en template salvo `copyOk` de
-  `debug-panel`, ya pasado a signal; los hosts TipTap vuelcan `isActive()` a
-  un signal `state` en `refreshState()`, así que están limpios. Se sacó el
-  `Eager` de los 26 en una sola tanda, `pnpm build` verde. **Falta la
-  verificación manual del autor** con la app arriba: toolbar del editor al
-  mover el cursor por itálica/negrita, contador P/Col, badge de git tras
-  cambiar el foco de ventana, drag&drop de archivos al árbol, redimensionar
-  el panel de notas, ✓ de copiar en el debug panel, banner de update, toasts.
-  Si algo no refresca, ese componente vuelve a `Eager` con comentario.
-- **`shared/select.ts` lee un campo plano bajo OnPush** (visto en la
-  auditoría de arriba, 2026-09-14). `disabledByForm` se muta en
-  `setDisabledState` (Forms API) y `isDisabled()` lo lee desde el template;
+- **`shared/select.ts` lee un campo plano bajo OnPush** (quedó de la
+  migración a OnPush, cerrada el 2026-09-14 — detalle en `git log -p TODO.md`).
+  `disabledByForm` se muta en `setDisabledState` (Forms API) y `isDisabled()`
+  lo lee desde el template;
   el componente ya era OnPush, así que si algún día un `app-select` se
   deshabilita vía `FormControl`/`ngModel` en vez de `[disabled]`, no repinta.
   Hoy no pasa: el único `ngModel` sobre `app-select` (export-modal) no toca
   disabled. Fix cuando haga falta: `signal(false)`.
+- [ ] **Apartado de notificaciones en Configuración**. Hoy los avisos salen
+  cada uno por su lado sin un lugar donde el autor los gobierne: los toasts
+  del exportador (EPUB listo, veredicto de epubcheck, partes reparadas), el
+  banner de update, los de git/sync, los de LanguageTool caído. Falta una
+  sección que los agrupe y deje elegir, por tipo, si se muestran, cómo
+  (toast / banner / silencio) y cuánto duran. Empezar por inventariar todos
+  los `toast.*()` y banners que hay y ver cuáles piden config de verdad.
 - **Contraste AA de `--ok` y `--warn` en tema claro** (quedó de la auditoría
   del SCSS, cerrada el 2026-09-08 — el detalle está en `git log -p TODO.md`).
   `--ok` sobre su tinte da ~4.3:1 y `--warn` ~3.4:1, los dos por debajo del
