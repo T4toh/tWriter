@@ -80,6 +80,10 @@ pub struct Settings {
     /// `system`.
     #[serde(default, rename = "appTheme", skip_serializing_if = "Option::is_none")]
     pub app_theme: Option<String>,
+    /// Fecha corta de la landing: `dmy` (día/mes/año) o `ymd` (ISO). Ausente =
+    /// `dmy`. Espeja `DateFormat` de `src/app/shared/fecha-corta.ts`.
+    #[serde(default, rename = "dateFormat", skip_serializing_if = "Option::is_none")]
+    pub date_format: Option<String>,
     /// Fuentes de la UI por slot. Ausente = la que shipea la app (el frontend
     /// borra la custom property y gana el valor de `styles.scss`).
     #[serde(default, rename = "appFontUi", skip_serializing_if = "Option::is_none")]

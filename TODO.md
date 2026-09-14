@@ -1080,21 +1080,6 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 - Colores en el tema (body color, heading color, scene-break color). Hoy el tema es solo tipografía + márgenes.
 - Theme presets compartibles entre repos distintos (export/import como zip).
 - Revisiones de EPUB: hoy sobreescribe siempre `Exportados/<titulo>.epub`. Sumar "guardar últimas N revisiones" (default 5) — renombrar la actual a `<titulo>-revN.epub` antes de generar la nueva.
-- [ ] **Formato de fecha configurable** (pedido del autor el 2026-09-04)
-  Hoy `shared/fecha-corta-pipe.ts` está fijo en `es-AR` con día/mes/año de dos
-  dígitos (`04/09/26`). Debería salir de Ajustes.
-  **Por qué no se usa el locale del sistema, que fue lo primero que se probó**:
-  la máquina del autor tiene `LANG=en_GB.UTF-8` y `LC_TIME=es_AR.UTF-8` — el
-  idioma en inglés y las fechas en argentino. `Intl` mira `navigator.language`,
-  que sale de `LANG` y no de `LC_TIME` (eso es de la libc, el motor JS no lo
-  consulta), así que "seguir al sistema" daba formato británico justo en el dato
-  donde el sistema decía otra cosa. Le pasó con otras apps y con addons de KDE.
-  **Alcance real**, según el autor: hay dos familias que importan, día-mes-año
-  y la japonesa/ISO invertida año-mes-día. No hace falta un selector de locales:
-  alcanza con un par de opciones y una muestra al lado de cada una.
-  Cuando se haga, el campo va en `Settings` **de los dos lados** — la interfaz
-  TS y el `struct` de Rust — o serde lo descarta al guardar y la preferencia se
-  pierde al reiniciar, sin ningún error (ver la convención en CLAUDE.md).
 - **`<br>` y `<hr>` sin cerrar, y el `<hr>` sin clase: NO hay nada que
   arreglar. Verificado el 2026-09-08.** Este ítem estuvo listado como pendiente
   con dos afirmaciones y las dos son falsas hoy; queda acá con la evidencia para

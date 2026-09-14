@@ -113,6 +113,23 @@
           </label>
         }
 
+        <p class="gs-bloque-intro">Formato de las fechas de última edición en la biblioteca.</p>
+        @for (f of dateFormats; track f) {
+          <label class="gs-option">
+            <input
+              type="radio"
+              name="date-format"
+              [value]="f"
+              [checked]="dateFormat() === f"
+              (change)="onDateFormatChange(f)"
+            />
+            <div class="gs-option-text">
+              <strong>{{ dateFormatLabel[f] }}</strong>
+              <span class="muted">Hoy: <code>{{ dateFormatMuestra[f] }}</code></span>
+            </div>
+          </label>
+        }
+
         <p class="gs-bloque-intro">
           Las tipografías de la interfaz. El default es el que shipea tWriter;
           podés cambiarlo por cualquier fuente instalada en esta PC. La fuente

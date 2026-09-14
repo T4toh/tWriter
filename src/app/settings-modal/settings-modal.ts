@@ -32,6 +32,12 @@ import {
 import { SystemFontsService } from '../core/system-fonts-service';
 import { Select, SelectGroup, SelectOption } from '../shared/select';
 import { CopyCommand } from '../shared/copy-command';
+import {
+  DATE_FORMAT_LABEL,
+  DATE_FORMATS,
+  DateFormat,
+  formatFechaCorta,
+} from '../shared/fecha-corta';
 import { GrammarMode } from '../core/types';
 
 /** Estado del validador de EPUB (`epubcheck.rs::epubcheck_estado`). */
@@ -282,6 +288,19 @@ export class SettingsModal {
 
   protected onThemeChange(theme: AppTheme): void {
     this.settings.setAppTheme(theme);
+  }
+
+  protected readonly dateFormats = DATE_FORMATS;
+  protected readonly dateFormatLabel = DATE_FORMAT_LABEL;
+  protected readonly dateFormat = this.settings.dateFormat;
+  /** Muestra al lado de cada opción: hoy, en ese formato. */
+  protected readonly dateFormatMuestra: Record<DateFormat, string> = {
+    dmy: formatFechaCorta(Date.now(), 'dmy'),
+    ymd: formatFechaCorta(Date.now(), 'ymd'),
+  };
+
+  protected onDateFormatChange(formato: DateFormat): void {
+    this.settings.setDateFormat(formato);
   }
 
   protected readonly slots: readonly AppFontSlot[] = ['ui', 'mono'];
