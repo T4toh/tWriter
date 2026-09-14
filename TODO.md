@@ -1447,7 +1447,7 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 
 ## Plataformas
 
-- Mobile (no urgente, capaz solo un exportador a EPUB para ver archivos desde gh). Tomador de notas estaría piola, pero no veo que sea posible sincronizar git en el teléfono (Capaz que sí, investigar.) Estaría re zarpado poder tomar notas sobre partes o capítulos mientras leo en la kindle y que queden resgistrados en notas del libro o algo así.
+- Mobile (no urgente, capaz solo un exportador a EPUB para ver archivos desde gh). El tomador de notas para la Kindle quedó descartado el 2026-09-14 (ver `## Proofreading`): no ahorra tipeo contra Keep, y git en el teléfono ya lo resuelven GitJournal / Obsidian con plugin git / Working Copy sin código propio.
 - [ ] **Publicar en Homebrew (cask) para macOS**
   Hoy la instalación en Mac es bajar el `.dmg` a mano del release y comerse el
   primer arranque con Gatekeeper. En Arch ya está resuelto vía AUR
@@ -1493,38 +1493,25 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   `.meta.json`, ya existe) — eso también avisa cuando un libro publicado se
   tocó después de la última revisión.
 
-- [ ] **El ciclo de correcciones vive en un txt y es un garrón** (para pensar
-  fuerte un día, todavía no hay diseño)
-  Flujo actual: se lee en la Kindle, se anotan las frases a cambiar en un `.txt`
-  suelto, y después hay que ir una por una copiando la frase a la búsqueda,
-  encontrar el capítulo, arreglar, y acordarse de tachar la línea del txt. Nada
-  de eso lo sabe la app: no hay estado de "pendiente / arreglado", no hay link
-  entre la anotación y el lugar del texto, y el ida y vuelta entre la nota y el
-  panel de búsqueda encima se pelea con el slot único del panel derecho (ver el
-  ítem de la nota que se cierra al buscar, en `## Búsqueda`).
-  **Esto va en una app aparte, no adentro de tWriter**: la lectura pasa en la
-  Kindle y las anotaciones se toman en el celular o la tablet, lejos de la
-  compu. El punto de captura no es el escritorio, así que lo que hace falta es
-  algo para anotar en el teléfono y después poder buscar fácil, y tWriter queda
-  del otro lado como consumidor de esas anotaciones. Emparentado con el bullet
-  de Mobile al final de `## Plataformas` (tomar notas desde la Kindle/teléfono y
-  que queden registradas contra el libro) — probablemente sean la misma app.
-  **Lo no resuelto del lado móvil**: cómo llega la anotación de la tablet al
-  repo. Sincronizar git desde el teléfono es la duda vieja de ese bullet; las
-  alternativas son un formato de intercambio tonto (un archivo por sesión de
-  lectura que se copia a mano) o un backend, que es muchísimo más app.
-  **Direcciones posibles del lado tWriter**, sin elegir todavía:
-  (a) marcar desde adentro de la app — una marca de revisión sobre la selección
-      en el editor, tipo comentario/anotación anclada al texto, con estado y
-      una lista lateral para recorrerlas;
-  (b) importar la lista de correcciones — que la app resuelva cada línea a un
-      hit de búsqueda, con checkbox y salto directo. Es la que respeta cómo se
-      anota hoy y la que conecta con la app móvil;
-  (c) las dos: (b) es la que sirve mañana, (a) es más prolija pero solo cubre lo
-      que se detecta con la app abierta.
-  Ojo con anclar: si la marca guarda un offset, editar el capítulo la desancla.
-  Anclar por texto de la frase (como hace la búsqueda) es más frágil pero
-  sobrevive a las ediciones de alrededor. Decidir esto es la mitad del diseño.
-  Lo que ya está y sirve de base: el índice tantivy con `matchedTerms`, el
-  highlight/salto del editor, y las notas por saga (una lista de correcciones
-  es una nota con estado).
+- [ ] **El ciclo de correcciones vive en un txt** (relevado con el autor el
+  2026-09-14; hoy no duele lo suficiente para codear)
+  Flujo actual: se lee en la Kindle, se anota en Google Keep con el título del
+  capítulo, el número de parte y un pedazo de la frase, y en la compu se va
+  una por una copiando la frase a la búsqueda, arreglando y tachando. Es
+  incómodo pero más rápido que lo anterior, y el autor no lo siente como
+  cuello de botella.
+  **App móvil propia: descartada.** Anotar «Zunyon 1 + frase» a mano en Keep
+  es igual de rápido que elegir capítulo y parte de un select, así que una app
+  que conozca el repo no ahorra tipeo. Keep no tiene API para cuentas
+  personales, solo «compartir → copiar texto». Si algún día se quiere el
+  archivo en el repo directo desde el teléfono, GitJournal u Obsidian con
+  plugin git (Android) y Working Copy (iOS) ya lo hacen sin código.
+  **Lo único codeable es el lado tWriter**, y solo si la búsqueda una por una
+  empieza a pesar: un `arreglos.md` por libro con el formato suelto de Keep tal
+  cual (línea de texto = capítulo, línea numérica = parte, después pares
+  frase / qué hacer separados por blanco), y un panel que lo muestre como lista
+  con capítulo y parte resueltos contra el árbol, checkbox por ítem y salto al
+  hit de la frase en el editor; tildar reescribe la línea en el archivo. Anclar
+  por texto de la frase, no por offset: editar el capítulo desancla el offset.
+  Base que ya está: el índice tantivy con `matchedTerms`, el highlight/salto del
+  editor y las notas por saga.
