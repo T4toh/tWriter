@@ -141,24 +141,6 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 > contra `/home/tatoh/novelas` y encontró que de las 1.667 reglas de español
 > dispararon **21**, y de las 6.098 de inglés dispararon **3**.
 
-- **Auditoría de gramática por libro** (pedido del autor, 2026-09-14).
-  **Implementado en `feat/auditoria-gramatica`, pendiente de verificación
-  manual del autor con LT levantado; sacar de acá al mergear.** Tercer
-  panel de auditoría, hermano de `rae-audit-service` /
-  `repeticiones-audit-service`: correr LanguageTool sobre un alcance (saga,
-  libro o sección) y listar los matches por capítulo con salto al offset, para
-  saber si quedó algo sin revisar. Hoy la gramática se ve solo en el capítulo
-  abierto, así que un typo en un capítulo que no se volvió a abrir no aparece
-  nunca. Reusar el patrón entero de `repeticiones-audit-service` (scope,
-  `ChapterPayload`, `auditTitleFromPath`, snippet, popover pendiente por ancla)
-  y el filtro por diccionario de la saga que ya aplica `editor.ts` a los TYPOS.
-  Diferencia clave con los otros dos: el chequeo **no es local ni gratis** —
-  cada capítulo es un POST a LT con `sleep(250 ms)` entre chunks y rate-limit
-  en Premium (`grammar.rs`), así que el panel tiene que correr capítulo por
-  capítulo con progreso visible, ser cancelable y cachear resultados por hash
-  del HTML para no repetir lo ya chequeado. Se solapa con el dashboard de
-  abajo; si se hace primero este, el dashboard suma las tres fuentes.
-
 - **Dashboard de estilo por novela** (idea del autor, no para ahora). Lo que hoy
   se ve capítulo por capítulo — repeticiones, violaciones RAE, matches de
   gramática, palabras por capítulo — agregado a nivel libro o saga: densidades,
