@@ -189,6 +189,12 @@
           Ningún resultado tiene todas las palabras. Estos tienen alguna.
         </p>
       }
+      @case ('noLiteral') {
+        <p class="sp-status sp-partial">
+          Ningún capítulo tiene "{{ query() }}" tal cual. Estos tienen las
+          palabras sin la puntuación.
+        </p>
+      }
     }
     <ul class="sp-list">
       @for (group of groups(); track group.path) {
