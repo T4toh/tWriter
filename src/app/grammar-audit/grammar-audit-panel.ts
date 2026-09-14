@@ -1,5 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-import { LucideSpellCheck, LucideX } from '@lucide/angular';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { LucideChevronsDownUp, LucideChevronsUpDown, LucideSpellCheck, LucideX } from '@lucide/angular';
 import { auditAnchor, auditSnippet } from '../core/audit-snippet';
 import { ChapterService } from '../core/chapter-service';
 import { ChapterGrammar, GrammarAuditService } from '../core/grammar-audit-service';
@@ -16,7 +16,7 @@ const AUTO_ABRIR_HASTA = 10;
 @Component({
   selector: 'app-grammar-audit-panel',
   standalone: true,
-  imports: [LucideSpellCheck, LucideX],
+  imports: [LucideChevronsDownUp, LucideChevronsUpDown, LucideSpellCheck, LucideX],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './grammar-audit-panel.html',
   styleUrl: './grammar-audit-panel.scss',
@@ -35,12 +35,22 @@ export class GrammarAuditPanel {
   protected readonly total = this.svc.total;
   protected readonly fallidos = this.svc.fallidos;
 
-  protected readonly grupos = computed(() =>
-    this.svc.chapters().map((c) => ({
+  /** Override del botón «abrir/colapsar todo». `null` = criterio automático
+   *  por cantidad. Alterna true/false para que el binding de `open` cambie
+   *  siempre, aunque el autor haya tocado algún `<details>` a mano. */
+  protected readonly todos = signal<boolean | null>(null);
+
+  protected readonly grupos = computed(() => {
+    const todos = this.todos();
+    return this.svc.chapters().map((c) => ({
       chapter: c,
-      abierto: c.matches.length <= AUTO_ABRIR_HASTA,
-    })),
-  );
+      abierto: todos ?? c.matches.length <= AUTO_ABRIR_HASTA,
+    }));
+  });
+
+  protected toggleTodos(): void {
+    this.todos.update((t) => t === false);
+  }
 
   protected readonly emptyAfterLoad = computed(
     () => !this.loading() && this.svc.chapters().length === 0 && this.error() === null,

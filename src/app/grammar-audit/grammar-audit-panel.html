@@ -21,6 +21,20 @@
         </span>
       </div>
     </div>
+    @if (grupos().length > 1) {
+      <button
+        type="button"
+        class="audit-panel-close"
+        (click)="toggleTodos()"
+        [title]="todos() === false ? 'Abrir todos los capítulos' : 'Colapsar todos los capítulos'"
+      >
+        @if (todos() === false) {
+          <svg lucideChevronsUpDown [size]="14"></svg>
+        } @else {
+          <svg lucideChevronsDownUp [size]="14"></svg>
+        }
+      </button>
+    }
     <button type="button" class="audit-panel-close" (click)="close()" title="Cerrar">
       <svg lucideX [size]="14"></svg>
     </button>
