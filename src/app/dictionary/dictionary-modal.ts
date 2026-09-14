@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LucideCheck, LucideX } from '@lucide/angular';
 import { DictionaryService } from '../core/dictionary-service';
@@ -12,7 +12,6 @@ import { isCompound } from './compound-terms';
   selector: 'app-dictionary-modal',
   imports: [FormsModule, LucideCheck, LucideX, DerivedFormsPanel],
   templateUrl: './dictionary-modal.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './dictionary-modal.scss',
 })
 export class DictionaryModal {

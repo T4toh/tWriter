@@ -9,8 +9,7 @@ import {
   inject,
   input,
   signal,
-  untracked,
-  ChangeDetectionStrategy
+  untracked
 } from '@angular/core';
 import { Editor as TipTapEditor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -87,7 +86,6 @@ const EMPTY_STATE: ToolbarState = {
   selector: 'app-notes-editor',
   imports: [LucideDynamicIcon, LucideFilePen],
   templateUrl: './notes-editor.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './notes-editor.scss',
 })
 export class NotesEditor implements AfterViewInit, OnDestroy {

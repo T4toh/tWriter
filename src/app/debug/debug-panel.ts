@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, EventEmitter, Output, inject, signal } from '@angular/core';
 import { LucideCamera, LucideCheck, LucideX } from '@lucide/angular';
 import { DebugEntry, DebugLevel, DebugService } from '../core/debug-service';
 
@@ -6,7 +6,6 @@ import { DebugEntry, DebugLevel, DebugService } from '../core/debug-service';
   selector: 'app-debug-panel',
   imports: [LucideCamera, LucideCheck, LucideX],
   templateUrl: './debug-panel.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './debug-panel.scss',
 })
 export class DebugPanel {
@@ -22,7 +21,7 @@ export class DebugPanel {
 
   protected readonly levels: DebugLevel[] = ['info', 'warn', 'error'];
 
-  protected copyOk = false;
+  protected readonly copyOk = signal(false);
 
   protected close(): void {
     this.debug.toggle();
@@ -55,8 +54,8 @@ export class DebugPanel {
       .join('\n');
     try {
       await navigator.clipboard.writeText(text);
-      this.copyOk = true;
-      setTimeout(() => (this.copyOk = false), 1500);
+      this.copyOk.set(true);
+      setTimeout(() => this.copyOk.set(false), 1500);
     } catch {
       // sin clipboard permissions o contexto inseguro — silent
     }

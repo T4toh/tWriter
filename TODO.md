@@ -1121,6 +1121,23 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   se refresca, ese se queda Eager con un comentario que diga por qué. Capaz
   no rinde nada visible: el beneficio es menos change detection por
   keystroke, medible solo en capítulos largos.
+  **Estado 2026-09-14**: auditoría estática de los 26 hecha (rama
+  `chore/onpush`): cero campos planos leídos en template salvo `copyOk` de
+  `debug-panel`, ya pasado a signal; los hosts TipTap vuelcan `isActive()` a
+  un signal `state` en `refreshState()`, así que están limpios. Se sacó el
+  `Eager` de los 26 en una sola tanda, `pnpm build` verde. **Falta la
+  verificación manual del autor** con la app arriba: toolbar del editor al
+  mover el cursor por itálica/negrita, contador P/Col, badge de git tras
+  cambiar el foco de ventana, drag&drop de archivos al árbol, redimensionar
+  el panel de notas, ✓ de copiar en el debug panel, banner de update, toasts.
+  Si algo no refresca, ese componente vuelve a `Eager` con comentario.
+- **`shared/select.ts` lee un campo plano bajo OnPush** (visto en la
+  auditoría de arriba, 2026-09-14). `disabledByForm` se muta en
+  `setDisabledState` (Forms API) y `isDisabled()` lo lee desde el template;
+  el componente ya era OnPush, así que si algún día un `app-select` se
+  deshabilita vía `FormControl`/`ngModel` en vez de `[disabled]`, no repinta.
+  Hoy no pasa: el único `ngModel` sobre `app-select` (export-modal) no toca
+  disabled. Fix cuando haga falta: `signal(false)`.
 - **Contraste AA de `--ok` y `--warn` en tema claro** (quedó de la auditoría
   del SCSS, cerrada el 2026-09-08 — el detalle está en `git log -p TODO.md`).
   `--ok` sobre su tinte da ~4.3:1 y `--warn` ~3.4:1, los dos por debajo del

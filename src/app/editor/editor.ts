@@ -10,8 +10,7 @@ import {
   inject,
   input,
   signal,
-  untracked,
-  ChangeDetectionStrategy
+  untracked
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
@@ -151,7 +150,6 @@ interface ObjetivoTesauro {
     LucideCircleAlert, LucideDynamicIcon, Spinner, DerivedFormsPanel,
   ],
   templateUrl: './editor.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './editor.scss',
 })
 export class Editor implements AfterViewInit, OnDestroy {

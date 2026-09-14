@@ -30,7 +30,7 @@
         <svg lucideCamera [size]="14"></svg>
       </button>
       <button type="button" class="link" (click)="copy()" title="Copiar entradas filtradas">
-        @if (copyOk) {
+        @if (copyOk()) {
           <svg lucideCheck [size]="14"></svg>
         } @else {
           Copiar

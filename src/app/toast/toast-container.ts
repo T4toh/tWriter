@@ -1,4 +1,4 @@
-import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { Toast, ToastService } from '../core/toast-service';
 import { ModalService } from '../shared/modal-service';
 
@@ -6,7 +6,6 @@ import { ModalService } from '../shared/modal-service';
   selector: 'app-toast-container',
   imports: [],
   templateUrl: './toast-container.html',
-  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './toast-container.scss',
 })
 export class ToastContainer {
