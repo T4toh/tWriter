@@ -1,4 +1,4 @@
-import { Component, ViewChild, computed, effect, HostListener, inject, signal } from '@angular/core';
+import { Component, ViewChild, computed, effect, HostListener, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ChapterService } from './core/chapter-service';
 import { CursorRestoreService } from './core/cursor-restore-service';
@@ -96,6 +96,7 @@ import {
     LucideSearch, LucideSettings, LucideX, LucideInfo,
   ],
   templateUrl: './app.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './app.scss',
 })
 export class App {

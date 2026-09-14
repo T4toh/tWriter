@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output, inject } from '@angular/core';
+import { Component, EventEmitter, Output, inject, ChangeDetectionStrategy } from '@angular/core';
 import { LucideCamera, LucideCheck, LucideX } from '@lucide/angular';
 import { DebugEntry, DebugLevel, DebugService } from '../core/debug-service';
 
@@ -6,6 +6,7 @@ import { DebugEntry, DebugLevel, DebugService } from '../core/debug-service';
   selector: 'app-debug-panel',
   imports: [LucideCamera, LucideCheck, LucideX],
   templateUrl: './debug-panel.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './debug-panel.scss',
 })
 export class DebugPanel {

@@ -17,7 +17,7 @@ const outDir = mkdtempSync(join(tmpdir(), 'hardbreak-smoke-'));
 const r = spawnSync(
   join(repo, 'node_modules', '.bin', 'tsc'),
   [
-    '--target', 'es2022', '--module', 'commonjs', '--moduleResolution', 'node',
+    '--target', 'es2022', '--ignoreConfig', '--module', 'commonjs',
     '--strict', '--skipLibCheck', '--esModuleInterop', '--outDir', outDir,
     'src/app/editor/split-hard-breaks.ts',
   ],

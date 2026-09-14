@@ -1,4 +1,4 @@
-import { Component, HostListener, computed, inject, viewChild } from '@angular/core';
+import { Component, HostListener, computed, inject, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { BloqueTipo } from '../shared/note-blocks';
 import { NoteFormService } from '../core/note-form-service';
@@ -12,6 +12,7 @@ import { carpetasDeNotas, relativoAlRoot } from '../tree/notas-del-libro';
   selector: 'app-note-form-modal',
   imports: [FormsModule, Select],
   templateUrl: './note-form-modal.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './note-form-modal.scss',
 })
 export class NoteFormModal {

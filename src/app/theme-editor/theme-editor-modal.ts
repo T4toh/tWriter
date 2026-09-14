@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { FormsModule } from '@angular/forms';
 import { convertFileSrc } from '@tauri-apps/api/core';
@@ -50,6 +50,7 @@ function previewFamilyName(slot: string, idx: number): string {
   selector: 'app-theme-editor-modal',
   imports: [FormsModule, ScrollingModule, Select],
   templateUrl: './theme-editor-modal.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './theme-editor-modal.scss',
 })
 export class ThemeEditorModal {

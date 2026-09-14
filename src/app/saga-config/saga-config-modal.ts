@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { invoke } from '@tauri-apps/api/core';
 import { FontsService } from '../core/fonts-service';
@@ -14,6 +14,7 @@ import { Select, SelectOption } from '../shared/select';
   selector: 'app-saga-config-modal',
   imports: [FormsModule, Select],
   templateUrl: './saga-config-modal.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './saga-config-modal.scss',
 })
 export class SagaConfigModal {

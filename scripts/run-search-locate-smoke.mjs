@@ -26,8 +26,8 @@ const r = spawnSync(
   tsc,
   [
     '--target', 'es2022',
+    '--ignoreConfig',
     '--module', 'commonjs',
-    '--moduleResolution', 'node',
     '--strict',
     '--skipLibCheck',
     '--esModuleInterop',

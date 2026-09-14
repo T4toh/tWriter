@@ -7,6 +7,7 @@ import {
   input,
   output,
   signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { BookConfigService } from '../core/book-config-service';
 import { CoverCache } from '../core/cover-cache';
@@ -25,6 +26,7 @@ const MAX_THUMBS = 6;
   selector: 'app-saga-card',
   imports: [FechaCortaPipe],
   templateUrl: './saga-card.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './saga-card.scss',
 })
 export class SagaCard {

@@ -5,6 +5,7 @@ import {
   inject,
   input,
   signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { LucideBookOpen, LucideSettings } from '@lucide/angular';
@@ -22,6 +23,7 @@ const MAX_DECK = 3;
   selector: 'app-saga-header',
   imports: [LucideBookOpen, LucideSettings],
   templateUrl: './saga-header.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './saga-header.scss',
 })
 export class SagaHeader {

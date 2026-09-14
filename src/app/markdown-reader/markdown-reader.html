@@ -1,6 +1,6 @@
 <header class="mr-header">
   <svg class="mr-icon" [lucideIcon]="editing() ? LucideFilePen : LucideBookOpen" [size]="14"></svg>
-  <span class="mr-title" [title]="viewing()?.path">{{ viewing()?.name }}</span>
+  <span class="mr-title" [title]="viewing()?.path ?? ''">{{ viewing()?.name }}</span>
   <button
     type="button"
     class="mr-btn"

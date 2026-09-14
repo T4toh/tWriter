@@ -7,6 +7,7 @@ import {
   input,
   output,
   signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { LucideArrowDownToLine, LucideListChecks, LucideSettings } from '@lucide/angular';
 import { BookConfig, BookConfigService } from '../core/book-config-service';
@@ -22,6 +23,7 @@ import { Spinner } from '../shared/spinner';
   selector: 'app-book-card',
   imports: [FechaCortaPipe, Spinner, LucideArrowDownToLine, LucideListChecks, LucideSettings],
   templateUrl: './book-card.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './book-card.scss',
 })
 export class BookCard {
