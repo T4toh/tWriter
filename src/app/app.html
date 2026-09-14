@@ -1,7 +1,7 @@
 <div
   class="shell"
   [class.focus]="settings.focusMode()"
-  [class.with-viewer]="search.open() || imageViewer.viewing() !== null || fontPreview.viewing() !== null || markdownReader.viewing() !== null || raeAudit.isOpen() || repeticionesAudit.isOpen()"
+  [class.with-viewer]="search.open() || imageViewer.viewing() !== null || fontPreview.viewing() !== null || markdownReader.viewing() !== null || raeAudit.isOpen() || repeticionesAudit.isOpen() || grammarAudit.isOpen()"
   [attr.data-rpw]="settings.rightPanelWidth()"
 >
   <aside class="panel panel-left">
