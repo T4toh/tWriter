@@ -7,6 +7,7 @@ import {
   computed,
   effect,
   inject,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
@@ -49,6 +50,7 @@ import { atajo } from '../shared/atajo';
     LucideBug, LucideDynamicIcon, LucideRefreshCw, LucideReplace, LucideSearch, LucideX,
   ],
   templateUrl: './search-panel.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './search-panel.scss',
 })
 export class SearchPanel implements AfterViewInit {

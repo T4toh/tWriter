@@ -10,6 +10,7 @@ import {
   inject,
   signal,
   untracked,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import {
   LucideBookOpen,
@@ -72,6 +73,7 @@ const EMPTY_STATE: ToolbarState = {
   selector: 'app-markdown-reader',
   imports: [LucideCheck, LucideDynamicIcon, LucidePencil, LucideX],
   templateUrl: './markdown-reader.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './markdown-reader.scss',
 })
 export class MarkdownReader implements AfterViewInit, OnDestroy {

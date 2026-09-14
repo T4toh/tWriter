@@ -4,7 +4,7 @@ App desktop para escribir novelas en español e inglés. Centraliza el flujo: ed
 
 Las novelas viven en un repo privado aparte (HTML + JSON). Esta app es solo el editor.
 
-**Stack**: Tauri 2 + Angular 21 + TipTap. Backend Rust, frontend signals.
+**Stack**: Tauri 2 + Angular 22 + TipTap. Backend Rust, frontend signals.
 
 ## Tabla de contenidos
 

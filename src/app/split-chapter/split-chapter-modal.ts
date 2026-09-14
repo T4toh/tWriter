@@ -1,4 +1,4 @@
-import { Component, ElementRef, computed, inject, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, inject, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LucideChevronDown } from '@lucide/angular';
 import { SplitChapterService } from '../core/split-chapter-service';
@@ -7,6 +7,7 @@ import { SplitChapterService } from '../core/split-chapter-service';
   selector: 'app-split-chapter-modal',
   imports: [FormsModule, LucideChevronDown],
   templateUrl: './split-chapter-modal.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './split-chapter-modal.scss',
 })
 export class SplitChapterModal {

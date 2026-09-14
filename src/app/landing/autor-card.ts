@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { AutorConfig, AutorService } from '../core/autor-service';
 import { CoverCache } from '../core/cover-cache';
 import { SettingsService } from '../core/settings-service';
@@ -7,6 +7,7 @@ import { SettingsService } from '../core/settings-service';
   selector: 'app-autor-card',
   imports: [],
   templateUrl: './autor-card.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './autor-card.scss',
 })
 export class AutorCard {

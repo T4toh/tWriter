@@ -14,7 +14,7 @@ const outDir = mkdtempSync(join(tmpdir(), 'fecha-corta-smoke-'));
 const tsc = join(repo, 'node_modules', '.bin', 'tsc');
 const r = spawnSync(
   tsc,
-  ['--target', 'es2022', '--module', 'commonjs', '--moduleResolution', 'node', '--strict',
+  ['--target', 'es2022', '--ignoreConfig', '--module', 'commonjs', '--strict',
    '--skipLibCheck', '--outDir', outDir, 'src/app/shared/fecha-corta.ts'],
   { cwd: repo, encoding: 'utf8' },
 );

@@ -30,7 +30,7 @@ const tsc = join(repo, 'node_modules', '.bin', 'tsc');
 const r = spawnSync(
   tsc,
   [
-    '--target', 'es2022', '--module', 'commonjs', '--moduleResolution', 'node',
+    '--target', 'es2022', '--ignoreConfig', '--module', 'commonjs',
     '--strict', '--skipLibCheck', '--esModuleInterop',
     '--allowSyntheticDefaultImports', '--outDir', outDir,
     'src/app/repeticiones/detector.ts',

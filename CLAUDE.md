@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-**tWriter** es una app desktop (Tauri 2 + Angular 21, TypeScript 5.9) para escribir novelas en español e inglés con un solo flujo: editor → conversor de diálogos a estilo RAE → chequeo de gramática → exportación EPUB. Reemplaza el flujo viejo del autor (LibreOffice → `dialogos_a_esp` [DEPRECADO, ver abajo] → Quillbot → Reedsy).
+**tWriter** es una app desktop (Tauri 2 + Angular 22, TypeScript 6.0) para escribir novelas en español e inglés con un solo flujo: editor → conversor de diálogos a estilo RAE → chequeo de gramática → exportación EPUB. Reemplaza el flujo viejo del autor (LibreOffice → `dialogos_a_esp` [DEPRECADO, ver abajo] → Quillbot → Reedsy).
 
 > **Nota**: el repo Python [`dialogos_a_esp`](https://github.com/T4toh/dialogos_a_esp) está **deprecado** — tenía bugs (colapsaba párrafos al convertir, perdía verbos dicendi acentuados por `\b` ASCII-only) que se arrastraron al port TS y se fueron arreglando acá. El port en `src/app/dialogos/converter.ts` + `validator.ts` ya divergió de la fuente Python; usar este repo como única fuente de verdad de las reglas RAE.
 
@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Stack y arquitectura
 
 ```
-Frontend (Angular 21)        Backend (Rust / Tauri 2)
+Frontend (Angular 22)        Backend (Rust / Tauri 2)
 ─────────────────────        ────────────────────────
 src/app/                     src-tauri/src/
   editor/  TipTap wrapper      main.rs    entry

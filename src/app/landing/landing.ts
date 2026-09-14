@@ -1,5 +1,5 @@
 import { FechaCortaPipe } from '../shared/fecha-corta-pipe';
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { NavigationService } from '../core/navigation-service';
@@ -27,6 +27,7 @@ interface Crumb {
   selector: 'app-landing',
   imports: [FechaCortaPipe, BookCard, SagaCard, SagaHeader, CreateCard, FolderCard, AutorCard],
   templateUrl: './landing.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './landing.scss',
 })
 export class Landing {

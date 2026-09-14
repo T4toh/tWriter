@@ -4,6 +4,7 @@ import {
   effect,
   inject,
   signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { invoke } from '@tauri-apps/api/core';
@@ -43,6 +44,7 @@ const INCISOS = [
   selector: 'app-book-config-modal',
   imports: [FormsModule, Select],
   templateUrl: './book-config-modal.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './book-config-modal.scss',
 })
 export class BookConfigModal {

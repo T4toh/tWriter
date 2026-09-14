@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { invoke } from '@tauri-apps/api/core';
@@ -67,6 +67,7 @@ interface DropListData {
     LucideMerge, LucideNotebook, LucidePackage, LucidePalette, LucideType, LucideTypeOutline,
   ],
   templateUrl: './tree.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './tree.scss',
 })
 export class Tree implements OnDestroy {
