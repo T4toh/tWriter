@@ -514,8 +514,8 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   llegaron a migrar no perdieron nada: Meridian 142→161 palabras, Milky Way
   198→265, **0 perdidas en ambas**. `Vieja República` nunca tuvo diccionario
   (el autor escribió poco ahí).
-  **Pendiente trivial**: restaurar esas 2 palabras al
-  `2 - Buenos Aires 2077/diccionario.txt`, que hoy no existe.
+  Las 2 palabras ya están restauradas en `2 - Buenos Aires 2077/diccionario.txt`
+  (verificado el 2026-09-14 contra el repo `novelas`).
 
   **Idea que sale de esto**: el diálogo en otro idioma (francés en Meridian)
   es una categoría distinta de un nombre propio — meter 15 palabras francesas
@@ -1063,8 +1063,8 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 - **Limpiar `autor` de los `book.json` del repo de novelas**. La parte de la
   app ya está: `epub.rs` resuelve `autor.json` → `book.json` → `saga.json` y
   el campo salió del modal del libro (decidido con el autor el 2026-09-01).
-  Lo que queda es de contenido: los 21 `book.json` de `~/novelas` todavía
-  tienen `autor` cargado y ahora es un fallback muerto. Borrarlo es un `jq`
+  Lo que queda es de contenido: 43 `book.json` de `~/novelas` todavía
+  tienen `autor` cargado (contado el 2026-09-14) y ahora es un fallback muerto. Borrarlo es un `jq`
   sobre el repo de novelas, no toca este repo; y solo tiene sentido cuando
   las dos PCs corran una versión que ya lea `autor.json`.
 
