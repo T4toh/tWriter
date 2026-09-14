@@ -54,6 +54,13 @@ export class GrammarAuditPanel {
     return auditSnippet(chapter.plain, m.offset, m.length);
   }
 
+  /** El texto marcado tal cual está escrito. Es lo que decide de un vistazo
+   *  si es un error o un nombre propio / palabra en otro idioma que no vale
+   *  la pena meter al diccionario. */
+  protected texto(chapter: ChapterGrammar, m: GrammarMatch): string {
+    return chapter.plain.slice(m.offset, m.offset + m.length);
+  }
+
   protected mensaje(m: GrammarMatch): string {
     return m.shortMessage || m.message;
   }

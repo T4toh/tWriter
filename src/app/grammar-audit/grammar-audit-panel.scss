@@ -13,7 +13,15 @@
   }
 }
 
+.ga-palabra {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
 .ga-cat {
+  margin-left: auto;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--fg-muted);
@@ -21,8 +29,9 @@
 }
 
 .ga-mensaje {
-  color: var(--fg);
-  min-width: 0;
+  color: var(--fg-muted);
+  font-size: 11px;
+  margin-bottom: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

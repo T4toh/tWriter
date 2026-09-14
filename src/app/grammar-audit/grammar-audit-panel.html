@@ -56,9 +56,10 @@
             @for (m of g.chapter.matches; track $index) {
               <li class="audit-row" (click)="openChapterAt(g.chapter, m)">
                 <div class="audit-row-meta">
+                  <span class="ga-palabra">{{ texto(g.chapter, m) }}</span>
                   <span class="ga-cat">{{ m.category }}</span>
-                  <span class="ga-mensaje">{{ mensaje(m) }}</span>
                 </div>
+                <div class="ga-mensaje">{{ mensaje(m) }}</div>
                 <div class="audit-row-snippet">{{ snippet(g.chapter, m) }}</div>
               </li>
             }
