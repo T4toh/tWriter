@@ -1494,6 +1494,20 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   revisión anterior a la última edición de un capítulo (`ultima_edicion` del
   `.meta.json`, ya existe) — eso también avisa cuando un libro publicado se
   tocó después de la última revisión.
+  **Lo publicado vs lo que hay en disco — sin resolver, planear junto con esto**
+  (pedido del autor el 2026-09-14, el mismo día que la auditoría de gramática
+  le encontró errores en una novela ya publicada). Arregló uno y no tiene
+  forma de saber que ese arreglo no está en la edición publicada: el estado
+  «publicada» es un bool sobre el libro, no un punto en el tiempo ni una
+  versión del contenido, y `ultima_edicion` solo dice que algo cambió, no
+  qué. El autor todavía no sabe qué forma quiere; lo que necesita es poder
+  responder «¿qué cambió desde lo que subí?» y, cuando corresponda, «ya
+  resubí esto». Piezas que ya existen para apoyarse: el repo es git
+  (`git-service`, `git2`), así que «publicada» podría guardar el commit del
+  export (`book.json` → `publicaciones: [{fecha, commit, archivo}]`) y el
+  diff contra ese commit da la lista exacta de capítulos tocados después; el
+  export ya escribe a `Exportados/<titulo>.epub`, que es el momento natural
+  para registrar la publicación. No arrancar sin diseñarlo con el autor.
 
 - [ ] **El ciclo de correcciones vive en un txt** (relevado con el autor el
   2026-09-14; hoy no duele lo suficiente para codear)
