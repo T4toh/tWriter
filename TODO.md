@@ -1109,6 +1109,18 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 
 ## Deuda transversal
 
+- [ ] **Evaluar pasar los componentes a OnPush** (quedó del salto a Angular
+  22, 2026-09-14). En v22 el default es OnPush; la migración puso
+  `changeDetection: ChangeDetectionStrategy.Eager` explícito en los 26
+  componentes que no declaraban estrategia, solo para no cambiar
+  comportamiento. Casi todo el estado ya es signals, así que OnPush debería
+  ser gratis en la mayoría; los sospechosos son los hosts de TipTap
+  (`editor`, `notes-editor`, `markdown-reader`) y lo que muta estado desde
+  callbacks de ProseMirror sin pasar por un signal. Hacerlo componente por
+  componente, sacando el `Eager` y probando con la app arriba; si alguno no
+  se refresca, ese se queda Eager con un comentario que diga por qué. Capaz
+  no rinde nada visible: el beneficio es menos change detection por
+  keystroke, medible solo en capítulos largos.
 - **Contraste AA de `--ok` y `--warn` en tema claro** (quedó de la auditoría
   del SCSS, cerrada el 2026-09-08 — el detalle está en `git log -p TODO.md`).
   `--ok` sobre su tinte da ~4.3:1 y `--warn` ~3.4:1, los dos por debajo del
