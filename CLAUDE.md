@@ -23,7 +23,8 @@ src/app/                     src-tauri/src/
   dialogos/  port TS D1-D5     fs.rs      tree, read/write capítulos
   grammar/   LanguageTool      git.rs     auto-commit + status (git2)
   export/    EPUB UI           epub.rs    builder XHTML zip
-  core/      services          pandoc.rs  sidecar import .docx/.odt
+  notificaciones/ campana      pandoc.rs  sidecar import .docx/.odt
+  core/      services          epubcheck.rs valida el EPUB exportado
                                storage.rs detección git/cloud/local
                                secrets.rs apiKey al keyring del OS
                                tesauro.rs sinónimos MyThes es+en
@@ -145,6 +146,26 @@ cabecera de `src/app/core/search-highlight.spec.ts` deja sentado ese criterio.
   Si falta el lado Rust, serde descarta el campo al guardar y la preferencia
   se pierde al reiniciar, sin ningún error: el síntoma es "lo dejé en X y
   volvió a arrancar en Y".
+- **Los modales de config arman el JSON con un whitelist, en los DOS sentidos.**
+  `saga-config-modal.ts` y `book-config-modal.ts` listan campo por campo tanto
+  en `load()` como en `save()`, así que un campo ausente en **cualquiera de los
+  dos** desaparece del JSON al guardar, sin ningún error. El síntoma llega
+  disfrazado de UI: primero "no veo esa opción en el modal" (la sección tiene un
+  `@if (...length > 0)` que nunca da true), y recién después se descubre que
+  abrir el modal y tocar Guardar venía borrando el campo. Pasó con
+  `reglas_lt_desactivadas` el 2026-09-18. Ojo: el `struct` de Rust puede estar
+  perfecto —con su campo, su `rename` y hasta su test de round-trip— y perderse
+  igual, así que revisar el lado Rust no alcanza para descartarlo.
+- **Capas de `z-index`.** El chrome del editor va por debajo de 200
+  (`.privacy-banner` 150, los tres popovers de `.editor-pop` 180), los modales
+  toman 200/201 (`.modal-backdrop` / `.modal-card`), los toasts 300, y arriba de
+  todo van los dos que tienen que escapar de su contenedor: el panel de
+  `shared/select.ts` (que se abre adentro de modales) y el banner de update,
+  los dos en 1000. Un popover del editor **nunca** va arriba de un modal: estuvo
+  en 1000 y tapaba cualquiera. Y ojo con el cierre por click afuera: la card del
+  menú contextual hace `stopPropagation()`, así que el click en una de sus
+  entradas no llega al `document` y no cierra nada — el editor cierra sus
+  popovers mirando `ctxMenu.current()` con un effect.
 - **El remedio se da adentro de la app.** Si la app puede detectar un problema de
   entorno (daemon caído, runtime ausente, sidecar faltante, credencial vencida),
   tiene que decir **qué** pasó y dar el remedio **accionable** ahí mismo: un botón
