@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { detectLang } from '../dialogos/detect';
 import { DebugService } from './debug-service';
+import { selloRevision } from './estado-libro';
 import { ExportProgress, resumenDeAviso, textoDeFase } from './export-progreso';
 import { sinPrefijoNumerico } from './nombre-carpeta';
 import { ExportsService } from './exports-service';
@@ -422,7 +423,11 @@ export class ChapterService {
    *  hasta el toast final: no se sabía si estaba trabajando o si el click no
    *  había agarrado. El toast cubre los dos caminos de entrada —la tarjeta del
    *  libro y el menú contextual—, y la tarjeta además tiene su spinner. */
-  async exportEpub(node: TreeNode, muestra: number | null = null): Promise<string | null> {
+  async exportEpub(
+    node: TreeNode,
+    muestra: number | null = null,
+    marcarRevision = false,
+  ): Promise<string | null> {
     if (node.kind !== 'book') return null;
     const toastId = this.toast.progreso(muestra ? 'Exportando muestra…' : 'Exportando EPUB…');
     let unlisten: UnlistenFn | null = null;
@@ -436,11 +441,18 @@ export class ChapterService {
         if (event.payload.libro !== node.path) return;
         this.toast.update(toastId, textoDeFase(event.payload));
       });
+      // El sello sale de acá y no de Rust: del lado nativo solo hay epoch UTC
+      // y el nombre del archivo saldría corrido las horas del huso.
       const result = await invoke<{
         epub_path: string;
         chapters: number;
         avisos: string[];
-      }>('export_book', { bookPath: node.path, muestra });
+      }>('export_book', {
+        bookPath: node.path,
+        muestra,
+        sello: selloRevision(new Date()),
+        marcarRevision,
+      });
       const filename = result.epub_path.split('/').pop() ?? 'epub';
       this.debug.info(
         'epub',

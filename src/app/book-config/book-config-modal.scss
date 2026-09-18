@@ -2,6 +2,38 @@
  * shared/config-modal.scss -- eran 236 líneas idénticas en los dos. */
 @use '../shared/config-modal';
 
+/* Historial de publicaciones: recuadro propio, pegado al estado que describe.
+   Las fechas en mono para que la columna alinee, y con scroll a partir de unas
+   pocas — el proofreading no termina nunca y la lista solo crece. */
+.revisiones {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-soft);
+  padding: 0.5rem 0.7rem;
+
+  ol {
+    margin: 0.35rem 0 0;
+    padding: 0;
+    max-height: 7.5rem;
+    overflow-y: auto;
+    list-style: none;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fg);
+  }
+
+  li + li {
+    margin-top: 2px;
+  }
+}
+
+.revisiones-titulo {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+}
+
 .hint {
   color: var(--fg-muted);
   font-size: 11px;

@@ -259,9 +259,20 @@ pub struct BookConfig {
     /// Template de tamaño de página para export EPUB: "6x9" | "5x8" | "a5". Default: "6x9".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub template: Option<String>,
-    /// Marca la novela como finalizada (sin más capítulos por agregar). Oculta el creador de capítulos.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Legacy: booleano que precedió a `estado`. Se lee para migrar
+    /// (`true` → `terminada`) y nunca se vuelve a escribir.
+    #[serde(default, skip_serializing)]
     pub finalizada: Option<bool>,
+    /// Punto del ciclo de vida: "en_curso" | "terminada" | "publicada".
+    /// Desde "terminada" en adelante se oculta el creador de capítulos.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub estado: Option<String>,
+    /// Historial de proofreading: un sello `YYYY-MM-DDTHH:MM` (hora local) por
+    /// revisión, en orden de export. Lo agrega el exportador cuando se tilda
+    /// "marcar como revisión"; el proofreading nunca termina, así que esto es
+    /// un historial y no un estado.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revisiones: Option<Vec<String>>,
     /// Path relativo al book dir del directorio del epílogo (ej: "Epílogo"). Único por novela.
     /// El epílogo se trata como un capítulo independiente al final del libro, fuera del TOC principal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -280,9 +291,40 @@ pub struct BookConfig {
     pub foto_autor: Option<String>,
 }
 
-#[tauri::command]
-pub fn get_book_config(book_path: String) -> Result<BookConfig, String> {
-    let book_dir = PathBuf::from(&book_path);
+/// Los `book.json` viejos traen `finalizada: bool` y ningún `estado`. Se
+/// deriva al leer y se olvida el campo viejo, que ya no se serializa: el
+/// archivo en disco recién queda migrado cuando algo lo vuelve a guardar.
+fn migrar_estado(cfg: &mut BookConfig) {
+    if cfg.estado.is_none() {
+        cfg.estado = Some(
+            match cfg.finalizada {
+                Some(true) => ESTADO_TERMINADA,
+                _ => ESTADO_EN_CURSO,
+            }
+            .to_string(),
+        );
+    }
+    cfg.finalizada = None;
+}
+
+pub const ESTADO_EN_CURSO: &str = "en_curso";
+pub const ESTADO_TERMINADA: &str = "terminada";
+
+/// Agrega un sello al historial de revisiones del libro y reescribe su
+/// `book.json`. Lo llama el exportador cuando se tildó "marcar como revisión",
+/// con el mismo sello que lleva el nombre del EPUB.
+pub fn agregar_revision(book_dir: &Path, sello: &str) -> Result<(), String> {
+    // Sin pasar por `get_book_config`: la autodetección de imágenes de ahí
+    // materializaría `tapa`/`foto_autor` en el JSON, y un export no tiene por
+    // qué tocar campos que el autor no editó.
+    let mut cfg = leer_book_config(book_dir)?;
+    cfg.revisiones.get_or_insert_with(Vec::new).push(sello.to_string());
+    set_book_config(book_dir.to_string_lossy().to_string(), cfg)
+}
+
+/// `book.json` parseado y migrado, o el default derivado del nombre de la
+/// carpeta si el libro todavía no tiene uno.
+fn leer_book_config(book_dir: &Path) -> Result<BookConfig, String> {
     let p = book_dir.join("book.json");
     let mut cfg = if p.exists() {
         let raw = fs::read_to_string(&p).map_err(|e| e.to_string())?;
@@ -299,6 +341,14 @@ pub fn get_book_config(book_path: String) -> Result<BookConfig, String> {
             ..Default::default()
         }
     };
+    migrar_estado(&mut cfg);
+    Ok(cfg)
+}
+
+#[tauri::command]
+pub fn get_book_config(book_path: String) -> Result<BookConfig, String> {
+    let book_dir = PathBuf::from(&book_path);
+    let mut cfg = leer_book_config(&book_dir)?;
     if image_field_unusable(&book_dir, cfg.tapa.as_deref()) {
         if let Some(found) = find_cover_in(&book_dir) {
             cfg.tapa = Some(found);
@@ -596,5 +646,73 @@ mod tests {
 
         assert_eq!(rel, "cover.png");
         assert!(libro.path().join("cover.png").is_file());
+    }
+    #[test]
+    fn finalizada_true_se_lee_como_terminada_y_no_se_vuelve_a_escribir() {
+        let libro = TempDir::new().unwrap();
+        fs::write(
+            libro.path().join("book.json"),
+            r#"{"titulo":"Test","finalizada":true}"#,
+        )
+        .unwrap();
+
+        let cfg = get_book_config(libro.path().to_string_lossy().into_owned()).unwrap();
+        assert_eq!(cfg.estado.as_deref(), Some(ESTADO_TERMINADA));
+        assert_eq!(cfg.finalizada, None);
+
+        set_book_config(libro.path().to_string_lossy().into_owned(), cfg).unwrap();
+        let raw = fs::read_to_string(libro.path().join("book.json")).unwrap();
+        assert!(raw.contains(r#""estado": "terminada""#), "{}", raw);
+        assert!(!raw.contains("finalizada"), "{}", raw);
+    }
+
+    #[test]
+    fn sin_finalizada_ni_estado_arranca_en_curso() {
+        let libro = TempDir::new().unwrap();
+        fs::write(libro.path().join("book.json"), r#"{"titulo":"Test"}"#).unwrap();
+
+        let cfg = get_book_config(libro.path().to_string_lossy().into_owned()).unwrap();
+        assert_eq!(cfg.estado.as_deref(), Some(ESTADO_EN_CURSO));
+    }
+
+    #[test]
+    fn estado_explicito_le_gana_al_finalizada_viejo() {
+        let libro = TempDir::new().unwrap();
+        fs::write(
+            libro.path().join("book.json"),
+            r#"{"titulo":"Test","finalizada":true,"estado":"publicada"}"#,
+        )
+        .unwrap();
+
+        let cfg = get_book_config(libro.path().to_string_lossy().into_owned()).unwrap();
+        assert_eq!(cfg.estado.as_deref(), Some("publicada"));
+    }
+
+    #[test]
+    fn agregar_revision_acumula_los_sellos_sin_tocar_lo_demas() {
+        let libro = TempDir::new().unwrap();
+        fs::write(
+            libro.path().join("book.json"),
+            r#"{"titulo":"Test","autor":"Tatoh","estado":"publicada"}"#,
+        )
+        .unwrap();
+        png(&libro.path().join("cover.png"));
+
+        agregar_revision(libro.path(), "2026-09-18T14:30").unwrap();
+        agregar_revision(libro.path(), "2026-09-19T09:05").unwrap();
+
+        let cfg = get_book_config(libro.path().to_string_lossy().into_owned()).unwrap();
+        assert_eq!(
+            cfg.revisiones.as_deref(),
+            Some(["2026-09-18T14:30".to_string(), "2026-09-19T09:05".to_string()].as_slice())
+        );
+        assert_eq!(cfg.autor.as_deref(), Some("Tatoh"));
+        assert_eq!(cfg.estado.as_deref(), Some("publicada"));
+        let raw = fs::read_to_string(libro.path().join("book.json")).unwrap();
+        assert!(
+            !raw.contains("cover.png"),
+            "un export no materializa la tapa autodetectada: {}",
+            raw
+        );
     }
 }

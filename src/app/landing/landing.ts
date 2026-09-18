@@ -2,6 +2,12 @@ import { FechaCortaPipe } from '../shared/fecha-corta-pipe';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
+import {
+  admiteCapitulosNuevos,
+  ESTADO_LIBRO_DEFAULT,
+  EstadoLibro,
+  estadoLibro,
+} from '../core/estado-libro';
 import { NavigationService } from '../core/navigation-service';
 import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { ProjectService } from '../core/project-service';
@@ -100,27 +106,27 @@ export class Landing {
     return node && node.kind === 'saga' ? node.path : null;
   });
 
-  protected readonly bookFinalizada = signal<boolean>(false);
+  protected readonly bookEstado = signal<EstadoLibro>(ESTADO_LIBRO_DEFAULT);
   protected readonly sagaFinalizada = signal<boolean>(false);
   protected readonly bookEpilogoPath = signal<string | null>(null);
 
   protected readonly canCreateCapitulo = computed<boolean>(() => {
     const node = this.currentNode();
     if (!node || node.kind !== 'book') return false;
-    return !this.bookFinalizada();
+    return admiteCapitulosNuevos(this.bookEstado());
   });
 
   protected readonly canCreateEpilogo = computed<boolean>(() => {
     const node = this.currentNode();
     if (!node || node.kind !== 'book') return false;
-    if (this.bookFinalizada()) return false;
+    if (!admiteCapitulosNuevos(this.bookEstado())) return false;
     return this.bookEpilogoPath() === null;
   });
 
   protected readonly canCreateParte = computed<boolean>(() => {
     const node = this.currentNode();
     if (!node || node.kind !== 'section') return false;
-    return !this.bookFinalizada();
+    return admiteCapitulosNuevos(this.bookEstado());
   });
 
   protected readonly canCreateBook = computed<boolean>(() => {
@@ -140,10 +146,10 @@ export class Landing {
       const path = this.bookContextPath();
       this.bookCfg.savedAt();
       if (!path) {
-        this.bookFinalizada.set(false);
+        this.bookEstado.set(ESTADO_LIBRO_DEFAULT);
         return;
       }
-      void this.loadBookFinalizada(path);
+      void this.loadBookEstado(path);
     });
     effect(() => {
       const path = this.sagaContextPath();
@@ -156,14 +162,14 @@ export class Landing {
     });
   }
 
-  private async loadBookFinalizada(path: string): Promise<void> {
+  private async loadBookEstado(path: string): Promise<void> {
     try {
       const cfg = await this.bookCfg.load(path);
-      this.bookFinalizada.set(!!cfg.finalizada);
+      this.bookEstado.set(estadoLibro(cfg.estado));
       const ep = cfg.epilogo?.trim();
       this.bookEpilogoPath.set(ep && ep.length > 0 ? ep : null);
     } catch {
-      this.bookFinalizada.set(false);
+      this.bookEstado.set(ESTADO_LIBRO_DEFAULT);
       this.bookEpilogoPath.set(null);
     }
   }

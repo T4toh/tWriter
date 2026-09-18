@@ -42,6 +42,21 @@
           }
         </div>
       }
+      <div class="ex-revision">
+        <label class="ex-check" [class.ex-off]="!completo()">
+          <input
+            type="checkbox"
+            [ngModel]="marcarRevision()"
+            (ngModelChange)="marcarRevision.set($event)"
+            [disabled]="!completo()"
+          />
+          <span>Esta es la versión que publico</span>
+        </label>
+        <p class="ex-hint">
+          Anota la fecha y hora en el historial del libro, para saber qué edición está publicada.
+          El historial son fechas: el EPUB anterior se borra igual, en Exportados queda el último.
+        </p>
+      </div>
     </div>
 
     <footer class="ex-actions">

@@ -69,6 +69,7 @@
 }
 
 .cover-slot {
+  position: relative;
   overflow: hidden;
   background: var(--bg-soft);
   contain: paint;
@@ -199,4 +200,35 @@
    atenuarlo lo dejaba lavado. Siguen siempre visibles. */
 .card-btn {
   flex: 0 0 auto;
+}
+
+/* Estado del libro, encima de la tapa. Abajo no entra: en el bloque de texto
+   ya pelean título, subtítulo, fecha, capítulos y los tres controles, y cada
+   línea que se le agrega a UNA tarjeta desalinea sus botones contra los de las
+   vecinas. Arriba a la izquierda, chico y sin gritar — el detalle con fechas
+   vive en el modal de configuración. */
+.badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+
+  /* Sin esto no se ve con tapa: el `<img>` lleva `transform: translateZ(0)`,
+     que lo mete en la capa de los posicionados, y al venir después en el DOM
+     se pinta encima del chip. */
+  z-index: 1;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+
+  /* Semiopaco sobre la ilustración: legible sin tapar la tapa. */
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  color: var(--fg-muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.7;
+
+  &.alerta {
+    border-color: var(--warn-tint-border);
+    color: var(--warn);
+  }
 }

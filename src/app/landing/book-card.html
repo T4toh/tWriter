@@ -7,6 +7,9 @@
   (click)="onClick()"
 >
   <div class="cover-slot">
+    @if (badge(); as b) {
+      <span class="badge" [class.alerta]="b.alerta">{{ b.texto }}</span>
+    }
     @if (coverDataUrl(); as url) {
       <img [src]="url" [alt]="displayTitle()" />
     } @else {

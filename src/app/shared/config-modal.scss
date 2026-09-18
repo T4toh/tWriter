@@ -40,6 +40,70 @@
   font-size: 13px;
 }
 
+/* Secciones plegables del modal. `<details>` pelado en vez de un acordeón con
+ * signals: el plegado es estado de la vista, el browser ya lo maneja con su
+ * teclado y su semántica, y arrancar con Identidad abierta y el resto cerrado
+ * alcanza — no hay nada que tenga que abrir una sección desde afuera. */
+.bc-sec {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 0.8rem;
+
+  &[open] {
+    padding-bottom: 0.8rem;
+  }
+
+  > summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.6rem 0;
+    cursor: pointer;
+    user-select: none;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+    color: var(--fg-muted);
+
+    /* El triangulito nativo desalinea y no se puede estilar parejo entre
+       motores; el chevron propio va antes del texto y rota al abrir. */
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &::before {
+      content: '›';
+      display: inline-block;
+      font-size: 14px;
+      line-height: 1;
+      transition: transform 0.12s ease;
+    }
+
+    &:hover {
+      color: var(--accent);
+    }
+  }
+
+  &[open] > summary {
+    color: var(--accent);
+
+    &::before {
+      transform: rotate(90deg);
+    }
+  }
+
+  /* El `gap` del cuerpo del modal no llega acá adentro: los hijos del
+     `<details>` no son flex items. */
+  > .row + .row,
+  > .revisiones,
+  > .hint-soft {
+    margin-top: 0.85rem;
+  }
+}
+
 .section-divider {
   margin-top: 0.5rem;
   padding-top: 0.5rem;

@@ -12,6 +12,11 @@ import { LucideArrowDownToLine, LucideListChecks, LucideSettings } from '@lucide
 import { BookConfig, BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { CoverCache } from '../core/cover-cache';
+import {
+  ESTADO_LIBRO_LABEL,
+  estadoLibro,
+  necesitaRevisar,
+} from '../core/estado-libro';
 import { ExportsService } from '../core/exports-service';
 import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { RevisionLibroService } from '../core/revision-libro-service';
@@ -74,6 +79,24 @@ export class BookCard {
       0,
     ),
   );
+
+  /** Chip sobre la tapa. Uno solo y corto: la tarjeta de la grilla ya pelea
+   *  por el espacio del bloque de texto, y cada línea que se le suma desalinea
+   *  los controles contra las tarjetas de al lado.
+   *
+   *  Gana el aviso sobre el estado porque es lo accionable; el estado con su
+   *  fecha y su cuenta de revisiones está en el modal de configuración. «En
+   *  curso» al día no muestra nada: es el caso normal de casi toda la grilla. */
+  protected readonly badge = computed<{ texto: string; alerta: boolean } | null>(() => {
+    const cfg = this.config();
+    if (!cfg) return null;
+    const estado = estadoLibro(cfg.estado);
+    if (necesitaRevisar(estado, cfg.revisiones, this.node().modifiedMs)) {
+      return { texto: 'Revisar', alerta: true };
+    }
+    if (estado === 'en_curso') return null;
+    return { texto: ESTADO_LIBRO_LABEL[estado], alerta: false };
+  });
 
   protected readonly isConfigured = computed(() => {
     const cfg = this.config();
