@@ -845,11 +845,18 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   Dónde mostrarlo: sumarlo a la pasada del panel de auditoría RAE
   (`rae-audit-panel.ts`), que ya recorre el capítulo y lista violaciones con
   jump-to-term, en vez de inventar un panel nuevo.
-- [ ] **Tres falsos positivos de LT con id ya identificado — 0004 y 0005 son
-  bugs de regla; el tercero es una regla que cubre mal su propia construcción**
-  (encontrados escribiendo el 2026-09-02)
-  Los tres se reprodujeron contra el container local (LT **6.7**, `es-AR`) y los
-  ids salieron de ahí, así que no hay que adivinarlos:
+- [ ] **Los parches `0004` y `0005` de LT: escritos, medidos y sin subir**
+  (falsos positivos encontrados escribiendo el 2026-09-02; parches escritos el
+  2026-09-18)
+  **Lo que falta es solo el trámite**: pushear las dos ramas del fork
+  (`es-tu-tilde-puntos-suspensivos`, `es-mas-seguido-adverbio`) y abrir los dos
+  PR upstream. El código está commiteado en `~/Repos/Personal/languagetool`, los
+  `.patch` en `docs/lt-patches/`, `SpanishPatternRuleTest` pasa (1670 reglas) y
+  la medición contra `~/novelas` está en el README de esa carpeta:
+  `TU_TILDE` 22 hits → 2, `AGREEMENT_POSTPONED_ADJ` 24 → 21, ningún hit nuevo.
+  El container local ya quedó parcheado a mano (se pierde si se recrea).
+  Los tres casos se reprodujeron contra el container local (LT **6.8**, `es-AR`)
+  y los ids salieron de ahí, así que no hay que adivinarlos:
 
   **`TU_TILDE[5]` — `tu` seguido de puntos suspensivos.**
   «No te disculpes, me ha sorprendido tu… conjuro.» → marca `tu` y sugiere `tú`
@@ -943,20 +950,28 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   argentino (CORPES XXI / CREA filtrando por Argentina) es un dato que se mide,
   y es distinto de opinar.
 
-  **El camino ya está armado**: `docs/lt-patches/README.md` — fork
-  `T4toh/languagetool`, patch acá mientras el PR no esté mergeado, `sed` sobre
-  el `grammar.xml` del container para probarlo en vivo, y
-  `node scripts/scan-regla-lt.mjs TU_TILDE ~/novelas es-AR` (ídem
-  `AGREEMENT_POSTPONED_ADJ`) **antes y después** para contar los hits sobre la
-  obra real. Serían los parches `0004` y `0005`, ramas independientes desde
-  `master` como los otros tres.
-  Ojo con la versión: el README ancla los números de línea a **LT 6.8** y el
-  container que respondió es **6.7**. Verificar antes de aplicar cualquier `sed`.
-  Mientras los PR no estén mergeados, estos dos son exactamente los casos que
+  **Cómo quedaron los dos parches** (detalle completo en
+  `docs/lt-patches/README.md`):
+  - `0004` mete un token opcional en el antipatrón de `TU_TILDE[5]` para que la
+    pausa no rompa el vínculo entre `tu` y su sustantivo. Los dos hits que
+    sobreviven **no son de la regla**: LT parte la oración en los puntos
+    suspensivos cuando sigue `¿` o mayúscula, así que el sustantivo queda en la
+    oración siguiente y ningún antipatrón llega. Eso se arregla en `segment.srx`
+    y es un parche aparte, sin escribir.
+  - `0005` agrega un antipatrón al rulegroup `AGREEMENT_POSTPONED_ADJ` que pide
+    un verbo delante de `más|menos seguido`. De paso quedó caracterizado el
+    disparador que el relevamiento del 2026-09-02 daba por desconocido, y no era
+    "sustantivo femenino contiguo": `Salgo de mi casa más seguido.` sale limpia y
+    `Voy a la playa más seguido.` no. Los casos sin verbo («la serie más
+    seguido») se siguen marcando, con un `<example>` nuevo que lo fija.
+  Mientras los PR no estén mergeados, estos dos siguen siendo los casos que
   justifican el "Nunca más esta regla" del popover: `disabledRules` es el
   paliativo, el parche es el arreglo. Ojo con la granularidad al apagarlos: la
   API desactiva la regla entera, no la subregla (el id que devuelve es
   `AGREEMENT_POSTPONED_ADJ`, sin el `[3]`).
+  Ojo con la versión al reaplicar sobre un container nuevo: los números de línea
+  del README están anclados a **LT 6.8**; verificar el `grep -n` antes de
+  cualquier `sed`.
 
 ## Búsqueda
 
@@ -1288,41 +1303,24 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 
 ## Proofreading
 
-- [ ] **Más estados para la novela** (pedido del autor el 2026-09-12). Hoy
-  `book.json` solo tiene `finalizada: bool` (terminada de escribir, oculta el
-  creador de capítulos) y el autor no sabe cuántas veces revisó un libro, si le
-  falta proofreading o si ya está publicado. Estados que necesita, en orden:
-  **en curso → terminada** (de escribir) **→ necesita revisar** (proofreading)
-  **→ revisada → publicada**. Los nombres son negociables, el ciclo no.
-  Reemplaza a `finalizada` (migrar: `true` → `terminada`, ausente → `en curso`;
-  el creador de capítulos se oculta desde `terminada` en adelante). Campo nuevo
-  tipado en los dos lados (`book-config-service.ts` + `book_config.rs`), se
-  edita desde el modal de configuración del libro y se muestra en la landing
-  y en el tree.
-  **Las revisiones no son un estado, son un historial** (confirmado por el
-  autor el 2026-09-12: «el proofreading nunca termina y siempre encuentro algo
-  más»). Así que «revisada» sale del ciclo y entra `revisiones: [fecha, ...]`
-  en `book.json`, con un botón «Marcar revisión» en el modal que agrega la fecha
-  de hoy. El estado queda **en curso → terminada → publicada**, y la landing
-  muestra al lado «3 revisiones, última el 2026-08-30». «Necesita revisar» se
-  deriva solo: terminada o publicada con cero revisiones, o con la última
-  revisión anterior a la última edición de un capítulo (`ultima_edicion` del
-  `.meta.json`, ya existe) — eso también avisa cuando un libro publicado se
-  tocó después de la última revisión.
-  **Lo publicado vs lo que hay en disco — sin resolver, planear junto con esto**
-  (pedido del autor el 2026-09-14, el mismo día que la auditoría de gramática
-  le encontró errores en una novela ya publicada). Arregló uno y no tiene
-  forma de saber que ese arreglo no está en la edición publicada: el estado
-  «publicada» es un bool sobre el libro, no un punto en el tiempo ni una
-  versión del contenido, y `ultima_edicion` solo dice que algo cambió, no
-  qué. El autor todavía no sabe qué forma quiere; lo que necesita es poder
-  responder «¿qué cambió desde lo que subí?» y, cuando corresponda, «ya
-  resubí esto». Piezas que ya existen para apoyarse: el repo es git
-  (`git-service`, `git2`), así que «publicada» podría guardar el commit del
-  export (`book.json` → `publicaciones: [{fecha, commit, archivo}]`) y el
-  diff contra ese commit da la lista exacta de capítulos tocados después; el
-  export ya escribe a `Exportados/<titulo>.epub`, que es el momento natural
-  para registrar la publicación. No arrancar sin diseñarlo con el autor.
+- [ ] **Lo publicado vs lo que hay en disco** (pedido del autor el 2026-09-14, el
+  mismo día que la auditoría de gramática le encontró errores en una novela ya
+  publicada). El ciclo de estados y el historial de revisiones ya están hechos
+  (`estado: en curso → terminada → publicada` + `revisiones[]` sellado desde el
+  export, ver README → «Estado de la novela + revisiones»); lo que sigue sin
+  resolver es esto.
+  El autor arregló un error y no tiene forma de saber que ese arreglo **no está
+  en la edición publicada**: `publicada` es un punto del ciclo, no un punto en el
+  tiempo ni una versión del contenido, y `revisiones[]` sella *cuándo* se exportó,
+  no *qué* salió. Necesita poder responder «¿qué cambió desde lo que subí?» y,
+  cuando corresponda, «ya resubí esto».
+  Piezas que ya existen para apoyarse: el repo es git (`git-service`, `git2`), así
+  que cada publicación podría guardar el commit (`book.json` →
+  `publicaciones: [{fecha, commit, archivo}]`) y el diff contra ese commit da la
+  lista exacta de capítulos tocados después; el export ya escribe a `Exportados/`
+  con sello de fecha y hora, que es el momento natural para registrarla — el mismo
+  modal donde ya vive el checkbox de «marcar revisión».
+  No arrancar sin diseñarlo con el autor.
 
 - [ ] **El ciclo de correcciones vive en un txt** (relevado con el autor el
   2026-09-14; hoy no duele lo suficiente para codear)
