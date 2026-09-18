@@ -851,8 +851,10 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   **De nuestro lado no queda nada**: [#12195](https://github.com/languagetool-org/languagetool/pull/12195)
   (`TU_TILDE`) y [#12196](https://github.com/languagetool-org/languagetool/pull/12196)
   (`AGREEMENT_POSTPONED_ADJ`), rebasados sobre `upstream/master`, 0 commits
-  atrás y los dos `MERGEABLE`. CodeRabbit ya pasó: `0004` salió limpio, y de
-  `0005` salió un acote del `skip` que está contestado y pusheado.
+  atrás y los dos `MERGEABLE`. CodeRabbit ya pasó dos veces: `0004` salió
+  limpio, y de `0005` salieron dos correcciones —acotar el `skip` a la cláusula
+  y no tapar el participio con complemento agente— las dos contestadas,
+  arregladas y pusheadas.
   El código está commiteado en `~/Repos/Personal/languagetool`, los `.patch` en
   `docs/lt-patches/`, `SpanishPatternRuleTest` pasa en las dos ramas
   (1673 reglas) y la medición contra `~/novelas` está en el README de esa
