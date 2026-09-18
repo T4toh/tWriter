@@ -4,12 +4,17 @@
       class="toast"
       [attr.data-level]="t.level"
       [class.con-detalle]="!!t.detalle"
-      [title]="t.detalle ? 'Ver el detalle' : 'Cerrar'"
+      [title]="tituloDe(t)"
       (click)="onClick(t)"
     >
       <span class="msg">{{ t.message }}</span>
       @if (t.detalle) {
         <span class="detalle-hint">ver detalle</span>
+      }
+      @if (t.accion; as a) {
+        <button type="button" class="toast-accion" (click)="onAccion($event, t)">
+          {{ a.label }}
+        </button>
       }
     </div>
   }

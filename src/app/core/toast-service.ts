@@ -9,14 +9,27 @@ export interface ToastDetalle {
   texto: string;
 }
 
+/** Vuelta atrás de la acción que disparó el toast. Existe porque hay acciones
+ *  destructivas que se hacen con un solo click y sin confirmación —desactivar
+ *  una regla de LT en toda la novela, agregar una palabra al diccionario— y el
+ *  aviso de 4 segundos era todo el rastro que quedaba. */
+export interface ToastAccion {
+  label: string;
+  run: () => void;
+}
+
 export interface Toast {
   id: number;
   level: ToastLevel;
   message: string;
   detalle?: ToastDetalle;
+  accion?: ToastAccion;
 }
 
 const DEFAULT_DURATION_MS = 4000;
+
+/** Un "Deshacer" que se va en 4 segundos no es una red. */
+export const DESHACER_DURATION_MS = 10000;
 
 @Injectable({ providedIn: 'root' })
 export class ToastService {
@@ -28,9 +41,10 @@ export class ToastService {
     level: ToastLevel = 'info',
     durationMs = DEFAULT_DURATION_MS,
     detalle?: ToastDetalle,
+    accion?: ToastAccion,
   ): void {
     const id = this.nextId++;
-    const toast: Toast = { id, level, message, detalle };
+    const toast: Toast = { id, level, message, detalle, accion };
     this.toasts.update((ts) => [...ts, toast]);
     setTimeout(() => this.dismiss(id), durationMs);
   }
@@ -50,20 +64,25 @@ export class ToastService {
     this.toasts.update((ts) => ts.map((t) => (t.id === id ? { ...t, message } : t)));
   }
 
-  success(message: string, durationMs?: number, detalle?: ToastDetalle): void {
-    this.show(message, 'success', durationMs, detalle);
+  success(
+    message: string,
+    durationMs?: number,
+    detalle?: ToastDetalle,
+    accion?: ToastAccion,
+  ): void {
+    this.show(message, 'success', durationMs, detalle, accion);
   }
 
-  info(message: string, durationMs?: number, detalle?: ToastDetalle): void {
-    this.show(message, 'info', durationMs, detalle);
+  info(message: string, durationMs?: number, detalle?: ToastDetalle, accion?: ToastAccion): void {
+    this.show(message, 'info', durationMs, detalle, accion);
   }
 
-  warn(message: string, durationMs?: number, detalle?: ToastDetalle): void {
-    this.show(message, 'warn', durationMs, detalle);
+  warn(message: string, durationMs?: number, detalle?: ToastDetalle, accion?: ToastAccion): void {
+    this.show(message, 'warn', durationMs, detalle, accion);
   }
 
-  error(message: string, durationMs?: number, detalle?: ToastDetalle): void {
-    this.show(message, 'error', durationMs ?? 6000, detalle);
+  error(message: string, durationMs?: number, detalle?: ToastDetalle, accion?: ToastAccion): void {
+    this.show(message, 'error', durationMs ?? 6000, detalle, accion);
   }
 
   dismiss(id: number): void {

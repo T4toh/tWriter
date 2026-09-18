@@ -57,6 +57,27 @@
   color: var(--fg);
 }
 
+/* El botón manda sobre el mensaje: es lo único accionable del toast y tiene un
+   timer corriendo en contra. */
+.toast-accion {
+  display: block;
+  margin-top: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--hover-bg);
+    border-color: var(--fg-muted);
+  }
+}
+
 @keyframes slide-in {
   from {
     transform: translateX(20px);

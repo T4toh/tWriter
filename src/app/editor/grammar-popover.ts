@@ -56,7 +56,7 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
             <button type="button" class="ignore-btn" (click)="dismiss.emit()">Ignorar</button>
             <button
               type="button"
-              class="ignore-btn"
+              class="ignore-btn nunca-btn"
               (click)="disableRule.emit()"
               [title]="'Desactivar la regla ' + m.ruleId + ' en toda esta novela'"
             >
