@@ -1143,36 +1143,6 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   iguales se unifican; dos copias parecidas que divergieron a propósito, no. Y
   antes de unificar una función duplicada, preguntarse si el framework ya la
   trae (`formatDate` ×4 se resolvió borrándola: era `DatePipe`).
-- [ ] **Tests genéricos de humo, con el EPUB pre-armado como carnada**
-  (pedido del autor, 2026-09-18). Hoy la red es de a partes: `cargo test`
-  cubre lo de Rust y los `scripts/run-*-smoke.mjs` solo funciones puras del
-  front (nada de DOM ni de TipTap, ver CLAUDE.md). Lo que falta es una prueba
-  **de punta a punta y barata**: correr el export completo sobre un repo de
-  novelas de juguete y ver que el pipeline no explote — `load_part` +
-  `close_void_elements`/`rebalance_inline`, manifest, spine, nav, CSS del
-  bundle, zip — sin abrir la app. Un EPUB que se arma es un montón de código
-  ejercitado de un saque.
-
-  **Planear primero, antes de escribir nada** — esto es una idea, no un
-  encargo. Lo que hay que resolver en el plan:
-  - **De dónde sale el repo de juguete**: `demo_template.rs` ya genera una
-    saga completa (`generate_demo_template`, con `src-tauri/src/demo_content`)
-    y `epub.rs` ya tiene su `#[cfg(test)]` en `epub.rs:2477`. Si el demo
-    alcanza como fixture, el test es "generar demo en un tmpdir → exportar →
-    assert", y no hay fixture nuevo que mantener. Verificar eso primero.
-  - **Qué se asegura**: que no haya `Err`, que el zip abra, que `mimetype` sea
-    el primer entry y esté sin comprimir, y que aparezcan los XHTML de todos
-    los capítulos. Nada de comparar bytes contra un EPUB de referencia: eso se
-    rompe con cada cambio de CSS y termina borrado.
-  - **Qué queda afuera a propósito**: epubcheck no se puede exigir en el test
-    (no está bundleado, es un jar con JVM — ver CLAUDE.md); si está instalado,
-    correrlo y reportar, si no, saltear. Lo mismo LanguageTool y pandoc.
-  - **Dónde vive**: `#[cfg(test)]` en `epub.rs` si el fixture es el demo;
-    un `tests/` de integración si necesita armar el árbol a mano.
-
-  Si el relevamiento muestra que hace falta un fixture nuevo a mano, **cortar
-  ahí y preguntar**: un corpus de prueba que hay que mantener a mano cuesta más
-  que los bugs que caza.
 
 ## Documentación
 

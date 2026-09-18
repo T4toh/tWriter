@@ -4371,4 +4371,154 @@ mod tests {
         }
     }
 
+
+    // ─────────── Humo de punta a punta sobre el repo demo ───────────
+    //
+    // Los casos de arriba arman libros a mano con `<p>Texto 1.</p>`: sirven
+    // para aislar una regla, pero no ejercitan el pipeline con prosa real. El
+    // demo que shipea la app (`demo_template::generate_demo`) es una saga
+    // completa —5 capítulos × 3 partes, con diálogo, itálicas y cortes de
+    // escena— y no cuesta nada mantener, porque ya se mantiene solo: es el
+    // contenido que ve quien abre la app por primera vez.
+    //
+    // Esto NO compara bytes contra un EPUB de referencia: eso se rompe con
+    // cada cambio del CSS y termina borrado. Chequea que el pipeline entero
+    // corra y que el zip salga con la forma que un lector espera.
+
+    /// El único subdirectorio de `dir`. El demo genera una saga con un libro
+    /// adentro, y buscarlos así evita clavar los títulos (que están en
+    /// constantes privadas de `demo_template` y cambian con el idioma).
+    fn unico_subdirectorio(dir: &std::path::Path) -> PathBuf {
+        let mut dirs: Vec<PathBuf> = fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .collect();
+        assert_eq!(dirs.len(), 1, "esperaba un solo subdirectorio en {}", dir.display());
+        dirs.pop().unwrap()
+    }
+
+    /// Genera el demo en un tmpdir y devuelve el path del libro.
+    fn libro_demo(tmp: &std::path::Path, lang: &str) -> PathBuf {
+        let resumen = crate::demo_template::generate_demo(tmp, "Saga Demo", lang, |_, _, _| {})
+            .expect("demo generado");
+        assert_eq!(resumen.copied_chapters, 15, "el demo son 5 capítulos × 3 partes");
+        let saga = unico_subdirectorio(tmp);
+        unico_subdirectorio(&saga)
+    }
+
+    /// `mimetype` tiene que ser la PRIMERA entrada del zip y estar SIN
+    /// comprimir. Es lo que deja reconocer un EPUB leyendo los primeros bytes
+    /// del archivo, y epubcheck lo rechaza si falla cualquiera de las dos
+    /// condiciones. El impl lo hace bien desde siempre; lo que no había era
+    /// nada que se diera cuenta si alguien reordenaba las escrituras del zip.
+    fn assert_mimetype_bien_puesto(epub_path: &std::path::Path) {
+        use std::io::Read;
+        let f = std::fs::File::open(epub_path).unwrap();
+        let mut archive = zip::ZipArchive::new(f).expect("el zip abre");
+        let mut primero = archive.by_index(0).expect("el zip tiene entradas");
+        assert_eq!(primero.name(), "mimetype", "`mimetype` no es la primera entrada");
+        assert_eq!(
+            primero.compression(),
+            CompressionMethod::Stored,
+            "`mimetype` tiene que ir sin comprimir"
+        );
+        let mut buf = String::new();
+        primero.read_to_string(&mut buf).unwrap();
+        assert_eq!(buf, "application/epub+zip");
+    }
+
+    #[test]
+    fn el_demo_entero_exporta_un_epub_con_forma_de_epub() {
+        for lang in ["es", "en"] {
+            let tmp = TempDir::new().unwrap();
+            let libro = libro_demo(tmp.path(), lang);
+
+            let r = export_impl(libro.to_str().unwrap())
+                .unwrap_or_else(|e| panic!("export del demo en {}: {}", lang, e));
+
+            assert_eq!(r.chapters, 15, "[{}] 15 partes escritas", lang);
+            assert!(r.avisos.is_empty(), "[{}] avisos: {:?}", lang, r.avisos);
+
+            let epub = std::path::Path::new(&r.epub_path);
+            assert!(epub.is_file(), "[{}] no quedó el archivo en disco", lang);
+            assert_mimetype_bien_puesto(epub);
+
+            let entries = read_epub_entries(epub);
+
+            // El esqueleto que exige EPUB 3: sin cualquiera de estos, no abre.
+            for obligatorio in [
+                "mimetype",
+                "META-INF/container.xml",
+                "OEBPS/content.opf",
+                // El nav de EPUB 3 (`properties="nav"`) se llama `toc.xhtml`.
+                "OEBPS/toc.xhtml",
+                "OEBPS/style.css",
+            ] {
+                assert!(entries.contains_key(obligatorio), "[{}] falta {}", lang, obligatorio);
+            }
+
+            // Las 15 partes, cada una con su XHTML. El prefijo numérico lo pone
+            // un contador global, así que se busca por sufijo.
+            for cap in 1..=5 {
+                for parte in 1..=3 {
+                    let sufijo = format!("_ch{}_p{}.xhtml", cap, parte);
+                    let encontrada = entries.keys().any(|k| k.ends_with(&sufijo));
+                    assert!(encontrada, "[{}] falta el XHTML de {}", lang, sufijo);
+                }
+            }
+
+            // Truncar un XHTML a la mitad es la forma más barata de romper un
+            // EPUB sin romper el zip, y `read_epub_entries` no se daría cuenta.
+            for (nombre, bytes) in entries.iter() {
+                if !nombre.ends_with(".xhtml") {
+                    continue;
+                }
+                let texto = String::from_utf8(bytes.clone())
+                    .unwrap_or_else(|_| panic!("[{}] {} no es UTF-8", lang, nombre));
+                assert!(texto.starts_with("<?xml"), "[{}] {} sin declaración XML", lang, nombre);
+                assert!(
+                    texto.trim_end().ends_with("</html>"),
+                    "[{}] {} cortado antes de cerrar",
+                    lang,
+                    nombre
+                );
+            }
+        }
+    }
+
+    /// epubcheck no está bundleado (es un jar y necesita JVM, ver CLAUDE.md),
+    /// así que este test se saltea solo donde no está en vez de fallar.
+    ///
+    /// Ojo con el modo de falla que describe CLAUDE.md: el wrapper de Homebrew
+    /// hace `exec` de una JVM, así que salir con código de error y SIN una sola
+    /// línea de diagnóstico es la herramienta rota, no un EPUB inválido. Ese
+    /// caso también se saltea — si no, el test falla en la máquina de quien
+    /// tenga una JVM a medio instalar y no dice nada del export.
+    #[test]
+    fn epubcheck_aprueba_el_epub_del_demo_si_esta_instalado() {
+        let tmp = TempDir::new().unwrap();
+        let libro = libro_demo(tmp.path(), "es");
+        let r = export_impl(libro.to_str().unwrap()).expect("export del demo");
+
+        let reporte = crate::epubcheck::validar_impl(&r.epub_path).expect("epubcheck corrió");
+        if !reporte.disponible {
+            eprintln!("epubcheck no instalado ({}), test salteado", reporte.binario);
+            return;
+        }
+        if reporte.mensajes.is_empty() && reporte.fatals + reporte.errors > 0 {
+            eprintln!(
+                "epubcheck salió mal sin diagnóstico (exit {:?}, bin {}) — herramienta rota, test salteado",
+                reporte.exit_code, reporte.binario
+            );
+            return;
+        }
+        assert_eq!(
+            (reporte.fatals, reporte.errors),
+            (0, 0),
+            "epubcheck rechazó el EPUB del demo:\n{}",
+            reporte.mensajes.join("\n")
+        );
+    }
 }

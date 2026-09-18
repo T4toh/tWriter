@@ -69,7 +69,9 @@ pub async fn epubcheck_validar(epub_path: String) -> Result<EpubcheckReport, Str
         .map_err(|e| format!("task: {}", e))?
 }
 
-fn validar_impl(epub_path: &str) -> Result<EpubcheckReport, String> {
+/// `pub(crate)` para que el test de humo del export (`epub.rs`) pueda validar
+/// el EPUB del demo cuando hay binario. No lo usa nadie más fuera de acá.
+pub(crate) fn validar_impl(epub_path: &str) -> Result<EpubcheckReport, String> {
     if !Path::new(epub_path).is_file() {
         return Err(format!("no existe el epub: {}", epub_path));
     }
