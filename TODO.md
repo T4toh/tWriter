@@ -21,7 +21,7 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   teclado son los de `Ctrl/⌘+Shift+Y`). Hay **dos** naranjas distintos y hay
   que decidir cuál es el que molesta antes de tocar código:
   1. La **decoración PM `.search-hit`** (`search-highlight-extension.ts`,
-     estilo en `editor.scss:633`), que el effect de `editor.ts:675` pinta
+     estilo en `editor.scss:558`), que el effect de `editor.ts:731` pinta
      desde `search.highlightTerms()`. Ese computed depende de
      `search.open()` + `search.query()`, así que la marca **es viva a
      propósito** mientras el panel de búsqueda esté abierto: clickear en otra
@@ -30,7 +30,7 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
      mientras buscás", y el cambio sería de diseño.
   2. La **selección nativa** de `highlightFirstMatch`
      (`core/search-highlight.ts`), que sí se va al clickear. Sobre un em-dash
-     entra por el camino de `rae-audit-panel.ts:83`, que pasa como término el
+     entra por el camino de `rae-audit-panel.ts:81`, que pasa como término el
      `slice` crudo de la violación (muchas veces arranca con la raya).
 
   **Falta para poder arreglarlo**: saber si el panel de búsqueda estaba abierto
@@ -70,7 +70,7 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
     `computeCursorPos`, que recorría `doc.descendants()` entero para contar
     bloques. **Arreglado** en `20dc294`: `$from.index(0)` da el mismo número
     en O(1). Era O(bloques) por tecla y por movimiento de cursor.
-  - **`onUpdate` hace `editor.getHTML()` en cada tecla** (`editor.ts:1836`) y
+  - **`onUpdate` hace `editor.getHTML()` en cada tecla** (`editor.ts:2128`) y
     mete el string en `pane.content`. Eso serializa el documento **entero**
     por cada carácter: en el capítulo de 300k palabras es armar 1,7 MB de
     string por tecla. Es el costo O(n) por tecla que queda, y el que
@@ -426,7 +426,7 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
     `language=es` y `es-ES` dan **8 falsos positivos** (marcan `vení`, `mirá`,
     `andate`, `fijate`, `cerrá`); **`es-AR` da 3** (`bondi`, `laburo`,
     `hagás`). Y ya estamos usando la variante correcta: `map_lang`
-    (`grammar.rs:780`) mapea `es` → `variante_es`, default `es-AR`.
+    (`grammar.rs:786`) mapea `es` → `variante_es`, default `es-AR`.
   - De esos 3 que quedan, rla-es solo cubriría `laburo`. Los otros dos ya los
     tapa el **diccionario per-saga** (`<saga>/diccionario.txt`, filtro de
     `TYPOS` en `editor.ts`, con `merge=union` en `.gitattributes` vía
@@ -478,7 +478,7 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   el repo `Novelas/` con `merge=union` en `.gitattributes`, así que ahora
   viaja con las novelas. Medida su cobertura sobre la misma muestra
   (comparación case-insensitive, que es como filtra
-  `saga-context-service.ts:25`):
+  `saga-context-service.ts:34`):
 
   | | tapado por el diccionario | ruido efectivo en la app |
   |---|---|---|
@@ -827,8 +827,9 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   muestra de corpus que hay hoy.
 - **Detectar mayúsculas rancias en las palabras propias del autor** (pedido del
   autor, 2026-08-31): `AEdan` por `Aedan`, `YIRIel` por `Yiriel`. Hoy **nada**
-  las marca, y la causa está identificada: el filtro de TYPOS de `editor.ts:638`
-  compara en minúsculas (`dict.has(word.toLowerCase())`), o sea que una vez que
+  las marca, y la causa está identificada: el filtro de TYPOS del editor
+  (`editor.ts:1249`) delega en `isInDictionary`
+  (`saga-context-service.ts:128`), que compara en minúsculas, o sea que una vez que
   `aedan` está en el diccionario, **cualquier** variante de mayúsculas de esa
   palabra queda silenciada. LT tampoco ayuda: `MORFOLOGIK_*` es justamente lo que
   ese filtro se come.
@@ -1027,7 +1028,7 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   export la app dice dónde quedó el archivo y ahí muere; el autor tiene que ir a
   buscarlo a mano. Sumar en el aviso de export exitoso dos acciones: "Mostrar en
   la carpeta" y "Abrir" (visor EPUB default del OS). `tauri-plugin-opener` ya
-  está instalado y registrado (`lib.rs:123`), así que es `reveal_item_in_dir` +
+  está instalado y registrado (`lib.rs:114`), así que es `reveal_item_in_dir` +
   `opener::open_path`, sin dependencia nueva.
 - **Blurb y sinopsis por libro** (pedido del autor, 2026-09-01). Dos textos
   distintos y con usos distintos: el **blurb** es el gancho de contratapa; la
@@ -1091,7 +1092,7 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
     prueba y grepeando void elements sin cerrar en todo el XHTML, el OPF y el
     NCX: cero.
   - **El `<hr>` sin `class="scene-break"` se ve igual que el que la tiene.**
-    `insertSceneBreak()` (`editor.ts:962`) usa el `horizontalRule` default de
+    `insertSceneBreak()` (`editor.ts:1013`) usa el `horizontalRule` default de
     TipTap, que emite `<hr>` pelado, mientras los importados traen la clase — o
     sea que en el mismo EPUB conviven `<hr/>` y `<hr class="scene-break"/>`.
     Pero `epub_style.css:375` es `hr, .scene-break { border: none; text-align:

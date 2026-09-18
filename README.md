@@ -34,6 +34,7 @@ Las novelas viven en un repo privado aparte (HTML + JSON). Esta app es solo el e
     - [Export EPUB](#export-epub)
     - [Temas + fuentes embebidas](#temas--fuentes-embebidas)
     - [Apariencia (tema de la app + fuentes de UI)](#apariencia-tema-de-la-app--fuentes-de-ui)
+    - [Notificaciones (campana de la status bar)](#notificaciones-campana-de-la-status-bar)
     - [Configuración](#configuración)
     - [Debug / observabilidad](#debug--observabilidad)
     - [Storage backend (git / cloud / local)](#storage-backend-git--cloud--local)
