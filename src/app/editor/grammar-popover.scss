@@ -78,6 +78,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+
+  /* El `space-between` solo deja aire cuando sobra lugar: con la fila de
+     botones ancha, el logo de LT queda pegado al último. El gap es el piso. */
+  gap: 12px;
   margin-top: 4px;
   padding-top: 6px;
   border-top: 1px solid var(--border);
@@ -110,6 +114,20 @@
 .dict-btn {
   color: var(--accent);
   font-weight: 500;
+}
+
+/* "Nunca más esta regla" mata la regla en TODA la novela y estaba pintado
+   igual que "Ignorar", que solo saca una marca — a 4px de distancia. El borde
+   y el rojo del hover son para que la mano frene antes, no decoración. */
+.nunca-btn {
+  margin-left: 8px;
+  border: 1px solid var(--border);
+}
+
+.nunca-btn:hover {
+  background: transparent;
+  border-color: var(--err);
+  color: var(--err);
 }
 
 .lt-attrib {

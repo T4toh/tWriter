@@ -214,6 +214,28 @@ export class SagaContextService {
     }
   }
 
+  /** Saca una palabra del diccionario de la saga activa. Es la vuelta atrás de
+   *  `addToDictionary` desde el editor: `DictionaryService.removeWord` no sirve
+   *  acá porque opera sobre la saga que tiene abierta el modal, que no es
+   *  necesariamente la del capítulo. */
+  async removeFromDictionary(word: string): Promise<{ ok: boolean; reason?: string }> {
+    const path = this.sagaPath();
+    if (!path) return { ok: false, reason: 'No hay saga activa' };
+    const existing = this.dictWords();
+    const next = existing.filter((w) => w.toLowerCase() !== word.toLowerCase());
+    if (next.length === existing.length) {
+      return { ok: false, reason: 'No se encontró la palabra' };
+    }
+    try {
+      await invoke('set_saga_dictionary', { sagaPath: path, words: next });
+      // Misma guarda que `addToDictionary`.
+      if (this.sagaPath() === path) this.dictWords.set(next);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, reason: String(err) };
+    }
+  }
+
   /** Agrega varias palabras en una sola escritura. Descarta en silencio las
    *  inválidas y las que ya están — el panel de formas derivadas ya las muestra
    *  como "ya está", así que no hay nada que reportar. */

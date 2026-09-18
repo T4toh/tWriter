@@ -39,7 +39,7 @@ import { DebugService } from '../core/debug-service';
 import { GrammarService } from '../core/grammar-service';
 import { ReplaceService } from '../core/replace-service';
 import { SearchService } from '../core/search-service';
-import { ToastService } from '../core/toast-service';
+import { DESHACER_DURATION_MS, ToastService } from '../core/toast-service';
 import {
   highlightBestMatch,
   findAllMatchesInPlain,
@@ -802,6 +802,16 @@ export class Editor implements AfterViewInit, OnDestroy {
       if (untracked(() => this.repAuto())) this.checkRepeticiones(true);
     });
 
+    // Abrir el menú contextual cierra los popovers. El cierre por click afuera
+    // (`onDocumentClick`) no los alcanza: la card del menú hace
+    // `stopPropagation()` para no cerrarse a sí misma, así que el click en una
+    // entrada nunca llega a `document`. El síntoma era un popover de gramática
+    // flotando sobre el modal que abría esa entrada.
+    effect(() => {
+      if (!this.ctxMenu.current()) return;
+      untracked(() => this.cerrarPopovers());
+    });
+
     // El panel de repeticiones pidió abrir el popover sobre una aparición. El
     // `force` no es opcional: si el detector automático está apagado,
     // `checkRepeticiones` no corre solo al abrir el capítulo y el pedido
@@ -1329,7 +1339,30 @@ export class Editor implements AfterViewInit, OnDestroy {
     }
     this.grammarMatches.update((list) => list.filter((m) => m.ruleId !== regla));
     this.applyDecorations(this.grammarMatches());
-    this.toast.success(`Regla ${regla} desactivada en esta novela`);
+    this.toast.success(
+      `Regla ${regla} desactivada en esta novela`,
+      DESHACER_DURATION_MS,
+      {
+        titulo: 'Regla desactivada',
+        texto:
+          `La regla ${regla} ya no se marca en ningún capítulo de esta novela.\n\n` +
+          'Para reactivarla más tarde: click derecho sobre la saga → «Configurar saga…» ' +
+          '→ «Reglas de LanguageTool desactivadas».',
+      },
+      { label: 'Deshacer', run: () => void this.revivirRegla(regla) },
+    );
+  }
+
+  /** El "Deshacer" del toast de `disableCurrentRule`. El re-check va forzado
+   *  porque el texto plano no cambió y `checkGrammar` saltea por eso. */
+  private async revivirRegla(regla: string): Promise<void> {
+    const result = await this.sagaCtx.quitarReglaLtDesactivada(regla);
+    if (!result.ok) {
+      this.toast.error(result.reason ?? 'No se pudo reactivar la regla');
+      return;
+    }
+    this.toast.info(`Regla ${regla} reactivada`);
+    void this.checkGrammar(true);
   }
 
   protected async addCurrentToDictionary(): Promise<void> {
@@ -1352,6 +1385,30 @@ export class Editor implements AfterViewInit, OnDestroy {
     );
     this.applyDecorations(this.grammarMatches());
     this.grammarPopover.set(null);
+    this.toast.success(
+      `«${word}» agregada al diccionario`,
+      DESHACER_DURATION_MS,
+      {
+        titulo: 'Palabra agregada',
+        texto:
+          `«${word}» ya no se marca como error de ortografía en esta novela.\n\n` +
+          'Para sacarla más tarde: click derecho sobre la saga → «Editar diccionario…».',
+      },
+      { label: 'Deshacer', run: () => void this.sacarDelDiccionario(word) },
+    );
+  }
+
+  /** El "Deshacer" del toast de `addCurrentToDictionary`. Mismo `force` que
+   *  `revivirRegla`: sin él la palabra queda sin marcar hasta la próxima
+   *  edición del capítulo. */
+  private async sacarDelDiccionario(word: string): Promise<void> {
+    const result = await this.sagaCtx.removeFromDictionary(word);
+    if (!result.ok) {
+      this.toast.error(result.reason ?? 'No se pudo sacar del diccionario');
+      return;
+    }
+    this.toast.info(`«${word}» sacada del diccionario`);
+    void this.checkGrammar(true);
   }
 
   protected closeGrammarPopover(): void {

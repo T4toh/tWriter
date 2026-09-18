@@ -10,7 +10,14 @@
  */
 .editor-pop {
   position: fixed;
-  z-index: 1000;
+
+  /* Arriba del chrome del editor (`.privacy-banner` es 150) y ABAJO de la capa
+     de modales (`.modal-backdrop` 200, `.modal-card` 201). Estaba en 1000, que
+     lo ponía encima de cualquier modal: con un popover abierto, "Configurar
+     saga" salía con el popover flotando arriba. El cierre al abrir el menú
+     contextual (ver el effect en `editor.ts`) es la causa; esto es la red para
+     los modales que se abran por otro camino. */
+  z-index: 180;
   background: var(--bg);
   color: var(--fg);
   border: 1px solid var(--border);

@@ -956,30 +956,6 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   paliativo, el parche es el arreglo. Ojo con la granularidad al apagarlos: la
   API desactiva la regla entera, no la subregla (el id que devuelve es
   `AGREEMENT_POSTPONED_ADJ`, sin el `[3]`).
-- [ ] **Falta red bajo el click de "Nunca más esta regla"** (pedido del autor,
-  2026-09-18). El botón del popover de gramática (`grammar-popover.ts:60`)
-  dispara `disableCurrentRule` (`editor.ts:1316`) de una: persiste la regla en
-  el `saga.json`, borra **todas** sus marcas del capítulo y avisa con un toast
-  que muere en 4 s. Un click al lado de "Ignorar" y el autor perdió una regla
-  entera de LT sin saber cuál ni dónde se deshace. Mismo problema el botón de
-  al lado, "Agregar al diccionario".
-
-  Deshacer **se puede** ya: `quitarReglaLtDesactivada`
-  (`saga-context-service.ts:167`) existe y la lista con su botón de quitar está
-  en Configuración de la saga (`saga-config-modal.html:69`). O sea que el
-  agujero no es el modelo, es que el camino de vuelta no se ve desde donde se
-  hizo el desastre. Opciones, de más barata a menos:
-  1. **"Deshacer" en el toast**, que es lo que corresponde a una acción
-     destructiva de un click. Necesita que `ToastService` sepa de acciones:
-     hoy `Toast` solo tiene `message` + `detalle` (`toast-service.ts:12`), así
-     que hay que sumar un callback opcional y su botón en el contenedor.
-  2. **Decir dónde se deshace** en el texto del toast ("Configuración de la
-     saga → Reglas desactivadas"). Es un string, pero no devuelve nada.
-  3. Confirmación modal. Descartada salvo que el autor la pida: una regla
-     desactivada no es irreversible, y un modal por click frena el flujo de
-     corrección que es justo lo que tiene que ser rápido.
-
-  Empezar por (1). Si se hace, la misma acción sirve para el diccionario.
 
 ## Búsqueda
 

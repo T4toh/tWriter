@@ -12,10 +12,20 @@ export class ToastContainer {
   protected toast = inject(ToastService);
   private modal = inject(ModalService);
 
+  protected tituloDe(t: Toast): string {
+    if (t.detalle) return 'Ver el detalle';
+    if (t.accion) return 'Se cierra solo';
+    return 'Cerrar';
+  }
+
   /** Un toast con detalle lo abre en vez de cerrarse: el click accidental que
    *  antes tiraba el mensaje a la basura ahora muestra lo que decía. El toast
    *  queda igual —su timer sigue corriendo— así que el detalle es una lectura
-   *  aparte, no un reemplazo. */
+   *  aparte, no un reemplazo.
+   *
+   *  Uno con acción no se cierra por click en el cuerpo: cerrarlo es perder el
+   *  "Deshacer", que es el mismo click accidental que la acción vino a reparar.
+   *  Sale por su timer o por el botón. */
   protected onClick(t: Toast): void {
     if (t.detalle) {
       void this.modal.alert({
@@ -25,6 +35,13 @@ export class ToastContainer {
       });
       return;
     }
+    if (t.accion) return;
+    this.toast.dismiss(t.id);
+  }
+
+  protected onAccion(event: MouseEvent, t: Toast): void {
+    event.stopPropagation();
+    t.accion?.run();
     this.toast.dismiss(t.id);
   }
 }
