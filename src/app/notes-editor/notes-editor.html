@@ -183,4 +183,10 @@
       <span class="indicator error">{{ err }}</span>
     }
   }
+  <!-- Fuera del `@if` del capítulo activo: los avisos que el autor se perdió
+       siguen ahí aunque no haya nada abierto. Solo en el panel primario, si no
+       en split saldrían dos campanas para un único historial. -->
+  @if (paneId() === 0) {
+    <app-notificaciones-bell />
+  }
 </footer>

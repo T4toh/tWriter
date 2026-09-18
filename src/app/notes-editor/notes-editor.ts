@@ -15,6 +15,7 @@ import { Editor as TipTapEditor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
 import { Markdown } from 'tiptap-markdown';
+import { NotificacionesBell } from '../notificaciones/notificaciones-bell';
 import {
   LucideDynamicIcon,
   LucideFilePen,
@@ -84,7 +85,7 @@ const EMPTY_STATE: ToolbarState = {
 
 @Component({
   selector: 'app-notes-editor',
-  imports: [LucideDynamicIcon, LucideFilePen],
+  imports: [LucideDynamicIcon, LucideFilePen, NotificacionesBell],
   templateUrl: './notes-editor.html',
   styleUrl: './notes-editor.scss',
 })

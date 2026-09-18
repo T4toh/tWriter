@@ -421,6 +421,12 @@
       <span class="indicator focus-hint">modo focus — F11 para salir</span>
     }
   }
+  <!-- Fuera del `@if` del capítulo activo: los avisos que el autor se perdió
+       siguen ahí aunque no haya nada abierto. Solo en el panel primario, si no
+       en split saldrían dos campanas para un único historial. -->
+  @if (paneId() === 0) {
+    <app-notificaciones-bell />
+  }
 </footer>
 
 @if (showPrivacyBanner()) {

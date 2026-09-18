@@ -40,6 +40,7 @@ import { GrammarService } from '../core/grammar-service';
 import { ReplaceService } from '../core/replace-service';
 import { SearchService } from '../core/search-service';
 import { DESHACER_DURATION_MS, ToastService } from '../core/toast-service';
+import { NotificacionesBell } from '../notificaciones/notificaciones-bell';
 import {
   highlightBestMatch,
   findAllMatchesInPlain,
@@ -148,6 +149,7 @@ interface ObjetivoTesauro {
   imports: [
     Landing, GrammarPopover, RaePopover, RepeticionesPopover, Select, FormsModule,
     LucideCircleAlert, LucideDynamicIcon, Spinner, DerivedFormsPanel,
+    NotificacionesBell,
   ],
   templateUrl: './editor.html',
   styleUrl: './editor.scss',
