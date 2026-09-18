@@ -1117,13 +1117,22 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   deshabilita vía `FormControl`/`ngModel` en vez de `[disabled]`, no repinta.
   Hoy no pasa: el único `ngModel` sobre `app-select` (export-modal) no toca
   disabled. Fix cuando haga falta: `signal(false)`.
-- [ ] **Apartado de notificaciones en Configuración**. Hoy los avisos salen
-  cada uno por su lado sin un lugar donde el autor los gobierne: los toasts
-  del exportador (EPUB listo, veredicto de epubcheck, partes reparadas), el
-  banner de update, los de git/sync, los de LanguageTool caído. Falta una
-  sección que los agrupe y deje elegir, por tipo, si se muestran, cómo
-  (toast / banner / silencio) y cuánto duran. Empezar por inventariar todos
-  los `toast.*()` y banners que hay y ver cuáles piden config de verdad.
+- **Configurar las notificaciones: MEDIDO, casi nada que gobernar**
+  (inventario del 2026-09-18, para no rehacerlo). Lo que pedía este item era
+  una sección en Configuración para elegir por tipo si el aviso se muestra,
+  cómo y cuánto dura. El conteo de los 115 `toast.*()` dice que eso gobernaría
+  muy poco: **61 son `error`** (no se silencian nunca), 21 `success`, 18
+  `warn`, 13 `info` y 2 `progreso`; 62 de los 115 viven en
+  `node-actions-service` (24), `tree` (22) y `chapter-service` (16), o sea
+  confirmaciones de una acción que el autor acaba de hacer. **Ningún call site
+  pasa duración custom**, así que "cuánto duran" no tiene nada que configurar.
+  Y no existe toast de git ni de "LanguageTool caído": eso son banners e
+  indicadores del header, otro mecanismo.
+  Lo que el autor sí necesitaba era **ver lo que se perdió**, no apagarlo
+  ("a veces pasa que se te van y no sabés qué pasó") — eso se resolvió con la
+  campana del historial. Si algún día se quiere config de verdad, lo único con
+  sentido son tres toggles: confirmaciones de éxito del árbol, banner de
+  update, y una duración global. La matriz por tipo × canal está descartada.
 - **Contraste AA de `--ok` y `--warn` en tema claro** (quedó de la auditoría
   del SCSS, cerrada el 2026-09-08 — el detalle está en `git log -p TODO.md`).
   `--ok` sobre su tinte da ~4.3:1 y `--warn` ~3.4:1, los dos por debajo del

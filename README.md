@@ -543,6 +543,16 @@ Bloque "Apariencia" en el modal de Configuración. Ojo con no confundirlo con el
 - El tema de la app **no** se filtra al EPUB exportado.
 - **Formato de fecha** (`dateFormat`: `'dmy' | 'ymd'`) para la fecha de última edición de las tarjetas de la biblioteca, con una muestra de hoy al lado de cada opción. Las dos salen con el mismo separador y año completo (`04/09/2026` / `2026/09/04`): solo cambia el orden, así la columna mide lo mismo con cualquiera. Dos formatos fijos y no el locale del sistema: en la máquina del autor `LANG=en_GB` pero `LC_TIME=es_AR`, e `Intl` solo mira `navigator.language`, así que "seguir al sistema" daba formato británico justo en el dato donde el sistema decía otra cosa. La mitad pura vive en `shared/fecha-corta.ts` (`scripts/run-fecha-corta-smoke.mjs`); el pipe `fechaCorta` es `pure: false` para enterarse del cambio del signal sin que cambie el `ms`.
 
+### Notificaciones (campana de la status bar)
+
+Los avisos duran 4 segundos y se van solos, así que hay una **campana al filo derecho de la status bar** —estilo VS Code— con el historial de lo que pasó: hora, nivel y mensaje, lo último arriba. Entra todo lo que sale por toast, **errores incluidos**, menos los avisos de progreso, que son transitorios.
+
+Las entradas **las borra el autor**, con la × de cada una o con "Limpiar todo"; no se vencen. El tope de 200 es una red contra una sesión larga, no una política de limpieza. El historial vive solo en memoria: se vacía al cerrar la app.
+
+Lo que el toast tenga, la entrada lo conserva: si tenía detalle se abre igual desde acá, y si tenía una acción —el **Deshacer** de "Nunca más esta regla" o de "+ diccionario"— **sigue disponible después de que el toast murió**, que es justamente el caso que la motivó. Correr la acción desde el historial la consume y borra la entrada.
+
+La parte pura (orden más-nueva-primero + recorte por tope) vive en `notificaciones/historial.ts` con su runner, `scripts/run-historial-smoke.mjs`.
+
 ### Configuración
 
 - El engranaje abre `settings-modal/` con bloques colapsables (`<details>` nativo): **General** (incluye el toggle del panel de debug, que antes vivía en el header), **Apariencia** y **Gramática** (variantes regionales, nivel de chequeo, repeticiones). Antes era un modal que solo configuraba LanguageTool.

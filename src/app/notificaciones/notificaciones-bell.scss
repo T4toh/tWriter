@@ -1,0 +1,188 @@
+/* La campana vive dentro de la status bar (`shared/editor-chrome.scss`), que
+   es flex: el host tiene que ser el ancla del panel, que sale hacia ARRIBA
+   porque abajo no hay lugar — es la última fila de la ventana. */
+:host {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+
+  /* Al filo derecho de la status bar, como la de VS Code, sin importar cuántos
+     indicadores haya a la izquierda. */
+  margin-left: auto;
+}
+
+.bell-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--hover-bg);
+    color: var(--fg);
+  }
+
+  &.active {
+    background: var(--hover-bg);
+    color: var(--fg);
+  }
+}
+
+.notif-panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 190;
+  width: min(380px, 80vw);
+  max-height: 50vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--panel-bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 28%);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--fg);
+  cursor: default;
+}
+
+.notif-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-header-bg);
+}
+
+.notif-title {
+  font-weight: 600;
+}
+
+.notif-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--hover-bg);
+    color: var(--fg);
+  }
+}
+
+.notif-vacio {
+  margin: 0;
+  padding: 18px 10px;
+  text-align: center;
+  color: var(--fg-muted);
+}
+
+.notif-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+
+  /* El nivel se lee por el filo izquierdo, igual que en el toast: es el mismo
+     aviso, movido de lugar. */
+  border-left: 3px solid var(--fg-muted);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &[data-level='success'] {
+    border-left-color: var(--ok);
+  }
+
+  &[data-level='warn'] {
+    border-left-color: var(--warn);
+  }
+
+  &[data-level='error'] {
+    border-left-color: var(--err);
+  }
+}
+
+.notif-cuerpo {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-hora {
+  margin-right: 6px;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.notif-msg {
+  overflow-wrap: anywhere;
+}
+
+.notif-acciones {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.notif-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--fg);
+  }
+}
+
+.notif-x {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    background: var(--hover-bg);
+    color: var(--fg);
+  }
+}
