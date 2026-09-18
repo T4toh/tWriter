@@ -848,11 +848,12 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
 - [ ] **Los parches `0004` y `0005` de LT: escritos, medidos y sin subir**
   (falsos positivos encontrados escribiendo el 2026-09-02; parches escritos el
   2026-09-18)
-  **Lo que falta es solo el trámite**: pushear las dos ramas del fork
-  (`es-tu-tilde-puntos-suspensivos`, `es-mas-seguido-adverbio`) y abrir los dos
-  PR upstream. El código está commiteado en `~/Repos/Personal/languagetool`, los
-  `.patch` en `docs/lt-patches/`, `SpanishPatternRuleTest` pasa (1670 reglas) y
-  la medición contra `~/novelas` está en el README de esa carpeta:
+  **Los dos PR ya están abiertos**: [#12195](https://github.com/languagetool-org/languagetool/pull/12195)
+  (`TU_TILDE`) y [#12196](https://github.com/languagetool-org/languagetool/pull/12196)
+  (`AGREEMENT_POSTPONED_ADJ`), los dos `MERGEABLE`. Lo único que queda es
+  esperar la review. El código está commiteado en `~/Repos/Personal/languagetool`,
+  los `.patch` en `docs/lt-patches/`, `SpanishPatternRuleTest` pasa (1670 reglas)
+  y la medición contra `~/novelas` está en el README de esa carpeta:
   `TU_TILDE` 22 hits → 2, `AGREEMENT_POSTPONED_ADJ` 24 → 21, ningún hit nuevo.
   El container local ya quedó parcheado a mano (se pierde si se recrea).
   Los tres casos se reprodujeron contra el container local (LT **6.8**, `es-AR`)

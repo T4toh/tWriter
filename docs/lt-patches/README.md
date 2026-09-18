@@ -9,6 +9,12 @@ o sea anterior a los merges — los tres primeros siguen haciendo falta a mano
 hasta que salga la release que los incluya.
 
 Fork: `T4toh/languagetool`. Clone local: `~/Repos/Personal/languagetool`.
+**El fork se borró después de que mergearan los tres primeros PR**, y sin fork no
+hay dónde pushear la rama ni desde dónde abrir el PR. Si vuelve a pasar,
+`gh repo fork languagetool-org/languagetool --clone=false` lo rehace y las ramas
+que ya estén commiteadas en el clone se pushean tal cual: no hace falta rebasar
+—`0004` y `0005` salieron de un `master` local de agosto y GitHub los dio
+`MERGEABLE` igual—, porque los parches tocan zonas que nadie más movió.
 
 ## Estado
 
@@ -17,8 +23,8 @@ Fork: `T4toh/languagetool`. Clone local: `~/Repos/Personal/languagetool`.
 | `0001-es-DETRAS_PX-adverbio-lugar.patch` | `es-adverbio-lugar-atras-adelante` | [#12131](https://github.com/languagetool-org/languagetool/pull/12131) | **mergeado** 2026-08-31 |
 | `0002-es-tu-verbo-voseante.patch` | `es-tu-verbo-voseante` | [#12132](https://github.com/languagetool-org/languagetool/pull/12132) | **mergeado** 2026-08-31 |
 | `0003-es-mezcla-tuteo-voseo.patch` | `es-mezcla-tuteo-voseo` | [#12133](https://github.com/languagetool-org/languagetool/pull/12133) | **mergeado** 2026-08-31 |
-| `0004-es-tu-tilde-puntos-suspensivos.patch` | `es-tu-tilde-puntos-suspensivos` | — | listo, sin subir |
-| `0005-es-mas-seguido-adverbio.patch` | `es-mas-seguido-adverbio` | — | listo, sin subir |
+| `0004-es-tu-tilde-puntos-suspensivos.patch` | `es-tu-tilde-puntos-suspensivos` | [#12195](https://github.com/languagetool-org/languagetool/pull/12195) | abierto 2026-09-18 |
+| `0005-es-mas-seguido-adverbio.patch` | `es-mas-seguido-adverbio` | [#12196](https://github.com/languagetool-org/languagetool/pull/12196) | abierto 2026-09-18 |
 
 Las ramas salen de `master`, son independientes entre sí y no se pisan.
 
