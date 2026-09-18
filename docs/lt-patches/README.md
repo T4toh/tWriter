@@ -26,6 +26,9 @@ que ya estén commiteadas en el clone se pushean tal cual: no hace falta rebasar
 | `0004-es-tu-tilde-puntos-suspensivos.patch` | `es-tu-tilde-puntos-suspensivos` | [#12195](https://github.com/languagetool-org/languagetool/pull/12195) | abierto 2026-09-18 |
 | `0005-es-mas-seguido-adverbio.patch` | `es-mas-seguido-adverbio` | [#12196](https://github.com/languagetool-org/languagetool/pull/12196) | abierto 2026-09-18 |
 
+`0005` son **dos commits** (el `.patch` es un mbox con los dos, `git am` los
+aplica de una): el antipatrón, y el acote del `skip` que salió de la review.
+
 Las ramas salen de `master`, son independientes entre sí y no se pisan.
 
 ## Aplicar sobre el clone del fork
@@ -145,3 +148,29 @@ El síntoma delator es que en esas mismas frases salta además
 `UPPERCASE_SENTENCE_START`. El arreglo sería en la segmentación (el SRX de
 `segment.srx`), no en `grammar.xml`, y es un parche aparte que todavía no está
 escrito.
+
+## Lo que enseñó la review de `0005`: `skip="-1"` se come la oración entera
+
+CodeRabbit marcó que el `skip="-1"` del antipatrón barre hasta el final de la
+oración analizada, así que un verbo de la principal alcanza para tapar un caso
+adjetival de la subordinada. Es cierto, aunque **el ejemplo que dio no
+reproduce**: `Creo que la serie más seguido fue esa.` sale limpia con y sin el
+parche. El que sí rompía es `Dice que la película más seguido de la tele fue
+esa.`, que se marcaba antes y salía limpia después.
+
+El acote es un `<exception scope="next">` sobre el tramo salteado, o sea que el
+verbo tiene que estar en la misma oración:
+
+```xml
+<token postag="V.*" postag_regexp="yes" skip="-1"><exception scope="next" regexp="yes">que|quien|…|,|;|:</exception></token>
+```
+
+Los usos adverbiales no se tocan, porque el verbo que necesitan está en su
+propia cláusula: `Quiero que vengas más seguido.` sigue limpia matcheando
+`vengas`. Y sobre el corpus no cambia **nada**: 21 hits antes y después, el
+mismo conjunto exacto.
+
+Vale como regla general para los parches que vengan: un `skip="-1"` sin acotar
+es cómodo para que el antipatrón matchee, y por eso mismo tapa de más. Medir
+sobre el corpus no lo detecta —acá el corpus dio idéntico— porque el caso que
+se pierde es justo el que la obra no tiene.

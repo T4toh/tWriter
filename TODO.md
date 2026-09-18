@@ -851,7 +851,8 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   **Los dos PR ya están abiertos**: [#12195](https://github.com/languagetool-org/languagetool/pull/12195)
   (`TU_TILDE`) y [#12196](https://github.com/languagetool-org/languagetool/pull/12196)
   (`AGREEMENT_POSTPONED_ADJ`), los dos `MERGEABLE`. Lo único que queda es
-  esperar la review. El código está commiteado en `~/Repos/Personal/languagetool`,
+  esperar la review humana: CodeRabbit ya pasó por los dos, `0004` salió limpio
+  y de `0005` salió un acote del `skip` que ya está contestado y pusheado. El código está commiteado en `~/Repos/Personal/languagetool`,
   los `.patch` en `docs/lt-patches/`, `SpanishPatternRuleTest` pasa (1670 reglas)
   y la medición contra `~/novelas` está en el README de esa carpeta:
   `TU_TILDE` 22 hits → 2, `AGREEMENT_POSTPONED_ADJ` 24 → 21, ningún hit nuevo.
