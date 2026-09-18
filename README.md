@@ -842,6 +842,8 @@ pnpm lint:css       # stylelint sobre los .scss de la app
 pnpm lint:css:epub  # solo corrección (propiedad desconocida, etc.) sobre epub_style.css
 ```
 
+El export de EPUB tiene además un **test de humo de punta a punta** que usa el repo demo como carnada: `generate_demo` arma una saga completa en un tmpdir (5 capítulos × 3 partes, con prosa real) y se exporta entera, chequeando que el zip abra, que `mimetype` sea la primera entrada y esté sin comprimir, que estén el `content.opf`, el `toc.xhtml` y los 15 XHTML, y que ninguno quede cortado. No compara bytes contra un EPUB de referencia: eso se rompe con cada cambio del CSS. Si hay **epubcheck** instalado, un segundo test valida el EPUB con él; donde no está, se saltea solo.
+
 **No hay runner de tests para el frontend**: `angular.json` no define target `test` y no hay karma/jasmine/vitest instalados, así que `ng test` no corre nada. Lo que corre son los smoke runners de `scripts/run-*-smoke.mjs`, que compilan los TS necesarios con `tsc` a un tmpdir e importan el JS resultante — y por eso solo sirven para **funciones puras**: nada que toque el DOM, `@tiptap/core` o el schema de ProseMirror se puede cargar desde node. Código nuevo del frontend se parte en una mitad pura con su smoke runner (patrón de `scripts/run-rae-smoke.mjs`) y una mitad con DOM que se valida con `pnpm build` + verificación manual.
 
 En **Arch / CachyOS** (system libs con secciones ELF `.relr.dyn`) el `strip` que linuxdeploy embebe falla. Workaround para `tauri build`:
