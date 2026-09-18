@@ -1,0 +1,53 @@
+From 9edfc43de8598b8f8c4ae39ced113789c539329c Mon Sep 17 00:00:00 2001
+From: Tatoh <tatukis@gmail.com>
+Date: Fri, 18 Sep 2026 14:53:40 -0300
+Subject: [PATCH] =?UTF-8?q?[es]=20TU=5FTILDE:=20don't=20flag=20=C2=ABtu?=
+ =?UTF-8?q?=C2=BB=20when=20an=20ellipsis=20separates=20it=20from=20its=20n?=
+ =?UTF-8?q?oun?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The catch-all subrule of TU_TILDE has an antipattern that lets «tu» through
+when a singular noun follows (optionally after adverbs or an opening question
+mark). An ellipsis between the determiner and its noun breaks that antipattern,
+so «me ha sorprendido tu… conjuro» is reported as a missing accent on the
+personal pronoun «tú», when «tu» is the possessive and the dots are a pause,
+not a clause boundary.
+
+Both spellings trigger it: «…» (U+2026) is a single token, «...» is tokenized
+as three. The antipattern now skips up to three of those tokens.
+
+Measured on a 810k-word Spanish novel corpus where ellipses are frequent in
+dialogue: 22 TU_TILDE matches before, 2 after, and no new matches. All 20
+suppressed ones were this false positive. The 2 that remain are a different
+issue — the sentence is split at the ellipsis when «¿» or a capital follows,
+so the noun is out of reach of any rule.
+---
+ .../src/main/resources/org/languagetool/rules/es/grammar.xml   | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
+index 72dba10..b3d6394 100644
+--- a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
++++ b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
+@@ -9577,6 +9577,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+                 </antipattern>
+                 <antipattern>
+                     <token>tu</token>
++                    <token min="0" max="3" regexp="yes">…|\.</token>
+                     <token min="0" max="4" postag_regexp="yes" postag="R.|LOC_ADV|_QM_OPEN"/>
+                     <token postag="N..[SN].*|A...[SN].|_GN_.S|DN.*|UNKNOWN|_possible_NP|V.N.*|V.P..S." postag_regexp="yes"><exception postag="V.[IS].2S." postag_regexp="yes"/></token>
+                 </antipattern>
+@@ -9610,6 +9611,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+                 <example>Es tu hermosa gente trabajadora.</example>
+                 <example>¿Cómo vas a explicar la razón de tu no asistencia?</example>
+                 <example>¡Espero que hayas practicado tu solo de flauta!</example>
++                <example>Me ha sorprendido tu… conjuro.</example>
++                <example>Vi tu... casa.</example>
+             </rule>
+             <rule>
+                 <antipattern>
+-- 
+2.54.0 (Apple Git-157)
+

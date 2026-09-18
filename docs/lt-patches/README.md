@@ -2,8 +2,11 @@
 
 Reglas del español que escribimos acá y mandamos upstream a
 [`languagetool-org/languagetool`](https://github.com/languagetool-org/languagetool).
-Mientras un PR no esté mergeado, el parche vive acá para poder aplicarlo a mano
-sobre el container y no perderlo.
+El parche vive acá para poder aplicarlo a mano sobre el container y no perderlo.
+**Mergeado upstream no quiere decir que esté en el container**: la imagen que
+usamos es `erikvl87/languagetool:latest`, hoy LT 6.8 con `buildDate 2026-06-15`,
+o sea anterior a los merges — los tres primeros siguen haciendo falta a mano
+hasta que salga la release que los incluya.
 
 Fork: `T4toh/languagetool`. Clone local: `~/Repos/Personal/languagetool`.
 
@@ -11,11 +14,13 @@ Fork: `T4toh/languagetool`. Clone local: `~/Repos/Personal/languagetool`.
 
 | Parche | Rama del fork | PR upstream | Estado |
 |---|---|---|---|
-| `0001-es-DETRAS_PX-adverbio-lugar.patch` | `es-adverbio-lugar-atras-adelante` | [#12131](https://github.com/languagetool-org/languagetool/pull/12131) | abierto 2026-08-21 |
-| `0002-es-tu-verbo-voseante.patch` | `es-tu-verbo-voseante` | [#12132](https://github.com/languagetool-org/languagetool/pull/12132) | abierto 2026-08-21 |
-| `0003-es-mezcla-tuteo-voseo.patch` | `es-mezcla-tuteo-voseo` | [#12133](https://github.com/languagetool-org/languagetool/pull/12133) | abierto 2026-08-21 |
+| `0001-es-DETRAS_PX-adverbio-lugar.patch` | `es-adverbio-lugar-atras-adelante` | [#12131](https://github.com/languagetool-org/languagetool/pull/12131) | **mergeado** 2026-08-31 |
+| `0002-es-tu-verbo-voseante.patch` | `es-tu-verbo-voseante` | [#12132](https://github.com/languagetool-org/languagetool/pull/12132) | **mergeado** 2026-08-31 |
+| `0003-es-mezcla-tuteo-voseo.patch` | `es-mezcla-tuteo-voseo` | [#12133](https://github.com/languagetool-org/languagetool/pull/12133) | **mergeado** 2026-08-31 |
+| `0004-es-tu-tilde-puntos-suspensivos.patch` | `es-tu-tilde-puntos-suspensivos` | — | listo, sin subir |
+| `0005-es-mas-seguido-adverbio.patch` | `es-mas-seguido-adverbio` | — | listo, sin subir |
 
-Las tres ramas salen de `master`, son independientes entre sí y no se pisan.
+Las ramas salen de `master`, son independientes entre sí y no se pisan.
 
 ## Aplicar sobre el clone del fork
 
@@ -58,7 +63,30 @@ container exec twriter-languagetool sh -c "echo $B64 | base64 -d > /tmp/frag.xml
 container exec twriter-languagetool sed -i '20121r /tmp/frag.xml' /LanguageTool/org/languagetool/rules/es/grammar.xml
 ```
 
-Después de cualquiera de los tres, reiniciar el server:
+`0004` (`TU_TILDE` con puntos suspensivos) es un token nuevo dentro de un
+antipatrón, o sea una línea suelta después de la 9579 de `grammar.xml` en LT 6.8
+(verificar con `grep -n 'R.|LOC_ADV|_QM_OPEN'`, es la cuarta coincidencia):
+
+```bash
+printf '                    <token min="0" max="3" regexp="yes">\xe2\x80\xa6|\\.</token>\n' > /tmp/frag-tu.xml
+B64=$(base64 -i /tmp/frag-tu.xml | tr -d '\n')
+container exec twriter-languagetool sh -c "echo $B64 | base64 -d > /tmp/frag-tu.xml"
+container exec twriter-languagetool sed -i '9579r /tmp/frag-tu.xml' /LanguageTool/org/languagetool/rules/es/grammar.xml
+```
+
+`0005` (`más seguido` adverbial) es un antipatrón entero del rulegroup
+`AGREEMENT_POSTPONED_ADJ`, que va antes de su primer `<rule>` (línea 23539 en LT
+6.8, justo después del antipatrón de `por ciento`). Mismo viaje en base64 que
+`0003`, con el bloque `<antipattern>…</antipattern>` del parche en `/tmp/frag.xml`:
+
+```bash
+container exec twriter-languagetool sed -i '23539r /tmp/frag.xml' /LanguageTool/org/languagetool/rules/es/grammar.xml
+```
+
+Ojo con el orden si se aplican los dos: `0005` toca una línea más abajo que
+`0004`, así que va primero, o el número de `0005` se corre en uno.
+
+Después de cualquiera de ellos, reiniciar el server:
 
 ```bash
 container stop twriter-languagetool && container start twriter-languagetool
@@ -72,8 +100,11 @@ Volver atrás: `container exec twriter-languagetool cp /tmp/grammar.xml.bak /Lan
 - Tests de LT (pide `mvn` + JDK 17+), valida el XSD y los `<example>`:
   ```bash
   cd ~/Repos/Personal/languagetool
-  mvn -pl languagetool-language-modules/es -am -Dtest=SpanishPatternRuleTest -DfailIfNoTests=false test
+  mvn -pl languagetool-language-modules/es -am -Dtest=SpanishPatternRuleTest -Dsurefire.failIfNoSpecifiedTests=false test
   ```
+  El flag es `-Dsurefire.failIfNoSpecifiedTests=false`, no `-DfailIfNoTests`:
+  `-am` arrastra `languagetool-core`, que no tiene ningún test con ese nombre, y
+  surefire corta el build ahí antes de llegar al módulo `es`.
 - Falsos positivos contra la obra real, con el container levantado — correrlo
   **antes y después** de parchear y comparar, porque una regla que ya existía
   puede tener hits propios:
@@ -81,4 +112,30 @@ Volver atrás: `container exec twriter-languagetool cp /tmp/grammar.xml.bak /Lan
   node scripts/scan-regla-lt.mjs DETRAS_PX ~/novelas es-AR
   node scripts/scan-regla-lt.mjs AGREEMENT_PRONOUNSUBJECT_VERB ~/novelas es-AR
   node scripts/scan-regla-lt.mjs MEZCLA_TUTEO_VOSEO ~/novelas es-AR
+  node scripts/scan-regla-lt.mjs TU_TILDE ~/novelas es-AR
+  node scripts/scan-regla-lt.mjs AGREEMENT_POSTPONED_ADJ ~/novelas es-AR
   ```
+  Medido el 2026-09-18 sobre `~/novelas` (592 archivos, 810k palabras), con el
+  container en LT 6.8: `TU_TILDE` 22 hits → 2 con `0004`, `AGREEMENT_POSTPONED_ADJ`
+  24 → 21 con `0005`, y **ningún hit nuevo** en ninguna de las dos (`comm -13`
+  entre el antes y el después da vacío). Los 22 de `TU_TILDE` eran todos el mismo
+  falso positivo; los 2 que sobreviven no son de la regla, ver abajo.
+
+## Lo que queda afuera de `0004`: la oración se parte en los puntos suspensivos
+
+Los 2 hits de `TU_TILDE` que sobreviven al parche —«Ya está, tu… T…» y
+«prestame tu… ¿fuego?»— no los puede arreglar ninguna regla. Cuando a los
+puntos suspensivos les sigue un `¿` o una mayúscula, LT **cierra la oración
+ahí**, así que el sustantivo queda en la oración siguiente y ningún antipatrón
+llega a verlo. Se comprueba con el tagger:
+
+```bash
+container exec twriter-languagetool sh -c 'echo "Dame tu… ¿fuego?" > /tmp/t.txt && java -jar /LanguageTool/languagetool-commandline.jar -l es --taggeronly /tmp/t.txt'
+# <S> Dame[…] tu[tu/DP2CSS]…[</S>…/_PUNCT]
+# <S> ¿[¿/_PUNCT_CONT]fuego[fuego/NCMS000]?[</S>?/_PUNCT]
+```
+
+El síntoma delator es que en esas mismas frases salta además
+`UPPERCASE_SENTENCE_START`. El arreglo sería en la segmentación (el SRX de
+`segment.srx`), no en `grammar.xml`, y es un parche aparte que todavía no está
+escrito.
