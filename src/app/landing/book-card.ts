@@ -12,6 +12,11 @@ import { LucideArrowDownToLine, LucideListChecks, LucideSettings } from '@lucide
 import { BookConfig, BookConfigService } from '../core/book-config-service';
 import { ChapterService } from '../core/chapter-service';
 import { CoverCache } from '../core/cover-cache';
+import {
+  ESTADO_LIBRO_LABEL,
+  estadoLibro,
+  necesitaRevisar,
+} from '../core/estado-libro';
 import { ExportsService } from '../core/exports-service';
 import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { RevisionLibroService } from '../core/revision-libro-service';
@@ -74,6 +79,26 @@ export class BookCard {
       0,
     ),
   );
+
+  /** Estado + cuántas veces se revisó, para la línea de metadata. «En curso»
+   *  no se muestra: es el caso normal y en la grilla sería ruido en todas las
+   *  tarjetas. El detalle con fecha vive en el modal de configuración. */
+  protected readonly estadoLinea = computed<string | null>(() => {
+    const cfg = this.config();
+    if (!cfg) return null;
+    const estado = estadoLibro(cfg.estado);
+    const revisiones = cfg.revisiones?.length ?? 0;
+    if (estado === 'en_curso' && revisiones === 0) return null;
+    const rev = revisiones > 0 ? ` · ${revisiones} rev.` : '';
+    return `${ESTADO_LIBRO_LABEL[estado]}${rev}`;
+  });
+
+  /** Derivado, nunca guardado: ver `necesitaRevisar`. */
+  protected readonly revisionPendiente = computed<boolean>(() => {
+    const cfg = this.config();
+    if (!cfg) return false;
+    return necesitaRevisar(estadoLibro(cfg.estado), cfg.revisiones, this.node().modifiedMs);
+  });
 
   protected readonly isConfigured = computed(() => {
     const cfg = this.config();

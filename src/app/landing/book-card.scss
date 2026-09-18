@@ -171,6 +171,13 @@
   }
 }
 
+/* Estado del libro (y cuántas revisiones lleva) al lado de la fecha y el
+   conteo: es metadata, no un aviso. El que sí lo es va en `.revisar`. */
+.estado {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .hint {
   margin: 4px 0 0;
   font-size: 10px;
@@ -199,4 +206,8 @@
    atenuarlo lo dejaba lavado. Siguen siempre visibles. */
 .card-btn {
   flex: 0 0 auto;
+}
+
+.revisar {
+  color: var(--warn);
 }

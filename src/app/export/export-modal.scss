@@ -18,7 +18,9 @@
   cursor: pointer;
 }
 
-.ex-muestra {
+/* Bloque dependiente de un checkbox: sangrado y con guía a la izquierda, para
+ * que se lea como "esto solo aplica a lo de arriba". */
+.ex-sub {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;

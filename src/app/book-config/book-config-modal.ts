@@ -8,12 +8,21 @@ import {
 import { FormsModule } from '@angular/forms';
 import { invoke } from '@tauri-apps/api/core';
 import { BookConfig, BookConfigService } from '../core/book-config-service';
+import {
+  ESTADO_LIBRO_DETALLE,
+  ESTADO_LIBRO_LABEL,
+  ESTADOS_LIBRO,
+  estadoLibro,
+  ultimaRevisionMs,
+} from '../core/estado-libro';
 import { FontsService } from '../core/fonts-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
 import { SagaConfigService } from '../core/saga-config-service';
+import { SettingsService } from '../core/settings-service';
 import { ThemesService } from '../core/themes-service';
 import { Theme, ThemeRef, TreeNode } from '../core/types';
 import { NodeActionsService } from '../shared/node-actions-service';
+import { formatFechaCorta } from '../shared/fecha-corta';
 import { Select, SelectOption } from '../shared/select';
 
 /** Espejo de `epub.rs::texto_inciso_default`. Si cambia allá, cambia acá:
@@ -52,6 +61,7 @@ export class BookConfigModal {
   private fontsSvc = inject(FontsService);
   private dialogs = inject(NativeDialogsService);
   private nodeActions = inject(NodeActionsService);
+  private settings = inject(SettingsService);
 
   protected readonly editing = this.svc.editing;
   protected readonly config = signal<BookConfig | null>(null);
@@ -99,6 +109,23 @@ export class BookConfigModal {
   protected readonly incisos = INCISOS;
   /** Claves de incisos con el textarea desplegado. */
   protected readonly editandoTexto = signal<Set<string>>(new Set());
+
+  protected readonly estadoOptions: SelectOption[] = ESTADOS_LIBRO.map((e) => ({
+    value: e,
+    label: `${ESTADO_LIBRO_LABEL[e]} — ${ESTADO_LIBRO_DETALLE[e]}`,
+  }));
+
+  /** Resumen del historial de proofreading. Solo lectura: las revisiones las
+   *  agrega el exportador al tildar "marcar como revisión", que es el único
+   *  momento en que existe un EPUB al que la fecha se refiere. */
+  protected readonly revisionesResumen = computed<string | null>(() => {
+    const revisiones = this.config()?.revisiones ?? [];
+    if (revisiones.length === 0) return null;
+    const ultima = ultimaRevisionMs(revisiones);
+    const cuantas = `${revisiones.length} ${revisiones.length === 1 ? 'revisión' : 'revisiones'}`;
+    if (ultima === null) return cuantas;
+    return `${cuantas} · última el ${formatFechaCorta(ultima, this.settings.dateFormat())}`;
+  });
 
   protected readonly idiomaOptions: SelectOption[] = [
     { value: 'es', label: 'Español' },
@@ -235,7 +262,8 @@ export class BookConfigModal {
         mostrar_numero_parte: cfg.mostrar_numero_parte ?? null,
         formato_parte: cfg.formato_parte ?? null,
         template: cfg.template ?? null,
-        finalizada: cfg.finalizada ?? false,
+        estado: estadoLibro(cfg.estado),
+        revisiones: cfg.revisiones ?? null,
         epilogo: cfg.epilogo ?? null,
         sobre_el_autor: cfg.sobre_el_autor ?? '',
         foto_autor: cfg.foto_autor ?? '',
@@ -385,7 +413,8 @@ export class BookConfigModal {
         mostrar_numero_parte: cfg.mostrar_numero_parte ?? null,
         formato_parte: cfg.formato_parte ?? null,
         template: cfg.template ?? null,
-        finalizada: cfg.finalizada ?? null,
+        estado: estadoLibro(cfg.estado),
+        revisiones: cfg.revisiones ?? null,
         epilogo: blank(cfg.epilogo ?? null),
         theme: this.buildThemeRef(),
         sobre_el_autor: blank(cfg.sobre_el_autor),

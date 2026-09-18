@@ -360,7 +360,15 @@ struct Item {
     properties: Option<String>,
 }
 
-/// Exporta un libro a EPUB en `<book>/Exportados/<title>.epub`.
+/// Exporta un libro a EPUB en `<book>/Exportados/<title> <sello>.epub`.
+///
+/// `sello` es `YYYY-MM-DDTHH:MM` en hora local, calculado por el front: acá
+/// solo hay epoch UTC y el nombre saldría corrido las horas del huso. Va en el
+/// nombre del archivo (con formato `YYYY-MM-DD HHMM`) para que cada export
+/// quede identificable, y en `book.json::revisiones` cuando
+/// `marcar_revision` viene en true, con el mismo valor: así una entrada del
+/// historial apunta a un archivo concreto. No hay poda automática de EPUBs
+/// viejos — se borran a mano desde el panel Exportados.
 ///
 /// `muestra = Some(n)` exporta solo los primeros `n` capítulos como EPUB de
 /// muestra: título con sufijo, sin epílogo, y una página de cierre con el
@@ -373,9 +381,13 @@ pub async fn export_book(
     app: AppHandle,
     book_path: String,
     muestra: Option<u32>,
+    sello: String,
+    marcar_revision: Option<bool>,
 ) -> Result<ExportResult, String> {
     let plantilla_css = css_template(&app)?;
-    tauri::async_runtime::spawn_blocking(move || {
+    let dir = PathBuf::from(&book_path);
+    let sello_revision = sello.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
         let mut emit_cb = |p: ExportProgress| {
             let _ = app.emit("epub-export-progress", p);
         };
@@ -383,17 +395,25 @@ pub async fn export_book(
             &book_path,
             &plantilla_css,
             muestra.map(|n| n as usize),
+            &sello,
             Some(&mut emit_cb),
         )
     })
     .await
-    .map_err(|e| format!("task: {}", e))?
+    .map_err(|e| format!("task: {}", e))??;
+    // Recién con el EPUB escrito: una revisión que no dejó archivo no sirve
+    // para responder "qué mandé y cuándo".
+    if marcar_revision == Some(true) {
+        crate::book_config::agregar_revision(&dir, &sello_revision)?;
+    }
+    Ok(result)
 }
 
 fn export_impl(
     book_path: &str,
     plantilla_css: &str,
     muestra: Option<usize>,
+    sello: &str,
     mut progreso: Option<&mut dyn FnMut(ExportProgress)>,
 ) -> Result<ExportResult, String> {
     // Mismo patrón que `search::full_reindex`: el impl no conoce Tauri, así que
@@ -452,9 +472,12 @@ fn export_impl(
     let exports_dir = book_dir.join("Exportados");
     fs::create_dir_all(&exports_dir).map_err(|e| e.to_string())?;
     let safe_title = sanitize_filename(&cfg.titulo);
+    let safe_sello = sanitize_filename(&sello_archivo(sello));
     let epub_path = match sufijo_muestra {
-        Some(sufijo) => exports_dir.join(format!("{} - {}.epub", safe_title, sufijo)),
-        None => exports_dir.join(format!("{}.epub", safe_title)),
+        Some(sufijo) => {
+            exports_dir.join(format!("{} - {} {}.epub", safe_title, sufijo, safe_sello))
+        }
+        None => exports_dir.join(format!("{} {}.epub", safe_title, safe_sello)),
     };
 
     let file = File::create(&epub_path).map_err(|e| e.to_string())?;
@@ -2422,6 +2445,13 @@ fn xml_escape(s: &str) -> String {
         .replace('\'', "&apos;")
 }
 
+/// `2026-09-18T14:30` → `2026-09-18 1430`. Los dos puntos no viven bien en
+/// todos los filesystems y la `T` no se lee; el orden alfabético sigue siendo
+/// el cronológico, que es lo que hace usable la carpeta Exportados.
+fn sello_archivo(sello: &str) -> String {
+    sello.replace('T', " ").replace(':', "")
+}
+
 fn sanitize_filename(s: &str) -> String {
     s.chars()
         .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' { c } else { '_' })
@@ -2488,8 +2518,11 @@ mod tests {
         fs::read_to_string(css_template_dev_path()).expect("hoja de estilos del EPUB")
     }
 
+    /// Sello fijo para que los nombres de archivo sean deterministas.
+    const SELLO: &str = "2026-09-18T14:30";
+
     fn export_impl(book_path: &str) -> Result<ExportResult, String> {
-        super::export_impl(book_path, &plantilla_css(), None, None)
+        super::export_impl(book_path, &plantilla_css(), None, SELLO, None)
     }
 
     fn libro_de_tres_capitulos(tmp: &std::path::Path, book_json: &str) -> PathBuf {
@@ -2504,15 +2537,39 @@ mod tests {
     }
 
     #[test]
+    fn el_nombre_del_epub_lleva_el_sello_y_no_pisa_el_export_anterior() {
+        let tmp = TempDir::new().unwrap();
+        let book = libro_de_tres_capitulos(tmp.path(), r#"{"titulo":"Test"}"#);
+        let antes =
+            super::export_impl(book.to_str().unwrap(), &plantilla_css(), None, SELLO, None)
+                .expect("export ok");
+        assert!(antes.epub_path.ends_with("Test 2026-09-18 1430.epub"), "{}", antes.epub_path);
+
+        let despues = super::export_impl(
+            book.to_str().unwrap(),
+            &plantilla_css(),
+            None,
+            "2026-09-19T09:05",
+            None,
+        )
+        .expect("export ok");
+        assert!(despues.epub_path.ends_with("Test 2026-09-19 0905.epub"), "{}", despues.epub_path);
+        assert!(
+            std::path::Path::new(&antes.epub_path).is_file(),
+            "el export viejo se conserva: la poda es a mano"
+        );
+    }
+
+    #[test]
     fn muestra_corta_los_capitulos_y_cierra_con_el_link() {
         let tmp = TempDir::new().unwrap();
         let book = libro_de_tres_capitulos(
             tmp.path(),
             r#"{"titulo":"Test","link":"https://tatoh.ar/libros/test","epilogo":"3 - Cap3"}"#,
         );
-        let r = super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(2), None)
+        let r = super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(2), SELLO, None)
             .expect("export ok");
-        assert!(r.epub_path.ends_with("Test - Muestra.epub"), "{}", r.epub_path);
+        assert!(r.epub_path.ends_with("Test - Muestra 2026-09-18 1430.epub"), "{}", r.epub_path);
         assert_eq!(r.chapters, 2, "dos partes escritas, ni la tercera ni el epílogo");
         assert!(r.avisos.is_empty(), "{:?}", r.avisos);
 
@@ -2540,9 +2597,9 @@ mod tests {
     fn muestra_sin_link_avisa_y_no_inventa_href() {
         let tmp = TempDir::new().unwrap();
         let book = libro_de_tres_capitulos(tmp.path(), r#"{"titulo":"Test","idioma":"en"}"#);
-        let r = super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(1), None)
+        let r = super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(1), SELLO, None)
             .expect("export ok");
-        assert!(r.epub_path.ends_with("Test - Sample.epub"), "{}", r.epub_path);
+        assert!(r.epub_path.ends_with("Test - Sample 2026-09-18 1430.epub"), "{}", r.epub_path);
         assert_eq!(r.chapters, 1);
         assert!(
             r.avisos.iter().any(|a| a.contains("link")),
@@ -2559,10 +2616,10 @@ mod tests {
     fn muestra_cero_o_mayor_que_el_libro_no_rompe() {
         let tmp = TempDir::new().unwrap();
         let book = libro_de_tres_capitulos(tmp.path(), r#"{"titulo":"Test"}"#);
-        let r = super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(0), None)
+        let r = super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(0), SELLO, None)
             .expect("export ok");
         assert_eq!(r.chapters, 1, "cero se clampa a un capítulo");
-        let r = super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(99), None)
+        let r = super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(99), SELLO, None)
             .expect("export ok");
         assert_eq!(r.chapters, 3);
     }
@@ -2785,7 +2842,7 @@ mod tests {
 
         let mut pasos: Vec<ExportProgress> = Vec::new();
         let mut cb = |p: ExportProgress| pasos.push(p);
-        super::export_impl(book.to_str().unwrap(), &plantilla_css(), None, Some(&mut cb))
+        super::export_impl(book.to_str().unwrap(), &plantilla_css(), None, SELLO, Some(&mut cb))
             .expect("export ok");
 
         assert!(

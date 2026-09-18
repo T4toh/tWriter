@@ -99,6 +99,7 @@ node scripts/run-hardbreak-smoke.mjs              # hardBreak → corte de párr
 node scripts/run-verso-smoke.mjs                  # toggle de bloque de verso (lift+wrap+join)
 node scripts/run-historial-smoke.mjs              # orden y tope del historial de notificaciones
 node scripts/run-fecha-corta-smoke.mjs            # formato de la fecha corta de la landing (dmy/ymd)
+node scripts/run-estados-smoke.mjs                # ciclo de la novela + "necesita revisar" derivado
 ```
 
 Primera build de Rust tarda ~5 min. Después es incremental.

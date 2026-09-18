@@ -17,13 +17,29 @@
         <span>Libro completo</span>
       </label>
 
+      @if (completo()) {
+        <div class="ex-sub">
+          <label class="ex-check">
+            <input
+              type="checkbox"
+              [ngModel]="marcarRevision()"
+              (ngModelChange)="marcarRevision.set($event)"
+            />
+            <span>Marcar como revisión</span>
+          </label>
+          <p class="ex-hint">
+            Guarda la fecha y hora de este export en el historial del libro. La muestra no cuenta.
+          </p>
+        </div>
+      }
+
       <label class="ex-check">
         <input type="checkbox" [ngModel]="muestra()" (ngModelChange)="muestra.set($event)" />
         <span>Muestra para la web</span>
       </label>
 
       @if (muestra()) {
-        <div class="ex-muestra">
+        <div class="ex-sub">
           <label class="ex-label" for="ex-n">Capítulos incluidos</label>
           @if (opcionesN().length > 0) {
             <app-select id="ex-n" [ngModel]="nStr()" (ngModelChange)="setN($event)" [options]="opcionesN()" />

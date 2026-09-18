@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
+import { EstadoLibro } from './estado-libro';
 import { ThemeRef, TreeNode } from './types';
 
 export type ChapterPrefix = 'none' | 'decimal' | 'roman';
@@ -29,7 +30,12 @@ export interface BookConfig {
   mostrar_numero_parte?: boolean | null;
   formato_parte?: 'raw' | 'parte' | 'punto' | null;
   template?: '6x9' | '5x8' | 'a5' | null;
-  finalizada?: boolean | null;
+  /** Punto del ciclo de vida. Rust migra el `finalizada: bool` viejo al
+   *  leer, así que acá el campo ya no existe. */
+  estado?: EstadoLibro | null;
+  /** Historial de proofreading: un sello `YYYY-MM-DDTHH:MM` (hora local) por
+   *  revisión. Lo agrega el exportador, no el modal. */
+  revisiones?: string[] | null;
   epilogo?: string | null;
   theme?: ThemeRef | null;
   /** Bio plain-text para la página "Sobre el autor" del EPUB. */

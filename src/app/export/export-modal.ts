@@ -29,6 +29,10 @@ export class ExportModal {
 
   protected readonly completo = signal(true);
   protected readonly muestra = signal(true);
+  /** Anota este export en `book.json::revisiones`. Default apagado: el autor
+   *  exporta muchas veces mientras acomoda el EPUB y solo algunas de esas
+   *  veces son una revisión de verdad. */
+  protected readonly marcarRevision = signal(false);
   protected readonly n = signal(1);
   protected readonly cfg = signal<BookConfig | null>(null);
 
@@ -74,6 +78,7 @@ export class ExportModal {
       untracked(() => {
         this.completo.set(true);
         this.muestra.set(true);
+        this.marcarRevision.set(false);
         this.cfg.set(null);
         void this.cargar(node);
       });
@@ -103,10 +108,11 @@ export class ExportModal {
     if (!node) return;
     const completo = this.completo();
     const muestra = this.muestra() ? this.n() : null;
+    const marcarRevision = completo && this.marcarRevision();
     this.cerrar();
     // En serie, no en paralelo: los dos escriben en `Exportados/` y comparten
     // el evento de progreso; un toast a la vez se lee, dos se pisan.
-    if (completo) await this.chapter.exportEpub(node);
+    if (completo) await this.chapter.exportEpub(node, null, marcarRevision);
     if (muestra !== null) await this.chapter.exportEpub(node, muestra);
   }
 }
