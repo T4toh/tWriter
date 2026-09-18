@@ -8,252 +8,258 @@
 
     @if (config(); as c) {
       <div class="bc-body">
-        <div class="row">
-          <label>
-            <span>Nombre</span>
-            <input
-              type="text"
-              [ngModel]="c.nombre"
-              (ngModelChange)="update('nombre', $event)"
-              placeholder="Nombre de la saga"
-            />
-          </label>
-        </div>
-        <div class="row">
-          <label class="checkbox">
-            <input
-              type="checkbox"
-              [ngModel]="c.finalizada"
-              (ngModelChange)="update('finalizada', $event)"
-            />
-            <span>Saga finalizada (oculta el creador de novelas)</span>
-          </label>
-        </div>
-        <div class="row split">
-          <label>
-            <span>Autor</span>
-            <input
-              type="text"
-              [ngModel]="c.autor"
-              (ngModelChange)="update('autor', $event)"
-              placeholder="Heredado a libros nuevos"
-            />
-          </label>
-          <label>
-            <span>Idioma</span>
-            <app-select
-              [ngModel]="c.idioma"
-              (ngModelChange)="update('idioma', $event)"
-              [options]="idiomaOptions"
-            />
-          </label>
-        </div>
-        <div class="row split">
-          <label>
-            <span>Variante ES (gramática)</span>
-            <app-select
-              [ngModel]="c.variante_es ?? ''"
-              (ngModelChange)="setVarianteEs($event)"
-              [options]="varianteEsOptions()"
-            />
-          </label>
-          <label>
-            <span>Variante EN (gramática)</span>
-            <app-select
-              [ngModel]="c.variante_en ?? ''"
-              (ngModelChange)="setVarianteEn($event)"
-              [options]="varianteEnOptions()"
-            />
-          </label>
-        </div>
-        @if (reglasLtDesactivadas().length > 0) {
-          <div class="row section-divider">
-            <span class="section-label">Reglas de LanguageTool desactivadas</span>
-          </div>
+        <details class="bc-sec" open>
+          <summary>Identidad</summary>
           <div class="row">
-            <ul class="reglas-lt">
-              @for (r of reglasLtDesactivadas(); track r.regla) {
-                <li>
-                  <div class="regla-lt-texto">
-                    <span class="regla-lt-id">{{ r.regla }}</span>
-                    @if (r.ejemplo) {
-                      <span class="regla-lt-ejemplo">{{ r.ejemplo }}</span>
-                    }
-                  </div>
-                  <button
-                    type="button"
-                    (click)="quitarReglaLt(r.regla)"
-                    title="Volver a activar esta regla"
-                  >
-                    Reactivar
-                  </button>
-                </li>
-              }
-            </ul>
-          </div>
-        }
-
-        <div class="row">
-          <label>
-            <span>Tapa de saga (imagen)</span>
-            <div class="cover-row">
+            <label>
+              <span>Nombre</span>
               <input
                 type="text"
-                [ngModel]="c.tapa"
-                (ngModelChange)="update('tapa', $event)"
-                placeholder="ej: cover.png o ruta absoluta"
+                [ngModel]="c.nombre"
+                (ngModelChange)="update('nombre', $event)"
+                placeholder="Nombre de la saga"
               />
-              <button type="button" (click)="pickCover()">Buscar…</button>
-            </div>
-          </label>
-        </div>
-        <div class="row section-divider">
-          <span class="section-label">Defaults heredados a libros nuevos</span>
-        </div>
-        <div class="row">
-          <label>
-            <span>Imprenta</span>
-            <input
-              type="text"
-              [ngModel]="c.imprenta"
-              (ngModelChange)="update('imprenta', $event)"
-              placeholder="Independiente"
-            />
-          </label>
-        </div>
-
-        <div class="row section-divider">
-          <span class="section-label">Tema (tipografía + estilo de capítulos)</span>
-        </div>
-        <div class="row split">
-          <label>
-            <span>Tema base</span>
-            <app-select
-              [ngModel]="themeBase()"
-              (ngModelChange)="themeBase.set($event)"
-              [options]="themeBaseOptions()"
-            />
-          </label>
-          <label>
-            <span>&nbsp;</span>
-            <button
-              type="button"
-              class="ghost-btn"
-              [disabled]="!themeBase()"
-              (click)="editTheme()"
-            >
-              Editar tema base…
-            </button>
-          </label>
-        </div>
-        @if (themeBase()) {
-          @if (selectedBaseTheme(); as base) {
-            <p class="hint-soft">
-              Dejá los campos vacíos para heredar del tema base. Lo que escribas
-              sobreescribe ese valor solo para esta saga.
-            </p>
-            <div class="row split">
-              <label>
-                <span>Fuente cuerpo</span>
-                <input
-                  type="text"
-                  [attr.list]="'sc-fams'"
-                  [ngModel]="ovBodyFont()"
-                  (ngModelChange)="ovBodyFont.set($event)"
-                  [placeholder]="base.body_font || '(genérico)'"
-                />
-              </label>
-              <label>
-                <span>Tamaño cuerpo</span>
-                <input
-                  type="text"
-                  [ngModel]="ovBodySize()"
-                  (ngModelChange)="ovBodySize.set($event)"
-                  [placeholder]="base.body_size || '(default)'"
-                />
-              </label>
-            </div>
-            <div class="row split">
-              <label>
-                <span>Fuente títulos</span>
-                <input
-                  type="text"
-                  [attr.list]="'sc-fams'"
-                  [ngModel]="ovHeadingFont()"
-                  (ngModelChange)="ovHeadingFont.set($event)"
-                  [placeholder]="base.heading_font || '(genérico)'"
-                />
-              </label>
-              <label>
-                <span>Tamaño títulos</span>
-                <input
-                  type="text"
-                  [ngModel]="ovHeadingSize()"
-                  (ngModelChange)="ovHeadingSize.set($event)"
-                  [placeholder]="base.heading_size || '(default)'"
-                />
-              </label>
-            </div>
-            <div class="row split">
-              <label>
-                <span>Line-height</span>
-                <input
-                  type="text"
-                  [ngModel]="ovLineHeight()"
-                  (ngModelChange)="ovLineHeight.set($event)"
-                  [placeholder]="base.line_height || '(default)'"
-                />
-              </label>
-              <label>
-                <span>Margen de página</span>
-                <input
-                  type="text"
-                  [ngModel]="ovPageMargin()"
-                  (ngModelChange)="ovPageMargin.set($event)"
-                  [placeholder]="base.page_margin || '(default)'"
-                />
-              </label>
-            </div>
-            <div class="row split">
-              <label>
-                <span>Fuente cuerpo editorial</span>
-                <input
-                  type="text"
-                  [attr.list]="'sc-fams'"
-                  [ngModel]="ovEditorialBodyFont()"
-                  (ngModelChange)="ovEditorialBodyFont.set($event)"
-                  [placeholder]="base.editorial_body_font || '(hereda body)'"
-                />
-              </label>
-              <label>
-                <span>Fuente títulos editorial</span>
-                <input
-                  type="text"
-                  [attr.list]="'sc-fams'"
-                  [ngModel]="ovEditorialHeadingFont()"
-                  (ngModelChange)="ovEditorialHeadingFont.set($event)"
-                  [placeholder]="base.editorial_heading_font || '(hereda heading)'"
-                />
-              </label>
+            </label>
+          </div>
+          <div class="row">
+            <label class="checkbox">
+              <input
+                type="checkbox"
+                [ngModel]="c.finalizada"
+                (ngModelChange)="update('finalizada', $event)"
+              />
+              <span>Saga finalizada (oculta el creador de novelas)</span>
+            </label>
+          </div>
+          <div class="row split">
+            <label>
+              <span>Autor</span>
+              <input
+                type="text"
+                [ngModel]="c.autor"
+                (ngModelChange)="update('autor', $event)"
+                placeholder="Heredado a libros nuevos"
+              />
+            </label>
+            <label>
+              <span>Idioma</span>
+              <app-select
+                [ngModel]="c.idioma"
+                (ngModelChange)="update('idioma', $event)"
+                [options]="idiomaOptions"
+              />
+            </label>
+          </div>
+        </details>
+        <details class="bc-sec">
+          <summary>Gramática</summary>
+          <div class="row split">
+            <label>
+              <span>Variante ES (gramática)</span>
+              <app-select
+                [ngModel]="c.variante_es ?? ''"
+                (ngModelChange)="setVarianteEs($event)"
+                [options]="varianteEsOptions()"
+              />
+            </label>
+            <label>
+              <span>Variante EN (gramática)</span>
+              <app-select
+                [ngModel]="c.variante_en ?? ''"
+                (ngModelChange)="setVarianteEn($event)"
+                [options]="varianteEnOptions()"
+              />
+            </label>
+          </div>
+          @if (reglasLtDesactivadas().length > 0) {
+            <div class="row">
+              <span class="section-label">Reglas de LanguageTool desactivadas</span>
             </div>
             <div class="row">
-              <label>
-                <span>Posición del título de capítulo</span>
-                <app-select
-                  [ngModel]="ovChapterTitlePosition()"
-                  (ngModelChange)="ovChapterTitlePosition.set($event)"
-                  [options]="chapterTitlePositionOptions()"
-                />
-              </label>
+              <ul class="reglas-lt">
+                @for (r of reglasLtDesactivadas(); track r.regla) {
+                  <li>
+                    <div class="regla-lt-texto">
+                      <span class="regla-lt-id">{{ r.regla }}</span>
+                      @if (r.ejemplo) {
+                        <span class="regla-lt-ejemplo">{{ r.ejemplo }}</span>
+                      }
+                    </div>
+                    <button
+                      type="button"
+                      (click)="quitarReglaLt(r.regla)"
+                      title="Volver a activar esta regla"
+                    >
+                      Reactivar
+                    </button>
+                  </li>
+                }
+              </ul>
             </div>
-            <datalist id="sc-fams">
-              @for (fam of availableFamilies(); track fam) {
-                <option [value]="fam"></option>
-              }
-            </datalist>
           }
-        }
-
+        </details>
+        <details class="bc-sec">
+          <summary>Portada</summary>
+          <div class="row">
+            <label>
+              <span>Tapa de saga (imagen)</span>
+              <div class="cover-row">
+                <input
+                  type="text"
+                  [ngModel]="c.tapa"
+                  (ngModelChange)="update('tapa', $event)"
+                  placeholder="ej: cover.png o ruta absoluta"
+                />
+                <button type="button" (click)="pickCover()">Buscar…</button>
+              </div>
+            </label>
+          </div>
+        </details>
+        <details class="bc-sec">
+          <summary>Defaults heredados a libros nuevos</summary>
+          <div class="row">
+            <label>
+              <span>Imprenta</span>
+              <input
+                type="text"
+                [ngModel]="c.imprenta"
+                (ngModelChange)="update('imprenta', $event)"
+                placeholder="Independiente"
+              />
+            </label>
+          </div>
+        </details>
+        <details class="bc-sec">
+          <summary>Tema (tipografía + estilo de capítulos)</summary>
+          <div class="row split">
+            <label>
+              <span>Tema base</span>
+              <app-select
+                [ngModel]="themeBase()"
+                (ngModelChange)="themeBase.set($event)"
+                [options]="themeBaseOptions()"
+              />
+            </label>
+            <label>
+              <span>&nbsp;</span>
+              <button
+                type="button"
+                class="ghost-btn"
+                [disabled]="!themeBase()"
+                (click)="editTheme()"
+              >
+                Editar tema base…
+              </button>
+            </label>
+          </div>
+          @if (themeBase()) {
+            @if (selectedBaseTheme(); as base) {
+              <p class="hint-soft">
+                Dejá los campos vacíos para heredar del tema base. Lo que escribas
+                sobreescribe ese valor solo para esta saga.
+              </p>
+              <div class="row split">
+                <label>
+                  <span>Fuente cuerpo</span>
+                  <input
+                    type="text"
+                    [attr.list]="'sc-fams'"
+                    [ngModel]="ovBodyFont()"
+                    (ngModelChange)="ovBodyFont.set($event)"
+                    [placeholder]="base.body_font || '(genérico)'"
+                  />
+                </label>
+                <label>
+                  <span>Tamaño cuerpo</span>
+                  <input
+                    type="text"
+                    [ngModel]="ovBodySize()"
+                    (ngModelChange)="ovBodySize.set($event)"
+                    [placeholder]="base.body_size || '(default)'"
+                  />
+                </label>
+              </div>
+              <div class="row split">
+                <label>
+                  <span>Fuente títulos</span>
+                  <input
+                    type="text"
+                    [attr.list]="'sc-fams'"
+                    [ngModel]="ovHeadingFont()"
+                    (ngModelChange)="ovHeadingFont.set($event)"
+                    [placeholder]="base.heading_font || '(genérico)'"
+                  />
+                </label>
+                <label>
+                  <span>Tamaño títulos</span>
+                  <input
+                    type="text"
+                    [ngModel]="ovHeadingSize()"
+                    (ngModelChange)="ovHeadingSize.set($event)"
+                    [placeholder]="base.heading_size || '(default)'"
+                  />
+                </label>
+              </div>
+              <div class="row split">
+                <label>
+                  <span>Line-height</span>
+                  <input
+                    type="text"
+                    [ngModel]="ovLineHeight()"
+                    (ngModelChange)="ovLineHeight.set($event)"
+                    [placeholder]="base.line_height || '(default)'"
+                  />
+                </label>
+                <label>
+                  <span>Margen de página</span>
+                  <input
+                    type="text"
+                    [ngModel]="ovPageMargin()"
+                    (ngModelChange)="ovPageMargin.set($event)"
+                    [placeholder]="base.page_margin || '(default)'"
+                  />
+                </label>
+              </div>
+              <div class="row split">
+                <label>
+                  <span>Fuente cuerpo editorial</span>
+                  <input
+                    type="text"
+                    [attr.list]="'sc-fams'"
+                    [ngModel]="ovEditorialBodyFont()"
+                    (ngModelChange)="ovEditorialBodyFont.set($event)"
+                    [placeholder]="base.editorial_body_font || '(hereda body)'"
+                  />
+                </label>
+                <label>
+                  <span>Fuente títulos editorial</span>
+                  <input
+                    type="text"
+                    [attr.list]="'sc-fams'"
+                    [ngModel]="ovEditorialHeadingFont()"
+                    (ngModelChange)="ovEditorialHeadingFont.set($event)"
+                    [placeholder]="base.editorial_heading_font || '(hereda heading)'"
+                  />
+                </label>
+              </div>
+              <div class="row">
+                <label>
+                  <span>Posición del título de capítulo</span>
+                  <app-select
+                    [ngModel]="ovChapterTitlePosition()"
+                    (ngModelChange)="ovChapterTitlePosition.set($event)"
+                    [options]="chapterTitlePositionOptions()"
+                  />
+                </label>
+              </div>
+              <datalist id="sc-fams">
+                @for (fam of availableFamilies(); track fam) {
+                  <option [value]="fam"></option>
+                }
+              </datalist>
+            }
+          }
+        </details>
         @if (error(); as err) {
           <p class="error">{{ err }}</p>
         }

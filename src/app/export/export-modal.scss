@@ -20,7 +20,7 @@
 
 /* Bloque dependiente de un checkbox: sangrado y con guía a la izquierda, para
  * que se lea como "esto solo aplica a lo de arriba". */
-.ex-sub {
+.ex-muestra {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -41,6 +41,23 @@
   color: var(--fg-muted);
   font-size: 11px;
   line-height: 1.45;
+}
+
+/* No es "qué exportar" sino "qué anotar", así que va separada del par de
+ * checkboxes de arriba por una línea. */
+.ex-revision {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+/* La revisión depende del libro completo: sin él el checkbox sigue en su
+ * lugar, apagado, en vez de aparecer y desaparecer moviendo el modal entero. */
+.ex-off {
+  color: var(--fg-muted);
+  cursor: default;
 }
 
 .ex-warn {

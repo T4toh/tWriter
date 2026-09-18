@@ -13,7 +13,6 @@ import {
   ESTADO_LIBRO_LABEL,
   ESTADOS_LIBRO,
   estadoLibro,
-  ultimaRevisionMs,
 } from '../core/estado-libro';
 import { FontsService } from '../core/fonts-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
@@ -115,16 +114,21 @@ export class BookConfigModal {
     label: `${ESTADO_LIBRO_LABEL[e]} — ${ESTADO_LIBRO_DETALLE[e]}`,
   }));
 
-  /** Resumen del historial de proofreading. Solo lectura: las revisiones las
-   *  agrega el exportador al tildar "marcar como revisión", que es el único
-   *  momento en que existe un EPUB al que la fecha se refiere. */
-  protected readonly revisionesResumen = computed<string | null>(() => {
-    const revisiones = this.config()?.revisiones ?? [];
-    if (revisiones.length === 0) return null;
-    const ultima = ultimaRevisionMs(revisiones);
-    const cuantas = `${revisiones.length} ${revisiones.length === 1 ? 'revisión' : 'revisiones'}`;
-    if (ultima === null) return cuantas;
-    return `${cuantas} · última el ${formatFechaCorta(ultima, this.settings.dateFormat())}`;
+  /** Historial de proofreading, de la más nueva a la más vieja. Solo lectura:
+   *  las revisiones las anota el exportador al tildar "esta es la versión que
+   *  publico", que es el único momento en que hay una edición concreta a la
+   *  que referirse. Van con hora porque dos revisiones del mismo día son
+   *  normales cuando el autor corrige y vuelve a exportar. */
+  protected readonly revisiones = computed<string[]>(() => {
+    const sellos = this.config()?.revisiones ?? [];
+    return [...sellos]
+      .sort()
+      .reverse()
+      .map((sello) => {
+        const ms = new Date(sello).getTime();
+        if (!Number.isFinite(ms)) return sello;
+        return `${formatFechaCorta(ms, this.settings.dateFormat())} ${sello.slice(11, 16)}`;
+      });
   });
 
   protected readonly idiomaOptions: SelectOption[] = [

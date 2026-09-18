@@ -504,21 +504,24 @@ Botón 📝 en el header del tree abre un wizard separado para traer notas markd
   escribir; el `book.json` en disco queda migrado la primera vez que algo lo
   guarda. Se elige en el modal de configuración del libro.
 - **Las revisiones son un historial, no un estado**: el proofreading nunca
-  termina. `book.json::revisiones` es una lista de sellos
-  `YYYY-MM-DDTHH:MM` (hora local) que **agrega el exportador**, no el modal —
-  tildando «Marcar como revisión» al exportar el libro completo. Una revisión
-  sin EPUB no serviría para responder «qué mandé y cuándo», así que solo se
-  anota si el archivo se escribió.
+  termina. `book.json::revisiones` es una lista de sellos `YYYY-MM-DDTHH:MM`
+  (hora local) que **agrega el exportador**, no el modal — tildando «Esta es la
+  versión que publico» al exportar el libro completo, que es lo que responde
+  «qué edición está publicada». Solo se anota si el EPUB se escribió. El modal
+  del libro las lista de la más nueva a la más vieja, con hora: dos revisiones
+  del mismo día son normales cuando el autor corrige y vuelve a exportar.
 - **«Necesita revisar» se deriva, no se guarda** (`core/estado-libro.ts`,
   `scripts/run-estados-smoke.mjs`): un libro terminado o publicado sin ninguna
   revisión, o editado después de la última. La fecha de edición es el
   `modifiedMs` del nodo, que Rust ya manda como el máximo mtime de los hijos.
   Un estado guardado que hay que acordarse de mantener al día es un estado que
   termina mintiendo.
-- La tarjeta del libro muestra el estado y cuántas revisiones lleva («Publicada
-  · 3 rev.»); el «3 revisiones · última el 18/09/2026» con fecha está en el
-  modal. «En curso» sin revisiones no se muestra: es el caso normal y en la
-  grilla sería ruido en todas las tarjetas.
+- La tarjeta del libro lleva **un chip sobre la tapa**, no una línea más de
+  texto: cada línea que se le suma a una tarjeta desalinea sus controles contra
+  las vecinas. Gana «Revisar» sobre el estado porque es lo accionable, y «en
+  curso» al día no muestra nada. El chip necesita `z-index` propio: el `<img>`
+  de la tapa lleva `transform: translateZ(0)`, que lo mete en la capa de los
+  posicionados y, al venir después en el DOM, lo tapaba.
 
 ### Export EPUB
 
@@ -538,13 +541,18 @@ Botón 📝 en el header del tree abre un wizard separado para traer notas markd
 - **Índice legible** (`toc.xhtml`): numeral del capítulo en una columna angosta con la fuente de títulos del tema y el título al lado en la del cuerpo, separados por un espacio real (el menú del reader lee el texto plano). Las partes que son solo números salen con `hidden` en la sub-lista —mecanismo del spec EPUB 3: no se imprimen en la página pero el reader las sigue mostrando en su menú; verificado en calibre— y aparecen si alguna tiene título propio en su `meta.json`. Respeta el prefijo del tema (`roman`/`decimal`/`none`: sin prefijo no hay columna) y el idioma del libro. Links sin subrayar, editoriales atenuadas y alineadas con los títulos, margen de página como «Sobre el autor».
 - **Modal de export: libro completo, muestra, o los dos** (default los dos). La **muestra** son los primeros N capítulos —por defecto los que suman ~10 % de las palabras, la proporción de la vista previa de Amazon—, cortada en fin de capítulo y sin epílogo. Lleva `dc:title` y nombre de archivo con sufijo `— Muestra`/`— Sample` (la portada interior queda igual), una página de cierre «Seguir leyendo» con el `link` del `book.json`, y el back matter completo («Otros libros» + «Sobre el autor»). Sin `link` sale igual y el export avisa. Las tiendas (Amazon, Kobo, Google) arman su propia vista previa del EPUB completo y no reciben este archivo; sirve para la web del autor, Apple Books (que sí acepta una muestra propia) y plataformas tipo BookFunnel. `export_book(bookPath, muestra, sello, marcarRevision)`; default de capítulos en `export/muestra.ts` (`scripts/run-muestra-smoke.mjs`).
 - **Cada EPUB sale con su sello de fecha y hora** en el nombre
-  (`Exportados/La Ciudad de las Luces 2026-09-18 1430.epub`), así que dos
-  exports no se pisan y la carpeta ordena alfabéticamente = cronológicamente.
-  El sello lo calcula el front (`core/estado-libro.ts::selloRevision`) porque
-  del lado nativo solo hay epoch UTC y el nombre saldría corrido las horas del
-  huso; viaja a Rust como string, que además lo hace determinista en los tests.
-  **No hay poda automática**: los exports viejos se borran a mano desde el
-  panel Exportados del árbol.
+  (`Exportados/La Ciudad de las Luces 2026-09-18 1430.epub`), así que se sabe de
+  cuándo es el archivo que está en la carpeta. El sello lo calcula el front
+  (`core/estado-libro.ts::selloRevision`) porque del lado nativo solo hay epoch
+  UTC y el nombre saldría corrido las horas del huso; viaja a Rust como string,
+  que además lo hace determinista en los tests.
+- **De cada variante queda solo el último**: al exportar, `barrer_exports_viejos`
+  borra los EPUB anteriores del libro (con sello y del formato viejo sin sello).
+  El historial de revisiones son las **fechas** del `book.json`, no los archivos
+  — guardar cada export son 7-8 MB más en un repo que es git. Reconoce los
+  propios por nombre completo y no por prefijo: `Test` también es prefijo de
+  `Test - Muestra …`, así que exportar el libro completo se llevaba puesta la
+  muestra; lo que sigue al nombre base tiene que ser nada o un sello.
 - **Validación con epubcheck** (`epubcheck.rs`): después de cada export corre el validador del W3C —el mismo que corre la tienda al recibir el archivo— y dice el veredicto en un toast; el detalle (las N líneas de epubcheck) se abre con un click y va también al panel 🐛. No se bundlea (es un jar y necesita JVM): se detecta el binario instalado como `pandoc_bin`, y sin él el EPUB sale igual, sin veredicto. Ojo: existir no alcanza — el wrapper de Homebrew hace `exec` de una JVM, así que el exit code manda, y salir mal **sin** una línea de diagnóstico se reporta como falla de la herramienta, no como EPUB inválido. La validación corre suelta y nunca voltea un export que salió bien.
 - **CSS que sobrevive al sanitizador de Google Play Books**: Google borra lo que no entiende de la hoja y avisaba tres cosas. Los selectores de atributo `p[style*="text-align"]` eran la única regla que sacaba la sangría a los párrafos alineados desde el editor — ahora el export traduce el style inline a `.center-align`/`.right-align`/`.left-align` (`align_style_to_class`). `object-fit`/`object-position` en la tapa pasan a `width`/`height: auto` + `max-*`. Y las `url()` de `@font-face` van con comillas simples. `-webkit-hyphens` se queda a propósito: Apple Books solo entiende el prefijado.
 - **Progreso del export**: `export_impl` recibe un callback de progreso (igual que `search::full_reindex`, así el impl sigue sin tipos de Tauri y los tests no necesitan `AppHandle`) y `export_book` lo traduce al evento `epub-export-progress`. La tarjeta del libro ya tenía spinner; el que no mostraba nada era exportar desde el menú contextual.

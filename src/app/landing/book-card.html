@@ -7,6 +7,9 @@
   (click)="onClick()"
 >
   <div class="cover-slot">
+    @if (badge(); as b) {
+      <span class="badge" [class.alerta]="b.alerta">{{ b.texto }}</span>
+    }
     @if (coverDataUrl(); as url) {
       <img [src]="url" [alt]="displayTitle()" />
     } @else {
@@ -32,9 +35,6 @@
             · {{ formatWords(w) }}
           }
         </span>
-        @if (estadoLinea(); as linea) {
-          <span class="estado">{{ linea }}</span>
-        }
       </div>
       <div class="card-actions">
         <button
@@ -70,9 +70,6 @@
     </div>
     @if (!isConfigured()) {
       <p class="hint">Sin configurar</p>
-    }
-    @if (revisionPendiente()) {
-      <p class="hint revisar">Necesita revisar</p>
     }
   </div>
 </button>

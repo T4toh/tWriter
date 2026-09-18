@@ -366,9 +366,10 @@ struct Item {
 /// solo hay epoch UTC y el nombre saldría corrido las horas del huso. Va en el
 /// nombre del archivo (con formato `YYYY-MM-DD HHMM`) para que cada export
 /// quede identificable, y en `book.json::revisiones` cuando
-/// `marcar_revision` viene en true, con el mismo valor: así una entrada del
-/// historial apunta a un archivo concreto. No hay poda automática de EPUBs
-/// viejos — se borran a mano desde el panel Exportados.
+/// `marcar_revision` viene en true, con el mismo valor. En `Exportados/` queda
+/// **solo el último** EPUB de cada variante: el historial de revisiones son las
+/// fechas de `book.json`, no los archivos — guardar cada export son 7-8 MB más
+/// en un repo que es git.
 ///
 /// `muestra = Some(n)` exporta solo los primeros `n` capítulos como EPUB de
 /// muestra: título con sufijo, sin epílogo, y una página de cierre con el
@@ -473,12 +474,13 @@ fn export_impl(
     fs::create_dir_all(&exports_dir).map_err(|e| e.to_string())?;
     let safe_title = sanitize_filename(&cfg.titulo);
     let safe_sello = sanitize_filename(&sello_archivo(sello));
-    let epub_path = match sufijo_muestra {
-        Some(sufijo) => {
-            exports_dir.join(format!("{} - {} {}.epub", safe_title, sufijo, safe_sello))
-        }
-        None => exports_dir.join(format!("{} {}.epub", safe_title, safe_sello)),
+    // El nombre sin el sello: identifica a la variante (libro o muestra) y es
+    // con lo que se reconocen los exports anteriores para barrerlos.
+    let nombre_base = match sufijo_muestra {
+        Some(sufijo) => format!("{} - {}", safe_title, sufijo),
+        None => safe_title.clone(),
     };
+    let epub_path = exports_dir.join(format!("{} {}.epub", nombre_base, safe_sello));
 
     let file = File::create(&epub_path).map_err(|e| e.to_string())?;
     let mut zip = ZipWriter::new(file);
@@ -1148,6 +1150,12 @@ fn export_impl(
             if reparados.len() == 1 { "esa parte" } else { "esas partes" },
         ));
     }
+
+    // Queda solo el último EPUB de esta variante: el historial de revisiones son
+    // las fechas de `book.json`, no los archivos. Guardar cada export son 7-8 MB
+    // más en el repo de novelas, que es git — y el sello del nombre alcanza para
+    // saber de cuándo es el que está.
+    barrer_exports_viejos(&exports_dir, &nombre_base, &epub_path);
 
     tracing::info!(target: "epub", path = %epub_path.display(), capitulos = total_chapter_files, "export listo");
     Ok(ExportResult {
@@ -2445,6 +2453,57 @@ fn xml_escape(s: &str) -> String {
         .replace('\'', "&apos;")
 }
 
+/// Borra los EPUB anteriores de esta variante, dejando solo `actual`.
+///
+/// Reconoce los propios por nombre y no por prefijo pelado: `Test` también es
+/// prefijo de `Test - Muestra 2026-09-18 1430.epub`, así que exportar el libro
+/// completo se llevaría puesta la muestra. Lo que sigue al nombre base tiene
+/// que ser nada (el formato viejo, sin sello) o un sello — cualquier otra cosa
+/// es de otro archivo y no se toca.
+fn barrer_exports_viejos(exports_dir: &Path, nombre_base: &str, actual: &Path) {
+    let entries = match fs::read_dir(exports_dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path == actual || !path.is_file() {
+            continue;
+        }
+        if path.extension().and_then(|e| e.to_str()) != Some("epub") {
+            continue;
+        }
+        let stem = match path.file_stem().and_then(|s| s.to_str()) {
+            Some(s) => s,
+            None => continue,
+        };
+        let resto = match stem.strip_prefix(nombre_base) {
+            Some(r) => r,
+            None => continue,
+        };
+        let propio = resto.is_empty() || resto.strip_prefix(' ').is_some_and(parece_sello);
+        if !propio {
+            continue;
+        }
+        match fs::remove_file(&path) {
+            Ok(()) => tracing::info!(target: "epub", path = %path.display(), "barrido el export anterior"),
+            Err(e) => {
+                tracing::warn!(target: "epub", path = %path.display(), error = %e, "no se pudo borrar el export anterior")
+            }
+        }
+    }
+}
+
+/// `2026-09-18 1430`, que es lo que mete `sello_archivo` en el nombre.
+fn parece_sello(s: &str) -> bool {
+    s.len() == 15
+        && s.bytes().enumerate().all(|(i, c)| match i {
+            4 | 7 => c == b'-',
+            10 => c == b' ',
+            _ => c.is_ascii_digit(),
+        })
+}
+
 /// `2026-09-18T14:30` → `2026-09-18 1430`. Los dos puntos no viven bien en
 /// todos los filesystems y la `T` no se lee; el orden alfabético sigue siendo
 /// el cronológico, que es lo que hace usable la carpeta Exportados.
@@ -2537,7 +2596,7 @@ mod tests {
     }
 
     #[test]
-    fn el_nombre_del_epub_lleva_el_sello_y_no_pisa_el_export_anterior() {
+    fn el_nombre_del_epub_lleva_el_sello() {
         let tmp = TempDir::new().unwrap();
         let book = libro_de_tres_capitulos(tmp.path(), r#"{"titulo":"Test"}"#);
         let antes =
@@ -2555,9 +2614,43 @@ mod tests {
         .expect("export ok");
         assert!(despues.epub_path.ends_with("Test 2026-09-19 0905.epub"), "{}", despues.epub_path);
         assert!(
-            std::path::Path::new(&antes.epub_path).is_file(),
-            "el export viejo se conserva: la poda es a mano"
+            !std::path::Path::new(&antes.epub_path).exists(),
+            "y el anterior lo barre el export nuevo"
         );
+    }
+
+    #[test]
+    fn cada_export_deja_solo_el_ultimo_epub_de_su_variante() {
+        let tmp = TempDir::new().unwrap();
+        let book = libro_de_tres_capitulos(tmp.path(), r#"{"titulo":"Test"}"#);
+        let exports = book.join("Exportados");
+        std::fs::create_dir_all(&exports).unwrap();
+        let sin_sello = exports.join("Test.epub");
+        let sellado_viejo = exports.join("Test 2026-09-01 0800.epub");
+        let muestra_sin_sello = exports.join("Test - Muestra.epub");
+        let muestra_sellada = exports.join("Test - Muestra 2026-09-01 0800.epub");
+        let ajeno = exports.join("Test y otro cuento.epub");
+        for p in [&sin_sello, &sellado_viejo, &muestra_sin_sello, &muestra_sellada, &ajeno] {
+            std::fs::write(p, b"viejo").unwrap();
+        }
+
+        let r = super::export_impl(book.to_str().unwrap(), &plantilla_css(), None, SELLO, None)
+            .expect("export ok");
+
+        assert!(!sin_sello.exists(), "el del formato viejo se va");
+        assert!(!sellado_viejo.exists(), "el sellado anterior también");
+        assert!(muestra_sin_sello.is_file(), "la muestra es otra variante");
+        assert!(muestra_sellada.is_file(), "la muestra es otra variante");
+        assert!(ajeno.is_file(), "un EPUB que solo comparte prefijo no se toca");
+        assert!(std::path::Path::new(&r.epub_path).is_file());
+
+        let m = super::export_impl(book.to_str().unwrap(), &plantilla_css(), Some(1), SELLO, None)
+            .expect("export ok");
+        assert!(!muestra_sin_sello.exists(), "y la muestra barre las suyas");
+        assert!(!muestra_sellada.exists());
+        assert!(std::path::Path::new(&m.epub_path).is_file());
+        assert!(std::path::Path::new(&r.epub_path).is_file(), "sin tocar el libro completo");
+        assert!(ajeno.is_file());
     }
 
     #[test]

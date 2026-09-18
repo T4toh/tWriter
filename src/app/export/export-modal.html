@@ -17,29 +17,13 @@
         <span>Libro completo</span>
       </label>
 
-      @if (completo()) {
-        <div class="ex-sub">
-          <label class="ex-check">
-            <input
-              type="checkbox"
-              [ngModel]="marcarRevision()"
-              (ngModelChange)="marcarRevision.set($event)"
-            />
-            <span>Marcar como revisión</span>
-          </label>
-          <p class="ex-hint">
-            Guarda la fecha y hora de este export en el historial del libro. La muestra no cuenta.
-          </p>
-        </div>
-      }
-
       <label class="ex-check">
         <input type="checkbox" [ngModel]="muestra()" (ngModelChange)="muestra.set($event)" />
         <span>Muestra para la web</span>
       </label>
 
       @if (muestra()) {
-        <div class="ex-sub">
+        <div class="ex-muestra">
           <label class="ex-label" for="ex-n">Capítulos incluidos</label>
           @if (opcionesN().length > 0) {
             <app-select id="ex-n" [ngModel]="nStr()" (ngModelChange)="setN($event)" [options]="opcionesN()" />
@@ -58,6 +42,21 @@
           }
         </div>
       }
+      <div class="ex-revision">
+        <label class="ex-check" [class.ex-off]="!completo()">
+          <input
+            type="checkbox"
+            [ngModel]="marcarRevision()"
+            (ngModelChange)="marcarRevision.set($event)"
+            [disabled]="!completo()"
+          />
+          <span>Esta es la versión que publico</span>
+        </label>
+        <p class="ex-hint">
+          Anota la fecha y hora en el historial del libro, para saber qué edición está publicada.
+          El historial son fechas: el EPUB anterior se borra igual, en Exportados queda el último.
+        </p>
+      </div>
     </div>
 
     <footer class="ex-actions">
