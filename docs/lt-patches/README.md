@@ -31,6 +31,14 @@ aplica de una): el antipatrón, y el acote del `skip` que salió de la review.
 
 Las ramas salen de `master`, son independientes entre sí y no se pisan.
 
+Las dos ramas de `0004` y `0005` se rebasaron sobre `upstream/master` el
+2026-09-18 y se force-pushearon (`--force-with-lease`), así que los PR quedaron
+en 0 commits atrás. Ojo con el clone: está hecho con `--single-branch`, o sea
+que `remote.origin.fetch` solo mapea `master` y el `--force-with-lease` falla
+con «stale info» porque no hay ref de seguimiento con qué comparar. Se arregla
+una vez con `git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'`
+y un `git fetch origin`.
+
 ## Aplicar sobre el clone del fork
 
 ```bash

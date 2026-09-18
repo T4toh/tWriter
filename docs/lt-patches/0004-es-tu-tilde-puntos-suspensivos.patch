@@ -1,4 +1,4 @@
-From 9edfc43de8598b8f8c4ae39ced113789c539329c Mon Sep 17 00:00:00 2001
+From 6dfdddba801529e6290443309977c0f0482acd39 Mon Sep 17 00:00:00 2001
 From: Tatoh <tatukis@gmail.com>
 Date: Fri, 18 Sep 2026 14:53:40 -0300
 Subject: [PATCH] =?UTF-8?q?[es]=20TU=5FTILDE:=20don't=20flag=20=C2=ABtu?=
@@ -28,7 +28,7 @@ so the noun is out of reach of any rule.
  1 file changed, 3 insertions(+)
 
 diff --git a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
-index 72dba10..b3d6394 100644
+index 912eeb620cf..ed09714728d 100644
 --- a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
 +++ b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
 @@ -9577,6 +9577,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
