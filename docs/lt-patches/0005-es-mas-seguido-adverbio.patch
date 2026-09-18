@@ -1,8 +1,9 @@
-From cdc294c98985d334374dafc536c5c9eda2e14230 Mon Sep 17 00:00:00 2001
+From 012b11907605509f24ceec03266ef7ba4f98df88 Mon Sep 17 00:00:00 2001
 From: Tatoh <tatukis@gmail.com>
 Date: Fri, 18 Sep 2026 14:54:12 -0300
-Subject: [PATCH] =?UTF-8?q?[es]=20AGREEMENT=5FPOSTPONED=5FADJ:=20=C2=ABm?=
- =?UTF-8?q?=C3=A1s=20seguido=C2=BB=20after=20a=20verb=20is=20adverbial?=
+Subject: [PATCH 1/2] =?UTF-8?q?[es]=20AGREEMENT=5FPOSTPONED=5FADJ:=20?=
+ =?UTF-8?q?=C2=ABm=C3=A1s=20seguido=C2=BB=20after=20a=20verb=20is=20adverb?=
+ =?UTF-8?q?ial?=
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -30,10 +31,10 @@ appears.
  1 file changed, 12 insertions(+)
 
 diff --git a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
-index 72dba10..019af9a 100644
+index 912eeb620cf..e9865191cba 100644
 --- a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
 +++ b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
-@@ -23537,6 +23537,17 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+@@ -23594,6 +23594,17 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
                  <token regexp="yes">más|menos</token>
                  <token postag="A.*|V.P.*" postag_regexp="yes"/>
              </antipattern>
@@ -51,11 +52,71 @@ index 72dba10..019af9a 100644
              <rule>
                  <pattern>
                      <token postag="AQ.*|V.P.*|PX.*" postag_regexp="yes" regexp="yes">.*(motriz|motrices)<exception postag="_GN_.*|ignore_concordance|AQ.CN.|_GV_" postag_regexp="yes"/></token>
-@@ -23580,6 +23591,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+@@ -23637,6 +23648,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
                  <example correction="pasado">El domingo <marker>pasada</marker> hubo corrida de toros de lujo.</example>
                  <example correction="posibles">De todas las maneras <marker>posible</marker>.</example>
                  <example correction="alta">Construyeron una torre bien <marker>alto</marker>.</example>
 +                <example correction="seguida">La serie más <marker>seguido</marker>.</example>
+                 <example>Uno de los aspectos migratorios más <marker>criticado</marker></example>
+                 <example>con la bobina y la placa electrónica montadas en una caja única</example>
+                 <example>El contacto con la cultura y la historia japonesas.</example>
+-- 
+2.54.0 (Apple Git-157)
+
+
+From 4e8b017b1cbcd1de2185edc7b5375587a4184987 Mon Sep 17 00:00:00 2001
+From: Tatoh <tatukis@gmail.com>
+Date: Fri, 18 Sep 2026 15:15:55 -0300
+Subject: [PATCH 2/2] [es] AGREEMENT_POSTPONED_ADJ: keep the verb search inside
+ the clause
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Addresses the review on the previous commit: skip="-1" scans to the end of the
+sentence, so a verb in a matrix clause satisfied the antipattern and suppressed
+a real adjectival case in the subordinate one — «dice que la película más
+seguido de la tele fue esa» was flagged before the antipattern and clean after.
+
+An <exception scope="next"> on the skipped part stops the search at clause
+boundaries. Adverbial uses are unaffected because the verb they need is in
+their own clause: «quiero que vengas más seguido» still matches on «vengas».
+
+A regression example is added for the subordinate case.
+
+The reviewer's own example, «creo que la serie más seguido fue...», turns out
+not to reproduce: it is clean with or without this rule change, so it is not
+what the bound is for.
+
+Re-measured on the same 810k-word corpus: still 21 matches, and the set is
+byte-identical to the unbounded version, so the bound costs nothing on real
+prose.
+---
+ .../main/resources/org/languagetool/rules/es/grammar.xml   | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
+index e9865191cba..9b5692b3acc 100644
+--- a/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
++++ b/languagetool-language-modules/es/src/main/resources/org/languagetool/rules/es/grammar.xml
+@@ -23598,8 +23598,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+                 <!-- «más/menos seguido» with a verb in front is the adverbial
+                      locution 'a menudo', invariable and general in the Americas.
+                      Without a verb («la serie más seguido») it is still a
+-                     postponed adjective and stays checked. -->
+-                <token postag="V.*" postag_regexp="yes" skip="-1"/>
++                     postponed adjective and stays checked. The skipped part may
++                     not cross a clause boundary, so a verb in a matrix clause
++                     («dice que la película más seguido…») does not count. -->
++                <token postag="V.*" postag_regexp="yes" skip="-1"><exception scope="next" regexp="yes">que|quien|quienes|cual|cuales|cuando|donde|porque|aunque|,|;|:</exception></token>
+                 <token regexp="yes">más|menos</token>
+                 <token>seguido</token>
+                 <example>Quiero pasear sin mi armadura más seguido.</example>
+@@ -23649,6 +23651,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+                 <example correction="posibles">De todas las maneras <marker>posible</marker>.</example>
+                 <example correction="alta">Construyeron una torre bien <marker>alto</marker>.</example>
+                 <example correction="seguida">La serie más <marker>seguido</marker>.</example>
++                <example correction="seguida">Dice que la película más <marker>seguido</marker> de la tele fue esa.</example>
                  <example>Uno de los aspectos migratorios más <marker>criticado</marker></example>
                  <example>con la bobina y la placa electrónica montadas en una caja única</example>
                  <example>El contacto con la cultura y la historia japonesas.</example>
