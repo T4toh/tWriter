@@ -802,6 +802,16 @@ export class Editor implements AfterViewInit, OnDestroy {
       if (untracked(() => this.repAuto())) this.checkRepeticiones(true);
     });
 
+    // Abrir el menú contextual cierra los popovers. El cierre por click afuera
+    // (`onDocumentClick`) no los alcanza: la card del menú hace
+    // `stopPropagation()` para no cerrarse a sí misma, así que el click en una
+    // entrada nunca llega a `document`. El síntoma era un popover de gramática
+    // flotando sobre el modal que abría esa entrada.
+    effect(() => {
+      if (!this.ctxMenu.current()) return;
+      untracked(() => this.cerrarPopovers());
+    });
+
     // El panel de repeticiones pidió abrir el popover sobre una aparición. El
     // `force` no es opcional: si el detector automático está apagado,
     // `checkRepeticiones` no corre solo al abrir el capítulo y el pedido

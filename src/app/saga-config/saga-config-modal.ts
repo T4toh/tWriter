@@ -192,6 +192,14 @@ export class SagaConfigModal {
         mostrar_numero_parte: cfg.mostrar_numero_parte ?? null,
         formato_parte: cfg.formato_parte ?? null,
         finalizada: cfg.finalizada ?? false,
+        // Sin esta línea el campo entraba `undefined` y pasaban las dos cosas
+        // juntas: la sección "Reglas de LanguageTool desactivadas" no se
+        // renderizaba nunca (el `@if` mira `length > 0`), y `save()` —cuyo
+        // whitelist SÍ lo preserva— lo escribía como `null`, borrando del
+        // `saga.json` todas las reglas desactivadas con solo abrir el modal y
+        // tocar Guardar. El aviso está escrito en `save()`: el whitelist es la
+        // lista completa, así que preservar allá no alcanza si `load()` no trae.
+        reglas_lt_desactivadas: cfg.reglas_lt_desactivadas ?? null,
       });
       this.hydrateTheme(cfg.theme ?? null);
     } catch (err) {

@@ -78,6 +78,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+
+  /* El `space-between` solo deja aire cuando sobra lugar: con la fila de
+     botones ancha, el logo de LT queda pegado al último. El gap es el piso. */
+  gap: 12px;
   margin-top: 4px;
   padding-top: 6px;
   border-top: 1px solid var(--border);
