@@ -7,7 +7,7 @@
   (click)="onClick()"
 >
   <div class="cover-slot">
-    @if (badge(); as b) {
+    @if (layout() === 'vertical' && badge(); as b) {
       <span class="badge" [class.alerta]="b.alerta" [title]="b.title">{{ b.texto }}</span>
     }
     @if (coverDataUrl(); as url) {
@@ -35,6 +35,9 @@
             · {{ formatWords(w) }}
           }
         </span>
+        @if (layout() === 'horizontal' && badge(); as b) {
+          <span class="badge inline" [class.alerta]="b.alerta" [title]="b.title">{{ b.texto }}</span>
+        }
       </div>
       <div class="card-actions">
         <button
