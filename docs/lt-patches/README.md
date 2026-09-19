@@ -23,8 +23,8 @@ que ya estén commiteadas en el clone se pushean tal cual: no hace falta rebasar
 | `0001-es-DETRAS_PX-adverbio-lugar.patch` | `es-adverbio-lugar-atras-adelante` | [#12131](https://github.com/languagetool-org/languagetool/pull/12131) | **mergeado** 2026-08-31 |
 | `0002-es-tu-verbo-voseante.patch` | `es-tu-verbo-voseante` | [#12132](https://github.com/languagetool-org/languagetool/pull/12132) | **mergeado** 2026-08-31 |
 | `0003-es-mezcla-tuteo-voseo.patch` | `es-mezcla-tuteo-voseo` | [#12133](https://github.com/languagetool-org/languagetool/pull/12133) | **mergeado** 2026-08-31 |
-| `0004-es-tu-tilde-puntos-suspensivos.patch` | `es-tu-tilde-puntos-suspensivos` | [#12195](https://github.com/languagetool-org/languagetool/pull/12195) | abierto 2026-09-18 |
-| `0005-es-mas-seguido-adverbio.patch` | `es-mas-seguido-adverbio` | [#12196](https://github.com/languagetool-org/languagetool/pull/12196) | abierto 2026-09-18 |
+| `0004-es-tu-tilde-puntos-suspensivos.patch` | `es-tu-tilde-puntos-suspensivos` | [#12195](https://github.com/languagetool-org/languagetool/pull/12195) | **mergeado** 2026-09-19 |
+| `0005-es-mas-seguido-adverbio.patch` | `es-mas-seguido-adverbio` | [#12196](https://github.com/languagetool-org/languagetool/pull/12196) | **mergeado** 2026-09-19 |
 
 `0005` son **tres commits** (el `.patch` es un mbox con los tres, `git am` los
 aplica de una): el antipatrón, el acote del `skip` a la cláusula, y la guarda
