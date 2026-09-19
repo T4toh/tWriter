@@ -16,11 +16,14 @@ import {
   ESTADO_LIBRO_LABEL,
   estadoLibro,
   necesitaRevisar,
+  ultimaRevisionMs,
 } from '../core/estado-libro';
 import { ExportsService } from '../core/exports-service';
 import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { RevisionLibroService } from '../core/revision-libro-service';
+import { SettingsService } from '../core/settings-service';
 import { TreeNode } from '../core/types';
+import { formatFechaCorta } from '../shared/fecha-corta';
 import { Spinner } from '../shared/spinner';
 
 @Component({
@@ -35,6 +38,7 @@ export class BookCard {
   private exports = inject(ExportsService);
   private coverCache = inject(CoverCache);
   private revision = inject(RevisionLibroService);
+  private settings = inject(SettingsService);
 
   readonly node = input.required<TreeNode>();
   /** `vertical` (default) es la tarjeta de la grilla: portada arriba a todo el
@@ -80,22 +84,43 @@ export class BookCard {
     ),
   );
 
-  /** Chip sobre la tapa. Uno solo y corto: la tarjeta de la grilla ya pelea
-   *  por el espacio del bloque de texto, y cada línea que se le suma desalinea
-   *  los controles contra las tarjetas de al lado.
+  /** Chip sobre la tapa: estado del libro y **fecha del último sello de
+   *  publicación**, que es el dato que el autor busca en la grilla — cuándo
+   *  subió esa novela a las tiendas por última vez.
    *
-   *  Gana el aviso sobre el estado porque es lo accionable; el estado con su
-   *  fecha y su cuenta de revisiones está en el modal de configuración. «En
-   *  curso» al día no muestra nada: es el caso normal de casi toda la grilla. */
-  protected readonly badge = computed<{ texto: string; alerta: boolean } | null>(() => {
+   *  Antes decía «Revisar» y nada más, que no informa nada: el libro siempre
+   *  se puede revisar. El aviso no se pierde, pasa a ser el color — naranja
+   *  cuando hay ediciones posteriores al último sello, o sea cuando lo que
+   *  está publicado quedó viejo. El `title` dice cuál de los dos casos es.
+   *
+   *  Sin sellos y en curso no muestra nada: es casi toda la grilla. El
+   *  historial completo sigue estando en el modal de configuración. */
+  protected readonly badge = computed<{
+    texto: string;
+    title: string;
+    alerta: boolean;
+  } | null>(() => {
     const cfg = this.config();
     if (!cfg) return null;
     const estado = estadoLibro(cfg.estado);
-    if (necesitaRevisar(estado, cfg.revisiones, this.node().modifiedMs)) {
-      return { texto: 'Revisar', alerta: true };
+    const alerta = necesitaRevisar(estado, cfg.revisiones, this.node().modifiedMs);
+    const ultima = ultimaRevisionMs(cfg.revisiones);
+    if (ultima !== null) {
+      const fecha = formatFechaCorta(ultima, this.settings.dateFormat());
+      return {
+        texto: `${ESTADO_LIBRO_LABEL[estado]} · ${fecha}`,
+        title: alerta
+          ? `Publicada el ${fecha}, con ediciones posteriores sin publicar`
+          : `Última versión publicada el ${fecha}`,
+        alerta,
+      };
     }
     if (estado === 'en_curso') return null;
-    return { texto: ESTADO_LIBRO_LABEL[estado], alerta: false };
+    return {
+      texto: ESTADO_LIBRO_LABEL[estado],
+      title: 'Todavía no se publicó ninguna versión',
+      alerta,
+    };
   });
 
   protected readonly isConfigured = computed(() => {
