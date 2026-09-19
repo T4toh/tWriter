@@ -28,6 +28,7 @@ const {
   esEstadoLibro,
   admiteCapitulosNuevos,
   selloRevision,
+  esSelloRevision,
   ultimaRevisionMs,
   necesitaRevisar,
 } = await import(pathToFileURL(join(outDir, 'estado-libro.js')).href);
@@ -52,6 +53,22 @@ check('publicada tampoco', admiteCapitulosNuevos('publicada'), false);
 check('sello rellena mes, día, hora y minuto',
   selloRevision(new Date(2026, 8, 4, 9, 5)), '2026-09-04T09:05');
 check('sello a medianoche', selloRevision(new Date(2026, 11, 31, 0, 0)), '2026-12-31T00:00');
+
+// El campo de texto del modal de configuración deja tipear cualquier cosa:
+// el picker nativo no se puede usar en WebKitGTK.
+check('sello tipeado bien', esSelloRevision('2026-09-19T21:33'), true);
+check('sello sin hora no alcanza', esSelloRevision('2026-09-19'), false);
+check('solo el año no es un sello', esSelloRevision('2026'), false);
+check('la fecha en formato argentino no', esSelloRevision('19/09/2026'), false);
+check('con segundos tampoco', esSelloRevision('2026-09-19T21:33:10'), false);
+check('la T va en mayúscula', esSelloRevision('2026-09-19t21:33'), false);
+check('vacío no', esSelloRevision(''), false);
+check('mes 13 no', esSelloRevision('2026-13-01T00:00'), false);
+// El caso que el `Date` solo deja pasar: no es inválido, rueda al 3 de marzo.
+check('31 de febrero no, aunque Date lo acepte', esSelloRevision('2026-02-31T00:00'), false);
+check('29 de febrero bisiesto sí', esSelloRevision('2024-02-29T00:00'), true);
+check('lo que escupe selloRevision siempre valida',
+  esSelloRevision(selloRevision(new Date(2026, 0, 1, 0, 0))), true);
 
 const tarde = new Date(2026, 8, 18, 14, 30).getTime();
 check('última revisión sin lista', ultimaRevisionMs(undefined), null);

@@ -64,6 +64,21 @@ export function selloRevision(d: Date): string {
   );
 }
 
+/** Valida un sello tipeado a mano.
+ *
+ *  El patrón solo no alcanza y `Date` tampoco. `new Date('2026')` parsea
+ *  contento y dejaría pasar un sello de un solo campo, y al revés
+ *  `new Date('2026-02-31T00:00')` **no** es `Invalid Date`: rueda al 3 de
+ *  marzo, así que un 31 de febrero entraría convertido en otra fecha, en
+ *  silencio. Por eso son los tres pasos: el patrón, que la fecha parsee, y el
+ *  round-trip por `selloRevision`, que es lo único que descarta el rodeo. */
+export function esSelloRevision(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return false;
+  const d = new Date(value);
+  if (!Number.isFinite(d.getTime())) return false;
+  return selloRevision(d) === value;
+}
+
 /** Milisegundos de la última revisión, o `null` si todavía no hay ninguna.
  *  No asume que la lista esté ordenada ni que todos los sellos sean válidos:
  *  el `book.json` se edita a mano. */

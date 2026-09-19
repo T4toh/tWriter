@@ -55,20 +55,29 @@
             }
             <div class="anotar-sello">
               <input
-                type="datetime-local"
+                type="text"
+                class="sello-input"
+                [class.invalido]="selloMalEscrito()"
                 [ngModel]="nuevoSello()"
                 (ngModelChange)="nuevoSello.set($event)"
+                (keydown.enter)="anotarRevision()"
+                placeholder="2026-09-19T21:33"
+                spellcheck="false"
+                autocomplete="off"
                 aria-label="Fecha y hora de la publicación"
               />
               <button
                 type="button"
                 class="ghost-btn"
                 (click)="anotarRevision()"
-                [disabled]="!nuevoSello()"
+                [disabled]="!selloValido()"
               >
                 Anotar
               </button>
             </div>
+            @if (selloMalEscrito()) {
+              <p class="hint error-hint">Va como año-mes-díaThora:minuto, por ejemplo 2026-09-19T21:33.</p>
+            }
             <p class="hint">
               El exportador anota una sola cuando tildás «esta es la versión que publico». Si una
               versión salió sin pasar por ahí, anotala acá y la novela deja de figurar como

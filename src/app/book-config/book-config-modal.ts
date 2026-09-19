@@ -12,6 +12,7 @@ import {
   ESTADO_LIBRO_DETALLE,
   ESTADO_LIBRO_LABEL,
   ESTADOS_LIBRO,
+  esSelloRevision,
   estadoLibro,
   selloRevision,
 } from '../core/estado-libro';
@@ -142,12 +143,24 @@ export class BookConfigModal {
       });
   });
 
-  /** Valor del `<input type="datetime-local">` con el que se anota a mano.
-   *  Se precarga con "ahora" en cada apertura del modal (ver `load`), que es
-   *  el caso común — "ya la subí". El formato nativo del input es
-   *  `YYYY-MM-DDTHH:MM`, exactamente el del sello, así que no hay nada que
-   *  parsear ni que formatear en el medio. */
+  /** Texto del campo con el que se anota una publicación a mano. Se precarga
+   *  con "ahora" en cada apertura del modal (ver `load`), que es el caso común
+   *  — "ya la subí" — así que lo normal es no tipear nada y darle a Anotar.
+   *
+   *  **Campo de texto y no `<input type="datetime-local">`**, que fue el
+   *  primer intento: el picker nativo de WebKitGTK se abre y no se puede
+   *  cerrar, y esta app corre sobre WebKitGTK en Linux. El formato es el mismo
+   *  que escupe `selloRevision`, así que tampoco acá hay nada que parsear. */
   protected readonly nuevoSello = signal<string>('');
+
+  /** Vacío no es "mal escrito": recién abierto el campo tiene la fecha de
+   *  ahora, y si el autor la borra entera todavía no tipeó nada mal. Separar
+   *  los dos casos es lo que evita el cartel de error apenas se abre el
+   *  modal. */
+  protected readonly selloValido = computed<boolean>(() => esSelloRevision(this.nuevoSello()));
+  protected readonly selloMalEscrito = computed<boolean>(
+    () => this.nuevoSello().trim().length > 0 && !this.selloValido(),
+  );
 
   /** Agrega el sello tipeado al historial. Los duplicados se ignoran en vez de
    *  avisar: anotar dos veces la misma fecha y hora es un doble click, no una
@@ -156,14 +169,14 @@ export class BookConfigModal {
   protected anotarRevision(): void {
     const sello = this.nuevoSello();
     const cur = this.config();
-    if (!cur || !sello || !Number.isFinite(new Date(sello).getTime())) return;
+    if (!cur || !esSelloRevision(sello)) return;
     const previas = cur.revisiones ?? [];
     if (previas.includes(sello)) return;
     this.update('revisiones', [...previas, sello]);
   }
 
   /** Saca un sello. Existe porque el de arriba deja meter cualquier fecha: sin
-   *  esto, un dedo torpe en el `datetime-local` se arregla editando el JSON. */
+   *  esto, un dedo torpe en el campo se arregla editando el JSON. */
   protected borrarRevision(sello: string): void {
     const cur = this.config();
     if (!cur) return;

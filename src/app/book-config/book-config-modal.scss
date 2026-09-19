@@ -34,9 +34,10 @@
   }
 }
 
-/* Anotar una publicación a mano. El `datetime-local` nativo escupe
-   `YYYY-MM-DDTHH:MM`, que es el formato del sello tal cual — de ahí que no
-   haya ni picker propio ni parseo. */
+/* Anotar una publicación a mano. Campo de texto pelado y no
+   `<input type="datetime-local">`: el picker nativo de WebKitGTK se abre y no
+   se puede cerrar. En mono y con el `placeholder` mostrando el formato, que es
+   el mismo `YYYY-MM-DDTHH:MM` del sello, así que no hay nada que parsear. */
 .anotar-sello {
   display: flex;
   gap: 0.5em;
@@ -46,6 +47,19 @@
     flex: 1;
     min-width: 0;
   }
+}
+
+.sello-input {
+  font-family: var(--font-mono);
+  font-size: 11px;
+
+  &.invalido {
+    border-color: var(--err);
+  }
+}
+
+.error-hint {
+  color: var(--err);
 }
 
 /* Solo se ve al pasar por encima de su fila: la lista se lee mucho más de lo
