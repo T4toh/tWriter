@@ -202,11 +202,17 @@
   flex: 0 0 auto;
 }
 
-/* Estado del libro, encima de la tapa. Abajo no entra: en el bloque de texto
-   ya pelean título, subtítulo, fecha, capítulos y los tres controles, y cada
-   línea que se le agrega a UNA tarjeta desalinea sus botones contra los de las
-   vecinas. Arriba a la izquierda, chico y sin gritar — el detalle con fechas
-   vive en el modal de configuración. */
+/* Estado del libro y fecha de la última publicación.
+
+   En la vertical va encima de la tapa: abajo no entra, porque en el bloque de
+   texto ya pelean título, subtítulo, fecha, capítulos y los tres controles, y
+   cada línea que se le agrega a UNA tarjeta desalinea sus botones contra los
+   de las vecinas.
+
+   En la horizontal NO: ahí la tapa mide 90px y el chip la tapaba entera,
+   mientras al lado sobraba media tarjeta vacía. Va en el pie (`.inline`),
+   detrás de la cuenta de capítulos, que es espacio que estaba sin usar. La
+   horizontal es una sola y no tiene vecinas contra las cuales desalinearse. */
 .badge {
   position: absolute;
   top: 8px;
@@ -230,5 +236,15 @@
   &.alerta {
     border-color: var(--warn-tint-border);
     color: var(--warn);
+  }
+
+  /* En el pie de la horizontal: en el flujo, sin fondo semiopaco (no hay tapa
+     abajo) y pegado a la línea de base de los otros dos textos del `.foot-meta`,
+     que son 11px con `line-height` normal. */
+  &.inline {
+    position: static;
+    padding: 0 6px;
+    background: none;
+    line-height: 1.5;
   }
 }
