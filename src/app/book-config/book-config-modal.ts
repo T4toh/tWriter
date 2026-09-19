@@ -13,6 +13,7 @@ import {
   ESTADO_LIBRO_LABEL,
   ESTADOS_LIBRO,
   estadoLibro,
+  selloRevision,
 } from '../core/estado-libro';
 import { FontsService } from '../core/fonts-service';
 import { NativeDialogsService } from '../core/native-dialogs-service';
@@ -114,22 +115,61 @@ export class BookConfigModal {
     label: `${ESTADO_LIBRO_LABEL[e]} — ${ESTADO_LIBRO_DETALLE[e]}`,
   }));
 
-  /** Historial de proofreading, de la más nueva a la más vieja. Solo lectura:
-   *  las revisiones las anota el exportador al tildar "esta es la versión que
-   *  publico", que es el único momento en que hay una edición concreta a la
-   *  que referirse. Van con hora porque dos revisiones del mismo día son
-   *  normales cuando el autor corrige y vuelve a exportar. */
-  protected readonly revisiones = computed<string[]>(() => {
+  /** Historial de publicaciones, de la más nueva a la más vieja. Lo normal es
+   *  que lo anote el exportador al tildar "esta es la versión que publico",
+   *  que es el momento en que hay una edición concreta a la que referirse.
+   *  Van con hora porque dos revisiones del mismo día son normales cuando el
+   *  autor corrige y vuelve a exportar.
+   *
+   *  Pero el exportador no es la única forma de publicar: una versión puede
+   *  salir a las tiendas sin pasar por acá, o el tilde puede quedar sin poner.
+   *  Cuando pasa eso el sello no existe, el libro figura desactualizado para
+   *  siempre y no había forma de arreglarlo desde la app — había que editar el
+   *  `book.json` a mano. Por eso la lista se edita: `anotarRevision` agrega y
+   *  `borrarRevision` saca. `sello` es el valor crudo, que es la clave. */
+  protected readonly revisiones = computed<{ sello: string; label: string }[]>(() => {
     const sellos = this.config()?.revisiones ?? [];
     return [...sellos]
       .sort()
       .reverse()
       .map((sello) => {
         const ms = new Date(sello).getTime();
-        if (!Number.isFinite(ms)) return sello;
-        return `${formatFechaCorta(ms, this.settings.dateFormat())} ${sello.slice(11, 16)}`;
+        if (!Number.isFinite(ms)) return { sello, label: sello };
+        return {
+          sello,
+          label: `${formatFechaCorta(ms, this.settings.dateFormat())} ${sello.slice(11, 16)}`,
+        };
       });
   });
+
+  /** Valor del `<input type="datetime-local">` con el que se anota a mano.
+   *  Se precarga con "ahora" en cada apertura del modal (ver `load`), que es
+   *  el caso común — "ya la subí". El formato nativo del input es
+   *  `YYYY-MM-DDTHH:MM`, exactamente el del sello, así que no hay nada que
+   *  parsear ni que formatear en el medio. */
+  protected readonly nuevoSello = signal<string>('');
+
+  /** Agrega el sello tipeado al historial. Los duplicados se ignoran en vez de
+   *  avisar: anotar dos veces la misma fecha y hora es un doble click, no una
+   *  intención. No ordena la lista — `ultimaRevisionMs` no asume orden y el
+   *  modal ya la ordena para mostrarla. */
+  protected anotarRevision(): void {
+    const sello = this.nuevoSello();
+    const cur = this.config();
+    if (!cur || !sello || !Number.isFinite(new Date(sello).getTime())) return;
+    const previas = cur.revisiones ?? [];
+    if (previas.includes(sello)) return;
+    this.update('revisiones', [...previas, sello]);
+  }
+
+  /** Saca un sello. Existe porque el de arriba deja meter cualquier fecha: sin
+   *  esto, un dedo torpe en el `datetime-local` se arregla editando el JSON. */
+  protected borrarRevision(sello: string): void {
+    const cur = this.config();
+    if (!cur) return;
+    const quedan = (cur.revisiones ?? []).filter((s) => s !== sello);
+    this.update('revisiones', quedan.length ? quedan : null);
+  }
 
   protected readonly idiomaOptions: SelectOption[] = [
     { value: 'es', label: 'Español' },
@@ -237,6 +277,10 @@ export class BookConfigModal {
 
   private async load(path: string): Promise<void> {
     this.error.set(null);
+    // El modal es uno solo y se reusa entre libros, así que el "ahora" se
+    // recalcula acá: puesto en el inicializador del signal quedaba clavado en
+    // la hora de arranque de la app.
+    this.nuevoSello.set(selloRevision(new Date()));
     try {
       const cfg = await this.svc.load(path);
       this.config.set({

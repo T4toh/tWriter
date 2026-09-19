@@ -31,18 +31,50 @@
               />
             </label>
           </div>
-          @if (revisiones().length > 0) {
-            <div class="revisiones">
-              <span class="revisiones-titulo">
-                {{ revisiones().length === 1 ? 'Revisión publicada' : 'Revisiones publicadas' }}
-              </span>
+          <div class="revisiones">
+            <span class="revisiones-titulo">Versiones publicadas</span>
+            @if (revisiones().length > 0) {
               <ol>
-                @for (fecha of revisiones(); track fecha) {
-                  <li>{{ fecha }}</li>
+                @for (r of revisiones(); track r.sello) {
+                  <li>
+                    <span>{{ r.label }}</span>
+                    <button
+                      type="button"
+                      class="borrar-sello"
+                      (click)="borrarRevision(r.sello)"
+                      title="Borrar este registro"
+                      aria-label="Borrar este registro"
+                    >
+                      ×
+                    </button>
+                  </li>
                 }
               </ol>
+            } @else {
+              <p class="hint">Todavía ninguna.</p>
+            }
+            <div class="anotar-sello">
+              <input
+                type="datetime-local"
+                [ngModel]="nuevoSello()"
+                (ngModelChange)="nuevoSello.set($event)"
+                aria-label="Fecha y hora de la publicación"
+              />
+              <button
+                type="button"
+                class="ghost-btn"
+                (click)="anotarRevision()"
+                [disabled]="!nuevoSello()"
+              >
+                Anotar
+              </button>
             </div>
-          }
+            <p class="hint">
+              El exportador anota una sola cuando tildás «esta es la versión que publico». Si una
+              versión salió sin pasar por ahí, anotala acá y la novela deja de figurar como
+              desactualizada.
+            </p>
+          </div>
           <div class="row">
             <label>
               <span>Subtítulo</span>
