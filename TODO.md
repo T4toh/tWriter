@@ -845,139 +845,15 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   Dónde mostrarlo: sumarlo a la pasada del panel de auditoría RAE
   (`rae-audit-panel.ts`), que ya recorre el capítulo y lista violaciones con
   jump-to-term, en vez de inventar un panel nuevo.
-- [ ] **Los parches `0004` y `0005` de LT: subidos, esperando review humana**
-  (falsos positivos encontrados escribiendo el 2026-09-02; parches escritos y
-  subidos el 2026-09-18)
-  **De nuestro lado no queda nada**: [#12195](https://github.com/languagetool-org/languagetool/pull/12195)
-  (`TU_TILDE`) y [#12196](https://github.com/languagetool-org/languagetool/pull/12196)
-  (`AGREEMENT_POSTPONED_ADJ`), rebasados sobre `upstream/master`, 0 commits
-  atrás y los dos `MERGEABLE`. CodeRabbit ya pasó: `0004` salió limpio, y de
-  `0005` salió un acote del `skip` que está contestado y pusheado.
-  El código está commiteado en `~/Repos/Personal/languagetool`, los `.patch` en
-  `docs/lt-patches/`, `SpanishPatternRuleTest` pasa en las dos ramas
-  (1673 reglas) y la medición contra `~/novelas` está en el README de esa
-  carpeta: `TU_TILDE` 22 hits → 2, `AGREEMENT_POSTPONED_ADJ` 24 → 21, ningún hit
-  nuevo. El container local ya quedó parcheado a mano (se pierde si se recrea).
-  **El item se borra cuando mergeen upstream**, no antes: hasta entonces el
-  parche en `docs/lt-patches/` es lo único que hace que las dos reglas anden
-  bien acá, y hay que reaplicarlo a mano en cada container nuevo.
-  Los tres casos se reprodujeron contra el container local (LT **6.8**, `es-AR`)
-  y los ids salieron de ahí, así que no hay que adivinarlos:
-
-  **`TU_TILDE[5]` — `tu` seguido de puntos suspensivos.**
-  «No te disculpes, me ha sorprendido tu… conjuro.» → marca `tu` y sugiere `tú`
-  ("El pronombre personal «tú» lleva tilde"). Acá `tu` es determinante posesivo
-  y su sustantivo es `conjuro`: los puntos son **pausa, no corte**. La regla
-  toma el `…` como fin de sintagma y concluye que `tu` quedó suelto, o sea que
-  tiene que ser el pronombre.
-  Acotado con pruebas contra el container:
-  - sin los puntos, `me ha sorprendido tu conjuro` → **limpio**, o sea que el
-    disparador es el `…`;
-  - dispara igual con `…` (U+2026) y con `...`, así que no es un problema de
-    normalización de caracteres nuestro y no se arregla del lado de la app;
-  - `Vi tu… casa.` y `Me gusta tu… idea.` también disparan → es el patrón, no
-    esa oración.
-  La forma de la excepción sería: `tu` + puntos suspensivos + sustantivo ⇒ no
-  marcar. Ojo con no romper el caso legítimo (`Dame tu, dijo.` dispara y ahí
-  está bien).
-
-  **`AGREEMENT_POSTPONED_ADJ[3]` — `más seguido` como locución adverbial.**
-  El caso de arriba, «Quiero pasear sin mi armadura más seguido, Chispi.» →
-  sugiere `seguida` concordando con `armadura`. Probado contra el container:
-  `Quiero salir más seguido.` y `Quiero pasear sin mi casco más seguido.` salen
-  limpias, así que hace falta un sustantivo femenino antes — pero
-  `Salgo de mi casa más seguido.` **también sale limpia**, o sea que no alcanza
-  con "femenino contiguo" y el disparador real está sin caracterizar. Eso es la
-  primera mitad del trabajo del parche.
-  (En esa oración salta además `MORFOLOGIK_RULE_ES` por `Chispi`, que es un
-  nombre del mundo y va al diccionario de la saga, no es parte de este bug.)
-
-  **`NO_SEPARADO[5]` — el `re` intensificador rioplatense. Distinto de los dos
-  de arriba: acá LT no está equivocado, está siendo normativo.**
-  «los pollitos son re lindos» → sugiere `relindos`. La norma de la RAE dice que
-  los prefijos van pegados, así que la sugerencia es correcta *como norma* — lo
-  que no contempla es el registro: en diálogo rioplatense el `re` separado es lo
-  que se escribe, y esto es diálogo.
-  **Y la regla es arbitraria vista desde el texto**, esto sí es reportable
-  aunque la norma le dé la razón: dispara solo cuando la forma pegada existe en
-  el diccionario de LT. Probado contra el container en `es-AR`:
-  - dispara: `re lindos` → `relindos`, `re lindo` → `relindo`,
-    `re contento` → `recontento`, `re malo` → `remalo`;
-  - no dispara: `re cansado`, `re caro`, `re fácil`, `re buenos`, `re grande`.
-  O sea que la misma construcción se marca o no según si el pegado quedó
-  lexicalizado, cosa que el que escribe no tiene forma de anticipar.
-  **La variante no cambia nada**: `es-AR` y `es` devuelven exactamente el mismo
-  match, así que la sospecha de que "falta en la variante" es correcta — la
-  variante voseo no trae ninguna excepción para esto.
-  **Y hay un argumento más fuerte que "es cuestión de registro"**: el `re`
-  rioplatense es **productivo**, se le pega a cualquier adjetivo — re feo, re
-  lindo, re caro, re choto, re piola — y las formas pegadas que LT propone no
-  las dice nadie. Eso se ve en el propio diccionario de LT: `Es relindo.` y
-  `Estoy recontento.` pasan **limpias** (están como entradas), mientras que
-  `re feo`, `re choto`, `re piola`, `re bueno` separadas también pasan limpias
-  porque el pegado no existe. O sea que la regla alcanza exactamente al puñado
-  de formas que quedaron lexicalizadas, y para esas sugiere justo la grafía que
-  no se usa. El resto de la misma construcción, que es la mayoría, no se marca.
-  **Decisión tomada el 2026-09-02: acá no va PR.** Sería defendible sin discutir
-  la norma (una regla que cubre 4 casos de una construcción abierta y sugiere la
-  variante muerta), pero es la clase de discusión que termina en un hilo sobre
-  qué dice la RAE, y no hay ganas. **Se apaga y listo**: es el caso testigo del
-  `disabledRules` por saga, que ya está hecho (ver README → Gramática) — novela
-  con diálogo argentino desactiva `NO_SEPARADO` desde el popover.
-  Si alguna vez cambia de idea: `node scripts/scan-regla-lt.mjs NO_SEPARADO
-  ~/novelas es-AR` da los hits sobre la obra real, que es la evidencia con la
-  que se armaría. Nada de esto bloquea a `0004`/`0005`, que sí son bugs de
-  regla y no discuten nada.
-
-  **La norma, para tenerla a mano** (buscada el 2026-09-02, para poder citarla
-  sin discutir de memoria). En esto LT tiene razón y conviene saberlo antes de
-  abrir la boca:
-  - *Ortografía de la lengua española* (RAE/ASALE 2010), §5.3, «La escritura de
-    palabras o expresiones con prefijo»: el prefijo va **unido a la base cuando
-    esta es univerbal** (`vicedecano`, `contrarreloj`); con **guion** si la base
-    es sigla, número o nombre propio (`anti-OTAN`, `sub-16`); y **separado por
-    espacio cuando la base es pluriverbal**, o sea varias palabras funcionando
-    como unidad (`anti pena de muerte`, `ex primer ministro`,
-    `pre Segunda Guerra Mundial`).
-    <https://www.rae.es/ortograf%C3%ADa-b%C3%A1sica/uni%C3%B3n-y-separaci%C3%B3n-de-palabras-y-otros-elementos-en-la-escritura/la-escritura-de-palabras-o-expresiones-con-prefijo>
-  - `re-` está en el DLE **como prefijo**, con valor intensivo equivalente a
-    "muy": `relindo`, `reloco`, `rebueno`, `rebién` — o sea que las formas que
-    sugiere LT son exactamente las que el diccionario registra.
-    <https://dle.rae.es/re->
-  - La RAE lo contestó varias veces por `#RAEconsultas` en la misma línea (el
-    prefijo `re-` se escribe unido, sin guion ni espacio).
-  **El resquicio, si el letrado quiere jugar**: la excepción de la base
-  pluriverbal. Por la misma regla, `re en serio` o `re de fiar` irían separados,
-  porque ahí la base son varias palabras. O sea que la norma **ya** admite el
-  `re` separado, solo que por otro motivo — y el hablante que escribe `re lindos`
-  no está distinguiendo esos dos casos. (Esto es deducción de la regla citada,
-  no una resolución de la RAE: verificarlo antes de usarlo como argumento.)
-  El otro flanco es de uso, no de norma: cuánto aparece cada grafía en corpus
-  argentino (CORPES XXI / CREA filtrando por Argentina) es un dato que se mide,
-  y es distinto de opinar.
-
-  **Cómo quedaron los dos parches** (detalle completo en
-  `docs/lt-patches/README.md`):
-  - `0004` mete un token opcional en el antipatrón de `TU_TILDE[5]` para que la
-    pausa no rompa el vínculo entre `tu` y su sustantivo. Los dos hits que
-    sobreviven **no son de la regla**: LT parte la oración en los puntos
-    suspensivos cuando sigue `¿` o mayúscula, así que el sustantivo queda en la
-    oración siguiente y ningún antipatrón llega. Eso se arregla en `segment.srx`
-    y es un parche aparte, sin escribir.
-  - `0005` agrega un antipatrón al rulegroup `AGREEMENT_POSTPONED_ADJ` que pide
-    un verbo delante de `más|menos seguido`. De paso quedó caracterizado el
-    disparador que el relevamiento del 2026-09-02 daba por desconocido, y no era
-    "sustantivo femenino contiguo": `Salgo de mi casa más seguido.` sale limpia y
-    `Voy a la playa más seguido.` no. Los casos sin verbo («la serie más
-    seguido») se siguen marcando, con un `<example>` nuevo que lo fija.
-  Mientras los PR no estén mergeados, estos dos siguen siendo los casos que
-  justifican el "Nunca más esta regla" del popover: `disabledRules` es el
-  paliativo, el parche es el arreglo. Ojo con la granularidad al apagarlos: la
-  API desactiva la regla entera, no la subregla (el id que devuelve es
-  `AGREEMENT_POSTPONED_ADJ`, sin el `[3]`).
-  Ojo con la versión al reaplicar sobre un container nuevo: los números de línea
-  del README están anclados a **LT 6.8**; verificar el `grep -n` antes de
-  cualquier `sed`.
+- [ ] **La oración se parte en los puntos suspensivos** (encontrado el
+  2026-09-18 midiendo el parche `0004`). Cuando a los puntos suspensivos les
+  sigue un `¿` o una mayúscula, LT cierra la oración ahí: «prestame tu…
+  ¿fuego?» queda como dos oraciones, el sustantivo cae en la segunda y ningún
+  antipatrón llega a verlo. Son los 2 hits de `TU_TILDE` que el parche no pudo
+  arreglar sobre el corpus, y el delator es que en esas mismas frases salta
+  `UPPERCASE_SENTENCE_START`. El arreglo va en `segment.srx`, no en
+  `grammar.xml`, así que es un parche aparte y todavía sin escribir. Detalle y
+  la salida del tagger que lo prueba, en `docs/lt-patches/README.md`.
 
 ## Búsqueda
 

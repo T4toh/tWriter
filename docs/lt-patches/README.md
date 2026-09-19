@@ -23,11 +23,12 @@ que ya estén commiteadas en el clone se pushean tal cual: no hace falta rebasar
 | `0001-es-DETRAS_PX-adverbio-lugar.patch` | `es-adverbio-lugar-atras-adelante` | [#12131](https://github.com/languagetool-org/languagetool/pull/12131) | **mergeado** 2026-08-31 |
 | `0002-es-tu-verbo-voseante.patch` | `es-tu-verbo-voseante` | [#12132](https://github.com/languagetool-org/languagetool/pull/12132) | **mergeado** 2026-08-31 |
 | `0003-es-mezcla-tuteo-voseo.patch` | `es-mezcla-tuteo-voseo` | [#12133](https://github.com/languagetool-org/languagetool/pull/12133) | **mergeado** 2026-08-31 |
-| `0004-es-tu-tilde-puntos-suspensivos.patch` | `es-tu-tilde-puntos-suspensivos` | [#12195](https://github.com/languagetool-org/languagetool/pull/12195) | abierto 2026-09-18 |
-| `0005-es-mas-seguido-adverbio.patch` | `es-mas-seguido-adverbio` | [#12196](https://github.com/languagetool-org/languagetool/pull/12196) | abierto 2026-09-18 |
+| `0004-es-tu-tilde-puntos-suspensivos.patch` | `es-tu-tilde-puntos-suspensivos` | [#12195](https://github.com/languagetool-org/languagetool/pull/12195) | **mergeado** 2026-09-19 |
+| `0005-es-mas-seguido-adverbio.patch` | `es-mas-seguido-adverbio` | [#12196](https://github.com/languagetool-org/languagetool/pull/12196) | **mergeado** 2026-09-19 |
 
-`0005` son **dos commits** (el `.patch` es un mbox con los dos, `git am` los
-aplica de una): el antipatrón, y el acote del `skip` que salió de la review.
+`0005` son **tres commits** (el `.patch` es un mbox con los tres, `git am` los
+aplica de una): el antipatrón, el acote del `skip` a la cláusula, y la guarda
+del participio. Los dos últimos salieron de la review.
 
 Las ramas salen de `master`, son independientes entre sí y no se pisan.
 
@@ -182,3 +183,24 @@ Vale como regla general para los parches que vengan: un `skip="-1"` sin acotar
 es cómodo para que el antipatrón matchee, y por eso mismo tapa de más. Medir
 sobre el corpus no lo detecta —acá el corpus dio idéntico— porque el caso que
 se pierde es justo el que la obra no tiene.
+
+**Y acotar a la cláusula tampoco alcanzó.** Segunda vuelta de la misma review:
+`El jurado nominó la serie más seguido por el público.` se marca en un 6.8
+pelado y el antipatrón la tapaba igual, porque la cláusula tiene un verbo
+(`nominó`) que no tiene nada que ver con la locución. Lo que separa las dos
+lecturas es el complemento agente: el `más seguido` adverbial nunca lleva uno.
+Así que el antipatrón pide además que el token siguiente no sea `por`:
+
+```xml
+<token>seguido</token>
+<token><exception>por</exception></token>
+```
+
+No cuesta nada del lado adverbial, porque después de la locución viene puntuación
+o cualquier cosa menos `por`. El único adverbial que la guarda deja pasar a la
+regla es `Voy más seguido por la mañana.`, que en un 6.8 pelado ya sale limpia.
+
+La moraleja de las dos vueltas es la misma y conviene tenerla a mano: **"hay un
+verbo antes" no identifica una locución adverbial**. Un antipatrón que se apoya
+solo en eso tapa todo lo que comparte forma, y el corpus propio no lo denuncia
+porque justamente no tiene esos casos.
