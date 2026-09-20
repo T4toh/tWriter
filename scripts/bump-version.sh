@@ -59,11 +59,23 @@ if command -v cargo &>/dev/null; then
   ( cd src-tauri && cargo update -p twriter --offline 2>/dev/null || cargo update -p twriter )
 fi
 
+# src/assets/licencias.json — lo genera el `prebuild` desde package.json, pero
+# está commiteado, así que si no se regenera acá queda en la versión anterior
+# hasta que alguien corra un build Y encima commitee el cambio suelto. Así el
+# panel de Acerca de mostró 0.16.0 con la app en 0.18.0 durante dos releases.
+node "$ROOT/scripts/generar-licencias.mjs" >/dev/null
+check src/assets/licencias.json "\"version\": \"$NEW\""
+if [[ "$fallo" != 0 ]]; then
+  echo "licencias.json no quedó en $NEW." >&2
+  exit 1
+fi
+
 echo "Versión bumpeada a $NEW en:"
 echo "  - package.json"
 echo "  - src-tauri/tauri.conf.json"
 echo "  - src-tauri/Cargo.toml"
 echo "  - src-tauri/Cargo.lock"
+echo "  - src/assets/licencias.json"
 echo "  - packaging/aur/PKGBUILD (pkgrel=1)"
 echo
 echo "Próximo paso:"
