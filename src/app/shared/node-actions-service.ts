@@ -246,7 +246,15 @@ export class NodeActionsService {
     const entries: CtxMenuEntry[] = [];
 
     if (canCreateChapter) {
-      entries.push({ label: 'Crear parte', kbd: 'N.html', onClick: () => this.createChapter(node) });
+      // `create_chapter` escribe `N.html` en el dir del nodo. Sobre una sección
+      // eso es una parte del capítulo; sobre un libro es un capítulo plano, que
+      // queda al lado de las carpetas de capítulo. Decía "Crear parte" en los
+      // dos casos y desde el libro el archivo aparecía donde nadie lo esperaba.
+      entries.push({
+        label: node.kind === 'section' ? 'Crear parte' : 'Crear capítulo plano',
+        kbd: 'N.html',
+        onClick: () => this.createChapter(node),
+      });
     }
     if (canCreateSection) {
       entries.push({ label: 'Crear capítulo', onClick: () => this.createSection(node) });

@@ -97,6 +97,31 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   `window`) y reejecuta `placePopover` con las coordenadas de ancla de antes.
   Si al redimensionar el texto se reacomoda, el flotante queda desfasado.
   Necesita recalcular el rect del ancla, no reusar el guardado.
+- **Dos capítulos abiertos rápido y te podés quedar en el equivocado.**
+  `openInPane` (`chapter-service.ts:124`) no tiene forma de saber que llegó
+  tarde: si clickeás el capítulo A y enseguida el B, las dos lecturas están en
+  vuelo a la vez y **gana la que resuelve última**, no la que pediste última.
+  Con una lectura lenta (capítulo grande, disco en la nube) terminás con el
+  árbol marcando B y el editor mostrando A. El fix es un contador de
+  generación: `openInPane` se lo lleva al entrar y descarta todo si cambió al
+  volver de los `await`. No medido todavía — anotado leyendo el código el
+  2026-09-22, mientras se investigaba un supuesto swap de partes que al final
+  **no era un bug** (el autor había cortado y pegado el texto a mano; el
+  historial del repo de novelas lo muestra creciendo por autosave toda la
+  noche en `4.html` y mudándose a `3.html` en dos saves normales).
+- **Mejorar el visor de imágenes** (pedido del autor, 2026-09-22).
+  `image-viewer.ts` son 25 líneas: abre, muestra la imagen entera en el
+  viewport, cierra con Esc. No tiene **zoom**, que es lo que falta de verdad —
+  sin él no se pueden mirar los detalles de una tapa o de una foto de
+  referencia, que es justo para lo que se abre el visor. Zoom con rueda +
+  `Ctrl/⌘ +/-`, pan arrastrando cuando la imagen excede el viewport, y doble
+  click para alternar "entra en pantalla" / 1:1.
+  El pedido incluye "poner EPUB y esas yerbas": **falta decidir el alcance**
+  antes de tocar código — si es que el mismo visor abra los `.epub` de
+  `Exportados` (que hoy salen al visor del OS, ver el item de "Abrir la carpeta
+  del EPUB exportado" en la sección EPUB), o si es un preview aparte. Un
+  renderer de EPUB embebido es otra cosa que un lightbox con zoom; preguntar al
+  autor y partir el item en dos si son dos.
 
 ## Gramática, ortografía y tesauro
 
@@ -845,6 +870,23 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   Dónde mostrarlo: sumarlo a la pasada del panel de auditoría RAE
   (`rae-audit-panel.ts`), que ya recorre el capítulo y lista violaciones con
   jump-to-term, en vez de inventar un panel nuevo.
+
+  **Re-pedido el 2026-09-22, y con un segundo alcance que el item no cubría**:
+  además de los nombres propios del diccionario, el autor quiere que se marquen
+  las **palabras comunes cortas en mayúsculas** — `ME`, `LA`, `EL` y compañía —
+  que salen de un Shift que quedó trabado, no de una decisión. Ojo que esto
+  choca de frente con la excepción de arriba: el item dice que ALL-CAPS no se
+  marca porque es un grito (`—¡AEDAN!`), y acá ALL-CAPS es justamente la señal.
+  La diferencia está en el largo y en la clase de palabra: un grito es una
+  palabra de contenido, y estas son funcionales de 2–3 letras en medio de una
+  oración que sigue en minúsculas. Criterio propuesto: marcar la palabra
+  ALL-CAPS de ≤3 letras cuando la palabra anterior **y** la siguiente no están
+  en mayúsculas (o sea, no es un grito entero), y dejar pasar el resto. Sin
+  lista cerrada de palabras: la forma alcanza y no hay que mantener un
+  diccionario. Verificar contra el corpus antes de prenderlo por default —
+  siglas de 2–3 letras pegadas al texto (`ARS`, `RC` en Buenos Aires 2077)
+  entran por ese mismo molde y son legítimas, así que puede hacer falta
+  exceptuar las que ya están en el diccionario de la saga.
 - [ ] **La oración se parte en los puntos suspensivos** (encontrado el
   2026-09-18 midiendo el parche `0004`). Cuando a los puntos suspensivos les
   sigue un `¿` o una mayúscula, LT cierra la oración ahí: «prestame tu…
