@@ -97,6 +97,64 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   `window`) y reejecuta `placePopover` con las coordenadas de ancla de antes.
   Si al redimensionar el texto se reacomoda, el flotante queda desfasado.
   Necesita recalcular el rect del ancla, no reusar el guardado.
+- **Bug de corrupción — el autosave escribe el capítulo viejo en el path nuevo**
+  (visto en producción el 2026-09-22). En `2 - Buenos Aires 2077/3 - El Rey de
+  Buenos Aires/1 - Movilidad/`, entre las 10:28 y las 10:29, `3.html` y `4.html`
+  **intercambiaron contenido byte a byte** (commit `28d78571` del repo de
+  novelas): el texto que el autor había escrito toda la noche en la parte 4
+  apareció en la 3, y el `<p></p>` de la 3 quedó en la 4. No se perdió nada,
+  pero pudo.
+
+  **No fue ni `insert_part_after` ni `move_node`**: los dos renombran el
+  `.meta.json` junto al `.html` (`create.rs:139` `bump_orden_in_meta`,
+  `reorder.rs:124` `swap_chapter_pair`) y en ese commit **ningún meta aparece en
+  el diff** — `3.meta.json` sigue con `orden:3` y `4.meta.json` con `orden:4`.
+  Tampoco se creó ni borró un archivo. Quedan dos `write_chapter` sueltos, o
+  sea el autosave del editor escribiendo en el path equivocado.
+
+  **Dónde está la ventana**: `chapter-service.ts:124` `openInPane` setea
+  `pane.active` recién **después** de dos `await` (el flush y el
+  `read_chapter`/`read_meta`), y el editor reacciona en el effect de
+  `editor.ts:475`, que corre en el flush de change detection — un macrotask
+  después. En el medio TipTap todavía tiene el documento **anterior**, y
+  cualquier transacción que cambie el doc dispara `onUpdate`
+  (`editor.ts:2128`) → `updateContentInPane(htmlViejo)` → `dirty = true` y
+  autosave agendado **contra el `node.path` nuevo**. Peor: cuando el effect
+  corre lee `content()` untracked, o sea el HTML viejo, y hace `setContent` con
+  él — el editor queda mostrando el capítulo anterior bajo el nombre del nuevo.
+  `saveInPane` (`:202`) no tiene con qué darse cuenta: escribe `pane.content()`
+  en `node.path` sin verificar que los dos vengan del mismo capítulo.
+
+  **Fix propuesto** (una sola guarda, donde pasan todos los caminos): que el
+  editor recuerde de qué path es el doc que tiene cargado (setearlo al final
+  del effect de `loadedAt`, al lado de `this.lastLoadedAt = at`) y lo pase en
+  `updateContentInPane`; el servicio descarta el update si ese path no es el de
+  `active()`. Las transacciones del doc viejo caen solas, porque el effect
+  todavía no corrió y el path registrado sigue siendo el del capítulo anterior.
+
+  **Falta el repro exacto**: los mtimes dicen que primero se vació `4.html`
+  (10:28) y después se escribió el texto en `3.html` (10:29), y con un solo
+  pane esa secuencia no cierra — o hubo split view, o un Ctrl+Z en el medio.
+  El autor no se acuerda. La guarda de arriba tapa la ventana igual, pero sin
+  el repro no hay forma de verificar que era esa y no otra.
+
+  Dos defectos menores del mismo lugar, para arreglar en la misma pasada:
+  `openInPane` no cancela el timer de autosave pendiente antes de pisar el
+  buffer, y lo que se tipea durante esos dos `await` se descarta en silencio
+  (`dirty.set(false)` lo borra sin avisar).
+- **Mejorar el visor de imágenes** (pedido del autor, 2026-09-22).
+  `image-viewer.ts` son 25 líneas: abre, muestra la imagen entera en el
+  viewport, cierra con Esc. No tiene **zoom**, que es lo que falta de verdad —
+  sin él no se pueden mirar los detalles de una tapa o de una foto de
+  referencia, que es justo para lo que se abre el visor. Zoom con rueda +
+  `Ctrl/⌘ +/-`, pan arrastrando cuando la imagen excede el viewport, y doble
+  click para alternar "entra en pantalla" / 1:1.
+  El pedido incluye "poner EPUB y esas yerbas": **falta decidir el alcance**
+  antes de tocar código — si es que el mismo visor abra los `.epub` de
+  `Exportados` (que hoy salen al visor del OS, ver el item de "Abrir la carpeta
+  del EPUB exportado" en la sección EPUB), o si es un preview aparte. Un
+  renderer de EPUB embebido es otra cosa que un lightbox con zoom; preguntar al
+  autor y partir el item en dos si son dos.
 
 ## Gramática, ortografía y tesauro
 
@@ -845,6 +903,23 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   Dónde mostrarlo: sumarlo a la pasada del panel de auditoría RAE
   (`rae-audit-panel.ts`), que ya recorre el capítulo y lista violaciones con
   jump-to-term, en vez de inventar un panel nuevo.
+
+  **Re-pedido el 2026-09-22, y con un segundo alcance que el item no cubría**:
+  además de los nombres propios del diccionario, el autor quiere que se marquen
+  las **palabras comunes cortas en mayúsculas** — `ME`, `LA`, `EL` y compañía —
+  que salen de un Shift que quedó trabado, no de una decisión. Ojo que esto
+  choca de frente con la excepción de arriba: el item dice que ALL-CAPS no se
+  marca porque es un grito (`—¡AEDAN!`), y acá ALL-CAPS es justamente la señal.
+  La diferencia está en el largo y en la clase de palabra: un grito es una
+  palabra de contenido, y estas son funcionales de 2–3 letras en medio de una
+  oración que sigue en minúsculas. Criterio propuesto: marcar la palabra
+  ALL-CAPS de ≤3 letras cuando la palabra anterior **y** la siguiente no están
+  en mayúsculas (o sea, no es un grito entero), y dejar pasar el resto. Sin
+  lista cerrada de palabras: la forma alcanza y no hay que mantener un
+  diccionario. Verificar contra el corpus antes de prenderlo por default —
+  siglas de 2–3 letras pegadas al texto (`ARS`, `RC` en Buenos Aires 2077)
+  entran por ese mismo molde y son legítimas, así que puede hacer falta
+  exceptuar las que ya están en el diccionario de la saga.
 - [ ] **La oración se parte en los puntos suspensivos** (encontrado el
   2026-09-18 midiendo el parche `0004`). Cuando a los puntos suspensivos les
   sigue un `¿` o una mayúscula, LT cierra la oración ahí: «prestame tu…
