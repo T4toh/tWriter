@@ -97,51 +97,18 @@ arreglo queda en el historial de git de este archivo (`git log -p TODO.md`).
   `window`) y reejecuta `placePopover` con las coordenadas de ancla de antes.
   Si al redimensionar el texto se reacomoda, el flotante queda desfasado.
   Necesita recalcular el rect del ancla, no reusar el guardado.
-- **Bug de corrupción — el autosave escribe el capítulo viejo en el path nuevo**
-  (visto en producción el 2026-09-22). En `2 - Buenos Aires 2077/3 - El Rey de
-  Buenos Aires/1 - Movilidad/`, entre las 10:28 y las 10:29, `3.html` y `4.html`
-  **intercambiaron contenido byte a byte** (commit `28d78571` del repo de
-  novelas): el texto que el autor había escrito toda la noche en la parte 4
-  apareció en la 3, y el `<p></p>` de la 3 quedó en la 4. No se perdió nada,
-  pero pudo.
-
-  **No fue ni `insert_part_after` ni `move_node`**: los dos renombran el
-  `.meta.json` junto al `.html` (`create.rs:139` `bump_orden_in_meta`,
-  `reorder.rs:124` `swap_chapter_pair`) y en ese commit **ningún meta aparece en
-  el diff** — `3.meta.json` sigue con `orden:3` y `4.meta.json` con `orden:4`.
-  Tampoco se creó ni borró un archivo. Quedan dos `write_chapter` sueltos, o
-  sea el autosave del editor escribiendo en el path equivocado.
-
-  **Dónde está la ventana**: `chapter-service.ts:124` `openInPane` setea
-  `pane.active` recién **después** de dos `await` (el flush y el
-  `read_chapter`/`read_meta`), y el editor reacciona en el effect de
-  `editor.ts:475`, que corre en el flush de change detection — un macrotask
-  después. En el medio TipTap todavía tiene el documento **anterior**, y
-  cualquier transacción que cambie el doc dispara `onUpdate`
-  (`editor.ts:2128`) → `updateContentInPane(htmlViejo)` → `dirty = true` y
-  autosave agendado **contra el `node.path` nuevo**. Peor: cuando el effect
-  corre lee `content()` untracked, o sea el HTML viejo, y hace `setContent` con
-  él — el editor queda mostrando el capítulo anterior bajo el nombre del nuevo.
-  `saveInPane` (`:202`) no tiene con qué darse cuenta: escribe `pane.content()`
-  en `node.path` sin verificar que los dos vengan del mismo capítulo.
-
-  **Fix propuesto** (una sola guarda, donde pasan todos los caminos): que el
-  editor recuerde de qué path es el doc que tiene cargado (setearlo al final
-  del effect de `loadedAt`, al lado de `this.lastLoadedAt = at`) y lo pase en
-  `updateContentInPane`; el servicio descarta el update si ese path no es el de
-  `active()`. Las transacciones del doc viejo caen solas, porque el effect
-  todavía no corrió y el path registrado sigue siendo el del capítulo anterior.
-
-  **Falta el repro exacto**: los mtimes dicen que primero se vació `4.html`
-  (10:28) y después se escribió el texto en `3.html` (10:29), y con un solo
-  pane esa secuencia no cierra — o hubo split view, o un Ctrl+Z en el medio.
-  El autor no se acuerda. La guarda de arriba tapa la ventana igual, pero sin
-  el repro no hay forma de verificar que era esa y no otra.
-
-  Dos defectos menores del mismo lugar, para arreglar en la misma pasada:
-  `openInPane` no cancela el timer de autosave pendiente antes de pisar el
-  buffer, y lo que se tipea durante esos dos `await` se descarta en silencio
-  (`dirty.set(false)` lo borra sin avisar).
+- **Dos capítulos abiertos rápido y te podés quedar en el equivocado.**
+  `openInPane` (`chapter-service.ts:124`) no tiene forma de saber que llegó
+  tarde: si clickeás el capítulo A y enseguida el B, las dos lecturas están en
+  vuelo a la vez y **gana la que resuelve última**, no la que pediste última.
+  Con una lectura lenta (capítulo grande, disco en la nube) terminás con el
+  árbol marcando B y el editor mostrando A. El fix es un contador de
+  generación: `openInPane` se lo lleva al entrar y descarta todo si cambió al
+  volver de los `await`. No medido todavía — anotado leyendo el código el
+  2026-09-22, mientras se investigaba un supuesto swap de partes que al final
+  **no era un bug** (el autor había cortado y pegado el texto a mano; el
+  historial del repo de novelas lo muestra creciendo por autosave toda la
+  noche en `4.html` y mudándose a `3.html` en dos saves normales).
 - **Mejorar el visor de imágenes** (pedido del autor, 2026-09-22).
   `image-viewer.ts` son 25 líneas: abre, muestra la imagen entera en el
   viewport, cierra con Esc. No tiene **zoom**, que es lo que falta de verdad —

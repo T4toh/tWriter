@@ -146,6 +146,16 @@ export class ChapterService {
         invoke<string>('read_chapter', { path: node.path }),
         invoke<ChapterMeta>('read_meta', { chapterPath: node.path }),
       ]);
+      // Segundo flush, a propósito. Leer capítulo + meta es un round-trip a
+      // Rust, y durante esa espera el editor sigue mostrando el capítulo
+      // anterior y sigue editable: lo que se tipee ahí entra por `onUpdate` →
+      // `updateContentInPane` y marca el pane dirty. Sin este flush, el
+      // `dirty.set(false)` de abajo pisaba el buffer y esas teclas no llegaban
+      // nunca al disco — el autosave pendiente después no-opeaba por dirty en
+      // false. `active` todavía apunta al capítulo anterior, así que el save
+      // va al archivo correcto. La rama no-dirty además cancela el timer que
+      // hubiera quedado armado.
+      await this.flushPendingInPane(paneId);
       let meta = metaRaw ?? EMPTY_META;
       if (!meta.idioma && html.trim()) {
         meta = { ...meta, idioma: detectLang(html) };
