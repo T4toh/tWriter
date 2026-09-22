@@ -7,20 +7,21 @@ import {
   signal
 } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
-import { LucideBookOpen, LucideSettings } from '@lucide/angular';
+import { LucideBookOpen, LucideRepeat, LucideRuler, LucideSettings, LucideSpellCheck } from '@lucide/angular';
 import { BookConfigService } from '../core/book-config-service';
 import { CoverCache } from '../core/cover-cache';
 import { DictionaryService } from '../core/dictionary-service';
 import { sinPrefijoNumerico } from '../core/nombre-carpeta';
 import { SagaConfig, SagaConfigService } from '../core/saga-config-service';
 import { TreeNode } from '../core/types';
+import { NodeActionsService } from '../shared/node-actions-service';
 
 /** Tapas visibles en el mazo, contando la del frente. */
 const MAX_DECK = 3;
 
 @Component({
   selector: 'app-saga-header',
-  imports: [LucideBookOpen, LucideSettings],
+  imports: [LucideBookOpen, LucideRepeat, LucideRuler, LucideSettings, LucideSpellCheck],
   templateUrl: './saga-header.html',
   styleUrl: './saga-header.scss',
 })
@@ -29,6 +30,7 @@ export class SagaHeader {
   private bookCfgService = inject(BookConfigService);
   private dictSvc = inject(DictionaryService);
   private coverCache = inject(CoverCache);
+  private actions = inject(NodeActionsService);
 
   readonly node = input.required<TreeNode>();
 
@@ -78,6 +80,21 @@ export class SagaHeader {
   protected openDictionary(event: MouseEvent): void {
     event.stopPropagation();
     void this.dictSvc.openFor(this.node());
+  }
+
+  protected auditRae(event: MouseEvent): void {
+    event.stopPropagation();
+    void this.actions.auditRae(this.node());
+  }
+
+  protected auditRepeticiones(event: MouseEvent): void {
+    event.stopPropagation();
+    void this.actions.auditRepeticiones(this.node());
+  }
+
+  protected auditGramatica(event: MouseEvent): void {
+    event.stopPropagation();
+    void this.actions.auditGramatica(this.node());
   }
 
   private async load(node: TreeNode): Promise<void> {

@@ -56,6 +56,8 @@ export class RaeAuditPanel {
         return 'Estructura';
       case 'typo':
         return 'Tipografía';
+      case 'mayusculas':
+        return 'Mayúsculas';
     }
   }
 

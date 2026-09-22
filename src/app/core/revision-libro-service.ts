@@ -80,6 +80,8 @@ export class RevisionLibroService {
     this.resultado.set(null);
     this.error.set(null);
     this.libro.set(node);
+    // Escanear es lectura, así que arranca solo; aplicar sigue siendo un click.
+    void this.escanear();
   }
 
   cerrar(): void {

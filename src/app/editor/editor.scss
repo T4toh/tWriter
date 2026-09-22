@@ -529,6 +529,12 @@
   border-bottom: 2px dotted #c89020;
 }
 
+/* mayúsculas rancias (LLOra, ME): teal punteado, lejos del ámbar de tipografía
+ * y del violeta de repeticiones, que es lo que suele tener al lado. */
+.editor-host ::ng-deep .rae-violation--mayusculas {
+  border-bottom: 2px dotted #1f9e8f;
+}
+
 /* ─── Repeticiones cercanas ─── */
 
 /* Violeta y `text-decoration`, no `border-bottom`: la paleta del editor es

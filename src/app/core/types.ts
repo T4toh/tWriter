@@ -111,7 +111,7 @@ export interface ReglaDesactivada {
   ejemplo: string;
 }
 
-export type RaeCategory = 'pending-conversion' | 'char' | 'structure' | 'typo';
+export type RaeCategory = 'pending-conversion' | 'char' | 'structure' | 'typo' | 'mayusculas';
 export type RaeSeverity = 'error' | 'warning';
 
 export interface RaeAutoFix {

@@ -46,6 +46,15 @@
     >
       <svg lucideBookOpen [size]="16"></svg>
     </button>
+    <button type="button" class="card-btn" (click)="auditRae($event)" title="Revisar RAE">
+      <svg lucideRuler [size]="16"></svg>
+    </button>
+    <button type="button" class="card-btn" (click)="auditRepeticiones($event)" title="Revisar repeticiones">
+      <svg lucideRepeat [size]="16"></svg>
+    </button>
+    <button type="button" class="card-btn" (click)="auditGramatica($event)" title="Revisar gramática">
+      <svg lucideSpellCheck [size]="16"></svg>
+    </button>
     <button
       type="button"
       class="card-btn"

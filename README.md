@@ -355,9 +355,29 @@ al oro, Adi.` no flagea (mid-content), `Dicen que una mansión está encantada`
 - Backend Rust `list_chapters_for_audit` (`src-tauri/src/audit.rs`) walks
   el scope, lee cada `.html` + parsea `meta.json::idioma`, devuelve lote
   completo en un solo invoke (sin round-trip por capítulo).
-- Frontend filtra a `idioma == 'es'` (con fallback `detectLang` heurístico
-  para chapters sin meta), corre validator sobre cada plain text, agrupa
-  por capítulo con snippet + severidad.
+- Frontend corre el validador RAE solo sobre `idioma == 'es'` (con fallback
+  `detectLang` heurístico para chapters sin meta), agrupa por capítulo con
+  snippet + severidad.
+- **Mayúsculas rancias** (`dictionary/mayusculas-rancias.ts`, categoría
+  `Mayúsculas`, en todos los idiomas): las que deja un Shift trabado y que
+  nada marca porque en minúsculas la palabra es correcta. Dos formas:
+  `mayuscula-mezclada` (`LLOra`, `AEdan`, `QUieres`: dos o más mayúsculas al
+  arranque y después minúscula; se exceptúan plural de sigla `CPUs` y
+  CamelCase `HoloDrive`) y `mayuscula-corta` (`ME`, `YA`, `EL`: funcional de
+  2–3 letras de una lista cerrada es+en en ALL-CAPS, rodeada de minúsculas,
+  sin `!`/`?` pegado ni guion; un grito entero `¡NO ME TOQUES!` no se marca).
+  También corren **inline en el editor** (mismo decorador que RAE, punteado
+  teal, en es y en) y el popover aplica la sugerencia con un click. Nunca en
+  bulk: el modal «Revisar libro» no las incluye y el panel solo lista y
+  salta ("nunca nada automático" es que cada arreglo sea decisión del autor).
+  El header de la saga en la biblioteca tiene botones para las tres
+  auditorías (RAE, repeticiones, gramática), al lado de Diccionario y
+  Configurar. Medido sobre el corpus del autor
+  (597 capítulos): 11 hits, 8 reales. La regla "minúscula en el texto,
+  Capitalizada en el diccionario" se probó y se descartó ahí mismo: 762 hits,
+  todos falsos, porque el diccionario guarda `Magus`/`Hombrelobo` con
+  mayúscula y el texto los usa en minúscula a propósito.
+  `scripts/run-mayusculas-smoke.mjs`.
 - Mutex con search / image-viewer / font-preview / markdown-reader: al
   abrir cierra a los otros tres.
 - Click en una violación → navega al capítulo + `requestHighlight` del
@@ -429,7 +449,7 @@ Sinónimos en el popover de repetición como chips clickeables — LT no tiene n
 
 ### Revisión por libro
 
-Botón en la tarjeta del libro → modal que escanea el libro entero con los cuatro detectores (rayas RAE, comillas tipográficas, arreglos RAE, repeticiones), muestra qué encontró cada uno y aplica los tildados. **Una acción por tipo**, no una lista unificada de hallazgos. El panel lateral "Revisar RAE" y las entradas del menú contextual quedan como estaban.
+Botón en la tarjeta del libro → modal que escanea el libro entero al abrirse (escanear es lectura; «Escanear» queda para re-escanear) con los cuatro detectores (rayas RAE, comillas tipográficas, arreglos RAE, repeticiones), muestra qué encontró cada uno y aplica los tildados. **Una acción por tipo**, no una lista unificada de hallazgos. El panel lateral "Revisar RAE" y las entradas del menú contextual quedan como estaban.
 
 - **Bulk auto-fix sin comerse el markup**: los offsets de `validateRae` son sobre texto plano y el archivo es HTML. `dialogos/plano-con-mapa.ts` construye el plano **y** el índice HTML de cada carácter en la misma pasada (incluido el doble-decode de entidades de `htmlToPlain`, que se replica a propósito porque es el comportamiento que vieron todas las violaciones calculadas hasta hoy). `dialogos/aplicar-fixes.ts` aplica en orden descendente y **saltea** todo fix cuyo rango HTML contenga un tag: antes de comerse un `</em>` en veinte capítulos, no lo aplica y lo reporta.
 - **Repeticiones va sin checkbox** — no son auto-fixables: se reescriben a mano. Pero la lista no se queda en un número: cada ocurrencia lleva `path` + offset, muestra el snippet con contexto (±40 caracteres, la forma del `rae-audit-panel`) y el click abre el capítulo **con el popover de sinónimos ya abierto** sobre la aparición, que es lo único que sirve para arreglarla. La identificación no puede ser por offset (el del plano no coincide con el del editor por los `<hr>`): es por palabra normalizada + cercanía al bloque que resaltó el ancla, vía un `pendingPopover` que espera a que el chequeo pinte las decoraciones. La lista agrupa por capítulo y colapsa.
