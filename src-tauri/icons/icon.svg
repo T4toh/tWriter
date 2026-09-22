@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- tile -->
+  <rect x="32" y="32" width="960" height="960" rx="215" fill="#1B2440"/>
+  <!-- pagina -->
+  <rect x="252" y="190" width="520" height="644" rx="34" fill="#FDFCF8"/>
+  <!-- linea de dialogo: raya + parlamento -->
+  <rect x="308" y="272" width="132" height="40" rx="20" fill="#2563EB"/>
+  <rect x="468" y="276" width="248" height="32" rx="16" fill="#C2CAD9"/>
+  <!-- t, con el travesano largo como segunda raya -->
+  <g fill="none" stroke="#1B2440" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 462 388 L 462 626 Q 462 710 546 710 Q 590 710 616 681" stroke-width="66"/>
+    <path d="M 364 458 L 668 458" stroke-width="54"/>
+  </g>
+</svg>

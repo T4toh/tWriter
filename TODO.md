@@ -620,15 +620,6 @@ huela a "esto ya lo miramos", buscar ahí primero.
   en los templates, así que eso es un item propio y grande, no un agregado al
   modal).
 - Guía in-app de primer uso: tour con flechas la primera vez que se abre la app (tree explorer, idioma, RAE, gramática, sync). Persiste flag en `settings.json`.
-- **Ícono nuevo** (pedido del autor, 2026-09-22). El actual es el del scaffold.
-  Falta definir el diseño; una vez que haya un PNG fuente de 1024×1024,
-  `pnpm tauri icon <archivo>` regenera todo `src-tauri/icons/` (los PNG por
-  tamaño, `icon.icns`, `icon.ico`, android/ios) y no hay que tocar la lista
-  `bundle.icon` de `tauri.conf.json`. Ojo con el que **no** regenera el
-  comando: `src/assets/icon.png`, que es el que se ve adentro de la app
-  (header en `app.html` y las dos instancias del modal «Acerca de»)
-  — ese se reemplaza a mano.
-
 - Botón "Abrir en terminal" dentro del modal storage-help (`xdg-open` / `konsole` / `gnome-terminal` / `wt`).
 - **Sincronizar `settings.json` entre PCs**: hoy la config vive en
   `app_config_dir` local (Linux: `~/.config/twriter/`) — cada PC arranca
