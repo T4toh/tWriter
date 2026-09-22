@@ -100,6 +100,7 @@ node scripts/run-verso-smoke.mjs                  # toggle de bloque de verso (l
 node scripts/run-historial-smoke.mjs              # orden y tope del historial de notificaciones
 node scripts/run-fecha-corta-smoke.mjs            # formato de la fecha corta de la landing (dmy/ymd)
 node scripts/run-estados-smoke.mjs                # ciclo de la novela + "necesita revisar" derivado
+node scripts/run-zoom-smoke.mjs                   # encaje, zoom alrededor de un punto y clamp del pan del visor
 ```
 
 Primera build de Rust tarda ~5 min. Después es incremental.

@@ -115,19 +115,12 @@ huela a "esto ya lo miramos", buscar ahí primero.
   **no era un bug** (el autor había cortado y pegado el texto a mano; el
   historial del repo de novelas lo muestra creciendo por autosave toda la
   noche en `4.html` y mudándose a `3.html` en dos saves normales).
-- **Mejorar el visor de imágenes** (pedido del autor, 2026-09-22).
-  `image-viewer.ts` son 25 líneas: abre, muestra la imagen entera en el
-  viewport, cierra con Esc. No tiene **zoom**, que es lo que falta de verdad —
-  sin él no se pueden mirar los detalles de una tapa o de una foto de
-  referencia, que es justo para lo que se abre el visor. Zoom con rueda +
-  `Ctrl/⌘ +/-`, pan arrastrando cuando la imagen excede el viewport, y doble
-  click para alternar "entra en pantalla" / 1:1.
-  El pedido incluye "poner EPUB y esas yerbas": **falta decidir el alcance**
-  antes de tocar código — si es que el mismo visor abra los `.epub` de
-  `Exportados` (que hoy salen al visor del OS, ver el item de "Abrir la carpeta
-  del EPUB exportado" en la sección EPUB), o si es un preview aparte. Un
-  renderer de EPUB embebido es otra cosa que un lightbox con zoom; preguntar al
-  autor y partir el item en dos si son dos.
+- **Abrir los `.epub` de `Exportados` adentro de la app** (resto del pedido
+  del autor del 2026-09-22, "poner EPUB y esas yerbas"; el zoom del visor de
+  imágenes está hecho en la rama `feat/visor-zoom`, falta que el autor lo
+  verifique a mano). **Falta decidir el alcance** antes de tocar código: un
+  renderer de EPUB embebido es otra cosa que un lightbox. Hoy los `.epub`
+  salen al visor del OS (ver "Abrir la carpeta del EPUB exportado" en EPUB).
 
 ## Gramática, ortografía y tesauro
 
