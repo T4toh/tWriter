@@ -96,6 +96,8 @@ export class RaePopover {
         return 'Estructura';
       case 'typo':
         return 'Tipografía';
+      case 'mayusculas':
+        return 'Mayúsculas';
     }
   });
 

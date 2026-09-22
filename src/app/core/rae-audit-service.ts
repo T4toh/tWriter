@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { htmlToPlain, validateRae } from '../dialogos/validator';
+import { detectMayusculasRancias } from '../dictionary/mayusculas-rancias';
 import { detectLang } from '../dialogos/detect';
 import { RaeViolation } from './types';
 import { FontPreviewService } from './font-preview-service';
@@ -74,18 +75,18 @@ export class RaeAuditService {
         scopePath: scope.path,
       });
       this.progress.set({ done: 0, total: payloads.length });
+      const dictWords = await this.palabrasDeLaSaga(scope.path);
 
       const accumulated: ChapterViolations[] = [];
       let processed = 0;
       for (const payload of payloads) {
         const lang = payload.idioma ?? detectLang(payload.html);
-        if (lang !== 'es') {
-          processed += 1;
-          this.progress.set({ done: processed, total: payloads.length });
-          continue;
-        }
         const plain = htmlToPlain(payload.html);
-        const violations = validateRae(plain, 'es');
+        // RAE es solo español; las mayúsculas rancias no tienen idioma.
+        const violations = [
+          ...(lang === 'es' ? validateRae(plain, 'es') : []),
+          ...detectMayusculasRancias(plain, dictWords),
+        ].sort((a, b) => a.offset - b.offset);
         if (violations.length > 0) {
           accumulated.push({
             path: payload.path,
@@ -116,6 +117,19 @@ export class RaeAuditService {
     } finally {
       this.loading.set(false);
       this.progress.set(null);
+    }
+  }
+
+  /** Diccionario de la saga que contiene al alcance auditado. Mismo patrón que
+   *  `RevisionLibroService.palabrasDeLaSaga`: `find_saga_dir` (Rust) resuelve
+   *  por filesystem, así sirve aunque el alcance no sea la saga activa. */
+  private async palabrasDeLaSaga(path: string): Promise<string[]> {
+    try {
+      const sagaPath = await invoke<string | null>('find_saga_dir', { path });
+      if (!sagaPath) return [];
+      return await invoke<string[]>('get_saga_dictionary', { sagaPath });
+    } catch {
+      return [];
     }
   }
 

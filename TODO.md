@@ -374,43 +374,6 @@ huela a "esto ya lo miramos", buscar ahí primero.
   `-yó`, `-yeron`, las terminaciones acentuadas y `-qué`/`-gué`/`-cé`, más una
   aserción de ida y vuelta que recorra la salida de `generateForms` en vez de la
   muestra de corpus que hay hoy.
-- **Detectar mayúsculas rancias en las palabras propias del autor** (pedido del
-  autor, 2026-08-31): `AEdan` por `Aedan`, `YIRIel` por `Yiriel`. Hoy **nada**
-  las marca, y la causa está identificada: el filtro de TYPOS del editor
-  (`editor.ts:1249`) delega en `isInDictionary`
-  (`saga-context-service.ts:128`), que compara en minúsculas, o sea que una vez que
-  `aedan` está en el diccionario, **cualquier** variante de mayúsculas de esa
-  palabra queda silenciada. LT tampoco ayuda: `MORFOLOGIK_*` es justamente lo que
-  ese filtro se come.
-  Fix barato, sin motor nuevo: el diccionario ya guarda la forma canónica, así
-  que alcanza con marcar toda palabra del texto cuyo `toLowerCase()` matchee una
-  entrada del diccionario pero cuya grafía exacta **no** sea la de la entrada.
-  Función pura; la comparación ya existe del otro lado —
-  `detectProblematic` en `dictionary/word-validator.ts` ya reporta
-  "Duplicada (variante de mayúsculas)" **dentro** del archivo; acá es el mismo
-  criterio pero texto vs. diccionario. Reusar, no escribir de cero.
-  Excepciones que no son error y no hay que marcar: la palabra en ALL-CAPS
-  (grito: `—¡AEDAN!`) y el arranque de oración cuando la entrada es minúscula.
-  Dónde mostrarlo: sumarlo a la pasada del panel de auditoría RAE
-  (`rae-audit-panel.ts`), que ya recorre el capítulo y lista violaciones con
-  jump-to-term, en vez de inventar un panel nuevo.
-
-  **Re-pedido el 2026-09-22, y con un segundo alcance que el item no cubría**:
-  además de los nombres propios del diccionario, el autor quiere que se marquen
-  las **palabras comunes cortas en mayúsculas** — `ME`, `LA`, `EL` y compañía —
-  que salen de un Shift que quedó trabado, no de una decisión. Ojo que esto
-  choca de frente con la excepción de arriba: el item dice que ALL-CAPS no se
-  marca porque es un grito (`—¡AEDAN!`), y acá ALL-CAPS es justamente la señal.
-  La diferencia está en el largo y en la clase de palabra: un grito es una
-  palabra de contenido, y estas son funcionales de 2–3 letras en medio de una
-  oración que sigue en minúsculas. Criterio propuesto: marcar la palabra
-  ALL-CAPS de ≤3 letras cuando la palabra anterior **y** la siguiente no están
-  en mayúsculas (o sea, no es un grito entero), y dejar pasar el resto. Sin
-  lista cerrada de palabras: la forma alcanza y no hay que mantener un
-  diccionario. Verificar contra el corpus antes de prenderlo por default —
-  siglas de 2–3 letras pegadas al texto (`ARS`, `RC` en Buenos Aires 2077)
-  entran por ese mismo molde y son legítimas, así que puede hacer falta
-  exceptuar las que ya están en el diccionario de la saga.
 - [ ] **La oración se parte en los puntos suspensivos** (encontrado el
   2026-09-18 midiendo el parche `0004`). Cuando a los puntos suspensivos les
   sigue un `¿` o una mayúscula, LT cierra la oración ahí: «prestame tu…
