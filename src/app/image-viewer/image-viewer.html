@@ -1,15 +1,35 @@
 @if (viewing(); as entry) {
   <header class="iv-header">
     <span class="iv-title" [title]="entry.relative_path">{{ entry.name }}</span>
+    @if (dataUrl()) {
+      <button type="button" class="iv-zoom" (click)="encajar()" title="Encajar en pantalla (⌘0)">{{ porcentaje() }} %</button>
+    }
     <button type="button" class="iv-close" (click)="close()" title="Cerrar (Esc)">×</button>
   </header>
-  <div class="iv-body">
+  <div
+    #body
+    class="iv-body"
+    [class.iv-grab]="excede()"
+    (wheel)="onWheel($event)"
+    (dblclick)="onDblClick($event)"
+    (pointerdown)="onPointerDown($event)"
+    (pointermove)="onPointerMove($event)"
+    (pointerup)="onPointerUp()"
+    (pointercancel)="onPointerUp()"
+  >
     @if (loading()) {
       <p class="iv-status">Cargando…</p>
     } @else if (error(); as err) {
       <p class="iv-status iv-error">{{ err }}</p>
     } @else if (dataUrl(); as url) {
-      <img [src]="url" [alt]="entry.name" class="iv-img" />
+      <img
+        [src]="url"
+        [alt]="entry.name"
+        class="iv-img"
+        draggable="false"
+        [style.transform]="'translate(' + vista().tx + 'px,' + vista().ty + 'px) scale(' + vista().scale + ')'"
+        (load)="onLoad($event)"
+      />
     }
   </div>
 }

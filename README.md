@@ -491,6 +491,13 @@ Botón 📝 en el header del tree abre un wizard separado para traer notas markd
 - Auto-discovery de covers desde disco (las novelas viejas no se rompen).
 - Drag&drop de archivos del OS al saga/libro.
 - Context menu por extra: abrir, renombrar, borrar.
+- **Visor de imágenes con zoom** en el panel derecho: la imagen arranca
+  encajada (nunca agrandada). Rueda o pinch hace zoom alrededor del cursor,
+  `⌘/Ctrl +`, `-` y `0` acercan, alejan y vuelven a encajar, arrastrar panea
+  cuando la imagen excede el viewport, doble click alterna encaja / 1:1, y
+  el porcentaje del header vuelve a encajar. La matemática (encaje, zoom
+  alrededor de un punto, clamp del pan) es pura en `image-viewer/zoom.ts`
+  con smoke en `scripts/run-zoom-smoke.mjs`.
 - `back-cover` embebida al final del EPUB si está presente.
 - **Tree view jerárquico**: subcarpetas dentro de `extras/` (ej. `1 - La Caballera Esmeralda/convertidos/`, `original/`) se renderean como folders expandibles independientes. Backend `list_extras` ya devuelve `relative_path` con subpath; frontend `buildExtrasTree` arma la jerarquía y un recursive template (`extrasNodeTpl`) la pinta.
 - **Cache de covers en landing**: los covers de saga-header / book-card / saga-card se cargan vía `convertFileSrc` (asset protocol) y se cachean como `Blob` + `URL.createObjectURL` en `src/app/core/cover-cache.ts`. Reemplaza el flujo viejo `invoke('read_image') → base64 data URL` que re-leía el disco y re-encodeaba en cada navegación. Re-visitar una saga o cambiar de carpeta no refetchea nada — bytes en heap JS. Cache versionado con `cfgService.savedAt()`: al guardar la tapa desde el modal, el blob viejo se revoca y se carga el nuevo. Los `<img>` además llevan `transform: translateZ(0) + will-change: transform + backface-visibility: hidden` y los slots `contain: paint`, para que el `transform: translateY(-1px)` del `:hover` no fuerce re-decode del bitmap en WebKitGTK (causaba flash al pasar el mouse o perder focus).
