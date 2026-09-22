@@ -92,7 +92,7 @@ function cssClassFor(category: RaeCategory): string {
     case 'typo':
       return 'rae-violation rae-violation--typo';
     case 'mayusculas':
-      return 'rae-violation rae-violation--typo';
+      return 'rae-violation rae-violation--mayusculas';
   }
 }
 

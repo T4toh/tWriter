@@ -149,8 +149,9 @@ console.log('cortas');
 console.log('forma de la violación');
 {
   const v = run('Ella LLOra.');
-  check('category mayusculas, severity warning, sin autoFix',
-    v[0].category === 'mayusculas' && v[0].severity === 'warning' && v[0].autoFix === undefined, v[0]);
+  check('category mayusculas, severity warning, autoFix con la sugerencia sobre la palabra',
+    v[0].category === 'mayusculas' && v[0].severity === 'warning'
+      && v[0].autoFix.offset === 5 && v[0].autoFix.length === 5 && v[0].autoFix.replacement === 'Llora', v[0]);
 }
 {
   const v = run('ME fui. LLOra YIri.');

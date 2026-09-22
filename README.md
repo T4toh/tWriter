@@ -366,8 +366,13 @@ al oro, Adi.` no flagea (mid-content), `Dicen que una mansión está encantada`
   CamelCase `HoloDrive`) y `mayuscula-corta` (`ME`, `YA`, `EL`: funcional de
   2–3 letras de una lista cerrada es+en en ALL-CAPS, rodeada de minúsculas,
   sin `!`/`?` pegado ni guion; un grito entero `¡NO ME TOQUES!` no se marca).
-  Sin autofix a propósito —el mensaje trae la sugerencia y se corrige con el
-  salto— porque "nunca nada automático". Medido sobre el corpus del autor
+  También corren **inline en el editor** (mismo decorador que RAE, punteado
+  teal, en es y en) y el popover aplica la sugerencia con un click. Nunca en
+  bulk: el modal «Revisar libro» no las incluye y el panel solo lista y
+  salta ("nunca nada automático" es que cada arreglo sea decisión del autor).
+  El header de la saga en la biblioteca tiene botones para las tres
+  auditorías (RAE, repeticiones, gramática), al lado de Diccionario y
+  Configurar. Medido sobre el corpus del autor
   (597 capítulos): 11 hits, 8 reales. La regla "minúscula en el texto,
   Capitalizada en el diccionario" se probó y se descartó ahí mismo: 762 hits,
   todos falsos, porque el diccionario guarda `Magus`/`Hombrelobo` con

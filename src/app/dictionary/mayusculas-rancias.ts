@@ -23,8 +23,10 @@
  * `Hombrelobo` con mayúscula y el texto los usa en minúscula a propósito. La
  * grafía del diccionario no es canónica, así que esa regla no existe.
  *
- * Sin `autoFix` a propósito: el autor corrige a mano con el salto del panel
- * ("nunca nada automático"). La sugerencia va en el mensaje.
+ * Lleva `autoFix` con la sugerencia para que el popover del editor la aplique
+ * con un click. Nunca en bulk: el modal «Revisar libro» no incluye estas
+ * violaciones y el panel de auditoría solo lista y salta ("nunca nada
+ * automático" = cada arreglo es una decisión del autor, no que no haya botón).
  *
  * Función pura; `scripts/run-mayusculas-smoke.mjs`.
  */
@@ -96,6 +98,7 @@ function violacion(t: Token, ruleId: string, sugerencia: string): RaeViolation {
     ruleId,
     message: `«${t.raw}» → «${sugerencia}»`,
     shortMessage: 'Mayúscula rancia',
+    autoFix: { offset: t.offset, length: t.raw.length, replacement: sugerencia },
   };
 }
 

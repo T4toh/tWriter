@@ -64,6 +64,7 @@ import { convert as convertRae } from '../dialogos/converter';
 import { suggestFromDictionary } from '../dictionary/suggest';
 import { educateQuotes } from '../quotes/educate';
 import { validateRae } from '../dialogos/validator';
+import { detectMayusculasRancias } from '../dictionary/mayusculas-rancias';
 import { Landing } from '../landing/landing';
 import { Spinner } from '../shared/spinner';
 import {
@@ -243,10 +244,12 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!this.canCheckRae()) return false;
     return !this.settings.raeAutoDisabled();
   });
+  /** El chequeo inline corre en es y en: `validateRae` se auto-gatea a español
+   *  (devuelve [] en inglés) y las mayúsculas rancias no tienen idioma. */
   protected readonly canCheckRae = computed(() => {
     if (!this.canEdit()) return false;
     const lang = this.meta().idioma;
-    return lang === 'es';
+    return lang === 'es' || lang === 'en';
   });
   protected readonly repeticiones = signal<RepeticionPos[]>([]);
   protected readonly repPopover = signal<{
@@ -1513,7 +1516,11 @@ export class Editor implements AfterViewInit, OnDestroy {
     }
     if (!force && plain === this.lastRaePlain) return;
     const lang = this.meta().idioma;
-    const raw: RaeViolation[] = validateRae(plain, lang);
+    // Mayúsculas rancias van en la misma pasada: mismo decorador, mismo popover.
+    const raw: RaeViolation[] = [
+      ...validateRae(plain, lang),
+      ...detectMayusculasRancias(plain, this.sagaCtx.dictionaryWords()),
+    ];
     const positioned = mapViolationsToPm(raw, ranges, this.tiptap.state.doc);
     this.raeViolations.set(positioned);
     this.applyRaeDecorations(positioned);

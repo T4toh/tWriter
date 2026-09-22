@@ -46,10 +46,14 @@ export class RaeAuditService {
   readonly totalViolations = computed(() =>
     this.chapters().reduce((sum, c) => sum + c.violations.length, 0),
   );
+  /** Las mayúsculas rancias traen `autoFix` para el popover del editor, pero
+   *  ningún bulk las aplica, así que acá no cuentan como auto-fixables. */
   readonly autoFixableCount = computed(() => {
     let n = 0;
     for (const c of this.chapters()) {
-      for (const v of c.violations) if (v.autoFix !== undefined) n += 1;
+      for (const v of c.violations) {
+        if (v.autoFix !== undefined && v.category !== 'mayusculas') n += 1;
+      }
     }
     return n;
   });
