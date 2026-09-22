@@ -117,8 +117,7 @@ huela a "esto ya lo miramos", buscar ahí primero.
   noche en `4.html` y mudándose a `3.html` en dos saves normales).
 - **Abrir los `.epub` de `Exportados` adentro de la app** (resto del pedido
   del autor del 2026-09-22, "poner EPUB y esas yerbas"; el zoom del visor de
-  imágenes está hecho en la rama `feat/visor-zoom`, falta que el autor lo
-  verifique a mano). **Falta decidir el alcance** antes de tocar código: un
+  imágenes salió en #154). **Falta decidir el alcance** antes de tocar código: un
   renderer de EPUB embebido es otra cosa que un lightbox. Hoy los `.epub`
   salen al visor del OS (ver "Abrir la carpeta del EPUB exportado" en EPUB).
 
