@@ -15,6 +15,10 @@ huela a "esto ya lo miramos", buscar ahí primero.
 ## Editor / UX
 
 - Más variantes de divisor de escena (más allá del `* * *`).
+- **Que se note la cursiva activa en el caret**: con la cursiva prendida
+  (mark activo o stored mark tras `Ctrl/⌘+I`) el marcador donde se escribe
+  debería verse distinto (p. ej. caret inclinado o de otro color), para
+  saber antes de tipear si el texto va a salir en cursiva.
 - **Marcador huérfano post jump-to-term**: el highlight naranja de
   `requestHighlight` (search → click resultado) o de la selección nativa
   del jump queda pegado sobre el carácter (típicamente un em-dash) aún
