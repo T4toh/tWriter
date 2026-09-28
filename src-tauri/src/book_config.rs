@@ -223,8 +223,12 @@ pub struct BookConfig {
     /// el texto es del autor. Default: apagado.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nota_ia: Option<bool>,
-    /// Redacción propia por inciso, con las claves "reserva", "ficcion" e
-    /// "ia". Solo se guarda lo que el autor haya editado; lo que falta usa
+    /// Inciso de advertencia de contenido (lenguaje soez, violencia
+    /// explícita, temas para adultos). Default: apagado.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aviso_contenido: Option<bool>,
+    /// Redacción propia por inciso, con las claves "reserva", "ficcion",
+    /// "ia" y "contenido". Solo se guarda lo que el autor haya editado; lo que falta usa
     /// el texto default del idioma del libro.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub textos_legales: Option<BTreeMap<String, String>>,

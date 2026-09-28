@@ -19,6 +19,7 @@ export interface BookConfig {
   link?: string | null;
   obra_de_ficcion?: boolean | null;
   nota_ia?: boolean | null;
+  aviso_contenido?: boolean | null;
   textos_legales?: Record<string, string> | null;
   dedicatoria?: string | null;
   imprenta?: string | null;

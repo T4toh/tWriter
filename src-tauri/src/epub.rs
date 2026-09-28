@@ -1756,7 +1756,13 @@ fn build_copyright_xhtml(cfg: &BookConfig) -> String {
     let reserva = cfg.derechos_reservados.unwrap_or(true);
     let ficcion = cfg.obra_de_ficcion.unwrap_or(true);
     let ia = cfg.nota_ia.unwrap_or(false);
-    for (clave, activo) in [("reserva", reserva), ("ficcion", ficcion), ("ia", ia)] {
+    let contenido = cfg.aviso_contenido.unwrap_or(false);
+    for (clave, activo) in [
+        ("reserva", reserva),
+        ("ficcion", ficcion),
+        ("ia", ia),
+        ("contenido", contenido),
+    ] {
         if !activo {
             continue;
         }
@@ -1800,6 +1806,8 @@ pub fn texto_inciso_default(clave: &str, is_en: bool) -> &'static str {
         ("ficcion", true) => "This novel is entirely a work of fiction. The names, characters and incidents portrayed in it are the work of the author's imagination. Any resemblance to actual persons, living or dead, events or localities is entirely coincidental.",
         ("ia", false) => "Las imágenes de esta obra fueron generadas con inteligencia artificial. El texto es obra exclusiva del autor.",
         ("ia", true) => "The images in this work were generated with artificial intelligence. The text is the sole work of the author.",
+        ("contenido", false) => "Advertencia de contenido: este libro contiene lenguaje soez, violencia explícita y temas para adultos. Se recomienda discreción al lector.",
+        ("contenido", true) => "Content warning: this book contains strong language, graphic violence and mature themes. Reader discretion is advised.",
         _ => "",
     }
 }
@@ -3348,6 +3356,19 @@ mod tests {
             serde_json::from_str(r#"{"titulo":"X","idioma":"en","nota_ia":true}"#).unwrap();
         let xhtml = build_copyright_xhtml(&cfg);
         assert!(xhtml.contains("The images in this work were generated with artificial intelligence."));
+    }
+
+    #[test]
+    fn copyright_aviso_de_contenido_solo_si_esta_prendido() {
+        let apagado: BookConfig = serde_json::from_str(r#"{"titulo":"X"}"#).unwrap();
+        assert!(!build_copyright_xhtml(&apagado).contains("Advertencia de contenido"));
+        let es: BookConfig =
+            serde_json::from_str(r#"{"titulo":"X","aviso_contenido":true}"#).unwrap();
+        assert!(build_copyright_xhtml(&es).contains("Advertencia de contenido:"));
+        let en: BookConfig =
+            serde_json::from_str(r#"{"titulo":"X","idioma":"en","aviso_contenido":true}"#)
+                .unwrap();
+        assert!(build_copyright_xhtml(&en).contains("Reader discretion is advised."));
     }
 
     #[test]
