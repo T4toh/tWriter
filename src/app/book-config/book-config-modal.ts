@@ -41,12 +41,17 @@ const TEXTOS_LEGALES_DEFAULT: Record<string, { es: string; en: string }> = {
     es: 'Las imágenes de esta obra fueron generadas con inteligencia artificial. El texto es obra exclusiva del autor.',
     en: 'The images in this work were generated with artificial intelligence. The text is the sole work of the author.',
   },
+  contenido: {
+    es: 'Advertencia de contenido: este libro contiene lenguaje soez, violencia explícita y temas para adultos. Se recomienda discreción al lector.',
+    en: 'Content warning: this book contains strong language, graphic violence and mature themes. Reader discretion is advised.',
+  },
 };
 
 const INCISOS = [
   { clave: 'reserva', label: 'Reserva de derechos' },
   { clave: 'ficcion', label: 'Obra de ficción' },
   { clave: 'ia', label: 'Uso de IA' },
+  { clave: 'contenido', label: 'Advertencia de contenido' },
 ] as const;
 
 @Component({
@@ -309,6 +314,7 @@ export class BookConfigModal {
         link: cfg.link ?? '',
         obra_de_ficcion: cfg.obra_de_ficcion ?? null,
         nota_ia: cfg.nota_ia ?? null,
+        aviso_contenido: cfg.aviso_contenido ?? null,
         textos_legales: cfg.textos_legales ?? null,
         dedicatoria: cfg.dedicatoria ?? '',
         imprenta: cfg.imprenta ?? 'Independiente',
@@ -393,6 +399,7 @@ export class BookConfigModal {
     const reserva = c.derechos_reservados ?? true;
     if (clave === 'reserva') return reserva;
     if (clave === 'ficcion') return c.obra_de_ficcion ?? true;
+    if (clave === 'contenido') return c.aviso_contenido ?? false;
     return c.nota_ia ?? false;
   }
 
@@ -404,6 +411,7 @@ export class BookConfigModal {
       return;
     }
     if (clave === 'ficcion') this.config.set({ ...c, obra_de_ficcion: activo });
+    else if (clave === 'contenido') this.config.set({ ...c, aviso_contenido: activo });
     else this.config.set({ ...c, nota_ia: activo });
   }
 
@@ -463,6 +471,7 @@ export class BookConfigModal {
         link: blank(cfg.link),
         obra_de_ficcion: cfg.obra_de_ficcion ?? null,
         nota_ia: cfg.nota_ia ?? null,
+        aviso_contenido: cfg.aviso_contenido ?? null,
         textos_legales: cfg.textos_legales ?? null,
         dedicatoria: blank(cfg.dedicatoria),
         imprenta: blank(cfg.imprenta),

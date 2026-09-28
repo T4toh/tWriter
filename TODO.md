@@ -717,14 +717,3 @@ huela a "esto ya lo miramos", buscar ahí primero.
   por texto de la frase, no por offset: editar el capítulo desancla el offset.
   Base que ya está: el índice tantivy con `matchedTerms`, el highlight/salto del
   editor y las notas por saga.
-
-- [ ] **Chequeo de sensibilidad** (nota del autor del 2026-09-28): avisar de
-  bardeo/insultos, descripciones gore y contenido parecido.
-  Falta decidir para quién es el aviso antes de codear: (a) para el autor,
-  marcas en el editor o un panel por libro que liste los pasajes, o (b) para
-  el lector, un resumen de advertencias de contenido para la ficha de la
-  tienda o el EPUB. LanguageTool no trae reglas de esto en español, así que
-  sería local. Base que ya está: el detector de repeticiones
-  (`repeticiones-audit`), que ya es una auditoría léxica por libro con salto
-  al pasaje. Una lista de palabras encuentra insultos pero no el gore, que
-  es cuestión de contexto. No arrancar sin diseñarlo con el autor.
