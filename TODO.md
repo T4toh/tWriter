@@ -121,6 +121,15 @@ huela a "esto ya lo miramos", buscar ahí primero.
   renderer de EPUB embebido es otra cosa que un lightbox. Hoy los `.epub`
   salen al visor del OS (ver "Abrir la carpeta del EPUB exportado" en EPUB).
 
+- **Las marcas inline abren un hueco falso antes de la marca** (visto por el
+  autor el 2026-09-29): `—Yo...` con la marca de LT `PUNTOS_SUSPENSIVOS` se ve
+  `—Yo ...`. En disco no hay espacio: el `border-bottom` de `.grammar-error` /
+  `.rae-violation` en un inline corta el run de shaping en WebKit y se pierde
+  el kerning `o.` de Merriweather. `text-decoration` (lo que ya usa
+  `.repeticion`) no lo corta, pero las marcas usan borde a propósito para no
+  pisarse con el subrayado de repeticiones (ver `editor.scss`): resolverlo
+  junto con ese canal, no a pedazos.
+
 ## Gramática, ortografía y tesauro
 
 - **Dashboard de estilo por novela** (idea del autor, no para ahora). Lo que hoy
