@@ -285,22 +285,28 @@ const rulePeriodBeforeVerb: Rule = (p) => {
   return out;
 };
 
-// Dos puntos seguidos, o cuatro o más: son suspensivos (tres) o un punto,
-// nunca otra cantidad. Cuál de los dos quiso el autor no se puede saber, así
-// que no hay autoFix.
+// DPD «puntos suspensivos»: son tres «y solo tres» (§1) y tras ellos no va
+// punto de cierre (§3.1). Dos puntos, o cuatro o más, son un error, y cuál de
+// los dos quiso el autor (suspensivos o punto) no se puede saber: sin autoFix.
+// Única excepción: detrás de una abreviatura se suma su punto y van cuatro
+// (`pág....`, §3.1).
 const DOUBLE_PERIOD_RE = /(?<!\.)(?:\.{2}|\.{4,})(?!\.)/g;
+const ABBR_BEFORE_RE =
+  /(?<!\p{L})(?:etc|págs?|Sra?|Srta|Dra?|Ud|Uds|núm|aprox|admón|cód|tel|ej)$/iu;
 
 const ruleDoublePeriod: Rule = (p) =>
-  [...p.matchAll(DOUBLE_PERIOD_RE)].map((m) => ({
-    offset: m.index ?? 0,
-    length: m[0].length,
-    ruleId: 'double-period',
-    severity: 'warning',
-    message:
-      `${m[0].length} puntos seguidos. Van tres (suspensivos, mejor «…») o ` +
-      'uno; y si sigue un verbo de habla, ninguno.',
-    shortMessage: 'Puntos de más',
-  }));
+  [...p.matchAll(DOUBLE_PERIOD_RE)]
+    .filter((m) => !(m[0].length === 4 && ABBR_BEFORE_RE.test(p.slice(0, m.index))))
+    .map((m) => ({
+      offset: m.index ?? 0,
+      length: m[0].length,
+      ruleId: 'double-period',
+      severity: 'warning',
+      message:
+        `${m[0].length} puntos seguidos. Los suspensivos son tres y solo tres, ` +
+        'sin punto después (DPD); si no, va uno, o ninguno antes de un verbo de habla.',
+      shortMessage: 'Puntos de más',
+    }));
 
 const RULES: readonly Rule[] = [
   ruleDashShort,
