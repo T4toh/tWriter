@@ -255,11 +255,10 @@ const ruleVerbCapitalized: Rule = (p) => {
   return out;
 };
 
-// El lookbehind deja afuera el tercer punto de los suspensivos
-// (`—Bueno... —dijo`), que se quedan antes del inciso. Un punto doble
-// (`—Ya voy.. —dijo`) sí se marca: es un error de tipeo y sobran los dos.
+// Solo el punto simple: los suspensivos (`—Bueno... —dijo`) se quedan antes
+// del inciso, y un punto doble (`—Ya voy.. —dijo`) lo marca double-period.
 const PERIOD_BEFORE_VERB_RE = new RegExp(
-  `(?<!\\.\\.)(\\.)(\\s+)—(${TAGS_ALT})(?!\\p{L})`,
+  `(?<!\\.)(\\.)(\\s+)—(${TAGS_ALT})(?!\\p{L})`,
   'giu',
 );
 
@@ -286,6 +285,23 @@ const rulePeriodBeforeVerb: Rule = (p) => {
   return out;
 };
 
+// Dos puntos seguidos, o cuatro o más: son suspensivos (tres) o un punto,
+// nunca otra cantidad. Cuál de los dos quiso el autor no se puede saber, así
+// que no hay autoFix.
+const DOUBLE_PERIOD_RE = /(?<!\.)(?:\.{2}|\.{4,})(?!\.)/g;
+
+const ruleDoublePeriod: Rule = (p) =>
+  [...p.matchAll(DOUBLE_PERIOD_RE)].map((m) => ({
+    offset: m.index ?? 0,
+    length: m[0].length,
+    ruleId: 'double-period',
+    severity: 'warning',
+    message:
+      `${m[0].length} puntos seguidos. Van tres (suspensivos, mejor «…») o ` +
+      'uno; y si sigue un verbo de habla, ninguno.',
+    shortMessage: 'Puntos de más',
+  }));
+
 const RULES: readonly Rule[] = [
   ruleDashShort,
   ruleDashOrphan,
@@ -295,6 +311,7 @@ const RULES: readonly Rule[] = [
   ruleSpaceBeforeVerb,
   ruleVerbCapitalized,
   rulePeriodBeforeVerb,
+  ruleDoublePeriod,
 ];
 
 export function runDedicatedRules(paragraph: string): DedicatedViolation[] {

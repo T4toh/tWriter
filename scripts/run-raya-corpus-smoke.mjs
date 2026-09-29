@@ -5,6 +5,8 @@
 //
 // Cada caso: [familia, input, esperado, sección, idioma?]. esperado null ⇒ el
 // texto ya es correcto: convert() no lo toca y el validador no dice nada.
+// esperado { marca } ⇒ el error no tiene un arreglo único: el validador tiene
+// que marcarlo con esa regla y nada lo cambia solo.
 // Si no, lo que el autor obtiene (convert + todos los autoFix) tiene que
 // quedar igual al esperado. Siempre, para todos: no se pierden letras ni
 // suspensivos, y convert() es idempotente.
@@ -94,7 +96,12 @@ const C = [
   [4, '—No sé —dijo Pedro, —capaz mañana.', '—No sé —dijo Pedro—, capaz mañana.', '2.3c'],
   [4, '—Anoche estuve en una fiesta —me confesó, y añadió:— Conocí gente.', '—Anoche estuve en una fiesta —me confesó, y añadió—: Conocí gente.', '2.3f'],
   [4, '—Anoche estuve en una fiesta —me confesó, y añadió: —Conocí gente.', '—Anoche estuve en una fiesta —me confesó, y añadió—: Conocí gente.', '2.3f'],
-  [4, '—Ya voy.. —dijo Ana.', '—Ya voy —dijo Ana.', '2.3c'],
+  // Dos puntos: tres (suspensivos) o uno, y cuál quiso el autor no se sabe.
+  // Se marca y se deja como está.
+  [4, '—Ya voy.. —dijo Ana.', { marca: 'double-period' }, 'puntos'],
+  [4, '—No sé.. Capaz mañana.', { marca: 'double-period' }, 'puntos'],
+  [4, 'Se quedó mirando la puerta.... Nadie vino.', { marca: 'double-period' }, 'puntos'],
+  [6, '—No sé... Capaz mañana.', null, 'suspensivos'],
   [4, '—¿Venís?. —preguntó Ana.', '—¿Venís? —preguntó Ana.', '2.3c'],
   [4, '—¡Andate!. —gritó.', '—¡Andate! —gritó.', '2.3c'],
   [4, '—Bueno... —dijo Ana—. Vamos.', '—Bueno... —dijo Ana—. Vamos.', '2.3c (susp. quedan)'],
@@ -365,18 +372,20 @@ function pipeline(x) {
 
 const rows = [];
 for (const [fam, input, exp0, sec, lang = 'es'] of C) {
-  const exp = exp0 ?? input;
-  const correct = exp === input;
+  const marca = exp0?.marca;
+  const exp = marca ? input : (exp0 ?? input);
+  const correct = exp === input && !marca;
   const conv = lang === 'es' ? convert(input).text : input;
   const pipe = lang === 'es' ? pipeline(input) : input;
   const vIn = viol(input, lang).map((v) => v.ruleId);
   const vOut = viol(pipe, lang).map((v) => v.ruleId);
   const vExp = viol(exp, lang).map((v) => v.ruleId);
   const f = [];
+  if (marca && !vIn.includes(marca)) f.push('SIN-MARCA');
   if (!correct && pipe !== exp) f.push('MAL');
   if (!correct && vIn.length === 0) f.push('MUDO-in');
   if (!correct && pipe !== exp && vOut.length === 0 && vIn.length > 0) f.push('MUDO-out');
-  if ((correct && (vIn.length || conv !== input)) || (!correct && vExp.length)) f.push('FP');
+  if ((correct && (vIn.length || conv !== input)) || (!correct && !marca && vExp.length)) f.push('FP');
   if (letters(conv) !== letters(input) || letters(pipe) !== letters(input)) f.push('PERDIDA');
   if (ellipses(conv) < ellipses(input) || ellipses(pipe) < ellipses(input)) f.push('PERDIDA-SUSP');
   if (lang === 'es' && convert(conv).text !== conv) f.push('NO-IDEMP');
