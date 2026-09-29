@@ -8,7 +8,7 @@
  * del párrafo. El validator orchestrator suma el offset del párrafo dentro
  * del documento.
  */
-import { DIALOG_TAGS, TAGS_ALT } from './tags';
+import { AMBIGUOUS_TAGS, DIALOG_TAGS, TAGS_ALT } from './tags';
 
 const EM_DASH = '—';
 
@@ -165,7 +165,10 @@ const ruleParagraphCollapsed: Rule = (p) => {
   ];
 };
 
-const SPACE_AFTER_OPEN_RE = /^([\s]*)—([ \t]+)\S/u;
+// Una intervención arranca en mayúscula, signo de apertura, comilla o
+// suspensivos. Raya + espacio + minúscula es un ítem de lista (DPD 3.2:
+// `— expresiva,`), donde el espacio va.
+const SPACE_AFTER_OPEN_RE = /^([\s]*)—([ \t]+)[\p{Lu}¿¡«"“…]/u;
 
 const ruleSpaceAfterOpen: Rule = (p) => {
   const m = SPACE_AFTER_OPEN_RE.exec(p);
@@ -218,6 +221,9 @@ const ruleVerbCapitalized: Rule = (p) => {
   for (const m of p.matchAll(VERB_CAPITAL_RE)) {
     const word = m[1];
     if (!TAGS_LOWER_SET.has(word.toLowerCase())) continue;
+    // `—Hola —Pidió un café.` es una acción (le falta el punto, DPD 2.3d),
+    // no un dicendi a bajar de caja.
+    if (AMBIGUOUS_TAGS.has(word.toLowerCase())) continue;
     const dashOffset = m.index ?? 0;
     // Anti-falso-positivo 1: raya de APERTURA del párrafo (`—Dicen eso...`)
     // — la palabra es contenido del diálogo, no dicendi-tag post-close. Va
@@ -249,14 +255,21 @@ const ruleVerbCapitalized: Rule = (p) => {
   return out;
 };
 
+// El lookbehind deja afuera el tercer punto de los suspensivos
+// (`—Bueno... —dijo`), que se quedan antes del inciso. Un punto doble
+// (`—Ya voy.. —dijo`) sí se marca: es un error de tipeo y sobran los dos.
 const PERIOD_BEFORE_VERB_RE = new RegExp(
-  `(\\.)(\\s+)—(${TAGS_ALT})(?!\\p{L})`,
+  `(?<!\\.\\.)(\\.)(\\s+)—(${TAGS_ALT})(?!\\p{L})`,
   'giu',
 );
 
 const rulePeriodBeforeVerb: Rule = (p) => {
   const out: DedicatedViolation[] = [];
   for (const m of p.matchAll(PERIOD_BEFORE_VERB_RE)) {
+    // `—No se moleste. —Negó con la cabeza.`: tras punto y en mayúscula, un
+    // verbo que también es de acción es la acción del DPD 2.3d y está bien.
+    const verb = m[3];
+    if (verb[0] !== verb[0].toLowerCase() && AMBIGUOUS_TAGS.has(verb.toLowerCase())) continue;
     const i = m.index ?? 0;
     out.push({
       offset: i,

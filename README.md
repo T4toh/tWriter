@@ -383,6 +383,14 @@ al oro, Adi.` no flagea (mid-content), `Dicen que una mansión está encantada`
 - Click en una violación → navega al capítulo + `requestHighlight` del
   término para que el editor scrollee al match.
 
+**Corpus contra el DPD** (`scripts/run-raya-corpus-smoke.mjs`): 176
+diálogos de borrador (sustitutos de raya, espaciado, caja del inciso,
+puntuación, comillas, falsos positivos, HTML) con el esperado según la
+sección del DPD. Nunca se pierden letras ni suspensivos y `convert()` es
+idempotente, para todos. Los casos que todavía fallan están en
+`PENDIENTES`: no cortan la corrida, pero si uno empieza a pasar sí, para
+sacarlo de la lista.
+
 **Verificación** (`scripts/run-rae-smoke.mjs`): 21 casos contra fixtures
 (diálogos simples, raya huérfana, pending D2, dash-short, párrafo colapsado,
 cita interna `«»` válida, multi-párrafo, monólogo con incisos, verbo regular

@@ -43,6 +43,21 @@ export const DIALOG_TAGS: readonly string[] = [
 
 const TAGS_SET = new Set(DIALOG_TAGS.map((t) => t.toLowerCase()));
 
+/** Verbos de la lista que también son de acción: `—No se moleste. —Negó con
+ *  la cabeza.` es la acción del DPD 2.3d (punto y mayúscula), no un dicendi mal
+ *  puntuado. En mayúscula no se pueden corregir solos. */
+export const AMBIGUOUS_TAGS: ReadonlySet<string> = new Set([
+  'negó', 'niega', 'negaron', 'niegan',
+  'señaló', 'señala', 'señalaron', 'señalan',
+  'indicó', 'indica', 'indicaron', 'indican',
+  'pidió', 'pide', 'pidieron', 'piden',
+  'ordenó', 'ordena', 'ordenaron', 'ordenan',
+  'continuó', 'continúa', 'continuaron', 'continúan',
+  'aportó', 'aporta', 'aportaron', 'aportan',
+  'sollozó', 'solloza', 'sollozaron', 'sollozan',
+  'gimió', 'gime', 'gimieron', 'gimen',
+]);
+
 export function isDialogTag(word: string): boolean {
   return TAGS_SET.has(word.toLowerCase());
 }
