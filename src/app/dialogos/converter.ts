@@ -113,8 +113,12 @@ function restoreQuotes(original: string, converted: string): string {
  *  van entre comillas a propósito, no son diálogo. */
 function isThoughtOrQuote(line: string): boolean {
   return (
-    /^\s*"[^"]+"[,.]?\s+pens\p{L}*/iu.test(line) ||
-    /^\s*"[^"]*—[^"]*"\.?\s*$/u.test(line)
+    // Comillas de seguir: la intervención que ocupa más de un párrafo abre
+    // cada párrafo siguiente con `»` (DPD comillas 2c). Se mira sobre la
+    // línea original: normalizada, ese `»` es una comilla más.
+    /^\s*»/.test(line) ||
+    /^\s*["“«][^"“”«»]+["”»][,.]?\s+pens\p{L}*/iu.test(line) ||
+    /^\s*["“«][^"“”«»]*—[^"“”«»]*["”»]\.?\s*$/u.test(line)
   );
 }
 
@@ -123,8 +127,8 @@ function convertLine(line: string): string {
 
   // Normalizar por línea y no el documento entero: si no, un solo párrafo
   // convertido aplana las «» y los ’ de todo el capítulo.
+  if (isThoughtOrQuote(line)) return line;
   const normalized = normalizeSpacingBeforeTags(normalizeQuotes(line));
-  if (isThoughtOrQuote(normalized)) return line;
 
   let current = fixPunctuationBeforeTag(normalized);
 
