@@ -126,8 +126,12 @@ const metadata = JSON.parse(
     { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
   ),
 );
+// Por id y no por nombre: un crate directo que además llega como transitivo
+// en otra versión (zip, reqwest) aparecía dos veces, con la versión ajena.
+const raiz = metadata.resolve.nodes.find((n) => n.id === metadata.resolve.root);
+const idsDirectos = new Set(raiz.deps.map((d) => d.pkg));
 for (const crate of metadata.packages) {
-  if (!directas.has(crate.name)) continue;
+  if (!directas.has(crate.name) || !idsDirectos.has(crate.id)) continue;
   paquetes.push({
     nombre: crate.name,
     version: crate.version,
