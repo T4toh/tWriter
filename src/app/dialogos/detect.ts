@@ -19,6 +19,9 @@ const EN_STOPWORDS = new Set([
   'their', 'they', 'them', 'his', 'her', 'she', 'he', 'we', 'you',
   'your', 'my', 'me', 'i', 'said', 'would', 'could', 'should',
   'about', 'which', 'when', 'where', 'who', 'what', 'why', 'how',
+  // `no` es de los dos idiomas: contarlo solo en español hacía que un diálogo
+  // corto en inglés (`"No," Tom said. "No way."`) diera `es`.
+  'no',
 ]);
 
 export type Lang = 'es' | 'en';

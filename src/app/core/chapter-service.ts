@@ -2,6 +2,7 @@ import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@a
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { detectLang } from '../dialogos/detect';
+import { BookConfigService } from './book-config-service';
 import { DebugService } from './debug-service';
 import { selloRevision } from './estado-libro';
 import { ExportProgress, resumenDeAviso, textoDeFase } from './export-progreso';
@@ -10,6 +11,7 @@ import { ExportsService } from './exports-service';
 import { GitService } from './git-service';
 import { NavigationService } from './navigation-service';
 import { ProjectService } from './project-service';
+import { findNodeByPath } from './tree-utils';
 import { ToastDetalle, ToastService } from './toast-service';
 import { ChapterMeta, EMPTY_META, PullPathChange, TreeNode } from './types';
 
@@ -71,6 +73,7 @@ const EPUBCHECK_TOAST_MS = 12_000;
 @Injectable({ providedIn: 'root' })
 export class ChapterService {
   private project = inject(ProjectService);
+  private bookConfig = inject(BookConfigService);
   private nav = inject(NavigationService);
   private debug = inject(DebugService);
   private git = inject(GitService);
@@ -142,9 +145,10 @@ export class ChapterService {
     }
 
     try {
-      const [html, metaRaw] = await Promise.all([
+      const [html, metaRaw, idiomaLibro] = await Promise.all([
         invoke<string>('read_chapter', { path: node.path }),
         invoke<ChapterMeta>('read_meta', { chapterPath: node.path }),
+        this.idiomaDelLibro(node.path),
       ]);
       // Segundo flush, a propósito. Leer capítulo + meta es un round-trip a
       // Rust, y durante esa espera el editor sigue mostrando el capítulo
@@ -157,7 +161,12 @@ export class ChapterService {
       // hubiera quedado armado.
       await this.flushPendingInPane(paneId);
       let meta = metaRaw ?? EMPTY_META;
-      if (!meta.idioma && html.trim()) {
+      // El idioma del libro manda, como en `resolverIdiomaEfectivo`: un
+      // capítulo con un idioma viejo mal detectado (un diálogo corto en inglés
+      // daba `es`) no le gana. Va en memoria: abrir un capítulo no escribe.
+      if (idiomaLibro) {
+        meta = { ...meta, idioma: idiomaLibro };
+      } else if (!meta.idioma && html.trim()) {
         meta = { ...meta, idioma: detectLang(html) };
         try {
           await invoke('write_meta', { chapterPath: node.path, meta });
@@ -807,6 +816,22 @@ export class ChapterService {
   async flushAllDirty(): Promise<void> {
     await Promise.all(PANE_IDS.map((id) => this.flushPendingInPane(id)));
   }
+
+  /** `idioma` del `book.json` del libro que contiene el capítulo, o `null`.
+   *  El libro se busca en el árbol subiendo carpetas: el capítulo puede estar
+   *  adentro de una sección. */
+  private async idiomaDelLibro(chapterPath: string): Promise<string | null> {
+    const tree = this.project.tree();
+    for (let dir = parentDir(chapterPath); dir; dir = parentDir(dir)) {
+      if (findNodeByPath(tree, dir)?.kind !== 'book') continue;
+      try {
+        return (await this.bookConfig.load(dir)).idioma?.trim() || null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
 }
 
 export function countWords(html: string): number {
@@ -827,4 +852,8 @@ function findParentNode(tree: TreeNode, childPath: string): TreeNode | null {
 
 function sameKindSiblings(parent: TreeNode, kind: TreeNode['kind']): TreeNode[] {
   return parent.children.filter((c) => c.kind === kind);
+}
+
+function parentDir(path: string): string {
+  return path.slice(0, Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')));
 }

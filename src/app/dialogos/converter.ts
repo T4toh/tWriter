@@ -143,7 +143,16 @@ function isThoughtOrQuote(line: string): boolean {
   );
 }
 
-function convertLine(line: string): string {
+function convertLine(html: string): string {
+  if (!html.trim()) return html;
+  // `&nbsp;` es una entidad en el HTML del editor y ninguna regex la ve como
+  // espacio: se pasa al carácter (que `\s` sí matchea) y se vuelve después.
+  // Si la conversión consumió ese espacio, no vuelve, y está bien.
+  if (!html.includes('&nbsp;')) return convertPlainLine(html);
+  return convertPlainLine(html.replaceAll('&nbsp;', '\u00a0')).replaceAll('\u00a0', '&nbsp;');
+}
+
+function convertPlainLine(line: string): string {
   if (!line.trim()) return line;
 
   // Normalizar por línea y no el documento entero: si no, un solo párrafo

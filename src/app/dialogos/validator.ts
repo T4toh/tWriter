@@ -54,7 +54,16 @@ function categoryFor(ruleId: string): RaeCategory {
   }
 }
 
-export function validateRae(plain: string, lang: string | null): RaeViolation[] {
+/** Qué párrafos del plano no son prosa (verso, títulos), por su offset de
+ *  inicio: `validateRae` no los mira. Un verso entre comillas o un título
+ *  `«Uno»` no son diálogos a convertir. */
+export type SkipParagraph = (offset: number) => boolean;
+
+export function validateRae(
+  plain: string,
+  lang: string | null,
+  skip?: SkipParagraph,
+): RaeViolation[] {
   if (lang !== 'es') return [];
   if (!plain.trim()) return [];
 
@@ -63,7 +72,7 @@ export function validateRae(plain: string, lang: string | null): RaeViolation[] 
   let offset = 0;
 
   for (const para of paragraphs) {
-    if (para.trim()) {
+    if (para.trim() && !skip?.(offset)) {
       pushPendingConversion(para, offset, out);
       pushDedicated(para, offset, out);
     }
@@ -146,29 +155,63 @@ export const ENTITY_MAP: Record<string, string> = {
 // dos se desalinean, los fixes de RAE se aplican en el lugar equivocado del
 // HTML y en silencio.
 export function htmlToPlain(html: string): string {
-  const blocks: string[] = [];
+  return plainBlocks(html)
+    .map((b) => b.text)
+    .join('\n\n');
+}
+
+/** El `SkipParagraph` de un capítulo en HTML: los `<p>` adentro de un
+ *  `<blockquote>` (verso) y el texto de los títulos. Mismo recorrido que
+ *  `htmlToPlain`, así que los offsets son los de su plano. */
+export function nonProseSkip(html: string): SkipParagraph {
+  const skip = new Set<number>();
+  let offset = 0;
+  for (const b of plainBlocks(html)) {
+    if (!b.prose) skip.add(offset);
+    offset += b.text.length + 2;
+  }
+  return (o) => skip.has(o);
+}
+
+interface PlainBlock {
+  text: string;
+  prose: boolean;
+}
+
+const HEADING_RE = /<h[1-6]\b/i;
+const BLOCKQUOTE_RE = /<blockquote\b[\s\S]*?<\/blockquote>/gi;
+
+function plainBlocks(html: string): PlainBlock[] {
+  const blocks: PlainBlock[] = [];
   const matches = Array.from(html.matchAll(P_BLOCK_RE));
   if (matches.length === 0) {
-    pushIfText(blocks, html);
-    return blocks.join('\n\n');
+    pushIfText(blocks, html, !HEADING_RE.test(html));
+    return blocks;
   }
+  const verses = Array.from(html.matchAll(BLOCKQUOTE_RE), (m) => [
+    m.index ?? 0,
+    (m.index ?? 0) + m[0].length,
+  ]);
+  const inVerse = (at: number): boolean => verses.some(([from, to]) => at > from && at < to);
   let last = 0;
   for (const m of matches) {
     const start = m.index ?? 0;
-    pushIfText(blocks, html.slice(last, start));
-    pushIfText(blocks, m[1]);
+    const between = html.slice(last, start);
+    pushIfText(blocks, between, !HEADING_RE.test(between));
+    pushIfText(blocks, m[1], !inVerse(start));
     last = start + m[0].length;
   }
-  pushIfText(blocks, html.slice(last));
-  return blocks.join('\n\n');
+  const tail = html.slice(last);
+  pushIfText(blocks, tail, !HEADING_RE.test(tail));
+  return blocks;
 }
 
-function pushIfText(blocks: string[], chunk: string): void {
+function pushIfText(blocks: PlainBlock[], chunk: string, prose: boolean): void {
   if (!chunk) return;
   const parts = chunk.split(BR_RE);
   for (const p of parts) {
     const text = stripInline(p).trim();
-    if (text) blocks.push(text);
+    if (text) blocks.push({ text, prose });
   }
 }
 

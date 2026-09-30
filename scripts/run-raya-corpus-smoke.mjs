@@ -35,7 +35,7 @@ const r = spawnSync(join(repo, 'node_modules/.bin/tsc'), [
 if (r.status !== 0) { console.error(r.stdout, r.stderr); process.exit(1); }
 const req = createRequire(import.meta.url);
 const { convert } = req(join(out, 'dialogos/converter.js'));
-const { validateRae, htmlToPlain } = req(join(out, 'dialogos/validator.js'));
+const { validateRae, htmlToPlain, nonProseSkip } = req(join(out, 'dialogos/validator.js'));
 const { aplicarFixesHtml } = req(join(out, 'dialogos/aplicar-fixes.js'));
 rmSync(out, { recursive: true, force: true });
 
@@ -275,11 +275,7 @@ const C = [
 
 const PENDIENTES = new Set([
   "\"Esto que hiciste\", gritó, \"es una locura\".",
-  "<p>\"Hola,\"&nbsp;dijo Ana.</p>",
   "<p><em>\"Vení\"</em>, dijo ella.</p>",
-  "<p>\"Hola\",&nbsp;dijo Ana.</p>",
-  "<blockquote><p>\"Canción de cuna\"</p></blockquote>",
-  "<h1 class=\"chapter-title\">«Uno»</h1><p>\"Hola\" dijo Juan.</p>",
 ]);
 
 const letters = (s) => (s.replace(/<[^>]+>|&[a-z]+;/g, ' ').match(/\p{L}/gu) ?? []).join('').toLowerCase();
@@ -296,7 +292,7 @@ function applyPlain(t, fixes) {
   return t;
 }
 const plainOf = (t) => (isHtml(t) ? htmlToPlain(t) : t);
-const viol = (t, lang = 'es') => validateRae(plainOf(t), lang);
+const viol = (t, lang = 'es') => validateRae(plainOf(t), lang, isHtml(t) ? nonProseSkip(t) : undefined);
 // Lo que el autor obtiene: convert() y después todos los autoFix dedicados
 // (pending-conversion ya es convert) hasta que no quede ninguno aplicable.
 function pipeline(x) {

@@ -28,6 +28,7 @@ const r = spawnSync(
     'src/app/dialogos/rules-dedicated.ts',
     'src/app/dialogos/converter.ts',
     'src/app/dialogos/tags.ts',
+    'src/app/dialogos/detect.ts',
     'src/app/core/types.ts',
   ],
   { cwd: repo, encoding: 'utf8' },
@@ -132,6 +133,12 @@ check('separa <p> con \\n\\n', htmlToPlain('<p>Uno</p><p>Dos</p>') === 'Uno\n\nD
 check('<br> como separador', htmlToPlain('<p>Uno<br>Dos</p>') === 'Uno\n\nDos');
 check('desnuda inline markup', htmlToPlain('<p>Hola <em>mundo</em> <strong>cruel</strong></p>') === 'Hola mundo cruel');
 check('decodifica entidades', htmlToPlain('<p>foo &amp; bar &mdash; baz</p>') === 'foo & bar — baz');
+
+{
+  const { detectLang } = await import(pathToFileURL(join(outDir, 'dialogos/detect.js')).href);
+  check('detectLang: diálogo corto en inglés → en', detectLang('<p>"No," Tom said. "No way."</p>') === 'en');
+  check('detectLang: diálogo corto en español → es', detectLang('<p>—No —dijo Tom—. No hay forma.</p>') === 'es');
+}
 
 rmSync(outDir, { recursive: true, force: true });
 {

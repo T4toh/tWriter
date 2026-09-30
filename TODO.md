@@ -717,7 +717,11 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   quedarse mudo; el botón del toolbar lo saltea en silencio. Arreglo de fondo:
   que el converter tolere tags inline antes de la comilla de apertura —
   reconocer el prefijo de markup y anclar sobre el texto, no sobre el string
-  crudo.
+  crudo. Medido el 2026-09-30 sobre las novelas del autor: **0** párrafos en
+  español abren con markup antes de la comilla (todos los `<p><em>"` son de
+  los libros en inglés), así que hoy solo le pega a un `.docx` viejo recién
+  importado. El arreglo de fondo no es anclar distinto: es convertir sobre el
+  texto sin tags y volver a meter los tags alineando los dos planos.
 - **Jump-to-exact-offset desde el batch**: el click en una violación del
   panel usa el patrón `requestHighlight` de search (busca el término en el
   capítulo y scrollea al primer match). Funciona para violaciones con

@@ -1,6 +1,6 @@
 import { convertFragmentHtml } from '../editor/rae-convert';
 import { detectLang } from '../dialogos/detect';
-import { htmlToPlain, validateRae } from '../dialogos/validator';
+import { htmlToPlain, nonProseSkip, validateRae } from '../dialogos/validator';
 import { aplicarFixesHtml } from '../dialogos/aplicar-fixes';
 import { educateQuotes } from '../quotes/educate';
 import {
@@ -141,7 +141,7 @@ export function detectarEnCapitulo(
   // cambio aparecía duplicado en dos filas del modal, y "arreglos RAE" dejaba
   // de ser independiente de "rayas" — tildar solo arreglosRae convertía el
   // diálogo igual.
-  const violaciones = validateRae(plain, idiomaEfectivo);
+  const violaciones = validateRae(plain, idiomaEfectivo, nonProseSkip(html));
   const arreglosRae = violaciones.filter(
     (v) => v.autoFix !== undefined && !v.autoFix.manual && v.category !== 'pending-conversion',
   ).length;
@@ -189,7 +189,7 @@ export function aplicarEnCapitulo(
   if (seleccion.rayas && !esIngles) out = convertFragmentHtml(out) ?? out;
   if (seleccion.comillas && esIngles) out = educateQuotes(out).text;
   if (seleccion.arreglosRae) {
-    const fixes = validateRae(htmlToPlain(out), idiomaEfectivo)
+    const fixes = validateRae(htmlToPlain(out), idiomaEfectivo, nonProseSkip(out))
       .filter((v) => v.category !== 'pending-conversion')
       .map((v) => v.autoFix)
       .filter((f) => !f?.manual)
