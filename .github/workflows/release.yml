@@ -17,13 +17,18 @@ jobs:
     outputs:
       release_id: ${{ steps.create.outputs.release_id }}
     steps:
+      # Checkout solo para leer CHANGELOG.md: el cuerpo del draft lleva las
+      # notas de esta versión arriba de las instrucciones de instalación.
+      - name: Checkout
+        uses: actions/checkout@v5
+
       - name: Crear draft
         id: create
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
-          cat > body.md <<'EOF'
+          cat > instalacion.md <<'EOF'
           **Linux (Arch / CachyOS)**: instalá vía AUR — `yay -S twriter-bin`. Auto-update con `yay -Syu`.
 
           **Linux (Debian / Ubuntu)**: descargar `.deb` y `sudo apt install ./twriter_*.deb`.
@@ -41,6 +46,17 @@ jobs:
 
           **macOS — LanguageTool (gramática)**: la app levanta LanguageTool en un container y autodetecta el runtime que tengas. Elegí uno: Apple container (`brew install container && container system start`), colima (`brew install colima docker && colima start`) o Podman (`brew install podman && podman machine init && podman machine start`). Si usás Docker y antes tuviste Docker Desktop desinstalado, borrá la línea `"credsStore": "desktop"` de `~/.docker/config.json` (rompe el `docker pull`).
           EOF
+          # Las notas salen de CHANGELOG.md (scripts/changelog.mjs). Sin sección
+          # para este tag el draft sale solo con la instalación: el release no
+          # se corta por el changelog.
+          notas=$(node scripts/changelog.mjs extraer "$TAG" || true)
+          if [ -n "$notas" ]; then
+            printf '%s\n\n---\n\n## Instalación\n\n' "$notas" > body.md
+            cat instalacion.md >> body.md
+          else
+            echo "::warning::CHANGELOG.md no tiene sección para $TAG"
+            cp instalacion.md body.md
+          fi
           # Idempotente: si el draft ya existe (re-run del workflow), lo reusa.
           id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
                  --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n1)
