@@ -578,7 +578,7 @@ fn status_for(repo: &Repository) -> Result<GitStatus, String> {
     let changed = statuses.len() as u32;
     let mut paths: Vec<GitStatusPath> = Vec::with_capacity(statuses.len().min(500));
     for entry in statuses.iter().take(500) {
-        let Some(p) = entry.path() else { continue };
+        let Ok(p) = entry.path() else { continue };
         paths.push(GitStatusPath {
             path: p.to_string(),
             kind: status_kind(entry.status()),
@@ -586,7 +586,7 @@ fn status_for(repo: &Repository) -> Result<GitStatus, String> {
     }
 
     let head = repo.head().ok();
-    let branch = head.as_ref().and_then(|h| h.shorthand()).map(String::from);
+    let branch = head.as_ref().and_then(|h| h.shorthand().ok()).map(String::from);
 
     let (ahead, behind, remote) = match branch.as_deref() {
         Some(name) => {
@@ -596,8 +596,8 @@ fn status_for(repo: &Repository) -> Result<GitStatus, String> {
                     let local_oid = local_branch
                         .as_ref()
                         .and_then(|b| b.get().target())
-                        .unwrap_or_else(git2::Oid::zero);
-                    let upstream_oid = upstream.get().target().unwrap_or_else(git2::Oid::zero);
+                        .unwrap_or(git2::Oid::ZERO_SHA1);
+                    let upstream_oid = upstream.get().target().unwrap_or(git2::Oid::ZERO_SHA1);
                     let (a, b) = repo
                         .graph_ahead_behind(local_oid, upstream_oid)
                         .unwrap_or((0, 0));
