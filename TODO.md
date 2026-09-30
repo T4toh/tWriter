@@ -634,20 +634,13 @@ huela a "esto ya lo miramos", buscar ahí primero.
      título `«Uno»`. En bloque ya no se convierten (el converter saltea el
      `<blockquote>`), pero «Aplicar RAE al párrafo» sobre el verso todavía
      lo convierte.
-  2. **Convierte mal y el validador no avisa** (lo más frecuente del
-     borrador):
-     - Coma fuera de la comilla, `"Hola", dijo Juan.` → `—Hola, dijo Juan.`
-       (~35 casos). D2 re1 exige `\s+` tras la comilla; re2 exige mayúscula.
-       Es la forma **correcta** en español (DPD comillas 3a/3b: la coma va
-       siempre tras la comilla de cierre), y hoy solo anda la inglesa.
-     - `DIALOG_TAGS` cerrada (del Python): faltan pronombres (`le dijo`,
-       `me preguntó`), primera persona (`dije`), imperfectos (`decía`),
-       `masculló/advirtió/espetó/musitó/confesó/inquirió`, enclíticos,
-       perífrasis. Los ambiguos acción/habla ya están en `AMBIGUOUS_TAGS`
-       (sin autoFix en mayúscula): sumar ahí los que entren.
-     - Sustitutos de raya: `--`, `-`, `–`, `―` (U+2015), `−` solo se ven en
-       la apertura (`dash-short` anclado a `^`) y el fix cambia solo esa.
-       El `--` entra por pegado, `.docx` o Ctrl+Z tras la input rule.
+  2. **Lo que #160 dejó afuera de la conversión**: la coma fuera de la
+     comilla, pronombres, perífrasis, más verbos y los sustitutos de raya en
+     cualquier posición ya andan (verificado por el autor el 2026-09-30).
+     Queda: `"Esto que hiciste", gritó, "es una locura".` (2.3e, ambiguo:
+     hoy sale `—gritó—, es`), y `&nbsp;` o markup inline pegados a la
+     comilla (ver 4). Los ambiguos acción/habla van a `AMBIGUOUS_TAGS`
+     (sin autoFix en mayúscula) a medida que aparezcan.
   3. **Reglas que faltan o contradicen al DPD**:
      - Caja del inciso: 2.3c (`—¿Venís? —Preguntó` no se marca:
        `verb-capitalized` saltea justo cuando hay `?!` antes), 2.3d (punto +
