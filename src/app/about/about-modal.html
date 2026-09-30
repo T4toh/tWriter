@@ -26,6 +26,21 @@
     }
 
     <div class="ab-body">
+      @if (novedades) {
+        <section>
+          <h3>Novedades</h3>
+          <app-markdown-view [markdown]="novedades" />
+          @if (anteriores) {
+            <button type="button" class="ab-toggle" (click)="alternar('anteriores')">
+              {{ abierto() === 'anteriores' ? '−' : '+' }} Versiones anteriores
+            </button>
+            @if (abierto() === 'anteriores') {
+              <app-markdown-view [markdown]="anteriores" />
+            }
+          }
+        </section>
+      }
+
       @if (about.error(); as err) {
         <p class="ab-error">{{ err }}</p>
       }

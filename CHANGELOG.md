@@ -6,6 +6,8 @@ Cada PR con un cambio visible suma su línea en **Sin publicar**. Al cortar un r
 
 ## Sin publicar
 
+- «Acerca de» muestra las novedades de la última versión, con las anteriores a un click.
+
 ## v0.22.0 — 2026-09-30
 
 ### Diálogos con raya: revisión a fondo contra el DPD

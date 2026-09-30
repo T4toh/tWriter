@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import changelog from '../../../CHANGELOG.md';
 import { AboutService, PaqueteLicencia } from '../core/about-service';
+import { MarkdownView } from '../shared/markdown-view';
 
 /**
  * Modal "Acerca de": qué es tWriter, bajo qué licencia, y los avisos de
@@ -13,6 +15,7 @@ import { AboutService, PaqueteLicencia } from '../core/about-service';
   selector: 'app-about-modal',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [MarkdownView],
   templateUrl: './about-modal.html',
   styleUrl: './about-modal.scss',
 })
@@ -22,6 +25,20 @@ export class AboutModal {
   /** Qué texto de licencia está desplegado. Uno a la vez: son de 1 a 11 KB y
    *  dos abiertos vuelven el modal ilegible. */
   protected readonly abierto = signal<string | null>(null);
+
+  /** Del `CHANGELOG.md` del repo: la última versión, y aparte las
+   *  anteriores. Se corta en el primer `## v…`, así quedan afuera la intro
+   *  para quien contribuye y «Sin publicar». */
+  protected readonly novedades: string;
+  protected readonly anteriores: string;
+
+  constructor() {
+    const desde = changelog.indexOf('\n## v');
+    const versiones = desde === -1 ? '' : changelog.slice(desde + 1);
+    const corte = versiones.indexOf('\n## ');
+    this.novedades = corte === -1 ? versiones : versiones.slice(0, corte);
+    this.anteriores = corte === -1 ? '' : versiones.slice(corte + 1);
+  }
 
   protected readonly totalPaquetes = computed(() =>
     (this.about.licencias()?.grupos ?? []).reduce((n, g) => n + g.paquetes.length, 0),
