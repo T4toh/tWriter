@@ -177,32 +177,6 @@ huela a "esto ya lo miramos", buscar ahí primero.
   falta**, y son la clase de dependencia que conviene no sumar sin un caso que
   la exija.
 
-- **Aportar upstream — cuál de los dos repos conviene.** Los dos aceptan
-  contribuciones, pero solo uno le vuelve a tWriter:
-  - **LanguageTool** es el que **sí** nos vuelve, porque es el motor que
-    corremos. El agujero está identificado y es chico de describir:
-    `es/confusion_sets.txt` tiene **5 pares** (`casa;caza`, `ciento;siento`,
-    `cima;sima`, `honda;onda`, `sumo;zumo` — todos seseo, inútiles para un
-    autor argentino) contra 782 del inglés. Sumar pares de confusión del
-    español rioplatense (`haber`/`a ver`, `hecho`/`echo`, `sino`/`si no`) es
-    una contribución acotada, medible y que arregla justo lo que medimos que
-    falta. Ojo: los pares necesitan datos de n-gramas para evaluarse, y los
-    n-gramas de español ya se probaron y descartaron para nuestro uso (ver
-    item más abajo) — hay que entender esa interacción antes de prometer algo.
-  - **rla-es** (`sbosio/rla-es`) — 258 stars, 53 forks, 21 issues abiertos,
-    PR #355 mergeado, último push 2025-11-26 (semi-dormido, pero con historia
-    real de contribuciones). El `CONTRIBUTING.md` invita explícitamente a
-    mejorar las **variantes regionales** y lista es_AR entre 23 variantes; el
-    detalle está en el wiki del proyecto. Hueco concreto: los regionalismos
-    es_AR (`ortografia/palabras/noRAE/l10n/es_AR/`) son **364 líneas en
-    total**. Verificado que tiene `laburo`, `quilombo` y `boludo`, y que le
-    faltan `bondi`, `pibe` y `hagás`. Un autor argentino es exactamente quien
-    puede llenar eso.
-    **Pero que quede claro**: mejorar rla-es **no mejora tWriter**, porque el
-    speller de LT no usa rla-es — usa su propio `es-ES.dict` Morfologik (ver
-    item de abajo). Es una contribución al mundo, no a nuestro corrector. Vale
-    hacerla por eso, no esperando que vuelva.
-
 - **Wizard de revisión de errores** (paralelo al chequeo inline, a pedido del
   autor): botón al lado de `Auto` / `LT` en la barra de arriba que abre un
   popup y camina los matches del capítulo **uno por uno** — mostrar contexto,
@@ -392,6 +366,63 @@ huela a "esto ya lo miramos", buscar ahí primero.
   `UPPERCASE_SENTENCE_START`. El arreglo va en `segment.srx`, no en
   `grammar.xml`, así que es un parche aparte y todavía sin escribir. Detalle y
   la salida del tagger que lo prueba, en `docs/lt-patches/README.md`.
+
+## Aportes a la corrección del español
+
+Lo que tWriter aprende corrigiendo español y vale devolver al mundo (pedido
+del autor el 2026-09-30: «me gusta sumar para estas cosas y que la corrección
+de español mejore»). Criterio para todo lo de acá: **la norma es la fuente**
+(DPD, OLE), no la costumbre del autor ni la nuestra, y cada regla que se
+proponga cita su sección y trae sus ejemplos ✗/✓.
+
+- **Reglas de raya y puntuación para LanguageTool.** El validador de rayas
+  (`src/app/dialogos/`) tiene reglas que LT en español no trae o no trae así.
+  Antes de proponer, **mirar qué ya hay** en `es/grammar.xml` y
+  `es/style.xml` de LT para no duplicar. Candidatas, de la más fácil a la
+  más difícil:
+  1. De una sola oración, entran como regla XML con `<example
+     correction=…>`: puntuación antes de la raya de cierre (`Carlos;— lo`
+     → `Carlos—; lo`, DPD raya 2.3c/2.3f); coma o punto antes de un inciso
+     con verbo de lengua (`—Hola, —dijo`, 2.3c); verbo de lengua en
+     mayúscula tras `?`/`!` (`—¿Venís? —Preguntó`, 2.3c); puntos de más
+     (`..`, `....` salvo tras abreviatura, DPD puntos suspensivos §1 y
+     §3.1).
+  2. Con el etiquetador morfológico de LT: la caja del inciso (2.3d/2.3e)
+     necesita saber si la palabra es verbo de lengua, de acción o nombre
+     propio. Acá lo resolvemos con listas cerradas (`DIALOG_TAGS`,
+     `ACTION_VERBS`, `NON_VERB_STARTS`) y por eso somos conservadores; las
+     etiquetas de LT (`VMIS3S0`, `NP…`) lo harían bien de verdad.
+  3. Las que cruzan puntos dentro del párrafo (la paridad de las rayas, el
+     `. —` al retomar el parlamento, DPD 2.3d) no entran en el modelo
+     oración por oración de LT: serían reglas en Java.
+  Material listo para aportar: `scripts/run-raya-corpus-smoke.mjs`, más de
+  200 casos con el esperado y la sección del DPD, y la medición sobre 283
+  capítulos reales (483 `. —`, 9 aciertos de caja y puntuación; ver #162).
+- **Diccionario y pares de confusión — cuál de los dos repos conviene.** Los dos aceptan
+  contribuciones, pero solo uno le vuelve a tWriter:
+  - **LanguageTool** es el que **sí** nos vuelve, porque es el motor que
+    corremos. El agujero está identificado y es chico de describir:
+    `es/confusion_sets.txt` tiene **5 pares** (`casa;caza`, `ciento;siento`,
+    `cima;sima`, `honda;onda`, `sumo;zumo` — todos seseo, inútiles para un
+    autor argentino) contra 782 del inglés. Sumar pares de confusión del
+    español rioplatense (`haber`/`a ver`, `hecho`/`echo`, `sino`/`si no`) es
+    una contribución acotada, medible y que arregla justo lo que medimos que
+    falta. Ojo: los pares necesitan datos de n-gramas para evaluarse, y los
+    n-gramas de español ya se probaron y descartaron para nuestro uso (ver
+    «N-gramas» en Gramática, ortografía y tesauro) — hay que entender esa interacción antes de prometer algo.
+  - **rla-es** (`sbosio/rla-es`) — 258 stars, 53 forks, 21 issues abiertos,
+    PR #355 mergeado, último push 2025-11-26 (semi-dormido, pero con historia
+    real de contribuciones). El `CONTRIBUTING.md` invita explícitamente a
+    mejorar las **variantes regionales** y lista es_AR entre 23 variantes; el
+    detalle está en el wiki del proyecto. Hueco concreto: los regionalismos
+    es_AR (`ortografia/palabras/noRAE/l10n/es_AR/`) son **364 líneas en
+    total**. Verificado que tiene `laburo`, `quilombo` y `boludo`, y que le
+    faltan `bondi`, `pibe` y `hagás`. Un autor argentino es exactamente quien
+    puede llenar eso.
+    **Pero que quede claro**: mejorar rla-es **no mejora tWriter**, porque el
+    speller de LT no usa rla-es — usa su propio `es-ES.dict` Morfologik (ver
+    «Por qué NO cambiar el speller» en `docs/decisiones-cerradas.md`). Es una contribución al mundo, no a nuestro corrector. Vale
+    hacerla por eso, no esperando que vuelva.
 
 ## Búsqueda
 
@@ -641,24 +672,18 @@ huela a "esto ya lo miramos", buscar ahí primero.
      hoy sale `—gritó—, es`), y `&nbsp;` o markup inline pegados a la
      comilla (ver 4). Los ambiguos acción/habla van a `AMBIGUOUS_TAGS`
      (sin autoFix en mayúscula) a medida que aparezcan.
-  3. **Reglas que faltan o contradicen al DPD**:
-     - Caja del inciso: 2.3c (`—¿Venís? —Preguntó` no se marca:
-       `verb-capitalized` saltea justo cuando hay `?!` antes), 2.3d (punto +
-       no-dicendi en minúscula: el caso del autor
-       `--Hola, Roberto. --sus manos temblaban por el miedo.` →
-       `—Hola, Roberto. —Sus manos…`; y sin punto + mayúscula:
-       `—Hola —Sus manos` → `—Hola. —Sus`), 2.3e (a mitad de enunciado,
-       minúscula siempre). Dicendi → sacar el punto; no-dicendi → mayúscula.
-       Un solo fix por caso, lo decide el DPD.
-     - Raya de cierre: puntuación antes en vez de después (`;—` `,—` `.—`
-       `:—`, 2.3c/f); `—.` sobrante a fin de párrafo (2.3a); falta `—.` si
-       el personaje sigue (2.3b); espacios (`Juan —.`, `— .`, `Ana—vamos`,
-       `sé— dijo`, doble espacio).
-     - `dash-orphan`: FP con imperativos (`Pregunta a tu madre.`), FN con
-       `—Hola dijo Juan.`. `dash-quote-mix`: FP con comillas internas
-       legítimas (`—Leí "Rayuela" anoche.`, §4).
-     - 2.1: inciso narrativo sin raya de cierre
-       (`Esperaba a Emilio —un gran amigo. Lamentablemente…`) no se detecta.
+  3. **Lo que #162 dejó afuera de las reglas**: la caja del inciso (2.3c/d/e),
+     la raya de cierre, la raya de inciso, el espacio doble, el inciso
+     narrativo sin cerrar (2.1) y el falso positivo de `dash-quote-mix` ya
+     andan (verificado por el autor el 2026-09-30). Queda:
+     - `inciso-case` solo actúa con palabras de `NON_VERB_STARTS` o
+       `ACTION_VERBS`: con un verbo que no está en ninguna lista no marca.
+       Sumar verbos a medida que aparezcan (o resolverlo con el etiquetador
+       de LT, ver «Aportes a la corrección del español»).
+     - 2.3b sin raya de cierre (`—Lo principal… —añadió Pilar. Afortunada…`)
+       se escribe igual que un 2.3a con narración que sigue: no se marca.
+     - `dash-orphan`: FP con imperativos (`—No sé. Pregunta a tu madre.`) y
+       FN con `—Hola dijo Juan.`.
   4. **Editor, entidades, idioma**:
      - Fix con posiciones viejas (`editor.ts:2196`, sospecha fuerte): el
        remap con assoc +1 estira el span si se tipea adentro; click en el

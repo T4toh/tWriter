@@ -134,5 +134,16 @@ check('desnuda inline markup', htmlToPlain('<p>Hola <em>mundo</em> <strong>cruel
 check('decodifica entidades', htmlToPlain('<p>foo &amp; bar &mdash; baz</p>') === 'foo & bar — baz');
 
 rmSync(outDir, { recursive: true, force: true });
+{
+  // Retomar el parlamento tras el comentario con `. —` (DPD 2.3d pide `—.`):
+  // arreglo de a uno, nunca en bloque, porque también puede ser otro hablante.
+  const plain = '—Hola. —Amelia se acercó al escritorio. —Vestite.';
+  const v = validateRae(plain, 'es').find((x) => x.ruleId === 'closing-dash');
+  const f = v?.autoFix;
+  const fixed = f ? plain.slice(0, f.offset) + f.replacement + plain.slice(f.offset + f.length) : '';
+  check('`. —` al retomar → closing-dash con arreglo manual', f?.manual === true, v);
+  check('el arreglo deja `escritorio—. Vestite.`', fixed === '—Hola. —Amelia se acercó al escritorio—. Vestite.', fixed);
+}
+
 console.log(`\n${passed} ok, ${failed} fail`);
 process.exit(failed > 0 ? 1 : 0);

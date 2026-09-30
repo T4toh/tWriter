@@ -6,7 +6,8 @@
 // Cada caso: [familia, input, esperado, sección, idioma?]. esperado null ⇒ el
 // texto ya es correcto: convert() no lo toca y el validador no dice nada.
 // esperado { marca } ⇒ el error no tiene un arreglo único: el validador tiene
-// que marcarlo con esa regla y nada lo cambia solo.
+// que marcarlo con esa regla y nada lo cambia en bloque (puede traer un
+// arreglo `manual`, de a uno desde el popover).
 // Si no, lo que el autor obtiene (convert + todos los autoFix) tiene que
 // quedar igual al esperado. Siempre, para todos: no se pierden letras ni
 // suspensivos, y convert() es idempotente.
@@ -91,8 +92,10 @@ const C = [
   [4, '—Está bien —dijo Carlos.— Lo haré.', '—Está bien —dijo Carlos—. Lo haré.', '2.3c'],
   [4, '—Hola —dijo Juan—.', '—Hola —dijo Juan.', '2.3a'],
   [4, '—Espero que todo salga bien —dijo Azucena con gesto ilusionado—.', '—Espero que todo salga bien —dijo Azucena con gesto ilusionado.', '2.3a'],
-  [4, '—Lo principal es sentirse viva —añadió Pilar. Afortunada o desafortunada, pero viva.', '—Lo principal es sentirse viva —añadió Pilar—. Afortunada o desafortunada, pero viva.', '2.3b'],
-  [4, '—Hola —dijo Juan. —¿Venís mañana?', '—Hola —dijo Juan—. ¿Venís mañana?', '2.3b'],
+  // 2.3b sin raya de cierre: se escribe igual que un 2.3a con narración que
+  // sigue (`—Hola —dijo Juan. Luego se fue.`). No se marca.
+  [4, '—Lo principal es sentirse viva —añadió Pilar. Afortunada o desafortunada, pero viva.', null, '2.3b/2.3a indistinguibles'],
+  [4, '—Hola —dijo Juan. —¿Venís mañana?', { marca: 'closing-dash' }, '2.3b u otro hablante: sin arreglo'],
   [4, '—No sé —dijo Pedro, —capaz mañana.', '—No sé —dijo Pedro—, capaz mañana.', '2.3c'],
   [4, '—Anoche estuve en una fiesta —me confesó, y añadió:— Conocí gente.', '—Anoche estuve en una fiesta —me confesó, y añadió—: Conocí gente.', '2.3f'],
   [4, '—Anoche estuve en una fiesta —me confesó, y añadió: —Conocí gente.', '—Anoche estuve en una fiesta —me confesó, y añadió—: Conocí gente.', '2.3f'],
@@ -108,7 +111,7 @@ const C = [
   [4, '—¿Venís?. —preguntó Ana.', '—¿Venís? —preguntó Ana.', '2.3c'],
   [4, '—¡Andate!. —gritó.', '—¡Andate! —gritó.', '2.3c'],
   [4, '—Bueno... —dijo Ana—. Vamos.', '—Bueno... —dijo Ana—. Vamos.', '2.3c (susp. quedan)'],
-  [4, '—Bueno… —dijo Ana. Vamos.', '—Bueno… —dijo Ana—. Vamos.', '2.3b'],
+  [4, '—Bueno… —dijo Ana. Vamos.', null, '2.3b/2.3a indistinguibles'],
   [4, '—No se moleste —cerró la puerta—. No hace falta.', '—No se moleste. —Cerró la puerta—. No hace falta.', '2.3d'],
   // 5. Comillas en vez de raya
   [5, '"Hola", dijo Juan.', '—Hola —dijo Juan.', '3.1/2.3a'],
@@ -245,6 +248,23 @@ const C = [
   [10, '"Mañana", dije. "Hoy no puedo".', '—Mañana —dije—. Hoy no puedo.', '2.3b primera persona'],
   [10, '"No", repitió. "No quiero", insistió.', '—No —repitió—. No quiero —insistió.', '2.3b + verbo del segundo parlamento'],
   [10, '—Hola -- le dijo Juan.', '—Hola —le dijo Juan.', 'sustituto + pronombre'],
+  // 11. Caja del inciso y raya de cierre (PR de reglas)
+  [11, '—Hola —sonrió Ana.', '—Hola. —Sonrió Ana.', '2.3d (sonreír no es de lengua)'],
+  [11, '—Sí —asintió—. Vamos.', '—Sí. —Asintió—. Vamos.', '2.3d'],
+  [11, '—Bueno —se rascó la cabeza—, vamos.', null, '2.3e con coma'],
+  [11, '—Hola —Pedro golpeó la mesa— y se fue.', null, 'nombre propio a mitad (no se toca)'],
+  [11, '—Hola —saludó Ana.', null, 'verbo fuera de las listas: no se marca'],
+  [11, '—¡Duendes! —gritó. —Todo apestaba.', { marca: 'closing-dash' }, '2.3b u otro hablante: sin arreglo'],
+  [11, 'Entonces gritó: —¡Vení!', null, 'raya tras dos puntos en narración'],
+  [11, 'Esperaba a Emilio —un gran amigo. Lamentablemente, no vino.', { marca: 'unclosed-aside' }, '2.1'],
+  [11, '—Leí "Rayuela" anoche.', null, 'comillas internas (§4)'],
+  [11, '—Esto que has hecho —gritó "es una locura."', { marca: 'dash-quote-mix' }, 'conversión a medias'],
+  [11, 'Se quedó  mirando la puerta.', 'Se quedó mirando la puerta.', 'espacio doble'],
+  // Falsos positivos encontrados corriendo el validador sobre las novelas
+  // del autor (2026-09-30): el personaje retoma tras el comentario.
+  [11, '—Ya sé. —Te dije.', null, 'retoma: segunda persona'],
+  [11, '—Ya sé. —Me dijo que la regañaste.', null, 'retoma: «que» detrás'],
+  [11, '—¿Eh? —La pregunta lo tomó por sorpresa.', null, 'artículo, no clítico'],
   [9, '»Ayer, cuando tenía todo listo, recibí una llamada.', null, 'comillas de seguir (DPD comillas 2c)'],
   [9, '»Me dijo «vete» y me fui.', null, 'comillas de seguir'],
   [9, '“Esto empieza mal”, pensó Bastidas malhumorado.', null, 'pensamiento (DPD comillas 2b)'],
@@ -254,59 +274,12 @@ const C = [
 ];
 
 const PENDIENTES = new Set([
-  "--Hola, Roberto. --sus manos temblaban por el miedo.",
-  "—Hola —dijo Juan —. ¿Venís?",
-  "—Hola —dijo Juan— . ¿Venís?",
-  "—Hola  —dijo  Juan.",
-  "—No sé— dijo Pedro.",
-  "—Mañana —dijo Ana—vamos al río.",
-  "—  ¿Venís? — preguntó.",
-  "—Vení acá —le dijo— , que te quiero ver.",
-  "—Hola —masculló Pedro—vení.",
-  "—¿Venís? —Preguntó Ana.",
-  "—¡Qué le vamos a hacer! —Exclamó resignada doña Patro.",
-  "—No se moleste. —cerró la puerta y salió de mala gana.",
-  "—Me voy ya. —se puso en pie con gesto decidido—. No hace falta que me acompañe.",
-  "—No se moleste —cerró la puerta y salió.",
-  "—Solo nos queda esto —Le enseñó unos billetes— para el viaje.",
-  "—¿Me escuchás? —Masculló Pedro.",
-  "—Hola, Roberto. —sus manos temblaban por el miedo.",
-  "—No me jodas. —Le contestó sin mirarla.",
-  "—Hola, —dijo Juan.",
-  "—Está bien —dijo Carlos;— lo haré.",
-  "—Está bien —dijo Carlos,— lo haré.",
-  "—Está bien —dijo Carlos.— Lo haré.",
-  "—Hola —dijo Juan—.",
-  "—Espero que todo salga bien —dijo Azucena con gesto ilusionado—.",
-  "—Lo principal es sentirse viva —añadió Pilar. Afortunada o desafortunada, pero viva.",
-  "—Hola —dijo Juan. —¿Venís mañana?",
-  "—No sé —dijo Pedro, —capaz mañana.",
-  "—Anoche estuve en una fiesta —me confesó, y añadió:— Conocí gente.",
-  "—Anoche estuve en una fiesta —me confesó, y añadió: —Conocí gente.",
-  "—Bueno… —dijo Ana. Vamos.",
-  "—No se moleste —cerró la puerta—. No hace falta.",
   "\"Esto que hiciste\", gritó, \"es una locura\".",
   "<p>\"Hola,\"&nbsp;dijo Ana.</p>",
-  "—Hola, Roberto. —sus manos temblaban por el miedo.",
-  "—Hola, Roberto. —se levantó y salió.",
-  "—Hola, Roberto. —sus manos temblaban—. ¿Cómo estás?",
-  "—¿Venís? —sus ojos brillaban.",
-  "—¡Basta! —golpeó la mesa.",
-  "\"Hola, Roberto.\" sus manos temblaban.",
-  "<p>—Hola, Roberto. —sus manos temblaban.</p>",
-  "—Hola —Sus manos temblaban por el miedo.",
-  "—Hola —Se levantó y salió.",
-  "—Hola, Roberto —Sus manos temblaban—. ¿Cómo estás?",
-  "—Hola —sus manos temblaban.",
-  "—Solo nos queda esto. —le enseñó unos billetes— para el viaje.",
-  "—Solo nos queda esto —Le enseñó unos billetes— para el viaje.",
   "<p><em>\"Vení\"</em>, dijo ella.</p>",
   "<p>\"Hola\",&nbsp;dijo Ana.</p>",
-  "<p>--Hola, Roberto. --sus manos temblaban.</p>",
   "<blockquote><p>\"Canción de cuna\"</p></blockquote>",
-  "—Vamos —dijo Juan, y leyó el cartel \"Peligro\".",
   "<h1 class=\"chapter-title\">«Uno»</h1><p>\"Hola\" dijo Juan.</p>",
-  "\"No sé.\" se encogió de hombros.",
 ]);
 
 const letters = (s) => (s.replace(/<[^>]+>|&[a-z]+;/g, ' ').match(/\p{L}/gu) ?? []).join('').toLowerCase();
@@ -329,7 +302,9 @@ const viol = (t, lang = 'es') => validateRae(plainOf(t), lang);
 function pipeline(x) {
   let t = convert(x).text;
   for (let i = 0; i < 5; i++) {
-    const fixes = viol(t).filter((v) => v.autoFix && v.ruleId !== 'pending-conversion').map((v) => v.autoFix);
+    // Los `manual` son de a uno desde el popover: la revisión en bloque no
+    // los aplica, y acá tampoco.
+    const fixes = viol(t).filter((v) => v.autoFix && !v.autoFix.manual && v.ruleId !== 'pending-conversion').map((v) => v.autoFix);
     if (!fixes.length) break;
     const n = isHtml(t) ? aplicarFixesHtml(t, fixes).html : applyPlain(t, fixes);
     if (n === t) break;
@@ -362,7 +337,7 @@ for (const [fam, input, exp0, sec, lang = 'es'] of C) {
 
 const show = (s) => JSON.stringify(s).slice(1, -1);
 const all = process.argv.includes('--all');
-const fams = ['', 'Sustitutos de raya', 'Espaciado', 'Mayúsculas', 'Puntuación', 'Comillas', 'Falsos positivos', 'HTML / multi-párrafo', 'Punto/cierre + raya + caja del inciso', 'Texto correcto que se rompía', 'Guiones, verbos y pronombres'];
+const fams = ['', 'Sustitutos de raya', 'Espaciado', 'Mayúsculas', 'Puntuación', 'Comillas', 'Falsos positivos', 'HTML / multi-párrafo', 'Punto/cierre + raya + caja del inciso', 'Texto correcto que se rompía', 'Guiones, verbos y pronombres', 'Caja del inciso y raya de cierre'];
 const fallan = rows.filter((x) => x.f.length && !PENDIENTES.has(x.input));
 const sanados = rows.filter((x) => !x.f.length && PENDIENTES.has(x.input));
 for (let fam = 1; fam < fams.length; fam++) {
