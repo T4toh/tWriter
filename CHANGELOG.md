@@ -14,6 +14,10 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 - «Acerca de» muestra las novedades de la última versión, con las anteriores a un click.
 
+### Fixed
+
+- La pestaña Licencias de «Acerca de» ya no repite `zip` y `reqwest` con una versión que no es la que usa tWriter.
+
 ## [0.22.0] - 2026-09-30
 
 ### Added

@@ -1524,6 +1524,18 @@ fn find_split(text: &str, start: usize, target: usize) -> usize {
 mod tests {
     use super::*;
 
+    /// reqwest va con `rustls-no-provider`: sin el proveedor que instala
+    /// `run()`, `build()` hace panic y LanguageTool deja de andar sin que falle
+    /// ningún otro test.
+    #[test]
+    fn el_cliente_http_encuentra_proveedor_tls() {
+        crate::install_tls_provider();
+        reqwest::Client::builder()
+            .timeout(REQUEST_TIMEOUT)
+            .build()
+            .expect("reqwest sin proveedor de cripto para rustls");
+    }
+
     fn utf16_len(s: &str) -> usize {
         s.chars().map(|c| c.len_utf16()).sum()
     }
