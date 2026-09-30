@@ -33,7 +33,7 @@ const r = spawnSync(
     'src/app/dialogos/tags.ts',
     'src/app/dialogos/aplicar-fixes.ts',
     'src/app/dialogos/plano-con-mapa.ts',
-    'src/app/editor/rae-convert.ts',
+    'src/app/editor/raya-convert.ts',
     'src/app/quotes/educate.ts',
     'src/app/repeticiones/detector.ts',
     'src/app/core/types.ts',
@@ -66,7 +66,7 @@ function check(name, cond, info) {
   }
 }
 
-const todo = { rayas: true, comillas: true, arreglosRae: true };
+const todo = { rayas: true, comillas: true, arreglosRaya: true };
 
 console.log('aplicarEnCapitulo');
 {
@@ -104,26 +104,26 @@ console.log('aplicarEnCapitulo');
 {
   // Nada tildado: el html no se toca pase lo que pase.
   const html = '<p>"No sé," dijo ella.</p>';
-  const res = aplicarEnCapitulo(html, null, 'es', { rayas: false, comillas: false, arreglosRae: false });
+  const res = aplicarEnCapitulo(html, null, 'es', { rayas: false, comillas: false, arreglosRaya: false });
   check('nada tildado: html sin cambios', res.html === html, res.html);
 }
 {
   // Fix round 1: `pending-conversion` (autoFix = salida de convert()) es
-  // EXACTAMENTE la misma transformación que ya hace `rayas` — si arreglosRae
+  // EXACTAMENTE la misma transformación que ya hace `rayas` — si arreglosRaya
   // la contara, las dos casillas dejarían de ser independientes (tildar solo
-  // arreglosRae convertía el diálogo igual, sin que el autor lo pidiera).
+  // arreglosRaya convertía el diálogo igual, sin que el autor lo pidiera).
   const html = '<p>"No sé," dijo ella. "De verdad."</p>';
   {
-    const res = aplicarEnCapitulo(html, null, 'es', { rayas: false, comillas: false, arreglosRae: true });
-    check('solo arreglosRae: NO convierte a raya', res.html === html, res.html);
+    const res = aplicarEnCapitulo(html, null, 'es', { rayas: false, comillas: false, arreglosRaya: true });
+    check('solo arreglosRaya: NO convierte a raya', res.html === html, res.html);
   }
   {
-    const res = aplicarEnCapitulo(html, null, 'es', { rayas: true, comillas: false, arreglosRae: false });
+    const res = aplicarEnCapitulo(html, null, 'es', { rayas: true, comillas: false, arreglosRaya: false });
     check('solo rayas: sí convierte a raya', res.html.includes('—'), res.html);
   }
   {
     const det = detectarEnCapitulo(html, null, 'es', { excepciones: EXCEPCIONES_DEFAULT, diccionario: [] });
-    check('detectarEnCapitulo: arreglosRae no cuenta la conversión pendiente', det.arreglosRae === 0, det);
+    check('detectarEnCapitulo: arreglosRaya no cuenta la conversión pendiente', det.arreglosRaya === 0, det);
   }
 }
 
@@ -156,7 +156,7 @@ console.log('aplicarEnCapitulo: idioma del libro manda sobre el del capítulo');
 // en deteccion.ts), así que sumar `rayas` acá mezclaría ese quirk conocido con
 // lo que este cambio prueba: que educateQuotes (comillas) no toque un
 // capítulo que el libro declaró español.
-const soloComillas = { rayas: false, comillas: true, arreglosRae: false };
+const soloComillas = { rayas: false, comillas: true, arreglosRaya: false };
 {
   // Libro declara 'es', capítulo trae 'en' en su meta — el libro manda:
   // comillas queda gateada a 0, el html no se toca.

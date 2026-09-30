@@ -111,10 +111,10 @@ export interface ReglaDesactivada {
   ejemplo: string;
 }
 
-export type RaeCategory = 'pending-conversion' | 'char' | 'structure' | 'typo' | 'mayusculas';
-export type RaeSeverity = 'error' | 'warning';
+export type RayaCategory = 'pending-conversion' | 'char' | 'structure' | 'typo' | 'mayusculas';
+export type RayaSeverity = 'error' | 'warning';
 
-export interface RaeAutoFix {
+export interface RayaAutoFix {
   offset: number;
   length: number;
   replacement: string;
@@ -123,28 +123,28 @@ export interface RaeAutoFix {
   manual?: boolean;
 }
 
-export interface RaeParagraphRange {
+export interface RayaParagraphRange {
   offset: number;
   length: number;
 }
 
-export interface RaeViolation {
+export interface RayaViolation {
   offset: number;
   length: number;
-  category: RaeCategory;
-  severity: RaeSeverity;
+  category: RayaCategory;
+  severity: RayaSeverity;
   ruleId: string;
   message: string;
   shortMessage: string;
-  autoFix?: RaeAutoFix;
-  paragraphRange?: RaeParagraphRange;
-  help?: RaeHelp;
+  autoFix?: RayaAutoFix;
+  paragraphRange?: RayaParagraphRange;
+  help?: RayaHelp;
 }
 
 /** De dónde sale la regla y cómo se ve bien escrita, para que el popover
  *  enseñe además de marcar. `entry` es la entrada del DPD (`raya`,
  *  `comillas`, `puntos suspensivos`) y `section`, su apartado. */
-export interface RaeHelp {
+export interface RayaHelp {
   entry: string;
   section: string;
   wrong?: string;

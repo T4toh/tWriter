@@ -275,7 +275,7 @@ body {
 
 // Los tres modales `inset` quedan afuera a propósito y no comparten nada de
 // esto: `sc-`/`nf-` usan otro padding (1.25rem), otro fondo
-// (`--panel-bg-elev`) y otra sombra, y `rae-` vive en `editor.html`. Son otra
+// (`--panel-bg-elev`) y otra sombra, y `raya-` vive en `editor.html`. Son otra
 // familia visual, no una variante de esta.
 .modal-card {
   position: fixed;

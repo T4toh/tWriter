@@ -1,7 +1,7 @@
 /**
  * Cede el control al event loop para que el navegador pinte.
  *
- * Los auditores (`rae-audit-service`, `repeticiones-audit-service`,
+ * Los auditores (`raya-audit-service`, `repeticiones-audit-service`,
  * `quotes-fix-service`) recorren el libro entero capítulo por capítulo en un
  * loop `async`. Sin ceder, el `progress` que publican en cada vuelta se
  * setea pero no se renderiza hasta el final: Angular no llega a correr

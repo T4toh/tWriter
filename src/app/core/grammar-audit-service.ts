@@ -12,7 +12,7 @@ import { GrammarService } from './grammar-service';
 import { filtrarMatchesAuditoria } from './grammar-audit-filter';
 import { ImageViewerService } from './image-viewer-service';
 import { MarkdownReaderService } from './markdown-reader-service';
-import { RaeAuditService } from './rae-audit-service';
+import { RayaAuditService } from './raya-audit-service';
 import { RepeticionesAuditService } from './repeticiones-audit-service';
 import { SearchService } from './search-service';
 
@@ -38,7 +38,7 @@ export interface GrammarAuditScope {
 /**
  * Auditoría de gramática sobre un alcance (saga, libro o sección).
  *
- * Tercer hermano de `RaeAuditService` y `RepeticionesAuditService`, con la
+ * Tercer hermano de `RayaAuditService` y `RepeticionesAuditService`, con la
  * misma forma. La diferencia es que el chequeo no es local ni gratis: cada
  * capítulo es un POST a LanguageTool, así que corre capítulo por capítulo con
  * progreso visible, se cancela cerrando el panel (el loop corta después de
@@ -51,7 +51,7 @@ export class GrammarAuditService {
   private imageViewer = inject(ImageViewerService);
   private fontPreview = inject(FontPreviewService);
   private markdownReader = inject(MarkdownReaderService);
-  private raeAudit = inject(RaeAuditService);
+  private rayaAudit = inject(RayaAuditService);
   private repeticionesAudit = inject(RepeticionesAuditService);
   private grammar = inject(GrammarService);
   private bookConfig = inject(BookConfigService);
@@ -93,7 +93,7 @@ export class GrammarAuditService {
     // alguno de los dos abre, este se cierra solo. Los otros no lo inyectan
     // para no cerrar un ciclo de DI.
     effect(() => {
-      const otroAbierto = this.raeAudit.scope() !== null || this.repeticionesAudit.scope() !== null;
+      const otroAbierto = this.rayaAudit.scope() !== null || this.repeticionesAudit.scope() !== null;
       if (otroAbierto && this.scope() !== null) this.close();
     });
   }
@@ -134,7 +134,7 @@ export class GrammarAuditService {
     this.imageViewer.close();
     this.fontPreview.close();
     this.markdownReader.close();
-    this.raeAudit.close();
+    this.rayaAudit.close();
     this.repeticionesAudit.close();
 
     this.scope.set(scope);

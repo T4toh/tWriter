@@ -645,18 +645,8 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   realmente se dispara para este caso. (Posible que ya esté resuelto —
   confirmar con repro entre dos PCs.)
 
-## Validador RAE
+## Validador de raya
 
-- **Renombrar «RAE» a «Raya» en la app** (pedido del autor el 2026-09-29).
-  Alcance medido: ~20 strings en `.html` y ~18 en `.ts` visibles (botón del
-  toolbar, «Aplicar RAE al párrafo», panel de auditoría, toasts, settings,
-  revisión de libro, split, import wizard), más README (26) y CLAUDE.md (6).
-  Decidir antes de arrancar si el rename es **solo de UI** o también de
-  identificadores (`rae-audit/`, `RaeViolation`, `validateRae`,
-  `RaeAuditService`, `run-rae-*.mjs`: ~126 ocurrencias de `rae`, rename
-  mecánico pero ancho). Ojo con lo persistido: `raeAutoDisabled` es una clave
-  de `settings.json` (TS + `settings.rs`); si se renombra, leer la vieja como
-  fallback o el autor pierde la preferencia al actualizar.
 - **Revisión a fondo del módulo de diálogos contra el DPD** (pedido del autor
   el 2026-09-29). Fuente única: DPD «raya» 2.ª ed.; la lectura del autor no
   manda (lo dijo él). Dos pasadas ese día: corpus de 155 borradores mal

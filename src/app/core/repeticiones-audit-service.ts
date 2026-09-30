@@ -11,7 +11,7 @@ import { DebugService } from './debug-service';
 import { FontPreviewService } from './font-preview-service';
 import { ImageViewerService } from './image-viewer-service';
 import { MarkdownReaderService } from './markdown-reader-service';
-import { RaeAuditService } from './rae-audit-service';
+import { RayaAuditService } from './raya-audit-service';
 import { SearchService } from './search-service';
 import { SettingsService } from './settings-service';
 import { yieldToEventLoop } from './yield-to-event-loop';
@@ -39,7 +39,7 @@ export interface RepeticionesScope {
 /**
  * Auditoría de repeticiones sobre un alcance (saga, libro o sección).
  *
- * Hermano de `RaeAuditService`, con la misma forma a propósito: el modal de
+ * Hermano de `RayaAuditService`, con la misma forma a propósito: el modal de
  * revisión por libro sabía cuántas repeticiones había pero no cuáles ni dónde,
  * así que para arreglarlas había que abrir capítulo por capítulo a buscarlas de
  * nuevo a ojo. Acá se juntan las ocurrencias con `path` + `offset` + `length`,
@@ -54,7 +54,7 @@ export class RepeticionesAuditService {
   private imageViewer = inject(ImageViewerService);
   private fontPreview = inject(FontPreviewService);
   private markdownReader = inject(MarkdownReaderService);
-  private raeAudit = inject(RaeAuditService);
+  private rayaAudit = inject(RayaAuditService);
   private settings = inject(SettingsService);
   private bookConfig = inject(BookConfigService);
   private debug = inject(DebugService);
@@ -95,15 +95,15 @@ export class RepeticionesAuditService {
   }
 
   constructor() {
-    // La exclusión mutua con la auditoría RAE es de ida y vuelta, pero la
-    // inyección no puede serlo: este servicio ya inyecta `RaeAuditService`
+    // La exclusión mutua con la auditoría de raya es de ida y vuelta, pero la
+    // inyección no puede serlo: este servicio ya inyecta `RayaAuditService`
     // para cerrarlo al abrir, y hacer que el otro inyecte a este cerraría un
-    // ciclo de DI. Así que la vuelta va por acá — si la RAE abre, este se
+    // ciclo de DI. Así que la vuelta va por acá — si la de raya abre, este se
     // cierra solo. Sin esto quedaría abierto pero tapado (la cadena
-    // `@else if` de `app.html` prioriza la RAE) y reaparecería viejo al
+    // `@else if` de `app.html` prioriza la de raya) y reaparecería viejo al
     // cerrar la de arriba.
     effect(() => {
-      if (this.raeAudit.scope() !== null && this.scope() !== null) this.close();
+      if (this.rayaAudit.scope() !== null && this.scope() !== null) this.close();
     });
   }
 
@@ -138,13 +138,13 @@ export class RepeticionesAuditService {
 
   async open(scope: RepeticionesScope): Promise<void> {
     // El slot del panel derecho es único (cadena `@else if` en `app.html`), así
-    // que abrir este tiene que cerrar los otros — incluida la auditoría RAE,
+    // que abrir este tiene que cerrar los otros — incluida la auditoría de raya,
     // que es la que más probablemente esté abierta al lado.
     this.search.hide();
     this.imageViewer.close();
     this.fontPreview.close();
     this.markdownReader.close();
-    this.raeAudit.close();
+    this.rayaAudit.close();
 
     this.scope.set(scope);
     this.chapters.set([]);
@@ -186,7 +186,7 @@ export class RepeticionesAuditService {
             plain,
             repeticiones: reps,
           });
-          // Se publica capítulo a capítulo, como la auditoría RAE: la lista se
+          // Se publica capítulo a capítulo, como la auditoría de raya: la lista se
           // va llenando mientras escanea en vez de aparecer entera al final.
           this.chapters.set([...accumulated]);
         }

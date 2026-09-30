@@ -1,5 +1,5 @@
 /**
- * Tests de `popover-position.ts` — ubicación de los popovers de gramática y RAE.
+ * Tests de `popover-position.ts` — ubicación de los popovers de gramática y raya.
  *
  * Sin Karma en el repo: los casos viven acá y `scripts/run-popover-position-smoke.mjs`
  * los corre compilando a CommonJS temporal. La función es pura (no toca DOM),

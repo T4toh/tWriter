@@ -27,7 +27,7 @@ export interface ConteoCapitulos {
   capitulos: number;
 }
 
-/** Arreglos RAE y repeticiones sí traen conteo real de violaciones. */
+/** Arreglos de raya y repeticiones sí traen conteo real de violaciones. */
 export interface ConteoDetector {
   cambios: number;
   capitulos: number;
@@ -36,10 +36,10 @@ export interface ConteoDetector {
 export interface ResumenRevision {
   rayas: ConteoCapitulos;
   comillas: ConteoCapitulos;
-  arreglosRae: ConteoDetector;
+  arreglosRaya: ConteoDetector;
   repeticiones: ConteoDetector;
   /** Capítulos por idioma EFECTIVO (`detectarEnCapitulo::esIngles`), contados
-   *  mientras se escanea. Es lo que decide si rayas/arreglosRae (necesitan
+   *  mientras se escanea. Es lo que decide si rayas/arreglosRaya (necesitan
    *  `capitulosEs > 0`) y comillas (`capitulosEn > 0`) aplican al libro —
    *  un detector puede no encontrar nada y aun así aplicar, o directamente
    *  no aplicar porque el libro no tiene ningún capítulo de ese idioma. */
@@ -55,7 +55,7 @@ export interface ResumenRevision {
 
 /**
  * Escanea un libro entero con los cuatro detectores (rayas, comillas,
- * arreglos RAE, repeticiones) y devuelve conteos. No escribe nada — aplicar
+ * arreglos de raya, repeticiones) y devuelve conteos. No escribe nada — aplicar
  * las correcciones es responsabilidad de otro servicio.
  */
 @Injectable({ providedIn: 'root' })
@@ -152,7 +152,7 @@ export class RevisionLibroService {
       const vacioCap = (): ConteoCapitulos => ({ capitulos: 0 });
       const vacio = (): ConteoDetector => ({ cambios: 0, capitulos: 0 });
       const res: ResumenRevision = {
-        rayas: vacioCap(), comillas: vacioCap(), arreglosRae: vacio(), repeticiones: vacio(),
+        rayas: vacioCap(), comillas: vacioCap(), arreglosRaya: vacio(), repeticiones: vacio(),
         capitulosEs: 0, capitulosEn: 0, idiomaLibroDeclarado: idiomaLibro,
       };
       // Los nombres propios inventados del mundo. Sin esto, que `Kallai`
@@ -166,7 +166,7 @@ export class RevisionLibroService {
         if (det.esIngles) res.capitulosEn += 1; else res.capitulosEs += 1;
         if (det.rayas > 0) res.rayas.capitulos += 1;
         if (det.comillas > 0) res.comillas.capitulos += 1;
-        if (det.arreglosRae > 0) { res.arreglosRae.cambios += det.arreglosRae; res.arreglosRae.capitulos += 1; }
+        if (det.arreglosRaya > 0) { res.arreglosRaya.cambios += det.arreglosRaya; res.arreglosRaya.capitulos += 1; }
         if (det.repeticiones > 0) { res.repeticiones.cambios += det.repeticiones; res.repeticiones.capitulos += 1; }
 
         procesados += 1;
@@ -190,7 +190,7 @@ export class RevisionLibroService {
 
   /** Aplica al libro entero las transformaciones tildadas en `seleccion`. Un
    *  solo `write_chapter` por capítulo, encadenando rayas → comillas →
-   *  arreglosRae sobre el mismo HTML, y solo si algo cambió — cada write
+   *  arreglosRaya sobre el mismo HTML, y solo si algo cambió — cada write
    *  dispara el auto-commit del repo de novelas, así que escribir de más
    *  ensucia el historial. El gateo de idioma es el mismo que usa `escanear`
    *  (`aplicarEnCapitulo`, hermana pura de `detectarEnCapitulo`): un capítulo
@@ -255,12 +255,12 @@ export class RevisionLibroService {
         `${modificados} capítulo${modificados === 1 ? '' : 's'} modificado${modificados === 1 ? '' : 's'}.`,
       );
       if (salteados > 0) {
-        // No es un error: son fixes de RAE que cruzaban el borde de un tag y
+        // No es un error: son arreglos de raya que cruzaban el borde de un tag y
         // no se aplicaron a propósito (ver `aplicarFixesHtml`). Decirlo es lo
         // mínimo — si no, el autor cuenta los arreglos y el número no le
         // cierra.
         this.toast.warn(
-          `${salteados} arreglo${salteados === 1 ? '' : 's'} de RAE se saltearon por tocar texto con formato. Revisalos a mano desde el panel «Revisar RAE».`,
+          `${salteados} arreglo${salteados === 1 ? '' : 's'} de raya se saltearon por tocar texto con formato. Revisalos a mano desde el panel «Revisar raya».`,
         );
       }
       // Si mientras se aplicaba el autor cerró el modal o abrió otro libro,

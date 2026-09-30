@@ -1,13 +1,13 @@
-/* Más ancho que los otros dos: el popover de RAE muestra el texto original y
+/* Más ancho que los otros dos: el popover de raya muestra el texto original y
    el convertido, y con 320px las dos líneas se cortaban demasiado. */
 @use 'popover-shell';
 
-.rae-pop {
+.raya-pop {
   min-width: 240px;
   max-width: 360px;
 }
 
-.rae-pop--pending {
+.raya-pop--pending {
   border-left: 3px solid #d27a1f;
 }
 
@@ -15,16 +15,16 @@
    el autor tiene que revisar sí o sí, contra el naranja de `pending` (cambio
    propuesto) y el ámbar de `typo`. Los cuatro son de la escala de marcas del
    editor, no del par --err/--warn de la UI. */
-.rae-pop--char,
-.rae-pop--structure {
+.raya-pop--char,
+.raya-pop--structure {
   border-left: 3px solid #d23030;
 }
 
-.rae-pop--typo {
+.raya-pop--typo {
   border-left: 3px solid #c89020;
 }
 
-.rae-pop-head {
+.raya-pop-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -32,7 +32,7 @@
   gap: 6px;
 }
 
-.rae-pop-tag {
+.raya-pop-tag {
   font-weight: 600;
   color: var(--fg);
   font-size: 11px;
@@ -40,20 +40,20 @@
   letter-spacing: 0.04em;
 }
 
-.rae-pop-rule {
+.raya-pop-rule {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--fg-muted);
 }
 
-.rae-pop-msg {
+.raya-pop-msg {
   color: var(--fg);
   margin-bottom: 6px;
 }
 
 /* El par ✗/✓ en una grilla de dos columnas: el signo y el ejemplo. Los
    ejemplos van en la fuente del cuerpo, que es como se van a leer en el libro. */
-.rae-pop-ej {
+.raya-pop-ej {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 2px 6px;
@@ -63,17 +63,17 @@
   line-height: 1.45;
 }
 
-.rae-pop-ej-no {
+.raya-pop-ej-no {
   color: var(--err);
   font-weight: 700;
 }
 
-.rae-pop-ej-si {
+.raya-pop-ej-si {
   color: var(--ok);
   font-weight: 700;
 }
 
-.rae-pop-fuente {
+.raya-pop-fuente {
   font-size: 11px;
   color: var(--fg-muted);
   margin-bottom: 4px;
@@ -83,7 +83,7 @@
   }
 }
 
-.rae-pop-link {
+.raya-pop-link {
   border: none;
   background: transparent;
   padding: 0;
@@ -93,12 +93,12 @@
   cursor: pointer;
 }
 
-.rae-pop-link:hover,
-.rae-pop-fuente a:hover {
+.raya-pop-link:hover,
+.raya-pop-fuente a:hover {
   color: var(--fg);
 }
 
-.rae-pop-footer {
+.raya-pop-footer {
   display: flex;
   gap: 6px;
   align-items: center;
@@ -108,7 +108,7 @@
   border-top: 1px solid var(--border);
 }
 
-.rae-pop-apply {
+.raya-pop-apply {
   border: 1px solid var(--accent);
   background: var(--accent);
   color: var(--bg);
@@ -120,11 +120,11 @@
   font-weight: 500;
 }
 
-.rae-pop-apply:hover {
+.raya-pop-apply:hover {
   filter: brightness(1.08);
 }
 
-.rae-pop-dismiss {
+.raya-pop-dismiss {
   border: none;
   background: transparent;
   color: var(--fg-muted);
@@ -135,7 +135,7 @@
   border-radius: 3px;
 }
 
-.rae-pop-dismiss:hover {
+.raya-pop-dismiss:hover {
   background: var(--border);
   color: var(--fg);
 }

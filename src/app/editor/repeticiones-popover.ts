@@ -17,7 +17,7 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
  * Popover de una repetición cercana. Dice DÓNDE está la repetición y, con los
  * chips de sinónimos del tesauro embebido, ofrece con qué reemplazarla.
  *
- * La mecánica de medición y colocación es la misma que `RaePopover` — ver el
+ * La mecánica de medición y colocación es la misma que `RayaPopover` — ver el
  * comentario largo de ahí para por qué se mide el elemento real en vez de
  * estimar el alto desde el CSS.
  */

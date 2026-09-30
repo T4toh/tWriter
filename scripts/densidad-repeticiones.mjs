@@ -50,7 +50,7 @@ if (r.status !== 0) {
 const { detectRepeticiones, DEFAULTS } = await import(
   pathToFileURL(join(outDir, 'repeticiones/detector.js')).href
 );
-// `htmlToPlain` del validador RAE: el mismo mapeo de bloques a `\n\n` que hace
+// `htmlToPlain` del validador de raya: el mismo mapeo de bloques a `\n\n` que hace
 // `extractPlainText` en el editor, sin necesitar ProseMirror.
 const { htmlToPlain } = await import(pathToFileURL(join(outDir, 'dialogos/validator.js')).href);
 

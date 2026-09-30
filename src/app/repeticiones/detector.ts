@@ -122,7 +122,7 @@ const STOPWORDS_EN = setNormalizado([
 const DICENDI_ES = setNormalizado(DIALOG_TAGS);
 
 /** El equivalente inglés no existe en el repo: `dialogos/tags.ts` es del
- *  validador RAE y es español-only por diseño. Lista mínima propia. */
+ *  validador de raya y es español-only por diseño. Lista mínima propia. */
 const DICENDI_EN = setNormalizado([
   'said', 'says', 'asked', 'asks', 'replied', 'replies', 'answered',
   'answers', 'whispered', 'whispers', 'shouted', 'shouts', 'muttered',

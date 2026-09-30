@@ -82,9 +82,9 @@ export class SagaHeader {
     void this.dictSvc.openFor(this.node());
   }
 
-  protected auditRae(event: MouseEvent): void {
+  protected auditRaya(event: MouseEvent): void {
     event.stopPropagation();
-    void this.actions.auditRae(this.node());
+    void this.actions.auditRaya(this.node());
   }
 
   protected auditRepeticiones(event: MouseEvent): void {

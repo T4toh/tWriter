@@ -130,25 +130,25 @@
       <span class="ico">* * *</span>
     </button>
 
-    @if (canApplyRae()) {
+    @if (canApplyRaya()) {
       <span class="sep"></span>
       <button
         type="button"
         class="tb-btn tb-text"
-        (click)="openRae()"
-        title="Aplicar reglas RAE de diálogos al capítulo entero (preview con diff)"
+        (click)="openRaya()"
+        title="Aplicar reglas de raya de diálogos al capítulo entero (preview con diff)"
       >
-        RAE
+        Raya
       </button>
-      @if (canCheckRae()) {
+      @if (canCheckRaya()) {
         <button
           type="button"
           class="tb-btn tb-text"
-          [class.active]="raeAuto()"
-          (click)="toggleAutoRae()"
-          title="Validador inline: marca violaciones RAE y mayúsculas rancias mientras escribís"
+          [class.active]="rayaAuto()"
+          (click)="toggleAutoRaya()"
+          title="Validador inline: marca violaciones de raya y mayúsculas rancias mientras escribís"
         >
-          <span class="rae-auto-label">RAE</span>
+          <span class="raya-auto-label">Raya</span>
         </button>
       }
     }
@@ -320,45 +320,45 @@
   }
 </div>
 
-@if (rae(); as r) {
-  <div class="modal-backdrop" (click)="cancelRae()"></div>
-  <div class="rae-modal" (click)="$event.stopPropagation()">
-    <header class="rae-header">
-      <h2>Aplicar reglas RAE</h2>
+@if (raya(); as r) {
+  <div class="modal-backdrop" (click)="cancelRaya()"></div>
+  <div class="raya-modal" (click)="$event.stopPropagation()">
+    <header class="raya-header">
+      <h2>Aplicar reglas de raya</h2>
       <p>Revisá los cambios antes de aceptar. Si el resultado no convence, cancelá.</p>
     </header>
-    <div class="rae-diff">
-      <div class="rae-pane">
+    <div class="raya-diff">
+      <div class="raya-pane">
         <h3>Original</h3>
-        <div class="rae-content" [innerHTML]="r.original"></div>
+        <div class="raya-content" [innerHTML]="r.original"></div>
       </div>
-      <div class="rae-pane">
+      <div class="raya-pane">
         <h3>Convertido</h3>
-        <div class="rae-content" [innerHTML]="r.converted"></div>
+        <div class="raya-content" [innerHTML]="r.converted"></div>
       </div>
     </div>
     <footer class="modal-actions">
-      <button type="button" class="btn btn-secondary" (click)="cancelRae()">Cancelar</button>
-      <button type="button" class="btn btn-primary" (click)="acceptRae()">Aplicar al editor</button>
+      <button type="button" class="btn btn-secondary" (click)="cancelRaya()">Cancelar</button>
+      <button type="button" class="btn btn-primary" (click)="acceptRaya()">Aplicar al editor</button>
     </footer>
   </div>
 }
 
 @if (quotes(); as q) {
   <div class="modal-backdrop" (click)="cancelQuotes()"></div>
-  <div class="rae-modal" (click)="$event.stopPropagation()">
-    <header class="rae-header">
+  <div class="raya-modal" (click)="$event.stopPropagation()">
+    <header class="raya-header">
       <h2>Arreglar comillas</h2>
       <p>Convierte comillas rectas a tipográficas (“ ” ‘ ’). Revisá los cambios antes de aceptar.</p>
     </header>
-    <div class="rae-diff">
-      <div class="rae-pane">
+    <div class="raya-diff">
+      <div class="raya-pane">
         <h3>Original</h3>
-        <div class="rae-content" [innerHTML]="q.original"></div>
+        <div class="raya-content" [innerHTML]="q.original"></div>
       </div>
-      <div class="rae-pane">
+      <div class="raya-pane">
         <h3>Convertido</h3>
-        <div class="rae-content" [innerHTML]="q.converted"></div>
+        <div class="raya-content" [innerHTML]="q.converted"></div>
       </div>
     </div>
     <footer class="modal-actions">
@@ -377,7 +377,7 @@
         class="lang-toggle"
         [attr.data-variant]="resolvedVariant()"
         (click)="openVariantPicker($event)"
-        [title]="'Variante regional del capítulo (click para elegir). Afecta RAE y revisión gramatical.'"
+        [title]="'Variante regional del capítulo (click para elegir). Afecta la raya y la revisión gramatical.'"
       >
         {{ resolvedVariant() }}
       </button>
@@ -467,13 +467,13 @@
   }
 }
 
-@if (raePopover(); as rp) {
-  <app-rae-popover
+@if (rayaPopover(); as rp) {
+  <app-raya-popover
     [violation]="rp.violation"
     [anchor]="rp.anchor"
-    (apply)="applyRaeFix()"
-    (applyParagraph)="applyRaeParagraph()"
-    (dismiss)="dismissRae()"
+    (apply)="applyRayaFix()"
+    (applyParagraph)="applyRayaParagraph()"
+    (dismiss)="dismissRaya()"
   />
 }
 

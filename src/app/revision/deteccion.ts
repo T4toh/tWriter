@@ -1,6 +1,6 @@
-import { convertFragmentHtml } from '../editor/rae-convert';
+import { convertFragmentHtml } from '../editor/raya-convert';
 import { detectLang } from '../dialogos/detect';
-import { htmlToPlain, nonProseSkip, validateRae } from '../dialogos/validator';
+import { htmlToPlain, nonProseSkip, validateRaya } from '../dialogos/validator';
 import { aplicarFixesHtml } from '../dialogos/aplicar-fixes';
 import { educateQuotes } from '../quotes/educate';
 import {
@@ -9,14 +9,14 @@ import {
   ExcepcionesDeliberadas,
 } from '../repeticiones/detector';
 import { findCompoundRanges, isInsideCompound } from '../dictionary/compound-terms';
-import { RaeAutoFix } from '../core/types';
+import { RayaAutoFix } from '../core/types';
 
 /** Qué transformaciones aplicar. Repeticiones no está: no se auto-aplican,
  *  solo se listan para que el autor las revise a mano. */
 export interface SeleccionRevision {
   rayas: boolean;
   comillas: boolean;
-  arreglosRae: boolean;
+  arreglosRaya: boolean;
 }
 
 export interface OpcionesDeteccion {
@@ -30,10 +30,10 @@ export interface OpcionesDeteccion {
 export interface ResultadoDeteccionCapitulo {
   rayas: number;
   comillas: number;
-  arreglosRae: number;
+  arreglosRaya: number;
   repeticiones: number;
   /** Idioma EFECTIVO (con fallback a `detectLang`) que se usó para gatear
-   *  rayas/comillas/arreglosRae acá adentro. Lo expone el servicio de
+   *  rayas/comillas/arreglosRaya acá adentro. Lo expone el servicio de
    *  escaneo para contar capítulos por idioma sin re-derivarlo — el gateo
    *  vive en un solo lugar a propósito. */
   esIngles: boolean;
@@ -101,7 +101,7 @@ export function detectarEnCapitulo(
   const plain = htmlToPlain(html);
 
   // Rayas: gatea con el idioma EFECTIVO (con fallback a `detectLang`), no
-  // con el campo crudo. Esto diverge a propósito de `canApplyRae` en
+  // con el campo crudo. Esto diverge a propósito de `canApplyRaya` en
   // editor.ts, que sí usa el campo crudo (null/undefined = habilitado): ahí
   // hay un autor mirando un modal de diff antes de que se escriba nada, así
   // que puede darse el lujo de permitir de más ante la duda. Acá no — esto
@@ -117,11 +117,11 @@ export function detectarEnCapitulo(
   // aplana las comillas tipográficas a rectas — sin este gate, un capítulo en
   // inglés con diálogo entre comillas sale con rayas españolas y comillas
   // rectas, corrupción real.
-  // NO "arreglar" esto para que calce con `canApplyRae` — es la divergencia
+  // NO "arreglar" esto para que calce con `canApplyRaya` — es la divergencia
   // correcta, ver arriba.
   //
   // `convertFragmentHtml` (no `convert()` crudo) es el mismo guard "solo se
-  // normalizaron comillas" que usa el editor (`rae-convert.ts`) y que
+  // normalizaron comillas" que usa el editor (`raya-convert.ts`) y que
   // `validator.ts::pushPendingConversion` aplica por párrafo. Sin él, un
   // capítulo español que solo tiene «» / “” / ‘’ sin diálogo de verdad cuenta
   // como "1 cambio" y aplicar le aplana la tipografía de comillas a ASCII sin
@@ -133,16 +133,16 @@ export function detectarEnCapitulo(
   // no hay idioma seteado), igual que `quotes-fix-service`.
   const comillas = esIngles ? educateQuotes(html).changes : 0;
 
-  // arreglosRae: `validateRae` ya se auto-gatea a `lang === 'es'` exacto, así
+  // arreglosRaya: `validateRaya` ya se auto-gatea a `lang === 'es'` exacto, así
   // que capítulos en inglés o sin idioma detectado como 'es' quedan en 0 sin
   // gate adicional acá. `pending-conversion` se excluye a propósito: su
   // autoFix ES la salida de `convert()` (ver `validator.ts`), la misma
   // transformación que ya cuenta `rayas` arriba. Sin este filtro el mismo
-  // cambio aparecía duplicado en dos filas del modal, y "arreglos RAE" dejaba
-  // de ser independiente de "rayas" — tildar solo arreglosRae convertía el
+  // cambio aparecía duplicado en dos filas del modal, y "arreglos de raya" dejaba
+  // de ser independiente de "rayas" — tildar solo arreglosRaya convertía el
   // diálogo igual.
-  const violaciones = validateRae(plain, idiomaEfectivo, nonProseSkip(html));
-  const arreglosRae = violaciones.filter(
+  const violaciones = validateRaya(plain, idiomaEfectivo, nonProseSkip(html));
+  const arreglosRaya = violaciones.filter(
     (v) => v.autoFix !== undefined && !v.autoFix.manual && v.category !== 'pending-conversion',
   ).length;
 
@@ -156,7 +156,7 @@ export function detectarEnCapitulo(
     ignorar: opts.diccionario,
   }).filter((r) => !isInsideCompound(compuestas, r.offset, r.offset + r.length));
 
-  return { rayas, comillas, arreglosRae, repeticiones: reps.length, esIngles };
+  return { rayas, comillas, arreglosRaya, repeticiones: reps.length, esIngles };
 }
 
 /**
@@ -168,9 +168,9 @@ export function detectarEnCapitulo(
  * en un segundo lugar y no coincidía con el de detectar).
  *
  * `rayas` y `comillas` son mutuamente excluyentes por idioma, así que el orden
- * entre ellas no importa. `arreglosRae` va después y sobre el HTML que resulte
+ * entre ellas no importa. `arreglosRaya` va después y sobre el HTML que resulte
  * de las anteriores, para que un capítulo con las tres tildadas sea una sola
- * pasada consistente. Los fixes de `arreglosRae` excluyen la categoría
+ * pasada consistente. Los fixes de `arreglosRaya` excluyen la categoría
  * `pending-conversion` — esa violación es la conversión de diálogo, que ya es
  * responsabilidad exclusiva de `rayas` (mismo motivo que en
  * `detectarEnCapitulo`, ver ahí).
@@ -188,12 +188,12 @@ export function aplicarEnCapitulo(
 
   if (seleccion.rayas && !esIngles) out = convertFragmentHtml(out) ?? out;
   if (seleccion.comillas && esIngles) out = educateQuotes(out).text;
-  if (seleccion.arreglosRae) {
-    const fixes = validateRae(htmlToPlain(out), idiomaEfectivo, nonProseSkip(out))
+  if (seleccion.arreglosRaya) {
+    const fixes = validateRaya(htmlToPlain(out), idiomaEfectivo, nonProseSkip(out))
       .filter((v) => v.category !== 'pending-conversion')
       .map((v) => v.autoFix)
       .filter((f) => !f?.manual)
-      .filter((f): f is RaeAutoFix => f !== undefined);
+      .filter((f): f is RayaAutoFix => f !== undefined);
     const r = aplicarFixesHtml(out, fixes);
     out = r.html;
     salteados = r.salteados;

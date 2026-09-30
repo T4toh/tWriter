@@ -1,10 +1,10 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
-import { htmlToPlain, nonProseSkip, validateRae } from '../dialogos/validator';
+import { htmlToPlain, nonProseSkip, validateRaya } from '../dialogos/validator';
 import { detectMayusculasRancias } from '../dictionary/mayusculas-rancias';
 import { resolverIdiomaEfectivo } from '../revision/deteccion';
 import { BookConfigService } from './book-config-service';
-import { RaeViolation } from './types';
+import { RayaViolation } from './types';
 import { FontPreviewService } from './font-preview-service';
 import { ImageViewerService } from './image-viewer-service';
 import { MarkdownReaderService } from './markdown-reader-service';
@@ -22,7 +22,7 @@ export interface ChapterViolations {
   path: string;
   title: string;
   plain: string;
-  violations: RaeViolation[];
+  violations: RayaViolation[];
 }
 
 export interface AuditScope {
@@ -31,7 +31,7 @@ export interface AuditScope {
 }
 
 @Injectable({ providedIn: 'root' })
-export class RaeAuditService {
+export class RayaAuditService {
   private search = inject(SearchService);
   private imageViewer = inject(ImageViewerService);
   private fontPreview = inject(FontPreviewService);
@@ -101,9 +101,9 @@ export class RaeAuditService {
         // El libro manda, como en los otros dos paneles de auditoría.
         const lang = resolverIdiomaEfectivo(idiomaLibro, payload.idioma, payload.html);
         const plain = htmlToPlain(payload.html);
-        // RAE es solo español; las mayúsculas rancias no tienen idioma.
+        // La raya es solo español; las mayúsculas rancias no tienen idioma.
         const violations = [
-          ...(lang === 'es' ? validateRae(plain, 'es', nonProseSkip(payload.html)) : []),
+          ...(lang === 'es' ? validateRaya(plain, 'es', nonProseSkip(payload.html)) : []),
           ...detectMayusculasRancias(plain, dictWords),
         ].sort((a, b) => a.offset - b.offset);
         if (violations.length > 0) {
@@ -121,7 +121,7 @@ export class RaeAuditService {
       }
 
       this.debug.info(
-        'rae-audit',
+        'raya-audit',
         'audit completado',
         JSON.stringify({
           scope: scope.path,
@@ -132,7 +132,7 @@ export class RaeAuditService {
       );
     } catch (err) {
       this.error.set(String(err));
-      this.debug.error('rae-audit', 'audit falló', String(err));
+      this.debug.error('raya-audit', 'audit falló', String(err));
     } finally {
       this.loading.set(false);
       this.progress.set(null);

@@ -216,7 +216,7 @@
   }
 }
 
-.rae-modal {
+.raya-modal {
   position: fixed;
   inset: 5vh 5vw;
   z-index: 201;
@@ -229,7 +229,7 @@
   overflow: hidden;
 }
 
-.rae-header {
+.raya-header {
   padding: 1rem 1.5rem;
   border-bottom: 1px solid var(--border);
   background: var(--bg-soft);
@@ -249,7 +249,7 @@
   }
 }
 
-.rae-diff {
+.raya-diff {
   flex: 1;
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -258,7 +258,7 @@
   min-height: 0;
 }
 
-.rae-pane {
+.raya-pane {
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -283,7 +283,7 @@
   }
 }
 
-.rae-content {
+.raya-content {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -521,37 +521,37 @@
   border-bottom: 2px dotted var(--fg-muted);
 }
 
-/* ─── RAE validator inline decorations ─── */
-.editor-host ::ng-deep .rae-violation {
+/* ─── Raya: validador inline decorations ─── */
+.editor-host ::ng-deep .raya-violation {
   cursor: pointer;
   text-decoration: none;
   background: transparent;
 }
 
 /* char: guion corto, espacios — rojo sólido finito */
-.editor-host ::ng-deep .rae-violation--char {
+.editor-host ::ng-deep .raya-violation--char {
   border-bottom: 2px solid #d23030;
 }
 
 /* pending-conversion: D1-D5 sin convertir — naranja wavy */
-.editor-host ::ng-deep .rae-violation--pending {
+.editor-host ::ng-deep .raya-violation--pending {
   background: rgb(210 122 31 / 12%);
   border-bottom: 2px solid #d27a1f;
 }
 
 /* estructura: raya huérfana, párrafo colapsado — rojo punteado */
-.editor-host ::ng-deep .rae-violation--structure {
+.editor-host ::ng-deep .raya-violation--structure {
   border-bottom: 2px dotted #d23030;
 }
 
 /* tipografía: verbo capitalizado, punto sobrante — amarillo wavy */
-.editor-host ::ng-deep .rae-violation--typo {
+.editor-host ::ng-deep .raya-violation--typo {
   border-bottom: 2px dotted #c89020;
 }
 
 /* mayúsculas rancias (LLOra, ME): teal punteado, lejos del ámbar de tipografía
  * y del violeta de repeticiones, que es lo que suele tener al lado. */
-.editor-host ::ng-deep .rae-violation--mayusculas {
+.editor-host ::ng-deep .raya-violation--mayusculas {
   border-bottom: 2px dotted #1f9e8f;
 }
 
@@ -580,7 +580,7 @@
 /* ─── Search highlights ─── */
 
 /* Marca de todas las ocurrencias de la query mientras el panel de búsqueda
- * esté abierto. Convive con grammar/rae sin romper sus borders. */
+ * esté abierto. Convive con grammar/raya sin romper sus borders. */
 .editor-host ::ng-deep .search-hit {
   background: rgb(255 213 0 / 35%);
   border-radius: 2px;

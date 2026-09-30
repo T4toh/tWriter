@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Smoke runner de `capitulosPorDefecto` (export/muestra.ts): cuántos capítulos
-// entran en la muestra por defecto. Mismo patrón que run-rae-smoke.mjs.
+// entran en la muestra por defecto. Mismo patrón que run-raya-smoke.mjs.
 // Uso: node scripts/run-muestra-smoke.mjs
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

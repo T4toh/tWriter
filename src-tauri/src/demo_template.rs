@@ -422,7 +422,7 @@ mod tests {
                 total.push('\n');
             }
         }
-        assert!(total.contains("—"), "esperaba diálogo RAE (em-dash)");
+        assert!(total.contains("—"), "esperaba diálogo con raya (em-dash)");
         assert!(total.contains("<em>"), "esperaba al menos un <em>");
         assert!(total.contains("<strong>"), "esperaba al menos un <strong>");
         assert!(

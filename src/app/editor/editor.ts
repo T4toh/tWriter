@@ -45,9 +45,9 @@ import {
   highlightBestMatch,
   findAllMatchesInPlain,
 } from '../core/search-highlight';
-import { convertFragmentHtml } from './rae-convert';
+import { convertFragmentHtml } from './raya-convert';
 import { withFreshHistory } from './fresh-history';
-import { parseFragmentHtml, serializeRange } from './rae-apply';
+import { parseFragmentHtml, serializeRange } from './raya-apply';
 import {
   EDITOR_FONT_LABEL,
   EDITOR_FONT_PRESETS,
@@ -59,12 +59,12 @@ import {
 import { SystemFontsService } from '../core/system-fonts-service';
 import { FontsService } from '../core/fonts-service';
 import { Select, SelectGroup, SelectOption } from '../shared/select';
-import { GrammarMatch, RaeViolation, RespuestaTesauro } from '../core/types';
+import { GrammarMatch, RayaViolation, RespuestaTesauro } from '../core/types';
 import { TesauroService } from '../core/tesauro-service';
-import { convert as convertRae } from '../dialogos/converter';
+import { convert as convertRaya } from '../dialogos/converter';
 import { suggestFromDictionary } from '../dictionary/suggest';
 import { educateQuotes } from '../quotes/educate';
-import { SkipParagraph, validateRae } from '../dialogos/validator';
+import { SkipParagraph, validateRaya } from '../dialogos/validator';
 import { detectMayusculasRancias } from '../dictionary/mayusculas-rancias';
 import { Landing } from '../landing/landing';
 import { Spinner } from '../shared/spinner';
@@ -87,12 +87,12 @@ import { AnchorBox } from './popover-position';
 import { buildEditorProps } from './editor-props';
 import { GrammarPopover } from './grammar-popover';
 import {
-  RaeExtension,
-  RaeViolationPos,
+  RayaExtension,
+  RayaViolationPos,
   mapViolationsToPm,
-  setRaeViolations,
-} from './rae-extension';
-import { RaePopover } from './rae-popover';
+  setRayaViolations,
+} from './raya-extension';
+import { RayaPopover } from './raya-popover';
 import { detectRepeticiones, DEFAULTS as REP_DEFAULTS } from '../repeticiones/detector';
 import { findCompoundRanges, isInsideCompound } from '../dictionary/compound-terms';
 import { RepeticionesAuditService } from '../core/repeticiones-audit-service';
@@ -149,7 +149,7 @@ interface ObjetivoTesauro {
 @Component({
   selector: 'app-editor',
   imports: [
-    Landing, GrammarPopover, RaePopover, RepeticionesPopover, Select, FormsModule,
+    Landing, GrammarPopover, RayaPopover, RepeticionesPopover, Select, FormsModule,
     LucideCircleAlert, LucideDynamicIcon, Spinner, DerivedFormsPanel,
     NotificacionesBell,
   ],
@@ -199,10 +199,10 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly state = signal<ToolbarState>(EMPTY_STATE);
   /** Posición del cursor para el footer: número de párrafo (1-based) y columna dentro del párrafo. */
   protected readonly cursorPos = signal<{ paragraph: number; col: number }>({ paragraph: 1, col: 0 });
-  protected readonly rae = signal<{ original: string; converted: string } | null>(null);
+  protected readonly raya = signal<{ original: string; converted: string } | null>(null);
   protected readonly quotes = signal<{ original: string; converted: string } | null>(null);
   protected readonly importing = this.chapter.importing;
-  protected readonly canApplyRae = computed(() => {
+  protected readonly canApplyRaya = computed(() => {
     if (!this.canEdit()) return false;
     const lang = this.meta().idioma;
     return lang === null || lang === 'es' || lang === undefined;
@@ -239,15 +239,15 @@ export class Editor implements AfterViewInit, OnDestroy {
     const word = this.tiptap.state.doc.textBetween(popover.from, popover.to, ' ').trim();
     return word.length > 0 && inferLemma(word, idioma).length > 0;
   });
-  protected readonly raeViolations = signal<RaeViolationPos[]>([]);
-  protected readonly raePopover = signal<{ violation: RaeViolationPos; anchor: AnchorBox } | null>(null);
-  protected readonly raeAuto = computed(() => {
-    if (!this.canCheckRae()) return false;
-    return !this.settings.raeAutoDisabled();
+  protected readonly rayaViolations = signal<RayaViolationPos[]>([]);
+  protected readonly rayaPopover = signal<{ violation: RayaViolationPos; anchor: AnchorBox } | null>(null);
+  protected readonly rayaAuto = computed(() => {
+    if (!this.canCheckRaya()) return false;
+    return !this.settings.rayaAutoDisabled();
   });
-  /** El chequeo inline corre en es y en: `validateRae` se auto-gatea a español
+  /** El chequeo inline corre en es y en: `validateRaya` se auto-gatea a español
    *  (devuelve [] en inglés) y las mayúsculas rancias no tienen idioma. */
-  protected readonly canCheckRae = computed(() => {
+  protected readonly canCheckRaya = computed(() => {
     if (!this.canEdit()) return false;
     const lang = this.meta().idioma;
     return lang === 'es' || lang === 'en';
@@ -265,7 +265,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!this.canCheckRepeticiones()) return false;
     return !this.settings.repeticionesAutoDisabled();
   });
-  /** A diferencia del validador RAE, este corre en los dos idiomas: el agujero
+  /** A diferencia del validador de raya, este corre en los dos idiomas: el agujero
    *  de repetición cercana que tapa es de LanguageTool, no del español. */
   protected readonly canCheckRepeticiones = computed(() => {
     if (!this.canEdit()) return false;
@@ -459,9 +459,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   private popoverScrollListener: (() => void) | null = null;
   private popoverScrollFrame: number | null = null;
   private grammarDebounceHandle: ReturnType<typeof setTimeout> | null = null;
-  private raeDebounceHandle: ReturnType<typeof setTimeout> | null = null;
+  private rayaDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private skipNextGrammarRemap = false;
-  private skipNextRaeRemap = false;
+  private skipNextRayaRemap = false;
   private skipNextRepRemap = false;
   private lastGrammarUserDisabled = false;
   private lastGrammarAvailable = false;
@@ -469,10 +469,10 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  invalida los matches aunque el texto no se haya tocado. */
   private lastGrammarCfgKey: string | null = null;
   private lastCheckedPlain: string | null = null;
-  private lastRaePlain: string | null = null;
+  private lastRayaPlain: string | null = null;
   private lastRepPlain: string | null = null;
   private repDebounceHandle: ReturnType<typeof setTimeout> | null = null;
-  private lastRaeAuto = false;
+  private lastRayaAuto = false;
   /** Capítulo e idioma del último chequeo, para distinguir un cambio de
    *  idioma (hay que rechequear) de un cambio de capítulo (ya chequea la
    *  carga). */
@@ -496,9 +496,9 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.grammarMatches.set([]);
       this.applyDecorations([]);
       this.lastCheckedPlain = null;
-      this.raeViolations.set([]);
-      this.applyRaeDecorations([]);
-      this.lastRaePlain = null;
+      this.rayaViolations.set([]);
+      this.applyRayaDecorations([]);
+      this.lastRayaPlain = null;
       this.repeticiones.set([]);
       this.applyRepeticionesDecorations([]);
       this.lastRepPlain = null;
@@ -506,16 +506,16 @@ export class Editor implements AfterViewInit, OnDestroy {
         clearTimeout(this.grammarDebounceHandle);
         this.grammarDebounceHandle = null;
       }
-      if (this.raeDebounceHandle !== null) {
-        clearTimeout(this.raeDebounceHandle);
-        this.raeDebounceHandle = null;
+      if (this.rayaDebounceHandle !== null) {
+        clearTimeout(this.rayaDebounceHandle);
+        this.rayaDebounceHandle = null;
       }
       if (this.repDebounceHandle !== null) {
         clearTimeout(this.repDebounceHandle);
         this.repDebounceHandle = null;
       }
       this.skipNextGrammarRemap = true;
-      this.skipNextRaeRemap = true;
+      this.skipNextRayaRemap = true;
       this.skipNextRepRemap = true;
 
       if (!this.tiptap) {
@@ -606,8 +606,8 @@ export class Editor implements AfterViewInit, OnDestroy {
       ) {
         void this.checkGrammar();
       }
-      if (editable && this.raeAuto()) {
-        this.checkRae();
+      if (editable && this.rayaAuto()) {
+        this.checkRaya();
       }
       if (editable && this.repAuto()) {
         this.checkRepeticiones();
@@ -782,39 +782,39 @@ export class Editor implements AfterViewInit, OnDestroy {
       if (!path || !prev || prev.path !== path || prev.idioma === idioma) return;
       untracked(() => {
         if (!this.viewReady() || !this.tiptap) return;
-        if (this.raeAuto()) {
-          this.checkRae(true);
+        if (this.rayaAuto()) {
+          this.checkRaya(true);
         } else {
-          this.raeViolations.set([]);
-          this.applyRaeDecorations([]);
-          this.raePopover.set(null);
-          this.lastRaePlain = null;
+          this.rayaViolations.set([]);
+          this.applyRayaDecorations([]);
+          this.rayaPopover.set(null);
+          this.lastRayaPlain = null;
         }
         if (this.repAuto()) this.checkRepeticiones(true);
       });
     });
 
-    // Auto-check RAE: igual patrón. Si el toggle está prendido y el capítulo
+    // Auto-check de raya: igual patrón. Si el toggle está prendido y el capítulo
     // es ES, marca. Si se apaga, limpia.
     effect(() => {
-      const on = this.raeAuto();
-      if (on === this.lastRaeAuto) return;
-      this.lastRaeAuto = on;
+      const on = this.rayaAuto();
+      if (on === this.lastRayaAuto) return;
+      this.lastRayaAuto = on;
       if (!this.viewReady() || !this.tiptap) return;
       if (on) {
         // Force=true porque el plain no cambió entre toggle-off y toggle-on;
-        // sin force, checkRae() vería `plain === lastRaePlain` y skipearía,
+        // sin force, checkRaya() vería `plain === lastRayaPlain` y skipearía,
         // dejando el editor sin decoraciones.
-        this.checkRae(true);
+        this.checkRaya(true);
       } else {
-        this.raeViolations.set([]);
-        this.applyRaeDecorations([]);
-        this.raePopover.set(null);
-        this.lastRaePlain = null;
+        this.rayaViolations.set([]);
+        this.applyRayaDecorations([]);
+        this.rayaPopover.set(null);
+        this.lastRayaPlain = null;
       }
     });
 
-    // Detector de repeticiones: mismo patrón que RAE.
+    // Detector de repeticiones: mismo patrón que raya.
     effect(() => {
       const on = this.repAuto();
       if (on === this.lastRepAuto) return;
@@ -955,9 +955,9 @@ export class Editor implements AfterViewInit, OnDestroy {
       clearTimeout(this.grammarDebounceHandle);
       this.grammarDebounceHandle = null;
     }
-    if (this.raeDebounceHandle !== null) {
-      clearTimeout(this.raeDebounceHandle);
-      this.raeDebounceHandle = null;
+    if (this.rayaDebounceHandle !== null) {
+      clearTimeout(this.rayaDebounceHandle);
+      this.rayaDebounceHandle = null;
     }
     if (this.repDebounceHandle !== null) {
       clearTimeout(this.repDebounceHandle);
@@ -1145,22 +1145,22 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.settings.setEditorFontFamily(family);
   }
 
-  protected openRae(): void {
-    if (!this.tiptap || !this.canApplyRae()) return;
+  protected openRaya(): void {
+    if (!this.tiptap || !this.canApplyRaya()) return;
     const original = this.tiptap.getHTML();
-    const result = convertRae(original);
-    this.rae.set({ original, converted: result.text });
+    const result = convertRaya(original);
+    this.raya.set({ original, converted: result.text });
   }
 
-  protected acceptRae(): void {
-    const m = this.rae();
+  protected acceptRaya(): void {
+    const m = this.raya();
     if (!m || !this.tiptap) return;
     this.tiptap.commands.setContent(m.converted, { emitUpdate: true });
-    this.rae.set(null);
+    this.raya.set(null);
   }
 
-  protected cancelRae(): void {
-    this.rae.set(null);
+  protected cancelRaya(): void {
+    this.raya.set(null);
   }
 
   protected openQuotes(): void {
@@ -1462,7 +1462,7 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  Repetición + gramática quedaban abiertos uno al lado del otro. */
   private cerrarPopovers(): void {
     this.grammarPopover.set(null);
-    this.raePopover.set(null);
+    this.rayaPopover.set(null);
     if (this.repPopover()) {
       this.repPopover.set(null);
       this.limpiarGrupo();
@@ -1536,20 +1536,20 @@ export class Editor implements AfterViewInit, OnDestroy {
     }, 2000);
   }
 
-  protected toggleAutoRae(): void {
-    void this.settings.setRaeAutoDisabled(!this.settings.raeAutoDisabled());
+  protected toggleAutoRaya(): void {
+    void this.settings.setRayaAutoDisabled(!this.settings.rayaAutoDisabled());
   }
 
-  protected checkRae(force = false): void {
-    if (!this.tiptap || !this.canCheckRae()) return;
+  protected checkRaya(force = false): void {
+    if (!this.tiptap || !this.canCheckRaya()) return;
     const { plain, ranges } = extractPlainText(this.tiptap.state.doc);
     if (!plain.trim()) {
-      this.raeViolations.set([]);
-      this.applyRaeDecorations([]);
-      this.lastRaePlain = '';
+      this.rayaViolations.set([]);
+      this.applyRayaDecorations([]);
+      this.lastRayaPlain = '';
       return;
     }
-    if (!force && plain === this.lastRaePlain) return;
+    if (!force && plain === this.lastRayaPlain) return;
     const lang = this.meta().idioma;
     // Mayúsculas rancias van en la misma pasada: mismo decorador, mismo popover.
     const doc = this.tiptap.state.doc;
@@ -1564,14 +1564,14 @@ export class Editor implements AfterViewInit, OnDestroy {
       }
       return false;
     };
-    const raw: RaeViolation[] = [
-      ...validateRae(plain, lang, skipNonProse),
+    const raw: RayaViolation[] = [
+      ...validateRaya(plain, lang, skipNonProse),
       ...detectMayusculasRancias(plain, this.sagaCtx.dictionaryWords()),
     ];
     const positioned = mapViolationsToPm(raw, ranges, this.tiptap.state.doc);
-    this.raeViolations.set(positioned);
-    this.applyRaeDecorations(positioned);
-    this.lastRaePlain = plain;
+    this.rayaViolations.set(positioned);
+    this.applyRayaDecorations(positioned);
+    this.lastRayaPlain = plain;
   }
 
   protected toggleAutoRepeticiones(): void {
@@ -1579,7 +1579,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   /**
-   * Sincrónico como `checkRae()` — el detector es una función pura local, no
+   * Sincrónico como `checkRaya()` — el detector es una función pura local, no
    * hay round-trip a ningún servicio, así que no aplica la clase de bug de
    * staleness del chequeo de LT (PR #70).
    */
@@ -1789,7 +1789,7 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  ANTERIOR a `from`, que está fuera del span (en el borde izquierdo de un
    *  `<em>` da `[]` y se pierde la cursiva). Con marcas mixtas adentro del
    *  span se homogeneiza — pérdida acotada en un span de pocos caracteres.
-   *  Usado por `applyRaeFix` y `reemplazarRepeticion`. */
+   *  Usado por `applyRayaFix` y `reemplazarRepeticion`. */
   private marcasParaReemplazo(tr: Transaction, from: number, to: number): readonly Mark[] {
     const $f = tr.doc.resolve(from);
     return to > from ? ($f.marksAcross(tr.doc.resolve(to)) ?? $f.marks()) : $f.marks();
@@ -1797,12 +1797,12 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   /** Reemplaza la aparición que está mirando el popover por el sinónimo
    *  elegido. La herencia de marcas es la de `marcasParaReemplazo` — mismo
-   *  patrón que `applyRaeFix`. */
+   *  patrón que `applyRayaFix`. */
   protected reemplazarRepeticion(sinonimo: string): void {
     const popover = this.repPopover();
     if (!popover || !this.tiptap) return;
     const r = popover.repeticion;
-    // Dato roto, no una operación válida acá (a diferencia de `applyRaeFix`,
+    // Dato roto, no una operación válida acá (a diferencia de `applyRayaFix`,
     // que sí puede recibir un borrado real de LT): un sinónimo vacío no
     // reemplaza nada, así que se corta antes de tocar el documento.
     if (sinonimo.trim().length === 0) return;
@@ -1835,8 +1835,8 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (this.repAuto()) this.scheduleRepRecheck();
   }
 
-  protected applyRaeFix(): void {
-    const popover = this.raePopover();
+  protected applyRayaFix(): void {
+    const popover = this.rayaPopover();
     if (!popover || !this.tiptap) return;
     const v = popover.violation;
     if (!v.autoFix || v.fixFrom === undefined || v.fixTo === undefined) return;
@@ -1847,8 +1847,8 @@ export class Editor implements AfterViewInit, OnDestroy {
     // se vuelve a chequear.
     const doc = this.tiptap.state.doc;
     if (to > doc.content.size || doc.textBetween(from, to) !== v.fixText) {
-      this.raePopover.set(null);
-      this.checkRae(true);
+      this.rayaPopover.set(null);
+      this.checkRaya(true);
       return;
     }
     const replacement = v.autoFix.replacement;
@@ -1870,14 +1870,14 @@ export class Editor implements AfterViewInit, OnDestroy {
         return true;
       })
       .run();
-    this.raePopover.set(null);
-    this.raeViolations.update((list) => list.filter((m) => m.id !== v.id));
-    this.applyRaeDecorations(this.raeViolations());
-    if (this.raeAuto()) this.scheduleRaeRecheck();
+    this.rayaPopover.set(null);
+    this.rayaViolations.update((list) => list.filter((m) => m.id !== v.id));
+    this.applyRayaDecorations(this.rayaViolations());
+    if (this.rayaAuto()) this.scheduleRayaRecheck();
   }
 
-  protected applyRaeParagraph(): void {
-    const popover = this.raePopover();
+  protected applyRayaParagraph(): void {
+    const popover = this.rayaPopover();
     if (!popover || !this.tiptap) return;
     const v = popover.violation;
     if (v.paragraphFrom === undefined || v.paragraphTo === undefined) return;
@@ -1892,7 +1892,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       // el ancla de la regla D1 necesita la comilla al principio del texto y el
       // tag se la corre. No hay fallback posible — aplicar el replacement plano
       // del validador convertiría borrando la cursiva.
-      this.raePopover.set(null);
+      this.rayaPopover.set(null);
       this.toast.warn(
         'Este párrafo no se puede convertir solo: el diálogo empieza después ' +
           'de una cursiva o negrita. Sacale el formato a la comilla de ' +
@@ -1908,34 +1908,34 @@ export class Editor implements AfterViewInit, OnDestroy {
         parseFragmentHtml(converted, schema),
       )
       .run();
-    this.raePopover.set(null);
-    this.raeViolations.update((list) => list.filter((m) => m.id !== v.id));
-    this.applyRaeDecorations(this.raeViolations());
-    if (this.raeAuto()) this.scheduleRaeRecheck();
+    this.rayaPopover.set(null);
+    this.rayaViolations.update((list) => list.filter((m) => m.id !== v.id));
+    this.applyRayaDecorations(this.rayaViolations());
+    if (this.rayaAuto()) this.scheduleRayaRecheck();
   }
 
-  protected dismissRae(): void {
-    this.raePopover.set(null);
+  protected dismissRaya(): void {
+    this.rayaPopover.set(null);
   }
 
-  private applyRaeDecorations(violations: RaeViolationPos[]): void {
+  private applyRayaDecorations(violations: RayaViolationPos[]): void {
     const view = (this.tiptap as unknown as { view?: { dispatch: (tr: unknown) => void; state: { tr: unknown } } } | null)?.view;
     if (!view) return;
-    setRaeViolations(view, violations);
+    setRayaViolations(view, violations);
   }
 
-  private scheduleRaeRecheck(): void {
-    if (this.raeDebounceHandle !== null) {
-      clearTimeout(this.raeDebounceHandle);
+  private scheduleRayaRecheck(): void {
+    if (this.rayaDebounceHandle !== null) {
+      clearTimeout(this.rayaDebounceHandle);
     }
-    this.raeDebounceHandle = setTimeout(() => {
-      this.raeDebounceHandle = null;
-      this.checkRae();
+    this.rayaDebounceHandle = setTimeout(() => {
+      this.rayaDebounceHandle = null;
+      this.checkRaya();
     }, 1500);
   }
 
   /**
-   * Único listener de click del host. Los dos popovers (gramática y RAE) se
+   * Único listener de click del host. Los dos popovers (gramática y raya) se
    * anclan a decoraciones que pueden solaparse sobre la misma palabra — un
    * verbo dicendi tras una raya suele tener las dos — y antes había un listener
    * por popover sobre este mismo nodo: `stopPropagation()` no corta al hermano
@@ -1945,38 +1945,38 @@ export class Editor implements AfterViewInit, OnDestroy {
    */
   private onHostClick(event: MouseEvent): void {
     const target = event.target as HTMLElement | null;
-    const raeSpan = target?.closest('.rae-violation') as HTMLElement | null;
+    const rayaSpan = target?.closest('.raya-violation') as HTMLElement | null;
     const grammarSpan = target?.closest('.grammar-error') as HTMLElement | null;
     // Los dos candidatos se resuelven ANTES de decidir nada: si el índice de
     // uno no matchea contra el array actual (remap tras una transacción que
     // corrió entre el render de la decoración y el click), no lo tratamos
     // como un match — así el otro candidato conserva su chance, y si ninguno
-    // resuelve caemos al bloque final que cierra los dos. Antes `openRaePopover`
+    // resuelve caemos al bloque final que cierra los dos. Antes `openRayaPopover`
     // podía devolver temprano con el índice roto sin cerrar nada: gramática
     // no se intentaba (aunque su span resolviera bien) y los dos popovers
     // podían quedar huérfanos en pantalla.
     const repSpan = target?.closest('.repeticion') as HTMLElement | null;
-    const raeIdx = raeSpan ? parseInt(raeSpan.dataset['raeIdx'] ?? '-1', 10) : -1;
-    const raeViolation = raeIdx >= 0 ? this.raeViolations()[raeIdx] : undefined;
+    const rayaIdx = rayaSpan ? parseInt(rayaSpan.dataset['rayaIdx'] ?? '-1', 10) : -1;
+    const rayaViolation = rayaIdx >= 0 ? this.rayaViolations()[rayaIdx] : undefined;
     const grammarIdx = grammarSpan ? parseInt(grammarSpan.dataset['grammarIdx'] ?? '-1', 10) : -1;
     const grammarMatch = grammarIdx >= 0 ? this.grammarMatches()[grammarIdx] : undefined;
     const repIdx = repSpan ? parseInt(repSpan.dataset['repeticionIdx'] ?? '-1', 10) : -1;
     const repeticion = repIdx >= 0 ? this.repeticiones()[repIdx] : undefined;
 
-    // RAE gana salvo una excepción: `pending-conversion` (validator.ts,
+    // Raya gana salvo una excepción: `pending-conversion` (validator.ts,
     // `pushPendingConversion`) decora el PÁRRAFO entero (`length: para.length`),
     // no la violación puntual — así que toda palabra de un diálogo con
-    // comillas sin convertir queda con `.rae-violation`, tapando el popover
+    // comillas sin convertir queda con `.raya-violation`, tapando el popover
     // de gramática de cualquier palabra de ese párrafo (incluido el
     // "+ diccionario" de un nombre propio marcado TYPOS). Ese caso ya tiene
-    // su fix a mano vía el botón "Aplicar RAE" del capítulo entero, así que
+    // su fix a mano vía el botón "Aplicar raya" del capítulo entero, así que
     // no necesita también ganarle a gramática acá.
-    if (raeViolation && grammarMatch && raeViolation.category === 'pending-conversion') {
+    if (rayaViolation && grammarMatch && rayaViolation.category === 'pending-conversion') {
       this.openGrammarPopover(grammarMatch, event);
       return;
     }
-    if (raeViolation) {
-      this.openRaePopover(raeViolation, event);
+    if (rayaViolation) {
+      this.openRayaPopover(rayaViolation, event);
       return;
     }
     if (grammarMatch) {
@@ -2009,7 +2009,7 @@ export class Editor implements AfterViewInit, OnDestroy {
    * click, no dos.
    */
   private onDocumentClick(event: MouseEvent): void {
-    if (!this.grammarPopover() && !this.raePopover() && !this.repPopover()) return;
+    if (!this.grammarPopover() && !this.rayaPopover() && !this.repPopover()) return;
     const target = event.target as HTMLElement | null;
     // Defensa en profundidad: si algún día un elemento interno del popover
     // dejara de burbujear hasta su root, el guard evita que se cierre solo.
@@ -2090,7 +2090,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.aplicarGrupo([]);
   }
 
-  /** El cast es el mismo que usan `applyRaeDecorations` y
+  /** El cast es el mismo que usan `applyRayaDecorations` y
    *  `applyRepeticionesDecorations`: el `EditorView` de TipTap no encaja en el
    *  shim mínimo que expone la extensión. */
   private aplicarGrupo(rangos: RangoPm[]): void {
@@ -2099,11 +2099,11 @@ export class Editor implements AfterViewInit, OnDestroy {
     setGrupoRepeticion(view, rangos);
   }
 
-  private openRaePopover(v: RaeViolationPos, event: MouseEvent): void {
+  private openRayaPopover(v: RayaViolationPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
     this.cerrarPopovers();
-    this.raePopover.set({
+    this.rayaPopover.set({
       violation: v,
       anchor: this.anchorAt(v.from),
     });
@@ -2174,7 +2174,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         Typography,
         TextAlign.configure({ types: ['paragraph', 'heading'] }),
         Grammar,
-        RaeExtension,
+        RayaExtension,
         RepeticionesExtension,
         SearchHighlight,
         NoHardBreak,
@@ -2206,18 +2206,18 @@ export class Editor implements AfterViewInit, OnDestroy {
           //
           // Las TRES flags se consumen acá, no cada una en su bloque. Se
           // prenden juntas (una sola transacción de `setContent` las justifica)
-          // pero este `return` cortaba antes de llegar a los bloques de RAE y
+          // pero este `return` cortaba antes de llegar a los bloques de raya y
           // repeticiones, así que sus flags sobrevivían hasta la PRIMERA
           // edición real del autor — y ahí suprimían el remap Y el recheck de
           // esa edición. Resultado: las marcas quedaban corridas por el delta
           // de ese primer tecleo y, si el autor paraba de escribir, nadie las
-          // volvía a calcular. El bug estaba latente en RAE desde antes; se
+          // volvía a calcular. El bug estaba latente en raya desde antes; se
           // hizo visible con repeticiones porque marca mucho más seguido.
           this.skipNextGrammarRemap = false;
-          this.skipNextRaeRemap = false;
+          this.skipNextRayaRemap = false;
           this.skipNextRepRemap = false;
           if (this.grammarPopover()) this.grammarPopover.set(null);
-          if (this.raePopover()) this.raePopover.set(null);
+          if (this.rayaPopover()) this.rayaPopover.set(null);
           if (this.repPopover()) this.repPopover.set(null);
           return;
         }
@@ -2238,13 +2238,13 @@ export class Editor implements AfterViewInit, OnDestroy {
           this.scheduleGrammarRecheck();
         }
 
-        if (this.skipNextRaeRemap) {
-          this.skipNextRaeRemap = false;
-          if (this.raePopover()) this.raePopover.set(null);
+        if (this.skipNextRayaRemap) {
+          this.skipNextRayaRemap = false;
+          if (this.rayaPopover()) this.rayaPopover.set(null);
         } else {
-          if (this.raeViolations().length > 0) {
+          if (this.rayaViolations().length > 0) {
             const docSize = transaction.doc.content.size;
-            const remappedRae = this.raeViolations()
+            const remappedRaya = this.rayaViolations()
               .map((v) => ({
                 ...v,
                 from: transaction.mapping.map(v.from, -1),
@@ -2255,11 +2255,11 @@ export class Editor implements AfterViewInit, OnDestroy {
                 paragraphTo: v.paragraphTo !== undefined ? transaction.mapping.map(v.paragraphTo, 1) : undefined,
               }))
               .filter((v) => v.from < v.to && v.to <= docSize);
-            this.raeViolations.set(remappedRae);
-            this.applyRaeDecorations(remappedRae);
+            this.rayaViolations.set(remappedRaya);
+            this.applyRayaDecorations(remappedRaya);
           }
-          if (this.raePopover()) this.raePopover.set(null);
-          if (this.raeAuto()) this.scheduleRaeRecheck();
+          if (this.rayaPopover()) this.rayaPopover.set(null);
+          if (this.rayaAuto()) this.scheduleRayaRecheck();
         }
 
         if (this.skipNextRepRemap) {
@@ -2310,7 +2310,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     // Los popovers son `position: fixed` con el ancla capturada UNA vez, así que
     // no siguen al scroll: si el capítulo se mueve, quedan flotando lejos del
     // span que los abrió. Antes esto se resolvía cerrándolos, y encima solo los
-    // de gramática y RAE — al de repeticiones nunca se lo agregó a la lista, y
+    // de gramática y raya — al de repeticiones nunca se lo agregó a la lista, y
     // por eso era el único que se veía derivar.
     //
     // Ahora se reposicionan: cerrar de golpe es peor, porque scrollear un poco
@@ -2338,9 +2338,9 @@ export class Editor implements AfterViewInit, OnDestroy {
     const editor = this.tiptap;
     if (!editor) return;
     const grammar = this.grammarPopover();
-    const rae = this.raePopover();
+    const raya = this.rayaPopover();
     const rep = this.repPopover();
-    if (!grammar && !rae && !rep) return;
+    if (!grammar && !raya && !rep) return;
 
     const caja = this.hostRef.nativeElement.getBoundingClientRect();
     const anclaEn = (pos: number): AnchorBox | null => {
@@ -2361,10 +2361,10 @@ export class Editor implements AfterViewInit, OnDestroy {
       if (a) this.grammarPopover.set({ ...grammar, anchor: a });
       else this.closeGrammarPopover();
     }
-    if (rae) {
-      const a = anclaEn(rae.violation.from);
-      if (a) this.raePopover.set({ ...rae, anchor: a });
-      else this.raePopover.set(null);
+    if (raya) {
+      const a = anclaEn(raya.violation.from);
+      if (a) this.rayaPopover.set({ ...raya, anchor: a });
+      else this.rayaPopover.set(null);
     }
     if (rep) {
       const a = anclaEn(rep.from);

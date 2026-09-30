@@ -1,34 +1,34 @@
 /* El shell sale de `shared/audit-panel.scss`, compartido con el panel de
    repeticiones: los dos viven en el slot derecho y son la misma familia. Acá
-   queda solo lo propio de RAE, que es la metadata de cada violación. */
+   queda solo lo propio de raya, que es la metadata de cada violación. */
 @use '../shared/audit-panel';
 
 /* Los dos colores son de la escala de marcas del editor (ver el comentario de
    `editor.scss`), no del par --err/--warn de la UI: esta es la leyenda de
    severidad y tiene que leerse igual que la marca que el autor ve bajo el
    texto. */
-.rae-violation-sev--error {
+.raya-violation-sev--error {
   color: #d23030;
 }
 
-.rae-violation-sev--warning {
+.raya-violation-sev--warning {
   color: #c89020;
 }
 
-.rae-violation-cat {
+.raya-violation-cat {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--fg-muted);
   font-weight: 600;
 }
 
-.rae-violation-rule {
+.raya-violation-rule {
   font-family: var(--font-mono);
   color: var(--fg-muted);
   margin-left: auto;
 }
 
-.rae-violation-msg {
+.raya-violation-msg {
   font-size: 11px;
   color: var(--fg-muted);
 }

@@ -54,7 +54,7 @@ pub async fn split_chapter_apply(plan: SplitPlan) -> Result<SplitResult, String>
 
 /// Lista los paths de las partes (`<N>.html` con stem numérico) dentro de
 /// un folder, ordenados por número ascendente. Usado por el botón
-/// "Aplicar RAE a partes" para iterar las partes recién creadas.
+/// "Aplicar raya a partes" para iterar las partes recién creadas.
 #[tauri::command]
 pub async fn list_part_paths(folder: String) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {

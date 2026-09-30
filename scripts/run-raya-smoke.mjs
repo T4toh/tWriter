@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Smoke runner del validador RAE. No es parte del build de Angular.
+// Smoke runner del validador de raya. No es parte del build de Angular.
 // Compila los TS necesarios a un dir temporal y corre las aserciones.
-// Uso: node scripts/run-rae-smoke.mjs
+// Uso: node scripts/run-raya-smoke.mjs
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -10,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..');
-const outDir = mkdtempSync(join(tmpdir(), 'rae-smoke-'));
+const outDir = mkdtempSync(join(tmpdir(), 'raya-smoke-'));
 
 const tsc = join(repo, 'node_modules', '.bin', 'tsc');
 const r = spawnSync(
@@ -40,7 +40,7 @@ if (r.status !== 0) {
 }
 
 const mod = await import(pathToFileURL(join(outDir, 'dialogos/validator.js')).href);
-const { validateRae, htmlToPlain } = mod;
+const { validateRaya, htmlToPlain } = mod;
 
 let passed = 0;
 let failed = 0;
@@ -55,32 +55,32 @@ function check(name, cond, info) {
   }
 }
 
-console.log('validateRae');
+console.log('validateRaya');
 {
   const plain = '—Bastien va a completar tu morral más tarde. Te espero afuera, hermoso.';
-  const v = validateRae(plain, 'es');
+  const v = validateRaya(plain, 'es');
   check('diálogo simple sin inciso → sin violaciones', v.length === 0, v);
 }
 {
   // Solo dispara si el verbo está después de sentence boundary (.?!…) —
   // verbos mid-content no son dicendi-tags (ej. `—Así le dicen al oro.`).
-  const v = validateRae('—¿Nervioso? Preguntó su hermana.', 'es');
+  const v = validateRaya('—¿Nervioso? Preguntó su hermana.', 'es');
   const orphan = v.find((x) => x.ruleId === 'dash-orphan');
   check('verbo dicendi post-? sin raya → dash-orphan', orphan !== undefined, v);
 }
 {
-  const v = validateRae('—Así le dicen al oro, Adi. Después te explico.', 'es');
+  const v = validateRaya('—Así le dicen al oro, Adi. Después te explico.', 'es');
   const orphan = v.find((x) => x.ruleId === 'dash-orphan');
   check('verbo regular mid-content NO dispara dash-orphan', orphan === undefined, v);
 }
 {
-  const v = validateRae('"Hola" dijo Juan.', 'es');
+  const v = validateRaya('"Hola" dijo Juan.', 'es');
   const p = v.find((x) => x.ruleId === 'pending-conversion');
   check('comillas con verbo dicendi → pending-conversion', p !== undefined, v);
   check('autoFix contiene raya', p?.autoFix?.replacement.includes('—Hola') === true, p?.autoFix);
 }
 {
-  const v = validateRae('-Hola, dijo.', 'es');
+  const v = validateRaya('-Hola, dijo.', 'es');
   const s = v.find((x) => x.ruleId === 'dash-short');
   check('guion corto → dash-short', s !== undefined, v);
   check('autoFix = em-dash', s?.autoFix?.replacement === '—', s?.autoFix);
@@ -88,42 +88,42 @@ console.log('validateRae');
 {
   // Necesita ≥3 verbos dicendi distintos por la salvaguarda anti-falso-positivo
   // (monólogo con 2 incisos sigue siendo aceptable según DPD).
-  const v = validateRae('—A —dijo. —B —preguntó. —C —respondió. —D —murmuró.', 'es');
+  const v = validateRaya('—A —dijo. —B —preguntó. —C —respondió. —D —murmuró.', 'es');
   const c = v.find((x) => x.ruleId === 'paragraph-collapsed');
   check('4 turns con verbos distintos → paragraph-collapsed', c !== undefined, v.map((x) => x.ruleId));
 }
 {
-  const v = validateRae('—¡Duendes! —gritó. —Todo apestaba —agregó. —Resulta que los duendes ayudaban.', 'es');
+  const v = validateRaya('—¡Duendes! —gritó. —Todo apestaba —agregó. —Resulta que los duendes ayudaban.', 'es');
   const c = v.find((x) => x.ruleId === 'paragraph-collapsed');
   check('monólogo con 2 incisos NO dispara collapsed', c === undefined, v.map((x) => x.ruleId));
 }
 {
-  const v = validateRae('"Hello," said John.', 'en');
+  const v = validateRaya('"Hello," said John.', 'en');
   check('inglés → exit early', v.length === 0, v);
 }
 {
-  const v = validateRae('—Me dijo «hola» al pasar.', 'es');
+  const v = validateRaya('—Me dijo «hola» al pasar.', 'es');
   check('cita interna «hola» válida → sin pending-conversion', !v.some((x) => x.ruleId === 'pending-conversion'), v);
 }
 {
-  const v = validateRae('— Texto del diálogo.', 'es');
+  const v = validateRaya('— Texto del diálogo.', 'es');
   const s = v.find((x) => x.ruleId === 'space-after-open');
   check('espacio sobrante post-raya → space-after-open', s !== undefined, v);
   check('autoFix borra el espacio', s?.autoFix?.replacement === '', s?.autoFix);
 }
 {
-  const v = validateRae('—Hola —Dijo Juan.', 'es');
+  const v = validateRaya('—Hola —Dijo Juan.', 'es');
   const c = v.find((x) => x.ruleId === 'verb-capitalized');
   check('verbo capitalizado → verb-capitalized', c !== undefined, v);
   check('autoFix minúscula', c?.autoFix?.replacement === 'd', c?.autoFix);
 }
 {
-  const v = validateRae('—Hola. —dijo Juan.', 'es');
+  const v = validateRaya('—Hola. —dijo Juan.', 'es');
   const p = v.find((x) => x.ruleId === 'period-before-verb');
   check('punto antes de raya de verbo → period-before-verb', p !== undefined, v);
 }
 {
-  const v = validateRae('—Primero.\n\n—Bien. Dijo el viejo.', 'es');
+  const v = validateRaya('—Primero.\n\n—Bien. Dijo el viejo.', 'es');
   const orphan = v.find((x) => x.ruleId === 'dash-orphan');
   check('multi-párrafo → offsets globales correctos', orphan !== undefined && orphan.offset > 10, orphan);
 }
@@ -145,7 +145,7 @@ rmSync(outDir, { recursive: true, force: true });
   // Retomar el parlamento tras el comentario con `. —` (DPD 2.3d pide `—.`):
   // arreglo de a uno, nunca en bloque, porque también puede ser otro hablante.
   const plain = '—Hola. —Amelia se acercó al escritorio. —Vestite.';
-  const v = validateRae(plain, 'es').find((x) => x.ruleId === 'closing-dash');
+  const v = validateRaya(plain, 'es').find((x) => x.ruleId === 'closing-dash');
   const f = v?.autoFix;
   const fixed = f ? plain.slice(0, f.offset) + f.replacement + plain.slice(f.offset + f.length) : '';
   check('`. —` al retomar → closing-dash con arreglo manual', f?.manual === true, v);

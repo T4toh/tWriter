@@ -1,11 +1,11 @@
-/* El shell sale de `shared/audit-panel.scss`, compartido con el panel de RAE.
+/* El shell sale de `shared/audit-panel.scss`, compartido con el panel de raya.
    Lo propio de acá son los grupos colapsables — un libro entero da cientos de
    repeticiones, así que los capítulos con más de 10 arrancan cerrados — y la
    metadata de cada repetición. */
 @use '../shared/audit-panel';
 
 /* La cabecera de capítulo es el `<summary>` del colapsable, así que es
-   clickeable: eso es lo único que la diferencia de la del panel de RAE. */
+   clickeable: eso es lo único que la diferencia de la del panel de raya. */
 .audit-chapter-head {
   cursor: pointer;
   user-select: none;

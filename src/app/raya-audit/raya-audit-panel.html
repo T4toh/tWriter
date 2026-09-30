@@ -3,7 +3,7 @@
     <div class="audit-panel-title">
       <svg class="audit-panel-icon" lucideRuler [size]="16"></svg>
       <div class="audit-panel-labels">
-        <span class="audit-panel-scope">RAE — {{ s.name }}</span>
+        <span class="audit-panel-scope">Raya — {{ s.name }}</span>
         <span class="audit-panel-sub">
           @if (loading()) {
             @if (progress(); as p) {
@@ -43,8 +43,8 @@
 
   @if (emptyAfterLoad()) {
     <div class="audit-panel-empty">
-      Ningún capítulo en español de este alcance tiene violaciones de la regla RAE
-      de diálogos.
+      Ningún capítulo en español de este alcance tiene problemas de raya
+      en los diálogos.
     </div>
   }
 
@@ -60,17 +60,17 @@
             <li class="audit-row" (click)="openChapterAt(chapter, v)">
               <div class="audit-row-meta">
                 <svg
-                  class="rae-violation-sev"
-                  [class.rae-violation-sev--error]="v.severity === 'error'"
-                  [class.rae-violation-sev--warning]="v.severity === 'warning'"
+                  class="raya-violation-sev"
+                  [class.raya-violation-sev--error]="v.severity === 'error'"
+                  [class.raya-violation-sev--warning]="v.severity === 'warning'"
                   [lucideIcon]="severityIcon(v.severity)"
                   [size]="12"
                 ></svg>
-                <span class="rae-violation-cat">{{ categoryLabel(v.category) }}</span>
-                <span class="rae-violation-rule">{{ v.ruleId }}</span>
+                <span class="raya-violation-cat">{{ categoryLabel(v.category) }}</span>
+                <span class="raya-violation-rule">{{ v.ruleId }}</span>
               </div>
               <div class="audit-row-snippet">{{ snippet(chapter, v) }}</div>
-              <div class="rae-violation-msg">{{ v.shortMessage }}</div>
+              <div class="raya-violation-msg">{{ v.shortMessage }}</div>
             </li>
           }
         </ul>
