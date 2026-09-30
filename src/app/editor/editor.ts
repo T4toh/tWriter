@@ -473,6 +473,10 @@ export class Editor implements AfterViewInit, OnDestroy {
   private lastRepPlain: string | null = null;
   private repDebounceHandle: ReturnType<typeof setTimeout> | null = null;
   private lastRaeAuto = false;
+  /** Capítulo e idioma del último chequeo, para distinguir un cambio de
+   *  idioma (hay que rechequear) de un cambio de capítulo (ya chequea la
+   *  carga). */
+  private lastIdiomaKey: { path: string; idioma: string | null } | null = null;
   private lastRepAuto = false;
 
   constructor() {
@@ -763,6 +767,31 @@ export class Editor implements AfterViewInit, OnDestroy {
       setTimeout(() => {
         highlightBestMatch(this.hostRef.nativeElement, consumed.terms, consumed.rawQuery, consumed.fold);
       }, 0);
+    });
+
+    // Cambiar el idioma del capítulo (selector de variante) cambia qué mira
+    // cada chequeo: se rechequea en el acto y forzado, porque el texto no
+    // cambió y los chequeos saltean un plano igual al último. Sin esto
+    // quedaban las marcas del idioma anterior. LT no va acá: lo rechequea
+    // `pickVariant` después de guardar la variante, que es la que usa.
+    effect(() => {
+      const path = this.active()?.path ?? null;
+      const idioma = this.meta().idioma ?? null;
+      const prev = this.lastIdiomaKey;
+      this.lastIdiomaKey = path ? { path, idioma } : null;
+      if (!path || !prev || prev.path !== path || prev.idioma === idioma) return;
+      untracked(() => {
+        if (!this.viewReady() || !this.tiptap) return;
+        if (this.raeAuto()) {
+          this.checkRae(true);
+        } else {
+          this.raeViolations.set([]);
+          this.applyRaeDecorations([]);
+          this.raePopover.set(null);
+          this.lastRaePlain = null;
+        }
+        if (this.repAuto()) this.checkRepeticiones(true);
+      });
     });
 
     // Auto-check RAE: igual patrón. Si el toggle está prendido y el capítulo
@@ -1193,8 +1222,10 @@ export class Editor implements AfterViewInit, OnDestroy {
       await this.chapter.setLanguageInPane(base, this.paneId());
     }
     await this.sagaCtx.setVariante(base, code);
+    // Forzado: el texto no cambió y sin `force` el chequeo lo saltea, así que
+    // LT seguía en el idioma o la variante anterior hasta que se tipeara algo.
     if (this.grammar.autoEnabled() && this.canAutoGrammar()) {
-      void this.checkGrammar();
+      void this.checkGrammar(true);
     }
   }
 
