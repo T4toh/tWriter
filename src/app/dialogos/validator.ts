@@ -43,6 +43,7 @@ function categoryFor(ruleId: string): RaeCategory {
       return 'structure';
     case 'verb-capitalized':
     case 'period-before-verb':
+    case 'double-period':
       return 'typo';
     default:
       return 'structure';

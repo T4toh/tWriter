@@ -8,7 +8,7 @@
  * del párrafo. El validator orchestrator suma el offset del párrafo dentro
  * del documento.
  */
-import { DIALOG_TAGS, TAGS_ALT } from './tags';
+import { AMBIGUOUS_TAGS, DIALOG_TAGS, TAGS_ALT } from './tags';
 
 const EM_DASH = '—';
 
@@ -165,7 +165,10 @@ const ruleParagraphCollapsed: Rule = (p) => {
   ];
 };
 
-const SPACE_AFTER_OPEN_RE = /^([\s]*)—([ \t]+)\S/u;
+// Una intervención arranca en mayúscula, signo de apertura, comilla o
+// suspensivos. Raya + espacio + minúscula es un ítem de lista (DPD 3.2:
+// `— expresiva,`), donde el espacio va.
+const SPACE_AFTER_OPEN_RE = /^([\s]*)—([ \t]+)[\p{Lu}¿¡«"“…]/u;
 
 const ruleSpaceAfterOpen: Rule = (p) => {
   const m = SPACE_AFTER_OPEN_RE.exec(p);
@@ -218,6 +221,9 @@ const ruleVerbCapitalized: Rule = (p) => {
   for (const m of p.matchAll(VERB_CAPITAL_RE)) {
     const word = m[1];
     if (!TAGS_LOWER_SET.has(word.toLowerCase())) continue;
+    // `—Hola —Pidió un café.` es una acción (le falta el punto, DPD 2.3d),
+    // no un dicendi a bajar de caja.
+    if (AMBIGUOUS_TAGS.has(word.toLowerCase())) continue;
     const dashOffset = m.index ?? 0;
     // Anti-falso-positivo 1: raya de APERTURA del párrafo (`—Dicen eso...`)
     // — la palabra es contenido del diálogo, no dicendi-tag post-close. Va
@@ -249,14 +255,20 @@ const ruleVerbCapitalized: Rule = (p) => {
   return out;
 };
 
+// Solo el punto simple: los suspensivos (`—Bueno... —dijo`) se quedan antes
+// del inciso, y un punto doble (`—Ya voy.. —dijo`) lo marca double-period.
 const PERIOD_BEFORE_VERB_RE = new RegExp(
-  `(\\.)(\\s+)—(${TAGS_ALT})(?!\\p{L})`,
+  `(?<!\\.)(\\.)(\\s+)—(${TAGS_ALT})(?!\\p{L})`,
   'giu',
 );
 
 const rulePeriodBeforeVerb: Rule = (p) => {
   const out: DedicatedViolation[] = [];
   for (const m of p.matchAll(PERIOD_BEFORE_VERB_RE)) {
+    // `—No se moleste. —Negó con la cabeza.`: tras punto y en mayúscula, un
+    // verbo que también es de acción es la acción del DPD 2.3d y está bien.
+    const verb = m[3];
+    if (verb[0] !== verb[0].toLowerCase() && AMBIGUOUS_TAGS.has(verb.toLowerCase())) continue;
     const i = m.index ?? 0;
     out.push({
       offset: i,
@@ -273,6 +285,29 @@ const rulePeriodBeforeVerb: Rule = (p) => {
   return out;
 };
 
+// DPD «puntos suspensivos»: son tres «y solo tres» (§1) y tras ellos no va
+// punto de cierre (§3.1). Dos puntos, o cuatro o más, son un error, y cuál de
+// los dos quiso el autor (suspensivos o punto) no se puede saber: sin autoFix.
+// Única excepción: detrás de una abreviatura se suma su punto y van cuatro
+// (`pág....`, §3.1).
+const DOUBLE_PERIOD_RE = /(?<!\.)(?:\.{2}|\.{4,})(?!\.)/g;
+const ABBR_BEFORE_RE =
+  /(?<!\p{L})(?:etc|págs?|Sra?|Srta|Dra?|Ud|Uds|núm|aprox|admón|cód|tel|ej)$/iu;
+
+const ruleDoublePeriod: Rule = (p) =>
+  [...p.matchAll(DOUBLE_PERIOD_RE)]
+    .filter((m) => !(m[0].length === 4 && ABBR_BEFORE_RE.test(p.slice(0, m.index))))
+    .map((m) => ({
+      offset: m.index ?? 0,
+      length: m[0].length,
+      ruleId: 'double-period',
+      severity: 'warning',
+      message:
+        `${m[0].length} puntos seguidos. Los suspensivos son tres y solo tres, ` +
+        'sin punto después (DPD); si no, va uno, o ninguno antes de un verbo de habla.',
+      shortMessage: 'Puntos de más',
+    }));
+
 const RULES: readonly Rule[] = [
   ruleDashShort,
   ruleDashOrphan,
@@ -282,6 +317,7 @@ const RULES: readonly Rule[] = [
   ruleSpaceBeforeVerb,
   ruleVerbCapitalized,
   rulePeriodBeforeVerb,
+  ruleDoublePeriod,
 ];
 
 export function runDedicatedRules(paragraph: string): DedicatedViolation[] {

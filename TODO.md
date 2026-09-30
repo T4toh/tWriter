@@ -121,6 +121,15 @@ huela a "esto ya lo miramos", buscar ahí primero.
   renderer de EPUB embebido es otra cosa que un lightbox. Hoy los `.epub`
   salen al visor del OS (ver "Abrir la carpeta del EPUB exportado" en EPUB).
 
+- **Las marcas inline abren un hueco falso antes de la marca** (visto por el
+  autor el 2026-09-29): `—Yo...` con la marca de LT `PUNTOS_SUSPENSIVOS` se ve
+  `—Yo ...`. En disco no hay espacio: el `border-bottom` de `.grammar-error` /
+  `.rae-violation` en un inline corta el run de shaping en WebKit y se pierde
+  el kerning `o.` de Merriweather. `text-decoration` (lo que ya usa
+  `.repeticion`) no lo corta, pero las marcas usan borde a propósito para no
+  pisarse con el subrayado de repeticiones (ver `editor.scss`): resolverlo
+  junto con ese canal, no a pedazos.
+
 ## Gramática, ortografía y tesauro
 
 - **Dashboard de estilo por novela** (idea del autor, no para ahora). Lo que hoy
@@ -603,6 +612,92 @@ huela a "esto ya lo miramos", buscar ahí primero.
 
 ## Validador RAE
 
+- **Renombrar «RAE» a «Raya» en la app** (pedido del autor el 2026-09-29).
+  Alcance medido: ~20 strings en `.html` y ~18 en `.ts` visibles (botón del
+  toolbar, «Aplicar RAE al párrafo», panel de auditoría, toasts, settings,
+  revisión de libro, split, import wizard), más README (26) y CLAUDE.md (6).
+  Decidir antes de arrancar si el rename es **solo de UI** o también de
+  identificadores (`rae-audit/`, `RaeViolation`, `validateRae`,
+  `RaeAuditService`, `run-rae-*.mjs`: ~126 ocurrencias de `rae`, rename
+  mecánico pero ancho). Ojo con lo persistido: `raeAutoDisabled` es una clave
+  de `settings.json` (TS + `settings.rs`); si se renombra, leer la vieja como
+  fallback o el autor pierde la preferencia al actualizar.
+- **Revisión a fondo del módulo de diálogos contra el DPD** (pedido del autor
+  el 2026-09-29). Fuente única: DPD «raya» 2.ª ed.; la lectura del autor no
+  manda (lo dijo él). Dos pasadas ese día: corpus de 155 borradores mal
+  escritos (43 OK) y revisión de código (24 hallazgos). Lo que rompía texto
+  correcto y perdía puntuación lo resolvió #159 (verificado por el autor el
+  2026-09-30); queda, por prioridad:
+  1. **Falso positivo por contexto de bloque**: el validador corre sobre texto
+     plano y no sabe qué es un `<blockquote>` (verso) ni un `<h1>`: marca
+     `pending-conversion` en `"Canción de cuna"` dentro de un verso y en un
+     título `«Uno»`. En bloque ya no se convierten (el converter saltea el
+     `<blockquote>`), pero «Aplicar RAE al párrafo» sobre el verso todavía
+     lo convierte.
+  2. **Convierte mal y el validador no avisa** (lo más frecuente del
+     borrador):
+     - Coma fuera de la comilla, `"Hola", dijo Juan.` → `—Hola, dijo Juan.`
+       (~35 casos). D2 re1 exige `\s+` tras la comilla; re2 exige mayúscula.
+       Es la forma **correcta** en español (DPD comillas 3a/3b: la coma va
+       siempre tras la comilla de cierre), y hoy solo anda la inglesa.
+     - `DIALOG_TAGS` cerrada (del Python): faltan pronombres (`le dijo`,
+       `me preguntó`), primera persona (`dije`), imperfectos (`decía`),
+       `masculló/advirtió/espetó/musitó/confesó/inquirió`, enclíticos,
+       perífrasis. Los ambiguos acción/habla ya están en `AMBIGUOUS_TAGS`
+       (sin autoFix en mayúscula): sumar ahí los que entren.
+     - Sustitutos de raya: `--`, `-`, `–`, `―` (U+2015), `−` solo se ven en
+       la apertura (`dash-short` anclado a `^`) y el fix cambia solo esa.
+       El `--` entra por pegado, `.docx` o Ctrl+Z tras la input rule.
+  3. **Reglas que faltan o contradicen al DPD**:
+     - Caja del inciso: 2.3c (`—¿Venís? —Preguntó` no se marca:
+       `verb-capitalized` saltea justo cuando hay `?!` antes), 2.3d (punto +
+       no-dicendi en minúscula: el caso del autor
+       `--Hola, Roberto. --sus manos temblaban por el miedo.` →
+       `—Hola, Roberto. —Sus manos…`; y sin punto + mayúscula:
+       `—Hola —Sus manos` → `—Hola. —Sus`), 2.3e (a mitad de enunciado,
+       minúscula siempre). Dicendi → sacar el punto; no-dicendi → mayúscula.
+       Un solo fix por caso, lo decide el DPD.
+     - Raya de cierre: puntuación antes en vez de después (`;—` `,—` `.—`
+       `:—`, 2.3c/f); `—.` sobrante a fin de párrafo (2.3a); falta `—.` si
+       el personaje sigue (2.3b); espacios (`Juan —.`, `— .`, `Ana—vamos`,
+       `sé— dijo`, doble espacio).
+     - `dash-orphan`: FP con imperativos (`Pregunta a tu madre.`), FN con
+       `—Hola dijo Juan.`. `dash-quote-mix`: FP con comillas internas
+       legítimas (`—Leí "Rayuela" anoche.`, §4).
+     - 2.1: inciso narrativo sin raya de cierre
+       (`Esperaba a Emilio —un gran amigo. Lamentablemente…`) no se detecta.
+  4. **Editor, entidades, idioma**:
+     - Fix con posiciones viejas (`editor.ts:2196`, sospecha fuerte): el
+       remap con assoc +1 estira el span si se tipea adentro; click en el
+       fix reemplaza lo tipeado. Descartar violaciones cuyo span cambió de
+       largo.
+     - `&nbsp;`: por HTML queda `—Hola&nbsp;dijo`, por plano sí convierte:
+       el preview no es lo que se aplica.
+     - NFD: acentos descompuestos no matchean verbos (sintético, sin saber
+       si aparece en el corpus real).
+     - `detectLang` da `es` en empate y con diálogo corto en inglés, y
+       `chapter-service.ts:160` lo persiste en `meta.json` sin mirar
+       `book.json`; `rae-audit-service.ts:87` tampoco usa el idioma del libro.
+       Usar `resolverIdiomaEfectivo`.
+     - `validator.spec.ts` (dormido): 3 casos fallan contra el código de hoy.
+  Base de regresión: `scripts/run-raya-corpus-smoke.mjs`, con la lista de
+  `PENDIENTES`; cada arreglo saca sus casos de ahí. ReDoS, `lastIndex`,
+  astrales e idempotencia salieron limpios.
+- **Enseñar la regla, no solo marcarla** (pedido del autor el 2026-09-29: «la
+  idea es ayudar a escribir bien esto; comparado con el inglés es confuso y
+  difícil de recordar»). Hoy los mensajes dicen qué está mal sin decir por
+  qué ni cómo queda. El DPD 2.3 entero son dos preguntas sobre el inciso: ¿es
+  verbo de lengua? (sí → minúscula y sin punto antes; no → punto y
+  mayúscula) y ¿el personaje sigue hablando? (sí → raya de cierre con la
+  puntuación después: `—.` `—,` `—;` `—:`; no → sin raya de cierre); más la
+  excepción de 2.3e (a mitad de enunciado, minúscula siempre). El inglés solo
+  tiene la primera; la segunda es la que no se retiene.
+  1. Cada regla gana `ejemplo` (par ✗/✓) y `seccion` (link al DPD) y el
+     popover los muestra. Sin UI nueva.
+  2. Chuleta con esas dos preguntas, abrible desde el panel y el popover
+     («ver todas las reglas»), para consultar escribiendo, no solo al errar.
+  Fuente: el DPD manda (ver memoria del autor); la OLE 2010 solo para casos
+  que el DPD no cubre.
 - **El ancla de D1 no tolera markup inline de apertura** (limitación del
   converter, no del popover): la regla D1 ancla el diálogo con `^(\s*)"`, o sea
   que la comilla de apertura tiene que ser el primer carácter no-espacio del

@@ -102,6 +102,7 @@ node scripts/run-fecha-corta-smoke.mjs            # formato de la fecha corta de
 node scripts/run-estados-smoke.mjs                # ciclo de la novela + "necesita revisar" derivado
 node scripts/run-zoom-smoke.mjs                   # encaje, zoom alrededor de un punto y clamp del pan del visor
 node scripts/run-mayusculas-smoke.mjs             # mayúsculas rancias (LLOra, ME) en el panel de auditoría RAE
+node scripts/run-raya-corpus-smoke.mjs            # corpus de diálogos contra el DPD (con lista de pendientes)
 ```
 
 Primera build de Rust tarda ~5 min. Después es incremental.
