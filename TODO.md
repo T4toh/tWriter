@@ -723,20 +723,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
 ## Plataformas
 
 - Mobile (no urgente, capaz solo un exportador a EPUB para ver archivos desde gh). El tomador de notas para la Kindle quedó descartado el 2026-09-14 (ver `## Proofreading`): no ahorra tipeo contra Keep, y git en el teléfono ya lo resuelven GitJournal / Obsidian con plugin git / Working Copy sin código propio.
-- [ ] **Changelog versionado, y que el release lo levante solo** (pedido del
-  autor el 2026-09-30, al cortar v0.22.0: «la mitad de las veces me olvido
-  de pegar esos cambios»). Hoy las notas de cada release se escriben a mano en
-  el borrador de GitHub, y si nadie las pega el release sale solo con las
-  instrucciones de instalación que arma `release.yml`. Idea:
-  - `CHANGELOG.md` en la raíz, con una sección `## Sin publicar` a la que
-    cada PR le suma su línea, escrita para quien usa la app (qué cambia para
-    el autor, no el detalle de implementación).
-  - `scripts/bump-version.sh` renombra `## Sin publicar` a `## vX.Y.Z — fecha`
-    y abre una nueva vacía, en el mismo commit del bump.
-  - `release.yml` arma `body.md` con esa sección **más** las instrucciones de
-    instalación de hoy, así el borrador nace completo.
-  - Semilla: las notas de v0.22.0 que quedaron en su release, y las de los
-    releases anteriores (`gh release view vX`) si se quiere el historial.
 - [ ] **Publicar en Homebrew (cask) para macOS**
   Hoy la instalación en Mac es bajar el `.dmg` a mano del release y comerse el
   primer arranque con Gatekeeper. En Arch ya está resuelto vía AUR

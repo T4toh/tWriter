@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Sincroniza la versión en package.json, src-tauri/Cargo.toml, src-tauri/tauri.conf.json
-# y packaging/aur/PKGBUILD. Después corre `cargo update -p twriter` para refrescar Cargo.lock.
+# Cierra «Sin publicar» en CHANGELOG.md y sincroniza la versión en package.json,
+# src-tauri/Cargo.toml, src-tauri/tauri.conf.json y packaging/aur/PKGBUILD.
+# Después corre `cargo update -p twriter` para refrescar Cargo.lock.
 # Uso: ./scripts/bump-version.sh 0.2.0
 #
 # Los reemplazos van con perl y no con `sed -i`: el sed de macOS (BSD) pide el
@@ -24,6 +25,11 @@ fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+
+# CHANGELOG.md primero: «## Sin publicar» pasa a «## vX.Y.Z — fecha». Si está
+# vacía, el script corta acá, antes de tocar ninguna versión, así un release
+# sin notas no queda a medio bumpear (ver scripts/changelog.mjs).
+node "$ROOT/scripts/changelog.mjs" cerrar "$NEW"
 
 # package.json y tauri.conf.json — el primer "version" del archivo (sin /g).
 perl -0777 -pi -e "s/\"version\": \"\d+\.\d+\.\d+\"/\"version\": \"$NEW\"/" package.json
@@ -71,6 +77,7 @@ if [[ "$fallo" != 0 ]]; then
 fi
 
 echo "Versión bumpeada a $NEW en:"
+echo "  - CHANGELOG.md («Sin publicar» → v$NEW)"
 echo "  - package.json"
 echo "  - src-tauri/tauri.conf.json"
 echo "  - src-tauri/Cargo.toml"
