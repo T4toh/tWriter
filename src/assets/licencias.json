@@ -142,7 +142,7 @@
         },
         {
           "nombre": "tantivy",
-          "version": "0.22.1",
+          "version": "0.26.2",
           "origen": "cargo",
           "licencia": "MIT",
           "texto": 15
