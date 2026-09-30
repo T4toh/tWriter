@@ -31,17 +31,21 @@ serde_json = "1"
 # usa el git de sistema (run_git_net), git2 solo hace status/commit locales. Sin
 # openssl, x86_64-apple-darwin cross-compila desde el runner ARM sin pkg-config.
 git2 = { version = "0.21", default-features = false }
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "8", default-features = false, features = ["deflate"] }
 uuid = { version = "1", features = ["v4"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json", "form"] }
+# El proveedor de cripto de rustls para reqwest: `ring`, el mismo que usa
+# tauri-plugin-updater. El `rustls` default de reqwest 0.13 trae aws-lc-rs,
+# que es C y complica el cross-compile. Se instala en `lib.rs::run()`.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 tokio = { version = "1", features = ["sync", "time"] }
-rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "registry", "std"] }
 tantivy = { version = "0.26", features = ["stopwords"] }
 regex = "1"
 # Listado de fuentes del OS para el selector del editor (sin deps C — pure Rust).
-fontdb = { version = "0.23", default-features = false, features = ["fontconfig", "memmap"] }
+fontdb = { version = "0.24", default-features = false, features = ["fontconfig", "memmap"] }
 # Decodificar y reescalar tapas para el EPUB: las del repo son PNG de
 # imprenta (hasta 7 MB) y embeberlas tal cual infla el archivo y el costo
 # de delivery de KDP. default-features=false deja solo png+jpeg — nada de

@@ -83,9 +83,18 @@ use themes::{
     rename_theme_font, set_theme,
 };
 
+/// reqwest va con `rustls-no-provider`, así que sin esto el primer
+/// `Client::build()` hace panic. El updater instala `ring` recién cuando busca
+/// una versión nueva, que puede llegar después del primer chequeo de gramática.
+/// El `Err` es "ya había uno instalado", y cualquiera sirve.
+pub(crate) fn install_tls_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     debug_bridge::init_tracing();
+    install_tls_provider();
     // Antes de `Builder::default()`: Tauri construye la `WKWebView` durante el
     // armado del builder, no en `.setup()`. Si WebKit inicializa su text
     // checker con esa construcción, un registro de `NSUserDefaults` hecho
