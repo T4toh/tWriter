@@ -625,44 +625,30 @@ huela a "esto ya lo miramos", buscar ahí primero.
 - **Revisión a fondo del módulo de diálogos contra el DPD** (pedido del autor
   el 2026-09-29). Fuente única: DPD «raya» 2.ª ed.; la lectura del autor no
   manda (lo dijo él). Dos pasadas ese día: corpus de 155 borradores mal
-  escritos (43 OK) y revisión de código (24 hallazgos). Los smoke runners
-  pasan (21 + 7), o sea que no cubren nada de esto. Por prioridad:
-  1. **Rompe texto correcto** — va primero, tres de estos corren en bloque
-     (`deteccion.ts:189`, `aplicarFixesHtml`):
-     - D1 `reAdd` (`converter.ts:287`): comilla con mayúscula dentro de un
-       parlamento pasa a diálogo nuevo. `—Me dijo «Vete» y se fue.` →
-       `—Me dijo —Vete y se fue.` Exigir cierre de oración antes.
-     - `normalizeQuotes` (`converter.ts:21,63`) aplana `«»` y `’` de **todo**
-       el capítulo si un solo párrafo convierte (incluye `<h1>`). Normalizar
-       por línea y devolver la original si ninguna regla cambió.
-     - D5 (`converter.ts:327`) toma apóstrofos como comillas:
-       `rock'n'roll` → `rock«n»roll`, `Bob's` → `Bob»s`; no idempotente.
-       Exigir no-letra a los dos lados.
-     - D2 sin ancla (`converter.ts:213-244`): comillas en medio de la
-       narración. `La palabra "fin" dice mucho.` → `La palabra —fin —dice…`.
-     - `period-before-verb` con flag `i` (`rules-dedicated.ts:252`) rompe
-       2.3d con verbos que también son acción (`negó`, `señaló`, `pidió`):
-       `—No se moleste. —Negó con la cabeza.` → `—negó con la cabeza.`
-     - D1 convierte a diálogo pensamientos (`«¿Y si no vuelve?», pensó`),
-       versos en `<blockquote>` y citas de 2.4.
-  2. **Pierde puntuación**: `...` se come en D2 (`:220,236,255`),
-     `cleanText1` (`:190`), `fixPunctuationBeforeTag` (`:104`) y el autoFix
-     de `period-before-verb`. `"Yo..." murmuró.` → `—Yo —murmuró.`;
-     `"Hola, Roberto." sus manos` pierde la raya del narrador.
-  3. **Convierte mal y el validador no avisa** (lo más frecuente del
+  escritos (43 OK) y revisión de código (24 hallazgos). Lo que rompía texto
+  correcto y perdía puntuación lo resolvió #159 (verificado por el autor el
+  2026-09-30); queda, por prioridad:
+  1. **Falso positivo por contexto de bloque**: el validador corre sobre texto
+     plano y no sabe qué es un `<blockquote>` (verso) ni un `<h1>`: marca
+     `pending-conversion` en `"Canción de cuna"` dentro de un verso y en un
+     título `«Uno»`. En bloque ya no se convierten (el converter saltea el
+     `<blockquote>`), pero «Aplicar RAE al párrafo» sobre el verso todavía
+     lo convierte.
+  2. **Convierte mal y el validador no avisa** (lo más frecuente del
      borrador):
      - Coma fuera de la comilla, `"Hola", dijo Juan.` → `—Hola, dijo Juan.`
        (~35 casos). D2 re1 exige `\s+` tras la comilla; re2 exige mayúscula.
-     - Coma o punto que sobran: `—Bueno, —dijo—, vamos.`, `—Hola,. —Cerró`.
+       Es la forma **correcta** en español (DPD comillas 3a/3b: la coma va
+       siempre tras la comilla de cierre), y hoy solo anda la inglesa.
      - `DIALOG_TAGS` cerrada (del Python): faltan pronombres (`le dijo`,
        `me preguntó`), primera persona (`dije`), imperfectos (`decía`),
        `masculló/advirtió/espetó/musitó/confesó/inquirió`, enclíticos,
-       perífrasis. Separar además los ambiguos acción/habla (`negó`,
-       `señaló`, `pidió`), que no pueden llevar autoFix.
+       perífrasis. Los ambiguos acción/habla ya están en `AMBIGUOUS_TAGS`
+       (sin autoFix en mayúscula): sumar ahí los que entren.
      - Sustitutos de raya: `--`, `-`, `–`, `―` (U+2015), `−` solo se ven en
        la apertura (`dash-short` anclado a `^`) y el fix cambia solo esa.
        El `--` entra por pegado, `.docx` o Ctrl+Z tras la input rule.
-  4. **Reglas que faltan o contradicen al DPD**:
+  3. **Reglas que faltan o contradicen al DPD**:
      - Caja del inciso: 2.3c (`—¿Venís? —Preguntó` no se marca:
        `verb-capitalized` saltea justo cuando hay `?!` antes), 2.3d (punto +
        no-dicendi en minúscula: el caso del autor
@@ -675,14 +661,12 @@ huela a "esto ya lo miramos", buscar ahí primero.
        `:—`, 2.3c/f); `—.` sobrante a fin de párrafo (2.3a); falta `—.` si
        el personaje sigue (2.3b); espacios (`Juan —.`, `— .`, `Ana—vamos`,
        `sé— dijo`, doble espacio).
-     - `space-after-open` marca listas `— item`, que 3.2 permite: marcar
-       solo si sigue mayúscula, `¿¡«"…`.
      - `dash-orphan`: FP con imperativos (`Pregunta a tu madre.`), FN con
        `—Hola dijo Juan.`. `dash-quote-mix`: FP con comillas internas
        legítimas (`—Leí "Rayuela" anoche.`, §4).
      - 2.1: inciso narrativo sin raya de cierre
        (`Esperaba a Emilio —un gran amigo. Lamentablemente…`) no se detecta.
-  5. **Editor, entidades, idioma**:
+  4. **Editor, entidades, idioma**:
      - Fix con posiciones viejas (`editor.ts:2196`, sospecha fuerte): el
        remap con assoc +1 estira el span si se tipea adentro; click en el
        fix reemplaza lo tipeado. Descartar violaciones cuyo span cambió de
@@ -696,10 +680,9 @@ huela a "esto ya lo miramos", buscar ahí primero.
        `book.json`; `rae-audit-service.ts:87` tampoco usa el idioma del libro.
        Usar `resolverIdiomaEfectivo`.
      - `validator.spec.ts` (dormido): 3 casos fallan contra el código de hoy.
-  Base de regresión: el corpus (scratchpad de la sesión,
-  `corpus-raya.mjs`) pasa a `scripts/` como smoke runner con esperados DPD;
-  cada arreglo entra con sus casos. ReDoS, `lastIndex`, astrales e
-  idempotencia (salvo D5) salieron limpios.
+  Base de regresión: `scripts/run-raya-corpus-smoke.mjs`, con la lista de
+  `PENDIENTES`; cada arreglo saca sus casos de ahí. ReDoS, `lastIndex`,
+  astrales e idempotencia salieron limpios.
 - **Enseñar la regla, no solo marcarla** (pedido del autor el 2026-09-29: «la
   idea es ayudar a escribir bien esto; comparado con el inglés es confuso y
   difícil de recordar»). Hoy los mensajes dicen qué está mal sin decir por
