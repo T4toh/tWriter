@@ -30,7 +30,7 @@ serde_json = "1"
 # default-features=false saca https(openssl-sys) + ssh(libssh2-sys): el push/pull
 # usa el git de sistema (run_git_net), git2 solo hace status/commit locales. Sin
 # openssl, x86_64-apple-darwin cross-compila desde el runner ARM sin pkg-config.
-git2 = { version = "0.20", default-features = false }
+git2 = { version = "0.21", default-features = false }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 uuid = { version = "1", features = ["v4"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
