@@ -11,68 +11,68 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { RaeHelp, RaeViolation } from '../core/types';
+import { RayaHelp, RayaViolation } from '../core/types';
 import { RayaChuletaService } from '../core/raya-chuleta-service';
 import { AnchorBox, Placement, placePopover } from './popover-position';
 
 @Component({
-  selector: 'app-rae-popover',
+  selector: 'app-raya-popover',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (violation(); as v) {
       <div
         #root
-        class="editor-pop rae-pop"
-        [class.rae-pop--pending]="v.category === 'pending-conversion'"
-        [class.rae-pop--char]="v.category === 'char'"
-        [class.rae-pop--structure]="v.category === 'structure'"
-        [class.rae-pop--typo]="v.category === 'typo'"
+        class="editor-pop raya-pop"
+        [class.raya-pop--pending]="v.category === 'pending-conversion'"
+        [class.raya-pop--char]="v.category === 'char'"
+        [class.raya-pop--structure]="v.category === 'structure'"
+        [class.raya-pop--typo]="v.category === 'typo'"
         [class.editor-pop--measuring]="placed() === null"
         [style.top.px]="placed()?.y ?? 0"
         [style.left.px]="placed()?.x ?? 0"
         [style.max-height.px]="clippedMaxHeight()"
         (click)="$event.stopPropagation()"
       >
-        <div class="rae-pop-head">
-          <span class="rae-pop-tag">{{ tagLabel() }}</span>
-          <span class="rae-pop-rule">{{ v.ruleId }}</span>
+        <div class="raya-pop-head">
+          <span class="raya-pop-tag">{{ tagLabel() }}</span>
+          <span class="raya-pop-rule">{{ v.ruleId }}</span>
         </div>
-        <div class="rae-pop-msg">{{ v.message }}</div>
+        <div class="raya-pop-msg">{{ v.message }}</div>
         @if (v.help; as h) {
           @if (h.wrong && h.right) {
-            <div class="rae-pop-ej">
-              <span class="rae-pop-ej-no" aria-label="Mal">✗</span>
+            <div class="raya-pop-ej">
+              <span class="raya-pop-ej-no" aria-label="Mal">✗</span>
               <span>{{ h.wrong }}</span>
-              <span class="rae-pop-ej-si" aria-label="Bien">✓</span>
+              <span class="raya-pop-ej-si" aria-label="Bien">✓</span>
               <span>{{ h.right }}</span>
             </div>
           }
-          <div class="rae-pop-fuente">
+          <div class="raya-pop-fuente">
             <a [href]="dpdUrl(h)" target="_blank" rel="noopener">DPD {{ h.entry }} {{ h.section }}</a>
             ·
-            <button type="button" class="rae-pop-link" (click)="chuleta.show(); dismiss.emit()">
+            <button type="button" class="raya-pop-link" (click)="chuleta.show(); dismiss.emit()">
               Ver todas las reglas
             </button>
           </div>
         }
-        <footer class="rae-pop-footer">
+        <footer class="raya-pop-footer">
           @if (canAutoFix()) {
-            <button type="button" class="rae-pop-apply" (click)="apply.emit()">
+            <button type="button" class="raya-pop-apply" (click)="apply.emit()">
               Aplicar
             </button>
           }
           @if (canApplyParagraph()) {
             <button
               type="button"
-              class="rae-pop-apply"
+              class="raya-pop-apply"
               (click)="applyParagraph.emit()"
-              title="Aplicar reglas RAE al párrafo entero (preview)"
+              title="Aplicar reglas de raya al párrafo entero (preview)"
             >
-              Aplicar RAE al párrafo
+              Aplicar raya al párrafo
             </button>
           }
-          <button type="button" class="rae-pop-dismiss" (click)="dismiss.emit()">
+          <button type="button" class="raya-pop-dismiss" (click)="dismiss.emit()">
             @if (canAutoFix() || canApplyParagraph()) {
               Ignorar
             } @else {
@@ -83,17 +83,17 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
       </div>
     }
   `,
-  styleUrl: './rae-popover.scss',
+  styleUrl: './raya-popover.scss',
 })
-export class RaePopover {
-  violation = input<RaeViolation | null>(null);
+export class RayaPopover {
+  violation = input<RayaViolation | null>(null);
   anchor = input<AnchorBox | null>(null);
   apply = output<void>();
   applyParagraph = output<void>();
   dismiss = output<void>();
   protected readonly chuleta = inject(RayaChuletaService);
 
-  protected dpdUrl(h: RaeHelp): string {
+  protected dpdUrl(h: RayaHelp): string {
     return `https://www.rae.es/dpd/${encodeURIComponent(h.entry)}`;
   }
 

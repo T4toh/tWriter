@@ -31,7 +31,7 @@ const r = spawnSync(
     'src/app/dialogos/validator.ts',
     'src/app/dialogos/rules-dedicated.ts',
     'src/app/dialogos/tags.ts',
-    'src/app/editor/rae-convert.ts',
+    'src/app/editor/raya-convert.ts',
     'src/app/quotes/educate.ts',
     'src/app/repeticiones/detector.ts',
     'src/app/core/types.ts',
@@ -109,7 +109,7 @@ console.log('detectarEnCapitulo');
   const res = detectarEnCapitulo(html, null, 'es', opts);
   check(
     'ES limpio: los cuatro detectores en 0',
-    res.rayas === 0 && res.comillas === 0 && res.arreglosRae === 0 && res.repeticiones === 0,
+    res.rayas === 0 && res.comillas === 0 && res.arreglosRaya === 0 && res.repeticiones === 0,
     res,
   );
 }

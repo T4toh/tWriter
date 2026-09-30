@@ -119,7 +119,7 @@ interface Settings {
   grammarVariantEn?: string | null;
   grammarPicky?: boolean;
   grammarAutoDisabled?: boolean;
-  raeAutoDisabled?: boolean;
+  rayaAutoDisabled?: boolean;
   repeticionesAutoDisabled?: boolean;
   repeticionesExcepciones?: ExcepcionesDeliberadas;
   rightPanelWidth?: RightPanelWidth;
@@ -176,8 +176,8 @@ export class SettingsService {
   readonly grammarPicky = signal<boolean>(false);
   /** Auto-check de gramática desactivado por el usuario. Persiste cross-session. */
   readonly grammarAutoDisabled = signal<boolean>(false);
-  /** Auto-check del validador RAE desactivado por el usuario. Persiste cross-session. */
-  readonly raeAutoDisabled = signal<boolean>(false);
+  /** Auto-check del validador de raya desactivado por el usuario. Persiste cross-session. */
+  readonly rayaAutoDisabled = signal<boolean>(false);
   /** Detector de repeticiones cercanas desactivado por el usuario. */
   readonly repeticionesAutoDisabled = signal<boolean>(false);
   /** Formas de repetición deliberada que se filtran. Las tres prendidas por
@@ -236,7 +236,7 @@ export class SettingsService {
       this.grammarVariantEn.set(s.grammarVariantEn ?? 'en-US');
       this.grammarPicky.set(s.grammarPicky ?? false);
       this.grammarAutoDisabled.set(s.grammarAutoDisabled ?? false);
-      this.raeAutoDisabled.set(s.raeAutoDisabled ?? false);
+      this.rayaAutoDisabled.set(s.rayaAutoDisabled ?? false);
       this.repeticionesAutoDisabled.set(s.repeticionesAutoDisabled ?? false);
       this.repeticionesExcepciones.set({
         ...EXCEPCIONES_DEFAULT,
@@ -451,8 +451,8 @@ export class SettingsService {
     await this.persist();
   }
 
-  async setRaeAutoDisabled(disabled: boolean): Promise<void> {
-    this.raeAutoDisabled.set(disabled);
+  async setRayaAutoDisabled(disabled: boolean): Promise<void> {
+    this.rayaAutoDisabled.set(disabled);
     await this.persist();
   }
 
@@ -530,7 +530,7 @@ export class SettingsService {
       grammarVariantEn: this.grammarVariantEn(),
       grammarPicky: this.grammarPicky() || undefined,
       grammarAutoDisabled: this.grammarAutoDisabled(),
-      raeAutoDisabled: this.raeAutoDisabled(),
+      rayaAutoDisabled: this.rayaAutoDisabled(),
       repeticionesAutoDisabled: this.repeticionesAutoDisabled() || undefined,
       repeticionesExcepciones: this.repeticionesExcepciones(),
       rightPanelWidth: this.rightPanelWidth(),

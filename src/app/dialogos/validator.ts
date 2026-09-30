@@ -1,5 +1,5 @@
 /**
- * Validador RAE para diálogos en español. Detecta violaciones de la regla DPD
+ * Validador de raya para diálogos en español. Detecta violaciones de la regla DPD
  * de diálogos sobre texto YA escrito — tanto texto sin convertir como texto
  * convertido pero mal parseado por versiones anteriores del converter.
  *
@@ -18,7 +18,7 @@
  */
 import { convert } from './converter';
 import { runDedicatedRules } from './rules-dedicated';
-import { RaeCategory, RaeViolation } from '../core/types';
+import { RayaCategory, RayaViolation } from '../core/types';
 
 // Escapes Unicode explícitos: si el archivo se vuelve a guardar bajo un encoding
 // raro, los smart quotes literales (« » " " ' ') pueden colarse como ASCII y
@@ -31,7 +31,7 @@ export function normalizeQuotesForCompare(text: string): string {
   return text.replace(QUOTE_NORM_RE, '"').replace(SINGLE_QUOTE_NORM_RE, "'");
 }
 
-function categoryFor(ruleId: string): RaeCategory {
+function categoryFor(ruleId: string): RayaCategory {
   switch (ruleId) {
     case 'dash-short':
     case 'space-after-open':
@@ -55,19 +55,19 @@ function categoryFor(ruleId: string): RaeCategory {
 }
 
 /** Qué párrafos del plano no son prosa (verso, títulos), por su offset de
- *  inicio: `validateRae` no los mira. Un verso entre comillas o un título
+ *  inicio: `validateRaya` no los mira. Un verso entre comillas o un título
  *  `«Uno»` no son diálogos a convertir. */
 export type SkipParagraph = (offset: number) => boolean;
 
-export function validateRae(
+export function validateRaya(
   plain: string,
   lang: string | null,
   skip?: SkipParagraph,
-): RaeViolation[] {
+): RayaViolation[] {
   if (lang !== 'es') return [];
   if (!plain.trim()) return [];
 
-  const out: RaeViolation[] = [];
+  const out: RayaViolation[] = [];
   const paragraphs = plain.split('\n\n');
   let offset = 0;
 
@@ -85,7 +85,7 @@ export function validateRae(
 function pushPendingConversion(
   para: string,
   offset: number,
-  out: RaeViolation[],
+  out: RayaViolation[],
 ): void {
   const converted = convert(para).text;
   if (converted === para) return;
@@ -98,7 +98,7 @@ function pushPendingConversion(
     severity: 'warning',
     ruleId: 'pending-conversion',
     message:
-      'Diálogo con comillas o guiones en vez de raya. Aplicá las reglas RAE ' +
+      'Diálogo con comillas o guiones en vez de raya. Aplicá las reglas de raya ' +
       'para convertirlo a raya (—).',
     shortMessage: 'Conversión pendiente',
     help: { entry: 'raya', section: '3.1', wrong: '"Hola", dijo Juan.', right: '—Hola —dijo Juan.' },
@@ -107,7 +107,7 @@ function pushPendingConversion(
   });
 }
 
-function pushDedicated(para: string, offset: number, out: RaeViolation[]): void {
+function pushDedicated(para: string, offset: number, out: RayaViolation[]): void {
   for (const v of runDedicatedRules(para)) {
     out.push({
       offset: offset + v.offset,
@@ -152,7 +152,7 @@ export const ENTITY_MAP: Record<string, string> = {
 // además el mapa de posiciones al HTML. Si tocás algo acá — el recorrido de
 // bloques, el trim, el orden de `ENTITY_MAP` — corré
 // `node scripts/run-plano-con-mapa-smoke.mjs` (además de este archivo): si las
-// dos se desalinean, los fixes de RAE se aplican en el lugar equivocado del
+// dos se desalinean, los arreglos de raya se aplican en el lugar equivocado del
 // HTML y en silencio.
 export function htmlToPlain(html: string): string {
   return plainBlocks(html)

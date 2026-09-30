@@ -1,5 +1,5 @@
 /**
- * Ubicación de los popovers flotantes del editor (gramática y RAE).
+ * Ubicación de los popovers flotantes del editor (gramática y raya).
  *
  * Antes se posicionaban con `y = rect.bottom + 4` fijo y un clamp de X con
  * constantes mágicas que ni coincidían con el `max-width` del CSS: un error

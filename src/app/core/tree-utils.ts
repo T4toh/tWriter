@@ -4,7 +4,7 @@ import { TreeNode } from './types';
  * El nodo del árbol con ese `path`, o `null`.
  *
  * Estaba copiada y pegada seis veces (`app.ts`, `tree.ts`, `search-panel.ts`,
- * `node-actions-service.ts`, `rae-audit-panel.ts` y el panel de repeticiones).
+ * `node-actions-service.ts`, `raya-audit-panel.ts` y el panel de repeticiones).
  * Ya no queda ninguna copia: todos los llamadores importan de acá.
  *
  * El `?? []` sobre `children` viene de la copia de `app.ts`, que era la única

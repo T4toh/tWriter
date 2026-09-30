@@ -84,16 +84,16 @@
           @if (bulkMode()) {
             <button type="button" class="btn btn-secondary" (click)="abortRest()" [disabled]="applying()">Cancelar resto</button>
           }
-          @if (canApplyRae()) {
-            <button type="button" class="btn btn-primary" (click)="applyRae()" [disabled]="applying()">
+          @if (canApplyRaya()) {
+            <button type="button" class="btn btn-primary" (click)="applyRaya()" [disabled]="applying()">
               @if (applying()) {
-                Aplicando RAE…
+                Aplicando raya…
               } @else {
-                Aplicar RAE a partes
+                Aplicar raya a partes
               }
             </button>
           }
-          <button type="button" class="btn btn-secondary" (click)="continueWithoutRae()" [disabled]="applying()">
+          <button type="button" class="btn btn-secondary" (click)="continueWithoutRaya()" [disabled]="applying()">
             @if (bulkMode()) {
               Continuar
             } @else {

@@ -6,7 +6,7 @@ const BR_SOLO_RE = /^<br\s*\/?>$/i;
  * Igual que `htmlToPlain` de `validator.ts`, pero además devuelve el índice en
  * el HTML de cada carácter del plano.
  *
- * Existe porque las violaciones de `validateRae` traen offsets sobre el plano y
+ * Existe porque las violaciones de `validateRaya` traen offsets sobre el plano y
  * el archivo en disco es HTML: sin el mapa, aplicar un fix obliga a reconstruir
  * el HTML desde texto plano, que es como se pierden `<em>` y `<strong>`.
  *

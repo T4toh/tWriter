@@ -3,7 +3,7 @@
  *
  * Igual que `quotes/educate.spec.ts`: no hay Karma en el repo, así que los
  * casos viven acá y `scripts/run-suggest-smoke.mjs` los corre compilando a
- * CommonJS temporal (mismo patrón que `run-rae-smoke.mjs`).
+ * CommonJS temporal (mismo patrón que `run-raya-smoke.mjs`).
  */
 import { suggestFromDictionary } from './suggest';
 

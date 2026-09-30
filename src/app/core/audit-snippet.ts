@@ -2,7 +2,7 @@
  * Contexto de una ocurrencia sobre el texto plano de un capítulo: el snippet que
  * se muestra en la lista y el ancla con la que se salta al lugar.
  *
- * Sale de `rae-audit-panel`, que lo tenía adentro. Lo comparte ahora el panel de
+ * Sale de `raya-audit-panel`, que lo tenía adentro. Lo comparte ahora el panel de
  * repeticiones, que necesita exactamente lo mismo: mostrar la oración con la
  * marca señalada y después llevar al editor a ese punto.
  *

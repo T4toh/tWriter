@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { LucideArrowRight } from '@lucide/angular';
-import { RaeAuditService } from '../core/rae-audit-service';
+import { RayaAuditService } from '../core/raya-audit-service';
 import { RepeticionesAuditService } from '../core/repeticiones-audit-service';
 import { GrammarAuditService } from '../core/grammar-audit-service';
 import {
@@ -20,13 +20,13 @@ import { Spinner } from '../shared/spinner';
 })
 export class RevisionLibroModal {
   protected readonly svc = inject(RevisionLibroService);
-  private raeAudit = inject(RaeAuditService);
+  private rayaAudit = inject(RayaAuditService);
   private repeticionesAudit = inject(RepeticionesAuditService);
   private grammarAudit = inject(GrammarAuditService);
 
   protected readonly rayas = signal<boolean>(false);
   protected readonly comillas = signal<boolean>(false);
-  protected readonly arreglosRae = signal<boolean>(false);
+  protected readonly arreglosRaya = signal<boolean>(false);
 
   // El modal se monta una sola vez en app.html y solo se oculta con el @if
   // interno (`svc.libro()`), así que las casillas nunca pasan por el
@@ -41,7 +41,7 @@ export class RevisionLibroModal {
       this.svc.libro();
       this.rayas.set(false);
       this.comillas.set(false);
-      this.arreglosRae.set(false);
+      this.arreglosRaya.set(false);
     });
   }
 
@@ -51,7 +51,7 @@ export class RevisionLibroModal {
     return (
       (this.rayas() && r.rayas.capitulos > 0)
       || (this.comillas() && r.comillas.capitulos > 0)
-      || (this.arreglosRae() && r.arreglosRae.cambios > 0)
+      || (this.arreglosRaya() && r.arreglosRaya.cambios > 0)
     );
   });
 
@@ -88,7 +88,7 @@ export class RevisionLibroModal {
     const seleccion: SeleccionRevision = {
       rayas: this.rayas(),
       comillas: this.comillas(),
-      arreglosRae: this.arreglosRae(),
+      arreglosRaya: this.arreglosRaya(),
     };
     await this.svc.aplicar(seleccion);
   }
@@ -101,15 +101,15 @@ export class RevisionLibroModal {
    *  Cierran el modal a propósito: los dos paneles viven en el slot derecho,
    *  al lado del editor, y la gracia es poder arreglar mientras se recorre la
    *  lista — con el modal encima no se puede tocar nada. */
-  protected verRae(ev: Event): void {
-    // Las dos filas de RAE son `<label>` con checkbox adentro, así que
+  protected verRaya(ev: Event): void {
+    // Las dos filas de raya son `<label>` con checkbox adentro, así que
     // clickear el botón tildaría la casilla de paso.
     ev.preventDefault();
     ev.stopPropagation();
     const node = this.svc.libro();
     if (!node) return;
     this.svc.cerrar();
-    void this.raeAudit.open({ path: node.path, name: node.name });
+    void this.rayaAudit.open({ path: node.path, name: node.name });
   }
 
   protected verRepeticiones(): void {

@@ -505,7 +505,7 @@ export class SearchService {
   ): void {
     const q = (queryOverride ?? this.query()).trim();
     // El fold sale del toggle `≈`, salvo que el caller lo fije: un ancla exacta
-    // (la auditoría RAE) no quiere que una variante sin tilde de un párrafo
+    // (la auditoría de raya) no quiere que una variante sin tilde de un párrafo
     // anterior le gane al bloque correcto.
     const fold = foldOverride ?? this.settings.searchFuzzy();
     // Con puntuación en la query (`—dijo`) el literal manda: `matchedTerms`

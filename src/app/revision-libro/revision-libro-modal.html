@@ -21,10 +21,10 @@
         @if (r.capitulosEs > 0) {
           <label class="rl-fila">
             <input type="checkbox" [checked]="rayas()" (change)="rayas.set(!rayas())" [disabled]="r.rayas.capitulos === 0" />
-            <span class="rl-nombre">Rayas RAE</span>
+            <span class="rl-nombre">Rayas</span>
             <span class="rl-conteo">{{ resumenCapitulos(r.rayas) }}</span>
             @if (r.rayas.capitulos > 0) {
-              <button type="button" class="rl-ver" (click)="verRae($event)" title="Ver las violaciones RAE una por una, con la oración y el salto al lugar">
+              <button type="button" class="rl-ver" (click)="verRaya($event)" title="Ver las violaciones de raya una por una, con la oración y el salto al lugar">
                 ver <svg lucideArrowRight [size]="11"></svg>
               </button>
             }
@@ -32,7 +32,7 @@
           </label>
         } @else {
           <div class="rl-fila rl-fila-reporte">
-            <span class="rl-nombre">Rayas RAE</span>
+            <span class="rl-nombre">Rayas</span>
             <span class="rl-conteo">solo para capítulos en español</span>
           </div>
         }
@@ -50,18 +50,18 @@
         }
         @if (r.capitulosEs > 0) {
           <label class="rl-fila">
-            <input type="checkbox" [checked]="arreglosRae()" (change)="arreglosRae.set(!arreglosRae())" [disabled]="r.arreglosRae.cambios === 0" />
-            <span class="rl-nombre">Arreglos RAE</span>
-            <span class="rl-conteo">{{ resumen(r.arreglosRae) }}</span>
-            @if (r.arreglosRae.cambios > 0) {
-              <button type="button" class="rl-ver" (click)="verRae($event)" title="Ver las violaciones RAE una por una, con la oración y el salto al lugar">
+            <input type="checkbox" [checked]="arreglosRaya()" (change)="arreglosRaya.set(!arreglosRaya())" [disabled]="r.arreglosRaya.cambios === 0" />
+            <span class="rl-nombre">Arreglos de raya</span>
+            <span class="rl-conteo">{{ resumen(r.arreglosRaya) }}</span>
+            @if (r.arreglosRaya.cambios > 0) {
+              <button type="button" class="rl-ver" (click)="verRaya($event)" title="Ver las violaciones de raya una por una, con la oración y el salto al lugar">
                 ver <svg lucideArrowRight [size]="11"></svg>
               </button>
             }
           </label>
         } @else {
           <div class="rl-fila rl-fila-reporte">
-            <span class="rl-nombre">Arreglos RAE</span>
+            <span class="rl-nombre">Arreglos de raya</span>
             <span class="rl-conteo">solo para capítulos en español</span>
           </div>
         }

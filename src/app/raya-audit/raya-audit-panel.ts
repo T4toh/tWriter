@@ -11,23 +11,23 @@ import {
 import { ChapterService } from '../core/chapter-service';
 import { NavigationService } from '../core/navigation-service';
 import { ProjectService } from '../core/project-service';
-import { ChapterViolations, RaeAuditService } from '../core/rae-audit-service';
-import { RaeViolation } from '../core/types';
+import { ChapterViolations, RayaAuditService } from '../core/raya-audit-service';
+import { RayaViolation } from '../core/types';
 import { SearchService } from '../core/search-service';
 import { RayaChuletaService } from '../core/raya-chuleta-service';
 import { auditAnchor, auditSnippet } from '../core/audit-snippet';
 import { findNodeByPath } from '../core/tree-utils';
 
 @Component({
-  selector: 'app-rae-audit-panel',
+  selector: 'app-raya-audit-panel',
   standalone: true,
   imports: [LucideBookOpen, LucideDynamicIcon, LucideRuler, LucideX],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  templateUrl: './rae-audit-panel.html',
-  styleUrl: './rae-audit-panel.scss',
+  templateUrl: './raya-audit-panel.html',
+  styleUrl: './raya-audit-panel.scss',
 })
-export class RaeAuditPanel {
-  private svc = inject(RaeAuditService);
+export class RayaAuditPanel {
+  private svc = inject(RayaAuditService);
   private chapter = inject(ChapterService);
   private project = inject(ProjectService);
   private nav = inject(NavigationService);
@@ -49,7 +49,7 @@ export class RaeAuditPanel {
     this.svc.close();
   }
 
-  protected categoryLabel(c: RaeViolation['category']): string {
+  protected categoryLabel(c: RayaViolation['category']): string {
     switch (c) {
       case 'pending-conversion':
         return 'Conv. pendiente';
@@ -64,15 +64,15 @@ export class RaeAuditPanel {
     }
   }
 
-  protected severityIcon(s: RaeViolation['severity']): LucideIcon {
+  protected severityIcon(s: RayaViolation['severity']): LucideIcon {
     return s === 'error' ? LucideCircleX : LucideCircleAlert;
   }
 
-  protected snippet(chapter: ChapterViolations, v: RaeViolation): string {
+  protected snippet(chapter: ChapterViolations, v: RayaViolation): string {
     return auditSnippet(chapter.plain, v.offset, v.length);
   }
 
-  protected async openChapterAt(chapter: ChapterViolations, v: RaeViolation): Promise<void> {
+  protected async openChapterAt(chapter: ChapterViolations, v: RayaViolation): Promise<void> {
     const node = findNodeByPath(this.project.tree(), chapter.path);
     if (!node) return;
     const parent = chapter.path.replace(/\/[^/]+$/, '');

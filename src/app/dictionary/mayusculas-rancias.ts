@@ -30,7 +30,7 @@
  *
  * Función pura; `scripts/run-mayusculas-smoke.mjs`.
  */
-import { RaeViolation } from '../core/types';
+import { RayaViolation } from '../core/types';
 
 const PALABRA_RE = /\p{L}+/gu;
 
@@ -89,7 +89,7 @@ function capitalizar(lower: string): string {
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
-function violacion(t: Token, ruleId: string, sugerencia: string): RaeViolation {
+function violacion(t: Token, ruleId: string, sugerencia: string): RayaViolation {
   return {
     offset: t.offset,
     length: t.raw.length,
@@ -105,7 +105,7 @@ function violacion(t: Token, ruleId: string, sugerencia: string): RaeViolation {
 export function detectMayusculasRancias(
   plain: string,
   dictWords: readonly string[],
-): RaeViolation[] {
+): RayaViolation[] {
   const dict = new Map<string, string>();
   for (const w of dictWords) {
     const k = w.toLowerCase();
@@ -113,7 +113,7 @@ export function detectMayusculasRancias(
   }
 
   const tokens = tokenizar(plain);
-  const out: RaeViolation[] = [];
+  const out: RayaViolation[] = [];
 
   for (let i = 0; i < tokens.length; i += 1) {
     const t = tokens[i];

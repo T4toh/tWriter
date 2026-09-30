@@ -1,8 +1,8 @@
-import { RaeAutoFix } from '../core/types';
+import { RayaAutoFix } from '../core/types';
 import { planoConMapa } from './plano-con-mapa';
 
 /**
- * Aplica fixes de RAE sobre el HTML del capítulo. Los fixes traen offsets en el
+ * Aplica arreglos de raya sobre el HTML del capítulo. Los fixes traen offsets en el
  * espacio del texto plano; el mapa de `planoConMapa` los traduce a posiciones
  * exactas del HTML, así el markup inline (`<em>`, `<strong>`) queda intacto.
  *
@@ -12,7 +12,7 @@ import { planoConMapa } from './plano-con-mapa';
  */
 export function aplicarFixesHtml(
   html: string,
-  fixes: RaeAutoFix[],
+  fixes: RayaAutoFix[],
 ): { html: string; aplicados: number; salteados: number } {
   if (fixes.length === 0) return { html, aplicados: 0, salteados: 0 };
   const { plain, mapa } = planoConMapa(html);

@@ -1,7 +1,7 @@
 /**
- * Mitad CON DOM del apply de RAE. Importa `@tiptap/core`, así que no se puede
+ * Mitad CON DOM del apply de raya. Importa `@tiptap/core`, así que no se puede
  * cargar desde node: lo cubren `pnpm build` y la verificación manual. La lógica
- * testeable vive en `rae-convert.ts`.
+ * testeable vive en `raya-convert.ts`.
  */
 import { createNodeFromContent, getHTMLFromFragment } from '@tiptap/core';
 import { Fragment, Node as PmNode, Schema } from '@tiptap/pm/model';

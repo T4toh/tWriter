@@ -1,9 +1,9 @@
-/* Shell compartido de los paneles de auditoría (RAE y repeticiones).
+/* Shell compartido de los paneles de auditoría (raya y repeticiones).
  *
  * Los dos comparten el slot derecho y tienen que verse como la misma familia.
  * Hasta ahora eso se sostenía a mano: eran el mismo archivo con otro prefijo
- * (`rae-` contra `rp-`), ~110 líneas iguales, y ya habían empezado a
- * divergir sin que se notara --el título de capítulo de RAE tenía la clase en
+ * (`raya-` contra `rp-`), ~110 líneas iguales, y ya habían empezado a
+ * divergir sin que se notara --el título de capítulo de raya tenía la clase en
  * el template pero ninguna regla, así que un título largo desbordaba ahí y se
  * cortaba con elipsis en repeticiones--.
  *
@@ -13,7 +13,7 @@
  *
  * Nota de nombres: las filas se llaman `audit-row` y no `audit-violation`
  * porque repeticiones no lista violaciones. De paso desambigua contra
- * `.rae-violation`, que es la marca inline del editor y la lee `editor.ts`.
+ * `.raya-violation`, que es la marca inline del editor y la lee `editor.ts`.
  */
 
 :host {

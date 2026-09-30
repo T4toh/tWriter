@@ -22,7 +22,7 @@ import { ExtraEntry, ExtrasService } from '../core/extras-service';
 import { FontsService } from '../core/fonts-service';
 import { ImageViewerService } from '../core/image-viewer-service';
 import { MarkdownReaderService } from '../core/markdown-reader-service';
-import { RaeAuditService } from '../core/rae-audit-service';
+import { RayaAuditService } from '../core/raya-audit-service';
 import { RepeticionesAuditService } from '../core/repeticiones-audit-service';
 import { GrammarAuditService } from '../core/grammar-audit-service';
 import { QuotesFixService } from '../core/quotes-fix-service';
@@ -66,7 +66,7 @@ export class NodeActionsService {
   private themesSvc = inject(ThemesService);
   private imageViewer = inject(ImageViewerService);
   private mdReader = inject(MarkdownReaderService);
-  private raeAudit = inject(RaeAuditService);
+  private rayaAudit = inject(RayaAuditService);
   private repeticionesAudit = inject(RepeticionesAuditService);
   private grammarAudit = inject(GrammarAuditService);
   private quotesFix = inject(QuotesFixService);
@@ -365,15 +365,15 @@ export class NodeActionsService {
       });
     }
 
-    const canAuditRae =
+    const canAuditRaya =
       !isExcluded &&
       (node.kind === 'saga' || node.kind === 'book' || node.kind === 'section');
-    if (canAuditRae) {
+    if (canAuditRaya) {
       entries.push({ kind: 'separator' });
       entries.push({
-        label: 'Revisar RAE',
+        label: 'Revisar raya',
         icon: LucideRuler,
-        onClick: () => this.auditRae(node),
+        onClick: () => this.auditRaya(node),
       });
       entries.push({
         label: 'Revisar repeticiones',
@@ -591,8 +591,8 @@ export class NodeActionsService {
     this.exports.abrirPara(node);
   }
 
-  async auditRae(node: TreeNode): Promise<void> {
-    await this.raeAudit.open({ path: node.path, name: node.name });
+  async auditRaya(node: TreeNode): Promise<void> {
+    await this.rayaAudit.open({ path: node.path, name: node.name });
   }
 
   async auditRepeticiones(node: TreeNode): Promise<void> {

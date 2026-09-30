@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-**tWriter** es una app desktop (Tauri 2 + Angular 22, TypeScript 6.0) para escribir novelas en español e inglés con un solo flujo: editor → conversor de diálogos a estilo RAE → chequeo de gramática → exportación EPUB. Reemplaza el flujo viejo del autor (LibreOffice → `dialogos_a_esp` [DEPRECADO, ver abajo] → Quillbot → Reedsy).
+**tWriter** es una app desktop (Tauri 2 + Angular 22, TypeScript 6.0) para escribir novelas en español e inglés con un solo flujo: editor → conversor de diálogos a raya → chequeo de gramática → exportación EPUB. Reemplaza el flujo viejo del autor (LibreOffice → `dialogos_a_esp` [DEPRECADO, ver abajo] → Quillbot → Reedsy).
 
-> **Nota**: el repo Python [`dialogos_a_esp`](https://github.com/T4toh/dialogos_a_esp) está **deprecado** — tenía bugs (colapsaba párrafos al convertir, perdía verbos dicendi acentuados por `\b` ASCII-only) que se arrastraron al port TS y se fueron arreglando acá. El port en `src/app/dialogos/converter.ts` + `validator.ts` ya divergió de la fuente Python; usar este repo como única fuente de verdad de las reglas RAE.
+> **Nota**: el repo Python [`dialogos_a_esp`](https://github.com/T4toh/dialogos_a_esp) está **deprecado** — tenía bugs (colapsaba párrafos al convertir, perdía verbos dicendi acentuados por `\b` ASCII-only) que se arrastraron al port TS y se fueron arreglando acá. El port en `src/app/dialogos/converter.ts` + `validator.ts` ya divergió de la fuente Python; usar este repo como única fuente de verdad de las reglas de raya (con el DPD como norma).
 
 **Repo separado de contenido**: `~/Repos/Personal/Novelas/` (privado) guarda las novelas como HTML + JSON metadata. Este repo (`tWriter`) es solo la app — cero contenido.
 
@@ -101,7 +101,7 @@ node scripts/run-historial-smoke.mjs              # orden y tope del historial d
 node scripts/run-fecha-corta-smoke.mjs            # formato de la fecha corta de la landing (dmy/ymd)
 node scripts/run-estados-smoke.mjs                # ciclo de la novela + "necesita revisar" derivado
 node scripts/run-zoom-smoke.mjs                   # encaje, zoom alrededor de un punto y clamp del pan del visor
-node scripts/run-mayusculas-smoke.mjs             # mayúsculas rancias (LLOra, ME) en el panel de auditoría RAE
+node scripts/run-mayusculas-smoke.mjs             # mayúsculas rancias (LLOra, ME) en el panel de auditoría de raya
 node scripts/run-undo-capitulo-smoke.mjs          # Ctrl+Z no cruza de un capítulo al otro (ProseMirror puro)
 node scripts/run-raya-corpus-smoke.mjs            # corpus de diálogos contra el DPD (con lista de pendientes)
 ```
@@ -120,7 +120,7 @@ armado a mano): `run-undo-capitulo-smoke.mjs` compila a `node_modules/.cache`
 en vez de `/tmp` para que esos imports resuelvan.
 
 Al sumar código nuevo al frontend, partirlo en una mitad pura (con su smoke
-runner nuevo, patrón de `scripts/run-rae-smoke.mjs`) y una mitad con DOM que se
+runner nuevo, patrón de `scripts/run-raya-smoke.mjs`) y una mitad con DOM que se
 valida con `pnpm build` + verificación manual del autor. El comentario de
 cabecera de `src/app/core/search-highlight.spec.ts` deja sentado ese criterio.
 
@@ -189,7 +189,7 @@ El scaffold inicial usa nombres `app.component.*` — refactorizar a convencione
 
 ## Reuso desde otros repos del usuario
 
-- **Reglas de diálogos** (~~`dialogos_a_esp/src/rules.py` y `converter.py`~~ **DEPRECADO**): la fuente original Python está deprecada — el repo Python tenía bugs (`\b` ASCII-only no matchea acentos, párrafos colapsados en la conversión, verbos dicendi acentuados invisibles) que se arrastraron al port TS y se fueron arreglando. Las reglas RAE vivas viven en `src/app/dialogos/converter.ts` + `rules-dedicated.ts` + `validator.ts`. No volver al Python como referencia.
+- **Reglas de diálogos** (~~`dialogos_a_esp/src/rules.py` y `converter.py`~~ **DEPRECADO**): la fuente original Python está deprecada — el repo Python tenía bugs (`\b` ASCII-only no matchea acentos, párrafos colapsados en la conversión, verbos dicendi acentuados invisibles) que se arrastraron al port TS y se fueron arreglando. Las reglas de raya vivas viven en `src/app/dialogos/converter.ts` + `rules-dedicated.ts` + `validator.ts`. No volver al Python como referencia.
 - **CSS y fuentes para EPUB**: extraídos de un EPUB de Reedsy. El de referencia es `~/Dropbox/Novelas/Buenos Aires 2077/1 - La Ciudad de las Luces/La Ciudad de las Luces Rev.2.epub`. Su `OEBPS/style.css` se recortó a un subset que vive en `src-tauri/resources/epub_style.css` (un `resource` de Tauri que se lee en runtime, ver la sección de sidecars). El `src/styles/reedsy-subset.scss` que este archivo mencionaba hasta el 2026-09-07 **nunca existió** — no hay commit que lo borre: se planeó como SCSS del front y terminó siendo el CSS del bundle. `src/styles/` tiene solo `fonts.scss`. Las TTF (Merriweather, Lato, Roboto Mono) van a `src/assets/fonts/`.
 - **NO reusar componentes** de la-cueva-de-tatoh — la UI de tWriter es bespoke (3 paneles, modo focus, tipografía serif).
 
@@ -250,11 +250,11 @@ genere conflictos entre PCs. Errores del CLI git se categorizan en
 - **Sprint 3** ✓ importer Pandoc shell-out, port TS de D1–D5, UI de conversión con diff
 - **Sprint 4** ✓ EPUB builder en Rust con `zip` + `uuid`, CSS subset Reedsy, manifest+spine+nav
 - **Sprint 5** ✓ LanguageTool, templates 6×9"/5×8"/A5, polish
-- **Sprint 6** ✓ reestructurar capítulo plano en folder con partes (`split_chapter.rs` + modal con preview de bloques + strip auto de título/labels + bulk libro entero), insertar parte intermedia con shift (`insert_part_after`), "Aplicar RAE a partes" post-split
+- **Sprint 6** ✓ reestructurar capítulo plano en folder con partes (`split_chapter.rs` + modal con preview de bloques + strip auto de título/labels + bulk libro entero), insertar parte intermedia con shift (`insert_part_after`), "Aplicar raya a partes" post-split
 
 ## Verificación end-to-end (al completar MVP)
 
 1. Importar `~/Dropbox/Novelas/Meridian/1 - Noche Eterna/Parte 1/` (.docx) → aparece como libro con 23 capítulos.
 2. Editar cap 1, agregar itálica, cerrar y reabrir → cambios persisten en disco.
-3. Click "Aplicar RAE" sobre cap en español → diff produce salida válida según [DPD raya](https://www.rae.es/dpd/raya) (la comparación contra `dialogos_a_esp` ya no aplica, el repo Python está deprecado y el port TS lo supera).
+3. Click "Raya" (aplicar reglas de raya) sobre cap en español → diff produce salida válida según [DPD raya](https://www.rae.es/dpd/raya) (la comparación contra `dialogos_a_esp` ya no aplica, el repo Python está deprecado y el port TS lo supera).
 4. Export EPUB del libro completo → calibre/Thorium lo abre, comparar visualmente con `Noche Eterna Parte 1 Rev.3 EPUB.epub`.

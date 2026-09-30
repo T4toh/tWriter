@@ -1,5 +1,5 @@
 /**
- * Conversor de diálogos al formato RAE (rayas). Nació como port de
+ * Conversor de diálogos a raya. Nació como port de
  * dialogos_a_esp/src/converter.py (deprecado) y ya divergió: la norma es el
  * DPD «raya», y `scripts/run-raya-corpus-smoke.mjs` es la regresión.
  */

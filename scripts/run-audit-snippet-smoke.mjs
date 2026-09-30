@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Smoke runner del snippet y el ancla de las auditorías (RAE y repeticiones).
+// Smoke runner del snippet y el ancla de las auditorías (raya y repeticiones).
 // No es parte del build de Angular: compila el TS a un dir temporal y corre
 // las aserciones.
 // Uso: node scripts/run-audit-snippet-smoke.mjs

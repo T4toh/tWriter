@@ -16,7 +16,7 @@ import { ImportJoplinService } from './core/import-joplin-service';
 import { ImportWizardService } from './core/import-wizard-service';
 import { PaneSplitService } from './core/pane-split-service';
 import { ProjectService } from './core/project-service';
-import { RaeAuditService } from './core/rae-audit-service';
+import { RayaAuditService } from './core/raya-audit-service';
 import { RepeticionesAuditService } from './core/repeticiones-audit-service';
 import { GrammarAuditService } from './core/grammar-audit-service';
 import { RustLogBridge } from './core/rust-log-bridge';
@@ -40,7 +40,7 @@ import { ImageViewer } from './image-viewer/image-viewer';
 import { FontPreview } from './font-preview/font-preview';
 import { MarkdownReader } from './markdown-reader/markdown-reader';
 import { SearchPanel } from './search-panel/search-panel';
-import { RaeAuditPanel } from './rae-audit/rae-audit-panel';
+import { RayaAuditPanel } from './raya-audit/raya-audit-panel';
 import { RepeticionesAuditPanel } from './repeticiones-audit/repeticiones-audit-panel';
 import { GrammarAuditPanel } from './grammar-audit/grammar-audit-panel';
 import { ToastContainer } from './toast/toast-container';
@@ -89,7 +89,7 @@ import {
   selector: 'app-root',
   imports: [
     Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, RevisionLibroModal, SagaConfigModal, DictionaryModal, SplitChapterModal,
-    NoteFormModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RaeAuditPanel, RepeticionesAuditPanel, GrammarAuditPanel, ToastContainer,
+    NoteFormModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RayaAuditPanel, RepeticionesAuditPanel, GrammarAuditPanel, ToastContainer,
     SettingsModal, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, RayaChuletaModal, AboutModal, ExportModal, AutorModal, Spinner, ModalHost, ContextMenuHost,
     LucideArrowDownToLine, LucideArrowUpDown, LucideChevronDown, LucideChevronRight,
     LucideCircleQuestionMark, LucideDownload, LucideDynamicIcon, LucideFolder, LucideHouse, LucideMoveHorizontal,
@@ -109,7 +109,7 @@ export class App {
   protected fontPreview = inject(FontPreviewService);
   protected markdownReader = inject(MarkdownReaderService);
   protected search = inject(SearchService);
-  protected raeAudit = inject(RaeAuditService);
+  protected rayaAudit = inject(RayaAuditService);
   protected repeticionesAudit = inject(RepeticionesAuditService);
   protected grammarAudit = inject(GrammarAuditService);
 

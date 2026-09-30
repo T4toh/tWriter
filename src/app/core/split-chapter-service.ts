@@ -49,7 +49,7 @@ export class SplitChapterService {
   readonly editing = signal<SplitEditingState | null>(null);
   readonly loading = signal(false);
   readonly applying = signal(false);
-  /** Resultado del último split aplicado (folder + partes). Habilita el botón "Aplicar RAE a partes" post-apply. Se limpia al cerrar o avanzar al próximo capítulo en bulk. */
+  /** Resultado del último split aplicado (folder + partes). Habilita el botón "Aplicar raya a partes" post-apply. Se limpia al cerrar o avanzar al próximo capítulo en bulk. */
   readonly lastResult = signal<SplitResult | null>(null);
   /** Cola de paths pendientes (solo modo bulk). El path actual ya fue removido de la cola. */
   private queue = signal<string[]>([]);
@@ -143,8 +143,8 @@ export class SplitChapterService {
     }
   }
 
-  /** Aplica el converter RAE (D1–D5) sobre cada parte del último split. Silencioso: solo toast con conteo final. */
-  async applyRaeToParts(): Promise<void> {
+  /** Aplica el converter de raya (D1–D5) sobre cada parte del último split. Silencioso: solo toast con conteo final. */
+  async applyRayaToParts(): Promise<void> {
     const result = this.lastResult();
     if (!result) return;
     this.applying.set(true);
@@ -162,16 +162,16 @@ export class SplitChapterService {
         }
       }
       if (partsChanged === 0) {
-        this.toast.info('RAE: sin cambios.');
+        this.toast.info('Raya: sin cambios.');
       } else {
         this.toast.success(
-          `RAE: ${partsChanged} parte${partsChanged === 1 ? '' : 's'} modificada${partsChanged === 1 ? '' : 's'}.`,
+          `Raya: ${partsChanged} parte${partsChanged === 1 ? '' : 's'} modificada${partsChanged === 1 ? '' : 's'}.`,
         );
       }
       this.lastResult.set(null);
       await this.advanceOrClose();
     } catch (e) {
-      this.toast.error(`RAE: ${e}`);
+      this.toast.error(`Raya: ${e}`);
     } finally {
       this.applying.set(false);
     }
@@ -182,8 +182,8 @@ export class SplitChapterService {
     await this.advanceOrClose();
   }
 
-  /** Avanza al próximo capítulo de la cola sin aplicar RAE. */
-  async continueWithoutRae(): Promise<void> {
+  /** Avanza al próximo capítulo de la cola sin aplicar raya. */
+  async continueWithoutRaya(): Promise<void> {
     this.lastResult.set(null);
     await this.advanceOrClose();
   }

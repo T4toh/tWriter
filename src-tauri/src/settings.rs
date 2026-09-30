@@ -146,16 +146,19 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub grammar_auto_disabled: Option<bool>,
-    /// Si true, el auto-check del validador RAE queda apagado. Default false
-    /// (auto-check activo cuando idioma == 'es').
+    /// Si true, el auto-check del validador de raya queda apagado. Default false
+    /// (auto-check activo cuando idioma == 'es'). Hasta el 2026-09-30 la clave
+    /// era `raeAutoDisabled`: el alias la sigue leyendo, así la preferencia no
+    /// se pierde al actualizar, y al guardar se escribe con el nombre nuevo.
     #[serde(
         default,
-        rename = "raeAutoDisabled",
+        rename = "rayaAutoDisabled",
+        alias = "raeAutoDisabled",
         skip_serializing_if = "Option::is_none"
     )]
-    pub rae_auto_disabled: Option<bool>,
+    pub raya_auto_disabled: Option<bool>,
     /// Si true, el detector de repeticiones cercanas queda apagado.
-    /// Default false (marca mientras se escribe, como el validador RAE).
+    /// Default false (marca mientras se escribe, como el validador de raya).
     #[serde(
         default,
         rename = "repeticionesAutoDisabled",
@@ -401,6 +404,15 @@ mod tests {
         assert!(json.contains("\"fraseRepetida\":false"), "json: {}", json);
         let back: Settings = serde_json::from_str(&json).unwrap();
         assert_eq!(back.repeticiones_excepciones, s.repeticiones_excepciones);
+    }
+
+    #[test]
+    fn raya_auto_disabled_lee_la_clave_vieja() {
+        let viejo: Settings = serde_json::from_str(r#"{"raeAutoDisabled":true}"#).unwrap();
+        assert_eq!(viejo.raya_auto_disabled, Some(true));
+        let json = serde_json::to_string(&viejo).unwrap();
+        assert!(json.contains("\"rayaAutoDisabled\":true"), "json: {}", json);
+        assert!(!json.contains("raeAutoDisabled"), "json: {}", json);
     }
 
     #[test]

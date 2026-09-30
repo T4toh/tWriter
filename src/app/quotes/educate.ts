@@ -6,7 +6,7 @@
  *   '…'  → ‘…’   (U+2018 / U+2019)
  *   It's → It’s  (apóstrofe / posesivo → U+2019)
  *
- * Es la contraparte en inglés del conversor a rayas RAE (`../dialogos/converter`),
+ * Es la contraparte en inglés del conversor a rayas (`../dialogos/converter`),
  * que hace lo opuesto (normaliza curly→ASCII y produce rayas). Acá NO se tocan
  * las rayas ni el español: esto solo aplica cuando el capítulo es `idioma === 'en'`.
  *

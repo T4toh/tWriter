@@ -6,7 +6,7 @@
 }
 
 /* El id de la regla, visible para poder desactivarla o reportarla upstream.
-   Mismo tratamiento que `.rae-pop-rule`; sin extraer a `popover-shell` porque
+   Mismo tratamiento que `.raya-pop-rule`; sin extraer a `popover-shell` porque
    ahí vive solo la caja y esto es el segundo caso, no el tercero. */
 .grammar-pop-head {
   margin-bottom: 4px;

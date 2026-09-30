@@ -2,9 +2,9 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { Node as PmNode } from '@tiptap/pm/model';
-import { RaeCategory, RaeViolation } from '../core/types';
+import { RayaCategory, RayaViolation } from '../core/types';
 
-export interface RaeViolationPos extends RaeViolation {
+export interface RayaViolationPos extends RayaViolation {
   id: string;
   from: number;
   to: number;
@@ -18,10 +18,10 @@ export interface RaeViolationPos extends RaeViolation {
   paragraphTo?: number;
 }
 
-let _raeIdSeq = 0;
-function newRaeId(): string {
-  _raeIdSeq += 1;
-  return `r${Date.now().toString(36)}-${_raeIdSeq}`;
+let _rayaIdSeq = 0;
+function newRayaId(): string {
+  _rayaIdSeq += 1;
+  return `r${Date.now().toString(36)}-${_rayaIdSeq}`;
 }
 
 export interface TextRange {
@@ -30,27 +30,27 @@ export interface TextRange {
   pmPos: number;
 }
 
-const raeKey = new PluginKey<DecorationSet>('rae');
+const rayaKey = new PluginKey<DecorationSet>('raya');
 
-export const RaeExtension = Extension.create({
-  name: 'rae',
+export const RayaExtension = Extension.create({
+  name: 'raya',
   addProseMirrorPlugins() {
     return [
       new Plugin<DecorationSet>({
-        key: raeKey,
+        key: rayaKey,
         state: {
           init: () => DecorationSet.empty,
           apply(tr, oldSet) {
-            const meta = tr.getMeta(raeKey);
+            const meta = tr.getMeta(rayaKey);
             if (meta && meta.type === 'set') {
-              return buildDecorations(tr.doc, meta.violations as RaeViolationPos[]);
+              return buildDecorations(tr.doc, meta.violations as RayaViolationPos[]);
             }
             return oldSet.map(tr.mapping, tr.doc);
           },
         },
         props: {
           decorations(state) {
-            return raeKey.getState(state) ?? DecorationSet.empty;
+            return rayaKey.getState(state) ?? DecorationSet.empty;
           },
         },
       }),
@@ -58,18 +58,18 @@ export const RaeExtension = Extension.create({
   },
 });
 
-export function setRaeViolations(
+export function setRayaViolations(
   view: { dispatch: (tr: unknown) => void; state: { tr: unknown } },
-  violations: RaeViolationPos[],
+  violations: RayaViolationPos[],
 ): void {
   const tr = (view.state.tr as { setMeta: (k: unknown, v: unknown) => unknown }).setMeta(
-    raeKey,
+    rayaKey,
     { type: 'set', violations },
   );
   view.dispatch(tr);
 }
 
-function buildDecorations(doc: PmNode, violations: RaeViolationPos[]): DecorationSet {
+function buildDecorations(doc: PmNode, violations: RayaViolationPos[]): DecorationSet {
   const decos: Decoration[] = [];
   const docSize = doc.content.size;
   for (let i = 0; i < violations.length; i++) {
@@ -78,34 +78,34 @@ function buildDecorations(doc: PmNode, violations: RaeViolationPos[]): Decoratio
     decos.push(
       Decoration.inline(v.from, v.to, {
         class: cssClassFor(v.category),
-        'data-rae-idx': String(i),
+        'data-raya-idx': String(i),
       }),
     );
   }
   return DecorationSet.create(doc, decos);
 }
 
-function cssClassFor(category: RaeCategory): string {
+function cssClassFor(category: RayaCategory): string {
   switch (category) {
     case 'char':
-      return 'rae-violation rae-violation--char';
+      return 'raya-violation raya-violation--char';
     case 'pending-conversion':
-      return 'rae-violation rae-violation--pending';
+      return 'raya-violation raya-violation--pending';
     case 'structure':
-      return 'rae-violation rae-violation--structure';
+      return 'raya-violation raya-violation--structure';
     case 'typo':
-      return 'rae-violation rae-violation--typo';
+      return 'raya-violation raya-violation--typo';
     case 'mayusculas':
-      return 'rae-violation rae-violation--mayusculas';
+      return 'raya-violation raya-violation--mayusculas';
   }
 }
 
 export function mapViolationsToPm(
-  violations: RaeViolation[],
+  violations: RayaViolation[],
   ranges: TextRange[],
   doc: PmNode,
-): RaeViolationPos[] {
-  const out: RaeViolationPos[] = [];
+): RayaViolationPos[] {
+  const out: RayaViolationPos[] = [];
   for (const v of violations) {
     const from = offsetToPm(v.offset, ranges);
     const to = offsetToPm(v.offset + v.length, ranges);
@@ -140,7 +140,7 @@ export function mapViolationsToPm(
     }
     out.push({
       ...v,
-      id: newRaeId(),
+      id: newRayaId(),
       from,
       to,
       fixFrom,

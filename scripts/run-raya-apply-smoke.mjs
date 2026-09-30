@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Smoke runner de `convertFragmentHtml` (editor/rae-convert.ts). No es parte
+// Smoke runner de `convertFragmentHtml` (editor/raya-convert.ts). No es parte
 // del build de Angular. Compila los TS necesarios a un dir temporal y corre las
-// aserciones. Uso: node scripts/run-rae-apply-smoke.mjs
+// aserciones. Uso: node scripts/run-raya-apply-smoke.mjs
 //
-// Solo cubre la mitad SIN DOM. `serializeRange` (editor/rae-apply.ts) importa
+// Solo cubre la mitad SIN DOM. `serializeRange` (editor/raya-apply.ts) importa
 // @tiptap/core y no se puede cargar en node: se valida con `pnpm build` + el
 // checklist manual, igual que `highlightFirstMatch`.
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -14,7 +14,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..');
-const outDir = mkdtempSync(join(tmpdir(), 'rae-apply-smoke-'));
+const outDir = mkdtempSync(join(tmpdir(), 'raya-apply-smoke-'));
 
 const tsc = join(repo, 'node_modules', '.bin', 'tsc');
 const r = spawnSync(
@@ -28,7 +28,7 @@ const r = spawnSync(
     '--esModuleInterop',
     '--allowSyntheticDefaultImports',
     '--outDir', outDir,
-    'src/app/editor/rae-convert.ts',
+    'src/app/editor/raya-convert.ts',
     'src/app/dialogos/converter.ts',
     'src/app/dialogos/tags.ts',
   ],
@@ -40,7 +40,7 @@ if (r.status !== 0) {
   process.exit(r.status ?? 1);
 }
 
-const mod = await import(pathToFileURL(join(outDir, 'editor/rae-convert.js')).href);
+const mod = await import(pathToFileURL(join(outDir, 'editor/raya-convert.js')).href);
 const { convertFragmentHtml } = mod;
 
 let passed = 0;

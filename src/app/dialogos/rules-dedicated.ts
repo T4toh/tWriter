@@ -1,5 +1,5 @@
 /**
- * Reglas dedicadas del validador RAE — patrones para texto YA convertido pero
+ * Reglas dedicadas del validador de raya — patrones para texto YA convertido pero
  * mal parseado. El converter por sí solo no detecta estos casos porque "ya hay
  * raya" y considera el párrafo hecho.
  *
@@ -8,7 +8,7 @@
  * del párrafo. El validator orchestrator suma el offset del párrafo dentro
  * del documento.
  */
-import type { RaeHelp } from '../core/types';
+import type { RayaHelp } from '../core/types';
 import {
   ACTION_VERBS,
   AMBIGUOUS_TAGS,
@@ -23,7 +23,7 @@ const EM_DASH = '—';
 
 /** Ayuda de cada regla: sección del DPD y un par ✗/✓, casi siempre con los
  *  ejemplos del propio DPD. Ver `docs/raya.md`, la chuleta completa. */
-const raya = (section: string, wrong?: string, right?: string): RaeHelp => ({
+const raya = (section: string, wrong?: string, right?: string): RayaHelp => ({
   entry: 'raya',
   section,
   wrong,
@@ -55,7 +55,7 @@ const HELP = {
     wrong: '—Ya voy.. —dijo Ana.',
     right: '—Ya voy… —dijo Ana.',
   },
-} satisfies Record<string, RaeHelp>;
+} satisfies Record<string, RayaHelp>;
 
 export interface DedicatedViolation {
   offset: number;
@@ -65,7 +65,7 @@ export interface DedicatedViolation {
   message: string;
   shortMessage: string;
   autoFix?: { offset: number; length: number; replacement: string; manual?: boolean };
-  help?: RaeHelp;
+  help?: RayaHelp;
 }
 
 type Rule = (paragraph: string) => DedicatedViolation[];
@@ -187,7 +187,7 @@ const ruleDashQuoteMix: Rule = (p) => {
       severity: 'error',
       message:
         'Párrafo mezcla raya (—) y comilla doble ("). Indica conversión incompleta — ' +
-        'corregí manualmente o aplicá las reglas RAE al párrafo.',
+        'corregí manualmente o aplicá las reglas de raya al párrafo.',
       shortMessage: 'Mezcla raya/comilla',
     },
   ];
@@ -419,7 +419,7 @@ const ruleClosingDash: Rule = (p) => {
     length: number,
     message: string,
     replacement: string,
-    help: RaeHelp,
+    help: RayaHelp,
     manual = false,
   ): void => {
     out.push({
@@ -546,7 +546,7 @@ const ruleIncisoCase: Rule = (p) => {
       length: number,
       replacement: string,
       message: string,
-      help: RaeHelp,
+      help: RayaHelp,
     ): void => {
       out.push({
         offset,

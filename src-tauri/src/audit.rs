@@ -1,5 +1,5 @@
 //! Comando para recolectar los capítulos `.html` de una saga / libro / sección
-//! en una sola invoke, junto a su metadata `idioma`. El validador RAE corre en
+//! en una sola invoke, junto a su metadata `idioma`. El validador de raya corre en
 //! el frontend (TS) sobre el payload que devolvemos acá.
 //!
 //! Filtra carpetas que no aportan capítulos: `extras/`, `notas/`, `fonts/`,
@@ -81,7 +81,7 @@ fn walk_paths(path: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
     // podía omitir capítulos y reportar como completo un scope que no lo era.
     // Propagar el error es peor UX puntual pero mejor que mentir sobre el
     // scope. CAMBIA COMPORTAMIENTO para los dos consumidores existentes de
-    // `chapter_paths`: `list_chapters_for_audit` (auditoría RAE) y el
+    // `chapter_paths`: `list_chapters_for_audit` (auditoría de raya) y el
     // educador de comillas (`quotes-fix-service.ts`), que antes seguían de
     // largo ante una entrada ilegible y ahora fallan con error.
     let mut sorted: Vec<PathBuf> = entries

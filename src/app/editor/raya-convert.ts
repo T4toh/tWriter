@@ -1,19 +1,19 @@
 /**
- * Mitad SIN DOM del apply de RAE: HTML de entrada → HTML convertido.
+ * Mitad SIN DOM del apply de raya: HTML de entrada → HTML convertido.
  *
- * Vive separado de `rae-apply.ts` a propósito. Ese importa `@tiptap/core`, que
- * no carga en node, y el smoke runner (`scripts/run-rae-apply-smoke.mjs`)
+ * Vive separado de `raya-apply.ts` a propósito. Ese importa `@tiptap/core`, que
+ * no carga en node, y el smoke runner (`scripts/run-raya-apply-smoke.mjs`)
  * necesita poder importar esto sin arrastrarlo.
  */
 import { convert } from '../dialogos/converter';
 import { normalizeQuotesForCompare } from '../dialogos/validator';
 
 /**
- * Aplica las reglas RAE sobre un fragmento HTML. Devuelve `null` cuando no hay
+ * Aplica las reglas de raya sobre un fragmento HTML. Devuelve `null` cuando no hay
  * nada que cambiar — el caller no dispara transacción.
  *
  * El converter ya acepta HTML con markup inline: es exactamente lo que recibe
- * del botón "RAE" del toolbar, que convierte el capítulo entero. Acá se le da
+ * del botón "Raya" del toolbar, que convierte el capítulo entero. Acá se le da
  * la misma clase de input sobre un rango más chico.
  *
  * El segundo guard es el mismo que usa `pushPendingConversion` en el validador:
