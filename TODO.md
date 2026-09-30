@@ -672,24 +672,18 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
      hoy sale `—gritó—, es`), y `&nbsp;` o markup inline pegados a la
      comilla (ver 4). Los ambiguos acción/habla van a `AMBIGUOUS_TAGS`
      (sin autoFix en mayúscula) a medida que aparezcan.
-  3. **Reglas que faltan o contradicen al DPD**:
-     - Caja del inciso: 2.3c (`—¿Venís? —Preguntó` no se marca:
-       `verb-capitalized` saltea justo cuando hay `?!` antes), 2.3d (punto +
-       no-dicendi en minúscula: el caso del autor
-       `--Hola, Roberto. --sus manos temblaban por el miedo.` →
-       `—Hola, Roberto. —Sus manos…`; y sin punto + mayúscula:
-       `—Hola —Sus manos` → `—Hola. —Sus`), 2.3e (a mitad de enunciado,
-       minúscula siempre). Dicendi → sacar el punto; no-dicendi → mayúscula.
-       Un solo fix por caso, lo decide el DPD.
-     - Raya de cierre: puntuación antes en vez de después (`;—` `,—` `.—`
-       `:—`, 2.3c/f); `—.` sobrante a fin de párrafo (2.3a); falta `—.` si
-       el personaje sigue (2.3b); espacios (`Juan —.`, `— .`, `Ana—vamos`,
-       `sé— dijo`, doble espacio).
-     - `dash-orphan`: FP con imperativos (`Pregunta a tu madre.`), FN con
-       `—Hola dijo Juan.`. `dash-quote-mix`: FP con comillas internas
-       legítimas (`—Leí "Rayuela" anoche.`, §4).
-     - 2.1: inciso narrativo sin raya de cierre
-       (`Esperaba a Emilio —un gran amigo. Lamentablemente…`) no se detecta.
+  3. **Lo que #162 dejó afuera de las reglas**: la caja del inciso (2.3c/d/e),
+     la raya de cierre, la raya de inciso, el espacio doble, el inciso
+     narrativo sin cerrar (2.1) y el falso positivo de `dash-quote-mix` ya
+     andan (verificado por el autor el 2026-09-30). Queda:
+     - `inciso-case` solo actúa con palabras de `NON_VERB_STARTS` o
+       `ACTION_VERBS`: con un verbo que no está en ninguna lista no marca.
+       Sumar verbos a medida que aparezcan (o resolverlo con el etiquetador
+       de LT, ver «Aportes a la corrección del español»).
+     - 2.3b sin raya de cierre (`—Lo principal… —añadió Pilar. Afortunada…`)
+       se escribe igual que un 2.3a con narración que sigue: no se marca.
+     - `dash-orphan`: FP con imperativos (`—No sé. Pregunta a tu madre.`) y
+       FN con `—Hola dijo Juan.`.
   4. **Editor, entidades, idioma**:
      - Fix con posiciones viejas (`editor.ts:2196`, sospecha fuerte): el
        remap con assoc +1 estira el span si se tipea adentro; click en el
