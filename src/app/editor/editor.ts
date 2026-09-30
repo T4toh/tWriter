@@ -46,6 +46,7 @@ import {
   findAllMatchesInPlain,
 } from '../core/search-highlight';
 import { convertFragmentHtml } from './rae-convert';
+import { withFreshHistory } from './fresh-history';
 import { parseFragmentHtml, serializeRange } from './rae-apply';
 import {
   EDITOR_FONT_LABEL,
@@ -525,6 +526,9 @@ export class Editor implements AfterViewInit, OnDestroy {
         // pisa el archivo aunque el usuario no haya editado nada. Suprimir
         // el emit pasando `false`.
         this.tiptap.setEditable(editable, false);
+        // Sin esto, Ctrl+Z deshace el cambio de capítulo y el autosave guarda
+        // el anterior encima de este (ver fresh-history.ts).
+        this.tiptap.view.updateState(withFreshHistory(this.tiptap.state));
       }
       // Adoptar el HTML canónico que TipTap mantiene en memoria como
       // baseline del pane. El archivo en disco puede tener formato
