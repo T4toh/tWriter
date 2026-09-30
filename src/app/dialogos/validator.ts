@@ -85,8 +85,8 @@ function pushPendingConversion(
     severity: 'warning',
     ruleId: 'pending-conversion',
     message:
-      'Diálogo con comillas detectado. Aplicá las reglas RAE para convertir ' +
-      'a raya (—).',
+      'Diálogo con comillas o guiones en vez de raya. Aplicá las reglas RAE ' +
+      'para convertirlo a raya (—).',
     shortMessage: 'Conversión pendiente',
     autoFix: { offset, length: para.length, replacement: converted },
     paragraphRange: { offset, length: para.length },

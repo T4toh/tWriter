@@ -8,7 +8,7 @@
  * del párrafo. El validator orchestrator suma el offset del párrafo dentro
  * del documento.
  */
-import { AMBIGUOUS_TAGS, DIALOG_TAGS, TAGS_ALT } from './tags';
+import { AMBIGUOUS_TAGS, DIALOG_TAGS, TAG_PHRASE, TAGS_ALT } from './tags';
 
 const EM_DASH = '—';
 
@@ -191,7 +191,7 @@ const ruleSpaceAfterOpen: Rule = (p) => {
   ];
 };
 
-const SPACE_BEFORE_VERB_RE = new RegExp(`(\\S)—(${TAGS_ALT})(?!\\p{L})`, 'giu');
+const SPACE_BEFORE_VERB_RE = new RegExp(`(\\S)—(${TAG_PHRASE})(?!\\p{L})`, 'giu');
 
 const ruleSpaceBeforeVerb: Rule = (p) => {
   const out: DedicatedViolation[] = [];
@@ -258,7 +258,7 @@ const ruleVerbCapitalized: Rule = (p) => {
 // Solo el punto simple: los suspensivos (`—Bueno... —dijo`) se quedan antes
 // del inciso, y un punto doble (`—Ya voy.. —dijo`) lo marca double-period.
 const PERIOD_BEFORE_VERB_RE = new RegExp(
-  `(?<!\\.)(\\.)(\\s+)—(${TAGS_ALT})(?!\\p{L})`,
+  `(?<!\\.)(\\.)(\\s+)—(${TAG_PHRASE})(?!\\p{L})`,
   'giu',
 );
 
@@ -267,8 +267,9 @@ const rulePeriodBeforeVerb: Rule = (p) => {
   for (const m of p.matchAll(PERIOD_BEFORE_VERB_RE)) {
     // `—No se moleste. —Negó con la cabeza.`: tras punto y en mayúscula, un
     // verbo que también es de acción es la acción del DPD 2.3d y está bien.
-    const verb = m[3];
-    if (verb[0] !== verb[0].toLowerCase() && AMBIGUOUS_TAGS.has(verb.toLowerCase())) continue;
+    const phrase = m[3];
+    const verb = phrase.split(/\s+/).pop() ?? phrase;
+    if (phrase[0] !== phrase[0].toLowerCase() && AMBIGUOUS_TAGS.has(verb.toLowerCase())) continue;
     const i = m.index ?? 0;
     out.push({
       offset: i,
