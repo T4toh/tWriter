@@ -8,6 +8,7 @@
  * del párrafo. El validator orchestrator suma el offset del párrafo dentro
  * del documento.
  */
+import type { RaeHelp } from '../core/types';
 import {
   ACTION_VERBS,
   AMBIGUOUS_TAGS,
@@ -20,6 +21,42 @@ import {
 
 const EM_DASH = '—';
 
+/** Ayuda de cada regla: sección del DPD y un par ✗/✓, casi siempre con los
+ *  ejemplos del propio DPD. Ver `docs/raya.md`, la chuleta completa. */
+const raya = (section: string, wrong?: string, right?: string): RaeHelp => ({
+  entry: 'raya',
+  section,
+  wrong,
+  right,
+});
+const HELP = {
+  open: raya('3.1', '-Hola -dijo Juan.', '—Hola —dijo Juan.'),
+  spaceOpen: raya('3.1', '— ¿Cuándo volverás?', '—¿Cuándo volverás?'),
+  spaces: raya('§2', '—No sé— dijo Pedro.', '—No sé —dijo Pedro.'),
+  lengua: raya('2.3c', '—¡Qué le vamos a hacer! —Exclamó doña Patro.', '—¡Qué le vamos a hacer! —exclamó doña Patro.'),
+  periodLengua: raya('2.3c', '—Tranquilo, che. —advirtió el comisario.', '—Tranquilo, che —advirtió el comisario.'),
+  narration: raya('2.3d', '—No se moleste. —cerró la puerta.', '—No se moleste. —Cerró la puerta.'),
+  narrationPeriod: raya('2.3d', '—Hola, Roberto —sus manos temblaban.', '—Hola, Roberto. —Sus manos temblaban.'),
+  resume: raya('2.3d', '—Me voy ya. —Se puso en pie. —No hace falta.', '—Me voy ya. —Se puso en pie—. No hace falta.'),
+  mid: raya('2.3e', '—Solo nos queda esto —Le enseñó unos billetes— para el viaje.', '—Solo nos queda esto —le enseñó unos billetes— para el viaje.'),
+  noClose: raya('2.3a', '—Espero que todo salga bien —dijo Azucena—.', '—Espero que todo salga bien —dijo Azucena.'),
+  punctAfter: raya('2.3c', '—Está bien —dijo Carlos;— lo haré.', '—Está bien —dijo Carlos—; lo haré.'),
+  colonAfter: raya('2.3f', '—me confesó, y añadió: —Conocí gente.', '—me confesó, y añadió—: Conocí gente.'),
+  aside: raya('2.1', 'Esperaba a Emilio —un gran amigo. No vino.', 'Esperaba a Emilio —un gran amigo—. No vino.'),
+  quoteMix: raya('2.3e', '—Esto que has hecho —gritó "es una locura."', '—Esto que has hecho —gritó— es una locura.'),
+  collapsed: raya('3.1'),
+  orphan: raya('2.3c', '—Hola. dijo Juan.', '—Hola —dijo Juan.'),
+  glued: raya('§2', '—Hola—dijo Juan.', '—Hola —dijo Juan.'),
+  spacesClose: raya('§2', '—Hola —dijo Juan —. ¿Venís?', '—Hola —dijo Juan—. ¿Venís?'),
+  midPeriod: raya('2.3e', '—Solo nos queda esto. —le enseñó unos billetes— para el viaje.', '—Solo nos queda esto —le enseñó unos billetes— para el viaje.'),
+  ellipsis: {
+    entry: 'puntos suspensivos',
+    section: '§1',
+    wrong: '—Ya voy.. —dijo Ana.',
+    right: '—Ya voy… —dijo Ana.',
+  },
+} satisfies Record<string, RaeHelp>;
+
 export interface DedicatedViolation {
   offset: number;
   length: number;
@@ -28,6 +65,7 @@ export interface DedicatedViolation {
   message: string;
   shortMessage: string;
   autoFix?: { offset: number; length: number; replacement: string; manual?: boolean };
+  help?: RaeHelp;
 }
 
 type Rule = (paragraph: string) => DedicatedViolation[];
@@ -47,6 +85,7 @@ const ruleDashShort: Rule = (p) => {
       offset: indentLen,
       length: dashLen + spaceLen,
       ruleId: 'dash-short',
+      help: HELP.open,
       severity: 'error',
       message: `Usá raya em (${EM_DASH}, U+2014) para abrir diálogo, no guion ni en-dash.`,
       shortMessage: 'Guion incorrecto',
@@ -113,6 +152,7 @@ const ruleDashOrphan: Rule = (p) => {
       offset: i,
       length: m[0].length,
       ruleId: 'dash-orphan',
+      help: HELP.orphan,
       severity: 'warning',
       message:
         `Verbo dicendi «${m[0]}» sin raya de cierre del diálogo previa. ` +
@@ -143,6 +183,7 @@ const ruleDashQuoteMix: Rule = (p) => {
       offset: quoteMatch.index,
       length: 1,
       ruleId: 'dash-quote-mix',
+      help: HELP.quoteMix,
       severity: 'error',
       message:
         'Párrafo mezcla raya (—) y comilla doble ("). Indica conversión incompleta — ' +
@@ -173,6 +214,7 @@ const ruleParagraphCollapsed: Rule = (p) => {
       offset: 0,
       length: p.length,
       ruleId: 'paragraph-collapsed',
+      help: HELP.collapsed,
       severity: 'error',
       message:
         `Párrafo con ${verbCount} verbos dicendi y ${transitions + 1} segmentos ` +
@@ -200,6 +242,7 @@ const ruleSpaceAfterOpen: Rule = (p) => {
       offset: spaceOffset,
       length: spaceLen,
       ruleId: 'space-after-open',
+      help: HELP.spaceOpen,
       severity: 'warning',
       message:
         'Sobra espacio entre la raya de apertura y el texto. La RAE pide raya ' +
@@ -220,6 +263,7 @@ const ruleSpaceBeforeVerb: Rule = (p) => {
       offset: i + 1,
       length: 1,
       ruleId: 'space-before-verb',
+      help: HELP.glued,
       severity: 'warning',
       message: 'Falta espacio antes de la raya del verbo dicendi.',
       shortMessage: 'Espacio faltante',
@@ -266,10 +310,11 @@ const ruleVerbCapitalized: Rule = (p) => {
       offset: wordOffset,
       length: 1,
       ruleId: 'verb-capitalized',
+      help: HELP.lengua,
       severity: 'warning',
       message:
         `«${word}» va en minúscula: el comentario del narrador que introduce un ` +
-        'verbo de habla arranca en minúscula, aunque antes haya ? o ! (DPD raya 2.3c).',
+        'verbo de habla arranca en minúscula, aunque antes haya ? o !.',
       shortMessage: 'Verbo capitalizado',
       autoFix: {
         offset: wordOffset,
@@ -312,10 +357,11 @@ const rulePeriodBeforeVerb: Rule = (p) => {
       offset: i,
       length: 1,
       ruleId: 'period-before-verb',
+      help: HELP.periodLengua,
       severity: 'warning',
       message:
         `${signo} antes de la raya del verbo de habla. Antes de un inciso con ` +
-        'verbo de lengua no va punto ni coma (DPD raya 2.3c).',
+        'verbo de lengua no va punto ni coma.',
       shortMessage: `${signo} sobrante`,
       autoFix: { offset: i, length: 1, replacement: '' },
     });
@@ -339,10 +385,11 @@ const ruleDoublePeriod: Rule = (p) =>
       offset: m.index ?? 0,
       length: m[0].length,
       ruleId: 'double-period',
+      help: HELP.ellipsis,
       severity: 'warning',
       message:
         `${m[0].length} puntos seguidos. Los suspensivos son tres y solo tres, ` +
-        'sin punto después (DPD); si no, va uno, o ninguno antes de un verbo de habla.',
+        'sin punto después; si no, va uno, o ninguno antes de un verbo de habla.',
       shortMessage: 'Puntos de más',
     }));
 
@@ -372,12 +419,14 @@ const ruleClosingDash: Rule = (p) => {
     length: number,
     message: string,
     replacement: string,
+    help: RaeHelp,
     manual = false,
   ): void => {
     out.push({
       offset,
       length,
       ruleId: 'closing-dash',
+      help,
       severity: 'warning',
       message,
       shortMessage: 'Raya de cierre',
@@ -389,14 +438,14 @@ const ruleClosingDash: Rule = (p) => {
     const before = p[at - 1] ?? '';
     const after = p[at + 1] ?? '';
     if (after === '.' && p.slice(at + 2).trim() === '') {
-      push(at, 1, 'Si el personaje no sigue hablando, el inciso no lleva raya de cierre (DPD raya 2.3a).', '');
+      push(at, 1, 'Si el personaje no sigue hablando, el inciso no lleva raya de cierre.', '', HELP.noClose);
     } else if (before === ' ' && PUNCT_AROUND_CLOSE.test(p[at - 2] ?? '') && /\S/.test(after)) {
       // `—dijo Pedro, —capaz` / `—añadió: —Conocí`: la puntuación quedó antes
       // y la raya pegada a lo que sigue.
       const signo = p[at - 2];
       const msg =
         `El «${signo}» va después de la raya de cierre: ` +
-        `«—${signo}» (DPD raya 2.3c${signo === ':' ? ', 2.3f' : ''}).`;
+        `«—${signo}».`;
       // Tras un punto puede ser también otro hablante pegado en el mismo
       // párrafo, y ahí el arreglo es otro: se ofrece de a uno, nunca en
       // bloque (decisión del autor, 2026-09-30).
@@ -407,21 +456,23 @@ const ruleClosingDash: Rule = (p) => {
           ? `${msg} Si el que habla es otro personaje, va en párrafo aparte.`
           : msg,
         `${EM_DASH}${signo} `,
+        signo === '.' ? HELP.resume : signo === ':' ? HELP.colonAfter : HELP.punctAfter,
         signo === '.',
       );
     } else if (PUNCT_AROUND_CLOSE.test(before) && !(before === '.' && p[at - 2] === '.')) {
       push(
         at - 1,
         2,
-        `El «${before}» va después de la raya de cierre: «—${before}» (DPD raya 2.3c).`,
+        `El «${before}» va después de la raya de cierre: «—${before}».`,
         `${EM_DASH}${before}`,
+        HELP.punctAfter,
       );
     } else if (before === ' ' && (PUNCT_AROUND_CLOSE.test(after) || after === ' ')) {
-      push(at - 1, 1, 'La raya de cierre va pegada a la última palabra del inciso (DPD raya §2).', '');
+      push(at - 1, 1, 'La raya de cierre va pegada a la última palabra del inciso.', '', HELP.spacesClose);
     } else if (after === ' ' && PUNCT_AROUND_CLOSE.test(p[at + 2] ?? '')) {
-      push(at + 1, 1, 'Entre la raya de cierre y la puntuación no va espacio (DPD raya §2).', '');
+      push(at + 1, 1, 'Entre la raya de cierre y la puntuación no va espacio.', '', HELP.spacesClose);
     } else if (/\p{Ll}/u.test(after)) {
-      push(at + 1, 0, 'Después de la raya de cierre va un espacio antes de seguir (DPD raya §2).', ' ');
+      push(at + 1, 0, 'Después de la raya de cierre va un espacio antes de seguir.', ' ', HELP.spacesClose);
     }
   }
   return out;
@@ -441,10 +492,11 @@ const ruleOpeningDash: Rule = (p) => {
       offset: glued ? at : at + 1,
       length: glued ? 1 + spaces : spaces,
       ruleId: 'opening-dash',
+      help: HELP.spaces,
       severity: 'warning',
       message:
         'La raya que abre el comentario del narrador va separada de lo anterior ' +
-        'y pegada a lo que sigue: «hola —dijo» (DPD raya §2).',
+        'y pegada a lo que sigue: «hola —dijo».',
       shortMessage: 'Raya de inciso',
       autoFix: glued
         ? { offset: at, length: 1 + spaces, replacement: ` ${EM_DASH}` }
@@ -489,11 +541,18 @@ const ruleIncisoCase: Rule = (p) => {
     let j = at - 1;
     while (j >= 0 && /\s/.test(p[j])) j--;
     const prev = p[j] ?? '';
-    const push = (offset: number, length: number, replacement: string, message: string): void => {
+    const push = (
+      offset: number,
+      length: number,
+      replacement: string,
+      message: string,
+      help: RaeHelp,
+    ): void => {
       out.push({
         offset,
         length,
         ruleId: 'inciso-case',
+        help,
         severity: 'warning',
         message,
         shortMessage: 'Caja del inciso',
@@ -502,23 +561,23 @@ const ruleIncisoCase: Rule = (p) => {
     };
     if (mid) {
       if (prev === '.' && p[j - 1] !== '.') {
-        push(j, 1, '', 'El comentario queda a mitad del enunciado: sobra el punto (DPD raya 2.3e).');
+        push(j, 1, '', 'El comentario queda a mitad del enunciado: sobra el punto.', HELP.midPeriod);
       } else if (first !== first.toLowerCase()) {
         push(at + 1, 1, first.toLowerCase(),
-          'A mitad del enunciado el comentario del narrador va en minúscula (DPD raya 2.3e).');
+          'A mitad del enunciado el comentario del narrador va en minúscula.', HELP.mid);
       }
     } else if (/[.?!…]/.test(prev)) {
       if (first === first.toLowerCase()) {
         push(at + 1, 1, first.toUpperCase(),
           'Tras un enunciado completo, el comentario del narrador que no introduce ' +
-          'palabras va en mayúscula (DPD raya 2.3d).');
+          'palabras va en mayúscula.', HELP.narration);
       }
     } else {
       // `—Hola —sus manos…`: falta cerrar el parlamento con punto.
       const from = prev === ',' ? j : j + 1;
       push(from, at + 2 - from, `. ${EM_DASH}${first.toUpperCase()}`,
         'Cuando el narrador no introduce las palabras, el parlamento cierra con punto ' +
-        'y el comentario arranca en mayúscula (DPD raya 2.3d).');
+        'y el comentario arranca en mayúscula.', HELP.narrationPeriod);
     }
   });
   return out;
@@ -550,10 +609,11 @@ const ruleUnclosedAside: Rule = (p) => {
       offset: last.index ?? 0,
       length: 1,
       ruleId: 'unclosed-aside',
+      help: HELP.aside,
       severity: 'warning',
       message:
         'Inciso entre rayas sin raya de cierre. Va aunque detrás siga un punto: ' +
-        '«Esperaba a Emilio —un gran amigo—. No vino.» (DPD raya 2.1).',
+        '«Esperaba a Emilio —un gran amigo—. No vino.».',
       shortMessage: 'Inciso sin cerrar',
     },
   ];

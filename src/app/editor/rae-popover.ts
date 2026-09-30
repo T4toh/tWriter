@@ -11,7 +11,8 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { RaeViolation } from '../core/types';
+import { RaeHelp, RaeViolation } from '../core/types';
+import { RayaChuletaService } from '../core/raya-chuleta-service';
 import { AnchorBox, Placement, placePopover } from './popover-position';
 
 @Component({
@@ -38,6 +39,23 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
           <span class="rae-pop-rule">{{ v.ruleId }}</span>
         </div>
         <div class="rae-pop-msg">{{ v.message }}</div>
+        @if (v.help; as h) {
+          @if (h.wrong && h.right) {
+            <div class="rae-pop-ej">
+              <span class="rae-pop-ej-no" aria-label="Mal">✗</span>
+              <span>{{ h.wrong }}</span>
+              <span class="rae-pop-ej-si" aria-label="Bien">✓</span>
+              <span>{{ h.right }}</span>
+            </div>
+          }
+          <div class="rae-pop-fuente">
+            <a [href]="dpdUrl(h)" target="_blank" rel="noopener">DPD {{ h.entry }} {{ h.section }}</a>
+            ·
+            <button type="button" class="rae-pop-link" (click)="chuleta.show(); dismiss.emit()">
+              Ver todas las reglas
+            </button>
+          </div>
+        }
         <footer class="rae-pop-footer">
           @if (canAutoFix()) {
             <button type="button" class="rae-pop-apply" (click)="apply.emit()">
@@ -73,6 +91,11 @@ export class RaePopover {
   apply = output<void>();
   applyParagraph = output<void>();
   dismiss = output<void>();
+  protected readonly chuleta = inject(RayaChuletaService);
+
+  protected dpdUrl(h: RaeHelp): string {
+    return `https://www.rae.es/dpd/${encodeURIComponent(h.entry)}`;
+  }
 
   canAutoFix = computed(() => {
     const v = this.violation();

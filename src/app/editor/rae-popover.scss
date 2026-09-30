@@ -51,6 +51,53 @@
   margin-bottom: 6px;
 }
 
+/* El par ✗/✓ en una grilla de dos columnas: el signo y el ejemplo. Los
+   ejemplos van en la fuente del cuerpo, que es como se van a leer en el libro. */
+.rae-pop-ej {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 6px;
+  margin-bottom: 6px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.rae-pop-ej-no {
+  color: var(--err);
+  font-weight: 700;
+}
+
+.rae-pop-ej-si {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+.rae-pop-fuente {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-bottom: 4px;
+
+  a {
+    color: var(--fg-muted);
+  }
+}
+
+.rae-pop-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--fg-muted);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.rae-pop-link:hover,
+.rae-pop-fuente a:hover {
+  color: var(--fg);
+}
+
 .rae-pop-footer {
   display: flex;
   gap: 6px;

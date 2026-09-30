@@ -603,6 +603,10 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
     a la guía. El detalle de implementación por feature (lo que hoy es la
     sección Features) va a la referencia, y CLAUDE.md sigue siendo lo que lee
     el agente, no el usuario.
+  - **Primera página ya escrita**: `docs/raya.md`, la chuleta de diálogos con
+    raya (2026-09-30). La app la muestra desde el mismo archivo (modal de la
+    auditoría RAE y del popover), así que moverla a la wiki no puede copiarla:
+    tiene que seguir siendo una sola fuente.
 
 ## Archivos
 
@@ -701,21 +705,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   Base de regresión: `scripts/run-raya-corpus-smoke.mjs`, con la lista de
   `PENDIENTES`; cada arreglo saca sus casos de ahí. ReDoS, `lastIndex`,
   astrales e idempotencia salieron limpios.
-- **Enseñar la regla, no solo marcarla** (pedido del autor el 2026-09-29: «la
-  idea es ayudar a escribir bien esto; comparado con el inglés es confuso y
-  difícil de recordar»). Hoy los mensajes dicen qué está mal sin decir por
-  qué ni cómo queda. El DPD 2.3 entero son dos preguntas sobre el inciso: ¿es
-  verbo de lengua? (sí → minúscula y sin punto antes; no → punto y
-  mayúscula) y ¿el personaje sigue hablando? (sí → raya de cierre con la
-  puntuación después: `—.` `—,` `—;` `—:`; no → sin raya de cierre); más la
-  excepción de 2.3e (a mitad de enunciado, minúscula siempre). El inglés solo
-  tiene la primera; la segunda es la que no se retiene.
-  1. Cada regla gana `ejemplo` (par ✗/✓) y `seccion` (link al DPD) y el
-     popover los muestra. Sin UI nueva.
-  2. Chuleta con esas dos preguntas, abrible desde el panel y el popover
-     («ver todas las reglas»), para consultar escribiendo, no solo al errar.
-  Fuente: el DPD manda (ver memoria del autor); la OLE 2010 solo para casos
-  que el DPD no cubre.
 - **El ancla de D1 no tolera markup inline de apertura** (limitación del
   converter, no del popover): la regla D1 ancla el diálogo con `^(\s*)"`, o sea
   que la comilla de apertura tiene que ser el primer carácter no-espacio del
