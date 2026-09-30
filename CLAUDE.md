@@ -102,6 +102,7 @@ node scripts/run-fecha-corta-smoke.mjs            # formato de la fecha corta de
 node scripts/run-estados-smoke.mjs                # ciclo de la novela + "necesita revisar" derivado
 node scripts/run-zoom-smoke.mjs                   # encaje, zoom alrededor de un punto y clamp del pan del visor
 node scripts/run-mayusculas-smoke.mjs             # mayúsculas rancias (LLOra, ME) en el panel de auditoría RAE
+node scripts/run-undo-capitulo-smoke.mjs          # Ctrl+Z no cruza de un capítulo al otro (ProseMirror puro)
 node scripts/run-raya-corpus-smoke.mjs            # corpus de diálogos contra el DPD (con lista de pendientes)
 ```
 
@@ -113,8 +114,10 @@ Primera build de Rust tarda ~5 min. Después es incremental.
 `describe`/`it`/`expect` a mano y nadie los ejecuta. Lo que sí corre son los
 smoke runners de `scripts/`, que compilan los TS necesarios con `tsc` a un
 tmpdir e importan el JS resultante — y por eso solo sirven para **funciones
-puras**: nada que toque el DOM, `@tiptap/core` o el schema de ProseMirror se
-puede cargar desde node.
+puras**: nada que toque el DOM o `@tiptap/core` se puede cargar desde node.
+ProseMirror a secas sí (`@tiptap/pm/model`, `/state`, `/history`, con un schema
+armado a mano): `run-undo-capitulo-smoke.mjs` compila a `node_modules/.cache`
+en vez de `/tmp` para que esos imports resuelvan.
 
 Al sumar código nuevo al frontend, partirlo en una mitad pura (con su smoke
 runner nuevo, patrón de `scripts/run-rae-smoke.mjs`) y una mitad con DOM que se
