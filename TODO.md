@@ -660,48 +660,26 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
 - **Revisión a fondo del módulo de diálogos contra el DPD** (pedido del autor
   el 2026-09-29). Fuente única: DPD «raya» 2.ª ed.; la lectura del autor no
   manda (lo dijo él). Dos pasadas ese día: corpus de 155 borradores mal
-  escritos (43 OK) y revisión de código (24 hallazgos). Lo que rompía texto
-  correcto y perdía puntuación lo resolvió #159 (verificado por el autor el
-  2026-09-30); queda, por prioridad:
-  1. **Falso positivo por contexto de bloque**: el validador corre sobre texto
-     plano y no sabe qué es un `<blockquote>` (verso) ni un `<h1>`: marca
-     `pending-conversion` en `"Canción de cuna"` dentro de un verso y en un
-     título `«Uno»`. En bloque ya no se convierten (el converter saltea el
-     `<blockquote>`), pero «Aplicar RAE al párrafo» sobre el verso todavía
-     lo convierte.
-  2. **Lo que #160 dejó afuera de la conversión**: la coma fuera de la
-     comilla, pronombres, perífrasis, más verbos y los sustitutos de raya en
-     cualquier posición ya andan (verificado por el autor el 2026-09-30).
-     Queda: `"Esto que hiciste", gritó, "es una locura".` (2.3e, ambiguo:
-     hoy sale `—gritó—, es`), y `&nbsp;` o markup inline pegados a la
-     comilla (ver 4). Los ambiguos acción/habla van a `AMBIGUOUS_TAGS`
-     (sin autoFix en mayúscula) a medida que aparezcan.
-  3. **Lo que #162 dejó afuera de las reglas**: la caja del inciso (2.3c/d/e),
-     la raya de cierre, la raya de inciso, el espacio doble, el inciso
-     narrativo sin cerrar (2.1) y el falso positivo de `dash-quote-mix` ya
-     andan (verificado por el autor el 2026-09-30). Queda:
-     - `inciso-case` solo actúa con palabras de `NON_VERB_STARTS` o
-       `ACTION_VERBS`: con un verbo que no está en ninguna lista no marca.
-       Sumar verbos a medida que aparezcan (o resolverlo con el etiquetador
-       de LT, ver «Aportes a la corrección del español»).
-     - 2.3b sin raya de cierre (`—Lo principal… —añadió Pilar. Afortunada…`)
-       se escribe igual que un 2.3a con narración que sigue: no se marca.
-     - `dash-orphan`: FP con imperativos (`—No sé. Pregunta a tu madre.`) y
-       FN con `—Hola dijo Juan.`.
-  4. **Editor, entidades, idioma**:
-     - Fix con posiciones viejas (`editor.ts:2196`, sospecha fuerte): el
-       remap con assoc +1 estira el span si se tipea adentro; click en el
-       fix reemplaza lo tipeado. Descartar violaciones cuyo span cambió de
-       largo.
-     - `&nbsp;`: por HTML queda `—Hola&nbsp;dijo`, por plano sí convierte:
-       el preview no es lo que se aplica.
-     - NFD: acentos descompuestos no matchean verbos (sintético, sin saber
-       si aparece en el corpus real).
-     - `detectLang` da `es` en empate y con diálogo corto en inglés, y
-       `chapter-service.ts:160` lo persiste en `meta.json` sin mirar
-       `book.json`; `rae-audit-service.ts:87` tampoco usa el idioma del libro.
-       Usar `resolverIdiomaEfectivo`.
-     - `validator.spec.ts` (dormido): 3 casos fallan contra el código de hoy.
+  escritos (43 OK) y revisión de código (24 hallazgos). La resolvieron
+  #159, #160, #162, #163 y #164 (verificados por el autor, 2026-09-30); el
+  corpus quedó en 207 de 209. Lo que queda abierto:
+  - `"Esto que hiciste", gritó, "es una locura".` (2.3e, ambiguo: hoy sale
+    `—gritó—, es`). Pendiente en el corpus.
+  - Markup inline antes de la comilla: ver el item «El ancla de D1» abajo.
+    Pendiente en el corpus.
+  - `inciso-case` solo actúa con palabras de `NON_VERB_STARTS` o
+    `ACTION_VERBS`: con un verbo que no está en ninguna lista no marca.
+    Sumar verbos a medida que aparezcan (o resolverlo con el etiquetador de
+    LT, ver «Aportes a la corrección del español»). Los ambiguos
+    acción/habla van a `AMBIGUOUS_TAGS`.
+  - 2.3b sin raya de cierre (`—Lo principal… —añadió Pilar. Afortunada…`)
+    se escribe igual que un 2.3a con narración que sigue: no se marca.
+  - `dash-orphan`: FP con imperativos (`—No sé. Pregunta a tu madre.`) y FN
+    con `—Hola dijo Juan.`.
+  - NFD: acentos descompuestos no matchean verbos (sintético, sin saber si
+    aparece en el corpus real).
+  - `validator.spec.ts` (dormido): 3 casos fallan contra el código de hoy.
+    Pasarlos al corpus y borrarlo.
   Base de regresión: `scripts/run-raya-corpus-smoke.mjs`, con la lista de
   `PENDIENTES`; cada arreglo saca sus casos de ahí. ReDoS, `lastIndex`,
   astrales e idempotencia salieron limpios.
