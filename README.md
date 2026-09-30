@@ -965,12 +965,16 @@ Privada en `~/.tauri/twriter.key` — nunca commitear. Pública ya embebida en `
 Flujo completo de una release (asumiendo setup hecho):
 
 ```bash
-# 1) Bump de versión. Primero cierra «## Sin publicar» de CHANGELOG.md como
-#    «## v0.2.0 — fecha» (y corta sin tocar nada si está vacía); después
-#    package.json, Cargo.toml, tauri.conf.json, Cargo.lock y
-#    packaging/aur/PKGBUILD (pkgver + pkgrel=1). release.yml pone esa sección
-#    del changelog en el borrador, arriba de la instalación.
-./scripts/bump-version.sh 0.2.0
+# 1) Bump de versión. `auto` elige el número SemVer por lo que hay en
+#    [Unreleased] de CHANGELOG.md (Keep a Changelog): solo Fixed/Security →
+#    patch, algo en Added/Changed/Deprecated/Removed → minor. También acepta
+#    patch|minor|major o el número a mano, pero rechaza uno más chico de lo
+#    que pide el contenido. Primero cierra [Unreleased] como
+#    «## [0.2.0] - fecha» con sus links de comparación (y corta sin tocar nada
+#    si está vacía); después package.json, Cargo.toml, tauri.conf.json,
+#    Cargo.lock y packaging/aur/PKGBUILD (pkgver + pkgrel=1). release.yml pone
+#    esa sección del changelog en el borrador, arriba de la instalación.
+./scripts/bump-version.sh auto
 git add -A && git commit -m "chore: bump v0.2.0"
 git tag v0.2.0
 git push && git push --tags

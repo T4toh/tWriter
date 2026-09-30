@@ -18,39 +18,6 @@
   }
 }
 
-.te-tabs {
-  display: flex;
-  gap: 0;
-  padding: 0 1rem;
-  background: var(--bg-soft);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.te-tab {
-  background: transparent;
-  border: none;
-  color: var(--fg-muted);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 500;
-  padding: 0.7rem 1rem;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color 0.1s, border-color 0.1s;
-
-  &:hover {
-    color: var(--fg);
-  }
-
-  &.is-active {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
-    font-weight: 600;
-  }
-}
-
 .te-body {
   flex: 1;
   overflow-y: auto;

@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# Cierra «Sin publicar» en CHANGELOG.md y sincroniza la versión en package.json,
+# Cierra [Unreleased] en CHANGELOG.md y sincroniza la versión en package.json,
 # src-tauri/Cargo.toml, src-tauri/tauri.conf.json y packaging/aur/PKGBUILD.
 # Después corre `cargo update -p twriter` para refrescar Cargo.lock.
-# Uso: ./scripts/bump-version.sh 0.2.0
+# Uso: ./scripts/bump-version.sh 0.2.0 | patch | minor | major | auto
+#   `auto` elige el nivel SemVer por lo que hay en [Unreleased] de CHANGELOG.md
+#   (solo Fixed/Security → patch; algo en Added/Changed/Deprecated/Removed →
+#   minor). Con un número a mano, el changelog igual rechaza uno más chico de
+#   lo que pide su contenido.
 #
 # Los reemplazos van con perl y no con `sed -i`: el sed de macOS (BSD) pide el
 # sufijo de backup como argumento de `-i`, así que `sed -i -E` se come el `-E`
@@ -14,8 +18,16 @@ set -euo pipefail
 
 NEW="${1:-}"
 if [[ -z "$NEW" ]]; then
-  echo "uso: $0 X.Y.Z" >&2
+  echo "uso: $0 X.Y.Z | patch | minor | major | auto" >&2
   exit 1
+fi
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+if [[ "$NEW" =~ ^(patch|minor|major|auto)$ ]]; then
+  NEW="$(node "$ROOT/scripts/changelog.mjs" siguiente "$NEW")"
+  echo "Versión nueva: $NEW"
 fi
 
 if ! [[ "$NEW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -23,12 +35,10 @@ if ! [[ "$NEW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT"
-
-# CHANGELOG.md primero: «## Sin publicar» pasa a «## vX.Y.Z — fecha». Si está
-# vacía, el script corta acá, antes de tocar ninguna versión, así un release
-# sin notas no queda a medio bumpear (ver scripts/changelog.mjs).
+# CHANGELOG.md primero: [Unreleased] pasa a «## [X.Y.Z] - fecha». Si está
+# vacía, tiene un tipo que no es de Keep a Changelog o la versión es más chica
+# de lo que pide SemVer, el script corta acá, antes de tocar ninguna versión
+# (ver scripts/changelog.mjs).
 node "$ROOT/scripts/changelog.mjs" cerrar "$NEW"
 
 # package.json y tauri.conf.json — el primer "version" del archivo (sin /g).
@@ -77,7 +87,7 @@ if [[ "$fallo" != 0 ]]; then
 fi
 
 echo "Versión bumpeada a $NEW en:"
-echo "  - CHANGELOG.md («Sin publicar» → v$NEW)"
+echo "  - CHANGELOG.md ([Unreleased] → [$NEW])"
 echo "  - package.json"
 echo "  - src-tauri/tauri.conf.json"
 echo "  - src-tauri/Cargo.toml"
