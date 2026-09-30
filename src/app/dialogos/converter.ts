@@ -3,7 +3,7 @@
  * dialogos_a_esp/src/converter.py (deprecado) y ya divergió: la norma es el
  * DPD «raya», y `scripts/run-raya-corpus-smoke.mjs` es la regresión.
  */
-import { DIALOG_TAGS, TAGS_ALT, isDialogTag } from './tags';
+import { DIALOG_TAGS, TAG_PHRASE, isDialogTag } from './tags';
 
 const EM_DASH = '—';
 const QUOTES_CHAR_CLASS = '["“”]';
@@ -74,17 +74,38 @@ function normalizeQuotes(text: string): string {
 }
 
 function normalizeSpacingBeforeTags(text: string): string {
-  // "texto"Verbo → "texto" Verbo (sólo si Verbo es dialog tag).
+  // "texto"Verbo → "texto" Verbo (sólo si Verbo es dialog tag). La comilla
+  // tiene que venir pegada a algo: es la de cierre.
   // `\w+` es ASCII-only en JS y se corta antes de acentos: `Preguntó` →
   // `Pregunt` → `isDialogTag('Pregunt')` false → normalize no aplica.
   // `\p{L}+` con flag `u` matchea letras Unicode (incluye acentos).
-  const pattern = /"([.,]?)"(\p{Lu}\p{L}+)/gu;
-  return text.replace(pattern, (full, punct: string, word: string) => {
-    if (isDialogTag(word)) {
-      return `"${punct}" ${word}`;
-    }
-    return full;
-  });
+  return text.replace(/(?<=\S)"(\p{Lu}\p{L}+)/gu, (full, word: string) =>
+    isDialogTag(word) ? `" ${word}` : full,
+  );
+}
+
+/** Sustitutos de raya en un párrafo de diálogo: `--`, `―` (barra horizontal,
+ *  la que muestra la web de la RAE), `–` (semirraya) y `−` (menos) pasan a
+ *  raya; los dos últimos, salvo entre o antes de números (`1990–2000`, `−5`).
+ *  El guion simple solo donde no puede ser de palabra: al abrir, abriendo un
+ *  inciso (` -dijo`) o cerrándolo (`Juan-.`). Fuera de un diálogo no se toca
+ *  nada. */
+function normalizeDashes(line: string): string {
+  // Apertura con sustituto y mayúscula detrás: con minúscula es un ítem de
+  // lista (`- harina,`, DPD raya 3.2) y el espacio sí va.
+  const opener = /^(\s*)(?:--|[-–―−])[ \t]*(?=[\p{Lu}¿¡«"“…])/u.exec(line);
+  if (!opener && !/^\s*—/.test(line)) return line;
+  const head = opener ? `${opener[1]}${EM_DASH}` : '';
+  const rest = (opener ? line.slice(opener[0].length) : line)
+    // Raya de inciso con verbo de lengua detrás: va pegada al verbo
+    // (`-- dijo` → `—dijo`).
+    .replace(new RegExp(`(?<=\\s)(?:--|[-–―−])[ \\t]+(?=${TAG_PHRASE}${NOT_LETTER})`, 'giu'), EM_DASH)
+    .replace(/--|―|(?<!\d)–(?!\d)|−(?!\d)/g, EM_DASH)
+    // Guion con espacio a los dos lados: nunca es de palabra.
+    .replace(/(?<=\s)-(?=\s)/g, EM_DASH)
+    .replace(/(?<=\s)-(?=\p{L})/gu, EM_DASH)
+    .replace(/(?<=[\p{L}.,;:?!…])-(?=[\s.,;:?!…]|$)/gu, EM_DASH);
+  return head + rest;
 }
 
 /** Volver a poner las comillas que la normalización aplanó y que la
@@ -128,7 +149,8 @@ function convertLine(line: string): string {
   // Normalizar por línea y no el documento entero: si no, un solo párrafo
   // convertido aplana las «» y los ’ de todo el capítulo.
   if (isThoughtOrQuote(line)) return line;
-  const normalized = normalizeSpacingBeforeTags(normalizeQuotes(line));
+  const dashed = normalizeDashes(line);
+  const normalized = normalizeSpacingBeforeTags(normalizeQuotes(dashed));
 
   let current = fixPunctuationBeforeTag(normalized);
 
@@ -141,13 +163,13 @@ function convertLine(line: string): string {
     current = applyD5(current);
     if (current === prev) break;
   }
-  if (current === normalized) return line;
+  if (current === normalized) return dashed;
   return restoreQuotes(line, current);
 }
 
 function fixPunctuationBeforeTag(line: string): string {
   const re = new RegExp(
-    `"([^"]+)\\.\\s*"\\s+(${TAGS_ALT})${NOT_LETTER}([^"]*?)\\.\\s+"([^"]+)"`,
+    `"([^"]+)\\.\\s*"\\s+(${TAG_PHRASE})${NOT_LETTER}([^"]*?)\\.\\s+"([^"]+)"`,
     'giu',
   );
   return line.replace(re, (_, c1: string, verb: string, rest: string, c2: string) => {
@@ -163,71 +185,31 @@ function fixPunctuationBeforeTag(line: string): string {
   });
 }
 
-/** D3: Inciso del narrador con verbo. */
+/** D3: Inciso del narrador con verbo entre dos parlamentos. Cuatro formas:
+ *  con o sin coma entre la comilla y el verbo, y el segundo parlamento tras
+ *  coma (sigue el enunciado) o tras punto (enunciado nuevo). Si el segundo
+ *  parlamento lleva su propio verbo detrás (`"…", agregó.`), va con él. */
 function applyD3(line: string): string {
-  // "texto1", verbo[ resto], "texto2"
-  const re1 = new RegExp(
-    `"([^"]+)",\\s+(${TAGS_ALT})${NOT_LETTER}([^,]*),\\s+"([^"]+)"`,
-    'giu',
-  );
-  let result = line.replace(re1, (_, t1: string, verb: string, rest: string, t2: string) => {
-    const text1 = stripClosing(t1);
-    const v = verb.toLowerCase();
-    const verbRest = rest.trim();
-    const text2 = t2.trim();
-    return verbRest
-      ? `${EM_DASH}${text1} ${EM_DASH}${v} ${verbRest}${EM_DASH}, ${text2}`
-      : `${EM_DASH}${text1} ${EM_DASH}${v}${EM_DASH}, ${text2}`;
-  });
-
-  // "texto1", verbo resto. "texto2"
-  const re2 = new RegExp(
-    `"([^"]+)",\\s+(${TAGS_ALT})${NOT_LETTER}([^"]*?)\\.\\s+"([^"]+)"`,
-    'giu',
-  );
-  result = result.replace(re2, (_, t1: string, verb: string, rest: string, t2: string) => {
-    const text1 = stripClosing(t1);
-    const v = verb.toLowerCase();
-    const verbRest = rest.trim();
-    const text2 = t2.trim();
-    return verbRest
-      ? `${EM_DASH}${text1} ${EM_DASH}${v} ${verbRest}${EM_DASH}. ${text2}`
-      : `${EM_DASH}${text1} ${EM_DASH}${v}${EM_DASH}. ${text2}`;
-  });
-
-  // NUEVO — pattern 3: "texto1" verbo[ resto], "texto2"
-  // (sin coma entre comilla y verbo: caso típico cuando texto1 termina en
-  // ?, !, … o cuando el usuario simplemente no separó con coma)
-  const re3 = new RegExp(
-    `"([^"]+)"\\s+(${TAGS_ALT})${NOT_LETTER}([^,"]*),\\s+"([^"]+)"`,
-    'giu',
-  );
-  result = result.replace(re3, (_, t1: string, verb: string, rest: string, t2: string) => {
-    const text1 = stripClosing(t1);
-    const v = verb.toLowerCase();
-    const verbRest = rest.trim();
-    const text2 = t2.trim();
-    return verbRest
-      ? `${EM_DASH}${text1} ${EM_DASH}${v} ${verbRest}${EM_DASH}, ${text2}`
-      : `${EM_DASH}${text1} ${EM_DASH}${v}${EM_DASH}, ${text2}`;
-  });
-
-  // NUEVO — pattern 4: "texto1" verbo[ resto]. "texto2"
-  // (cierre con punto + continuación, sin coma entre comilla y verbo)
-  const re4 = new RegExp(
-    `"([^"]+)"\\s+(${TAGS_ALT})${NOT_LETTER}([^"]*?)\\.\\s+"([^"]+)"`,
-    'giu',
-  );
-  result = result.replace(re4, (_, t1: string, verb: string, rest: string, t2: string) => {
-    const text1 = stripClosing(t1);
-    const v = verb.toLowerCase();
-    const verbRest = rest.trim();
-    const text2 = t2.trim();
-    return verbRest
-      ? `${EM_DASH}${text1} ${EM_DASH}${v} ${verbRest}${EM_DASH}. ${text2}`
-      : `${EM_DASH}${text1} ${EM_DASH}${v}${EM_DASH}. ${text2}`;
-  });
-
+  let result = line;
+  for (const sep of [',\\s+', '\\s+']) {
+    for (const [middle, join] of [['([^,"]*),', ','], ['([^"]*?)\\.', '.']]) {
+      const re = new RegExp(
+        `"([^"]+)"${sep}(${TAG_PHRASE})${NOT_LETTER}${middle}\\s+"([^"]+)"` +
+          `(?:,?\\s+(${TAG_PHRASE})${NOT_LETTER})?`,
+        'giu',
+      );
+      result = result.replace(
+        re,
+        (_, t1: string, verb: string, rest: string, t2: string, verb2?: string) => {
+          const inciso = rest.trim() ? `${verb.toLowerCase()} ${rest.trim()}` : verb.toLowerCase();
+          const text2 = verb2
+            ? `${stripClosing(t2)} ${EM_DASH}${verb2.toLowerCase()}`
+            : t2.trim();
+          return `${EM_DASH}${stripClosing(t1)} ${EM_DASH}${inciso}${EM_DASH}${join} ${text2}`;
+        },
+      );
+    }
+  }
   return result;
 }
 
@@ -259,14 +241,31 @@ function applyD4(line: string): string {
  *  tras un cierre de oración: una comilla en medio de la narración
  *  (`La palabra "fin" dice mucho.`) no es un parlamento. */
 function applyD2(line: string): string {
-  // Patrón 1: "texto" verbo
+  // Patrón 1: "texto" verbo, con la coma afuera o sin coma. Afuera es la
+  // puntuación española (DPD comillas 3a/3b: `«¿Qué es esto?», preguntaron`).
   const re1 = new RegExp(
-    `${DIALOG_START}${QUOTES_CHAR_CLASS}([^"\\u201C\\u201D]+)${QUOTES_CHAR_CLASS}\\s+(${TAGS_ALT})${NOT_LETTER}`,
+    `${DIALOG_START}${QUOTES_CHAR_CLASS}([^"\\u201C\\u201D]+)${QUOTES_CHAR_CLASS},?\\s+(${TAG_PHRASE})${NOT_LETTER}`,
     'giu',
   );
   let result = line.replace(re1, (_, pre: string, content: string, tag: string) =>
     `${pre}${EM_DASH}${stripClosing(content)} ${EM_DASH}${tag.toLowerCase()}`,
   );
+
+  // Sujeto antes del verbo: `"No sé", Juan dijo.` es un inciso de verbo de
+  // lengua (DPD 2.3c), no narración nueva.
+  if (result === line) {
+    const reSubject = new RegExp(
+      `${DIALOG_START}${QUOTES_CHAR_CLASS}([^"\\u201C\\u201D]+)${QUOTES_CHAR_CLASS},?\\s+(\\p{Lu}\\p{L}+\\s+(?:${TAG_PHRASE}))${NOT_LETTER}`,
+      'gu',
+    );
+    // Con el parlamento cerrado en punto, lo que sigue es narración nueva
+    // (`"Vení." María dice que no.`): eso lo resuelve el patrón 2.
+    result = result.replace(reSubject, (full, pre: string, content: string, inciso: string) =>
+      /(?<!\.)\.\s*$/.test(content)
+        ? full
+        : `${pre}${EM_DASH}${stripClosing(content)} ${EM_DASH}${inciso}`,
+    );
+  }
 
   // Patrón 2: "texto"[,. ]palabra → si palabra es dialog tag o nueva narración
   const re2 = new RegExp(
@@ -288,7 +287,7 @@ function applyD2(line: string): string {
   // Patrón 3: comillas simples con verbo. El ancla de DIALOG_START también
   // deja afuera los apóstrofos (`Bob's`).
   const re3 = new RegExp(
-    `${DIALOG_START}${SINGLE_QUOTES_CHAR_CLASS}([^'\\u2018\\u2019]+)${SINGLE_QUOTES_CHAR_CLASS}\\s+(${TAGS_ALT})${NOT_LETTER}`,
+    `${DIALOG_START}${SINGLE_QUOTES_CHAR_CLASS}([^'\\u2018\\u2019]+)${SINGLE_QUOTES_CHAR_CLASS},?\\s+(${TAG_PHRASE})${NOT_LETTER}`,
     'giu',
   );
   result = result.replace(re3, (_, pre: string, content: string, tag: string) =>

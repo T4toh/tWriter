@@ -69,7 +69,7 @@ console.log('convertFragmentHtml');
 }
 {
   const out = convertFragmentHtml('"Hola", dijo <em>Ana</em>.');
-  check('el markup no se pierde en un inciso simple', out === '—Hola, dijo <em>Ana</em>.', out);
+  check('el markup no se pierde en un inciso simple', out === '—Hola —dijo <em>Ana</em>.', out);
 }
 {
   const out = convertFragmentHtml('El <strong>capitán</strong> miró el mar.');
@@ -83,7 +83,7 @@ console.log('convertFragmentHtml');
   const out = convertFragmentHtml('<p>"Hola", dijo Ana.</p><p>"Chau", respondió.</p>');
   check(
     'fragmento con <p> → convierte cada párrafo sin colapsarlos',
-    out === '<p>—Hola, dijo Ana.</p><p>—Chau, respondió.</p>',
+    out === '<p>—Hola —dijo Ana.</p><p>—Chau —respondió.</p>',
     out,
   );
 }
