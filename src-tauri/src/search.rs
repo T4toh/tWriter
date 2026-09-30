@@ -23,8 +23,10 @@ const INDEX_SUBDIR: &str = ".twriter/search-index";
 // v4: el tokenizer `es_text` preserva acentos Y stopwords (lowercase only) — el
 // modo exacto (default) necesita matchear el string literal tal cual para
 // proofreading; el modo fuzzy (opt-in) absorbe typos/acentos vía Levenshtein.
+// v5: tantivy 0.22 → 0.26. Mismo schema, pero el formato en disco cambia y
+// no hace falta averiguar si la 0.26 abre un índice de la 0.22: se regenera.
 // Bump fuerza wipe + full reindex.
-const INDEX_VERSION: u32 = 4;
+const INDEX_VERSION: u32 = 5;
 const VERSION_FILE: &str = ".version";
 const WRITER_HEAP_BYTES: usize = 50_000_000;
 const SNIPPET_MAX_LEN: usize = 240;
@@ -1056,7 +1058,7 @@ pub fn search_query_impl(
     let final_query: Box<dyn Query> = build_scoped_query(idx, parsed, scope);
     let limit = limit.clamp(1, 200);
     let mut top_docs = searcher
-        .search(&*final_query, &TopDocs::with_limit(limit))
+        .search(&*final_query, &TopDocs::with_limit(limit).order_by_score())
         .map_err(|e| e.to_string())?;
     // Rescate del fuzzy: si exigir todos los términos no encontró nada, mejor
     // devolver los parciales que una lista vacía — con un typo grueso o una
@@ -1066,7 +1068,7 @@ pub fn search_query_impl(
         if let Some(or_query) = build_fuzzy_query(idx, q, Occur::Should) {
             let scoped = build_scoped_query(idx, or_query, scope);
             top_docs = searcher
-                .search(&*scoped, &TopDocs::with_limit(limit))
+                .search(&*scoped, &TopDocs::with_limit(limit).order_by_score())
                 .map_err(|e| e.to_string())?;
             partial_match = !top_docs.is_empty();
         }
@@ -1407,7 +1409,7 @@ pub fn search_index_status(path: Option<String>) -> Result<IndexStatus, String> 
             IndexRecordOption::Basic,
         );
         let top = searcher
-            .search(&query, &TopDocs::with_limit(1))
+            .search(&query, &TopDocs::with_limit(1).order_by_score())
             .map_err(|e| e.to_string())?;
         st.path_indexed = Some(!top.is_empty());
         if let Some((_, addr)) = top.first() {
