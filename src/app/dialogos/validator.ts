@@ -36,6 +36,9 @@ function categoryFor(ruleId: string): RaeCategory {
     case 'dash-short':
     case 'space-after-open':
     case 'space-before-verb':
+    case 'double-space':
+    case 'opening-dash':
+    case 'closing-dash':
       return 'char';
     case 'dash-orphan':
     case 'dash-quote-mix':
@@ -44,6 +47,7 @@ function categoryFor(ruleId: string): RaeCategory {
     case 'verb-capitalized':
     case 'period-before-verb':
     case 'double-period':
+    case 'inciso-case':
       return 'typo';
     default:
       return 'structure';
@@ -108,6 +112,7 @@ function pushDedicated(para: string, offset: number, out: RaeViolation[]): void 
             offset: offset + v.autoFix.offset,
             length: v.autoFix.length,
             replacement: v.autoFix.replacement,
+            ...(v.autoFix.manual ? { manual: true } : {}),
           }
         : undefined,
       paragraphRange: { offset, length: para.length },

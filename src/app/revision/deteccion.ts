@@ -143,7 +143,7 @@ export function detectarEnCapitulo(
   // diálogo igual.
   const violaciones = validateRae(plain, idiomaEfectivo);
   const arreglosRae = violaciones.filter(
-    (v) => v.autoFix !== undefined && v.category !== 'pending-conversion',
+    (v) => v.autoFix !== undefined && !v.autoFix.manual && v.category !== 'pending-conversion',
   ).length;
 
   // Las entradas compuestas del diccionario (`Kun Lian`, `Tres Torres`) no
@@ -192,6 +192,7 @@ export function aplicarEnCapitulo(
     const fixes = validateRae(htmlToPlain(out), idiomaEfectivo)
       .filter((v) => v.category !== 'pending-conversion')
       .map((v) => v.autoFix)
+      .filter((f) => !f?.manual)
       .filter((f): f is RaeAutoFix => f !== undefined);
     const r = aplicarFixesHtml(out, fixes);
     out = r.html;

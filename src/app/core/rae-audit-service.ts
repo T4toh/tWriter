@@ -52,7 +52,7 @@ export class RaeAuditService {
     let n = 0;
     for (const c of this.chapters()) {
       for (const v of c.violations) {
-        if (v.autoFix !== undefined && v.category !== 'mayusculas') n += 1;
+        if (v.autoFix !== undefined && !v.autoFix.manual && v.category !== 'mayusculas') n += 1;
       }
     }
     return n;

@@ -106,3 +106,29 @@ export const TAGS_ALT = DIALOG_TAGS.join('|');
 export const TAG_PHRASE =
   `(?:(?:me|te|le|les|nos|os|se|lo|la|los|las)\\s+)?` +
   `(?:(?:volvió|volvía|vuelve|volví)\\s+a\\s+(?:decir|preguntar|repetir|gritar|insistir)|${TAGS_ALT})`;
+
+/** Clíticos que pueden ir antes del verbo del inciso (`se levantó`, `le dijo`). */
+export const CLITICS: ReadonlySet<string> = new Set([
+  'me', 'te', 'le', 'les', 'nos', 'os', 'se', 'lo', 'la', 'los', 'las',
+]);
+
+/** Verbos de acción frecuentes en un inciso del narrador. Con ellos el DPD
+ *  2.3d manda punto y mayúscula, y la regla puede ofrecer el arreglo. Con un
+ *  verbo que no está acá ni en DIALOG_TAGS no se marca nada: podría ser de
+ *  lengua y faltar en la lista. */
+export const ACTION_VERBS: ReadonlySet<string> = new Set([
+  'sonrió', 'rió', 'suspiró', 'asintió', 'miró', 'levantó', 'sentó', 'paró',
+  'puso', 'encogió', 'cerró', 'abrió', 'salió', 'entró', 'golpeó', 'tomó',
+  'dejó', 'sacó', 'giró', 'dio', 'hizo', 'bajó', 'subió', 'acercó', 'alejó',
+  'caminó', 'cruzó', 'frunció', 'arqueó', 'alzó', 'apoyó', 'soltó', 'agarró',
+  'tiró', 'empujó', 'abrazó', 'besó', 'tembló', 'enseñó', 'mostró', 'rascó',
+  'frotó', 'guiñó', 'carraspeó', 'tosió', 'bostezó', 'resopló', 'volvió',
+]);
+
+/** Palabras que no pueden ser el verbo del inciso ni un nombre propio: el
+ *  comentario es narración (DPD 2.3d) y la caja se puede corregir sola. */
+export const NON_VERB_STARTS: ReadonlySet<string> = new Set([
+  'su', 'sus', 'mi', 'mis', 'tu', 'tus', 'el', 'un', 'una', 'unos', 'unas',
+  'este', 'esta', 'estos', 'estas', 'ese', 'esa', 'esos', 'esas', 'él',
+  'ella', 'ellos', 'ellas', 'nadie', 'todos', 'todas', 'alguien', 'algo',
+]);

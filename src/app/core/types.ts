@@ -118,6 +118,9 @@ export interface RaeAutoFix {
   offset: number;
   length: number;
   replacement: string;
+  /** Solo desde el popover, de a uno: la revisión en bloque no lo aplica
+   *  porque el texto admite otra lectura (ver `closing-dash`). */
+  manual?: boolean;
 }
 
 export interface RaeParagraphRange {

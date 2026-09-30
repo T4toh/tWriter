@@ -8,7 +8,15 @@
  * del párrafo. El validator orchestrator suma el offset del párrafo dentro
  * del documento.
  */
-import { AMBIGUOUS_TAGS, DIALOG_TAGS, TAG_PHRASE, TAGS_ALT } from './tags';
+import {
+  ACTION_VERBS,
+  AMBIGUOUS_TAGS,
+  CLITICS,
+  DIALOG_TAGS,
+  NON_VERB_STARTS,
+  TAG_PHRASE,
+  TAGS_ALT,
+} from './tags';
 
 const EM_DASH = '—';
 
@@ -19,7 +27,7 @@ export interface DedicatedViolation {
   severity: 'error' | 'warning';
   message: string;
   shortMessage: string;
-  autoFix?: { offset: number; length: number; replacement: string };
+  autoFix?: { offset: number; length: number; replacement: string; manual?: boolean };
 }
 
 type Rule = (paragraph: string) => DedicatedViolation[];
@@ -115,9 +123,20 @@ const ruleDashOrphan: Rule = (p) => {
   return out;
 };
 
+// Una comilla que abre un parlamento dentro de un párrafo con raya: al
+// principio, tras un signo de puntuación o justo tras el verbo del inciso
+// (`—gritó "es una locura."`). Una cita en medio del parlamento (`—Leí
+// "Rayuela" anoche.`) es válida (DPD raya §4, comillas 2a).
+const QUOTE_OPENS_SPEECH_RE = new RegExp(
+  `(?:^|[.?!…;:,]|—(?:${TAG_PHRASE})(?:\\s+\\p{L}+){0,3})\\s*$`,
+  'iu',
+);
+
 const ruleDashQuoteMix: Rule = (p) => {
   if (!p.includes(EM_DASH)) return [];
-  const quoteMatch = /["“”]/.exec(p);
+  const quoteMatch = [...p.matchAll(/["“”]/g)].find((q) =>
+    QUOTE_OPENS_SPEECH_RE.test(p.slice(0, q.index)),
+  );
   if (!quoteMatch) return [];
   return [
     {
@@ -213,37 +232,44 @@ const ruleSpaceBeforeVerb: Rule = (p) => {
 // `\w+` en JS es ASCII-only y NO matchea letras acentuadas (`Preguntó`,
 // `Murmuró` se cortan en `Pregunt`/`Murmur` y nunca matchean DIALOG_TAGS).
 // `\p{L}+` con flag `u` matchea letras Unicode.
-const VERB_CAPITAL_RE = /—\s?(\p{Lu}\p{L}+)/gu;
+const VERB_CAPITAL_RE = /—\s?(\p{Lu}\p{L}*)(?:\s+(\p{L}+))?/gu;
 const TAGS_LOWER_SET = new Set(DIALOG_TAGS.map((t) => t.toLowerCase()));
 
 const ruleVerbCapitalized: Rule = (p) => {
   const out: DedicatedViolation[] = [];
   for (const m of p.matchAll(VERB_CAPITAL_RE)) {
     const word = m[1];
-    if (!TAGS_LOWER_SET.has(word.toLowerCase())) continue;
+    // `—Le contestó`: el que va en mayúscula es el clítico, pero el que dice
+    // si es verbo de lengua es el siguiente.
+    // `La`/`Lo` en mayúscula son casi siempre artículo (`—La pregunta lo tomó
+    // por sorpresa`), no clítico.
+    const clitic = CLITICS.has(word.toLowerCase()) && !/^l[oa]s?$/i.test(word);
+    const verb = (clitic ? m[2] ?? '' : word).toLowerCase();
+    if (!TAGS_LOWER_SET.has(verb)) continue;
     // `—Hola —Pidió un café.` es una acción (le falta el punto, DPD 2.3d),
     // no un dicendi a bajar de caja.
-    if (AMBIGUOUS_TAGS.has(word.toLowerCase())) continue;
+    if (AMBIGUOUS_TAGS.has(verb)) continue;
     const dashOffset = m.index ?? 0;
     // Anti-falso-positivo 1: raya de APERTURA del párrafo (`—Dicen eso...`)
     // — la palabra es contenido del diálogo, no dicendi-tag post-close. Va
     // con mayúscula como cualquier inicio de oración.
     if (p.slice(0, dashOffset).trim() === '') continue;
-    // Anti-falso-positivo 2: raya precedida por sentence-end (`. —Dicen`)
-    // es apertura de nuevo segmento de speech, no cierre de inciso. La
-    // palabra es contenido. (Si el `.` antes sobra, lo flaggea
-    // period-before-verb separadamente.)
+    // Tras un punto simple (`. —Dijo`) sobran las dos cosas y
+    // period-before-verb marca primero el punto. Tras `?`, `!` o suspensivos
+    // el verbo de lengua va igual en minúscula (DPD 2.3c: `—¡Qué le vamos a
+    // hacer! —exclamó`), así que ahí sí se marca.
     let j = dashOffset - 1;
     while (j >= 0 && /\s/.test(p[j])) j--;
-    if (j >= 0 && SENTENCE_END_RE.test(p[j])) continue;
-    const wordOffset = dashOffset + m[0].length - word.length;
+    if (j >= 0 && p[j] === '.' && p[j - 1] !== '.') continue;
+    const wordOffset = dashOffset + m[0].indexOf(word);
     out.push({
       offset: wordOffset,
       length: 1,
       ruleId: 'verb-capitalized',
       severity: 'warning',
       message:
-        `Verbo dicendi «${word}» con mayúscula. La RAE pide minúscula tras la raya.`,
+        `«${word}» va en minúscula: el comentario del narrador que introduce un ` +
+        'verbo de habla arranca en minúscula, aunque antes haya ? o ! (DPD raya 2.3c).',
       shortMessage: 'Verbo capitalizado',
       autoFix: {
         offset: wordOffset,
@@ -257,8 +283,9 @@ const ruleVerbCapitalized: Rule = (p) => {
 
 // Solo el punto simple: los suspensivos (`—Bueno... —dijo`) se quedan antes
 // del inciso, y un punto doble (`—Ya voy.. —dijo`) lo marca double-period.
+// La coma (`—Hola, —dijo`) sobra igual.
 const PERIOD_BEFORE_VERB_RE = new RegExp(
-  `(?<!\\.)(\\.)(\\s+)—(${TAG_PHRASE})(?!\\p{L})`,
+  `(?<!\\.)([.,])(\\s+)—(${TAG_PHRASE})(?!\\p{L})`,
   'giu',
 );
 
@@ -268,18 +295,28 @@ const rulePeriodBeforeVerb: Rule = (p) => {
     // `—No se moleste. —Negó con la cabeza.`: tras punto y en mayúscula, un
     // verbo que también es de acción es la acción del DPD 2.3d y está bien.
     const phrase = m[3];
-    const verb = phrase.split(/\s+/).pop() ?? phrase;
-    if (phrase[0] !== phrase[0].toLowerCase() && AMBIGUOUS_TAGS.has(verb.toLowerCase())) continue;
+    const words = phrase.toLowerCase().split(/\s+/);
+    const verb = words[words.length - 1];
+    if (phrase[0] !== phrase[0].toLowerCase()) {
+      if (AMBIGUOUS_TAGS.has(verb)) continue;
+      // En mayúscula tras punto, `—Te dije.`, `—Me dijo que la regañaste.` o
+      // `—La pregunta…` son el personaje que retoma: primera o segunda
+      // persona, artículo, o un «que» detrás. `—Le contestó` sí es inciso.
+      if (words.length > 1 && !['le', 'les', 'se'].includes(words[0])) continue;
+      const next = /^\s*(\p{L}+)/u.exec(p.slice((m.index ?? 0) + m[0].length))?.[1];
+      if (next && /^(?:que|si)$/i.test(next)) continue;
+    }
     const i = m.index ?? 0;
+    const signo = m[1] === '.' ? 'Punto' : 'Coma';
     out.push({
       offset: i,
       length: 1,
       ruleId: 'period-before-verb',
       severity: 'warning',
       message:
-        'Punto antes de la raya del verbo dicendi. La RAE elimina el punto ' +
-        'cuando hay verbo dicendi tras la raya de cierre.',
-      shortMessage: 'Punto sobrante',
+        `${signo} antes de la raya del verbo de habla. Antes de un inciso con ` +
+        'verbo de lengua no va punto ni coma (DPD raya 2.3c).',
+      shortMessage: `${signo} sobrante`,
       autoFix: { offset: i, length: 1, replacement: '' },
     });
   }
@@ -309,6 +346,219 @@ const ruleDoublePeriod: Rule = (p) =>
       shortMessage: 'Puntos de más',
     }));
 
+/** Las rayas de un párrafo de diálogo después de la de apertura, con su papel
+ *  por paridad: la primera abre un inciso, la segunda lo cierra, y así. */
+function incisoDashes(p: string): { at: number; opens: boolean }[] {
+  const open = /^\s*—/.exec(p);
+  if (!open) return [];
+  const out: { at: number; opens: boolean }[] = [];
+  let opens = true;
+  for (let i = p.indexOf(EM_DASH, open[0].length); i !== -1; i = p.indexOf(EM_DASH, i + 1)) {
+    out.push({ at: i, opens });
+    opens = !opens;
+  }
+  return out;
+}
+
+const PUNCT_AROUND_CLOSE = /[.,;:]/;
+
+/** La raya que cierra un inciso: pegada a lo último del comentario, con la
+ *  puntuación del enunciado interrumpido después (DPD raya 2.3c, 2.3f) y sin
+ *  raya si el párrafo termina ahí (2.3a). */
+const ruleClosingDash: Rule = (p) => {
+  const out: DedicatedViolation[] = [];
+  const push = (
+    offset: number,
+    length: number,
+    message: string,
+    replacement: string,
+    manual = false,
+  ): void => {
+    out.push({
+      offset,
+      length,
+      ruleId: 'closing-dash',
+      severity: 'warning',
+      message,
+      shortMessage: 'Raya de cierre',
+      autoFix: { offset, length, replacement, ...(manual ? { manual } : {}) },
+    });
+  };
+  for (const { at, opens } of incisoDashes(p)) {
+    if (opens) continue;
+    const before = p[at - 1] ?? '';
+    const after = p[at + 1] ?? '';
+    if (after === '.' && p.slice(at + 2).trim() === '') {
+      push(at, 1, 'Si el personaje no sigue hablando, el inciso no lleva raya de cierre (DPD raya 2.3a).', '');
+    } else if (before === ' ' && PUNCT_AROUND_CLOSE.test(p[at - 2] ?? '') && /\S/.test(after)) {
+      // `—dijo Pedro, —capaz` / `—añadió: —Conocí`: la puntuación quedó antes
+      // y la raya pegada a lo que sigue.
+      const signo = p[at - 2];
+      const msg =
+        `El «${signo}» va después de la raya de cierre: ` +
+        `«—${signo}» (DPD raya 2.3c${signo === ':' ? ', 2.3f' : ''}).`;
+      // Tras un punto puede ser también otro hablante pegado en el mismo
+      // párrafo, y ahí el arreglo es otro: se ofrece de a uno, nunca en
+      // bloque (decisión del autor, 2026-09-30).
+      push(
+        at - 2,
+        3,
+        signo === '.'
+          ? `${msg} Si el que habla es otro personaje, va en párrafo aparte.`
+          : msg,
+        `${EM_DASH}${signo} `,
+        signo === '.',
+      );
+    } else if (PUNCT_AROUND_CLOSE.test(before) && !(before === '.' && p[at - 2] === '.')) {
+      push(
+        at - 1,
+        2,
+        `El «${before}» va después de la raya de cierre: «—${before}» (DPD raya 2.3c).`,
+        `${EM_DASH}${before}`,
+      );
+    } else if (before === ' ' && (PUNCT_AROUND_CLOSE.test(after) || after === ' ')) {
+      push(at - 1, 1, 'La raya de cierre va pegada a la última palabra del inciso (DPD raya §2).', '');
+    } else if (after === ' ' && PUNCT_AROUND_CLOSE.test(p[at + 2] ?? '')) {
+      push(at + 1, 1, 'Entre la raya de cierre y la puntuación no va espacio (DPD raya §2).', '');
+    } else if (/\p{Ll}/u.test(after)) {
+      push(at + 1, 0, 'Después de la raya de cierre va un espacio antes de seguir (DPD raya §2).', ' ');
+    }
+  }
+  return out;
+};
+
+/** La raya que abre un inciso: separada de lo anterior, pegada al comentario. */
+const ruleOpeningDash: Rule = (p) => {
+  const out: DedicatedViolation[] = [];
+  for (const { at, opens } of incisoDashes(p)) {
+    if (!opens) continue;
+    const before = p[at - 1] ?? '';
+    const spaces = /^[ \t]+/.exec(p.slice(at + 1))?.[0].length ?? 0;
+    if (spaces === 0) continue;
+    // `—No sé— dijo`: pegada a lo anterior y separada del comentario.
+    const glued = /\S/.test(before);
+    out.push({
+      offset: glued ? at : at + 1,
+      length: glued ? 1 + spaces : spaces,
+      ruleId: 'opening-dash',
+      severity: 'warning',
+      message:
+        'La raya que abre el comentario del narrador va separada de lo anterior ' +
+        'y pegada a lo que sigue: «hola —dijo» (DPD raya §2).',
+      shortMessage: 'Raya de inciso',
+      autoFix: glued
+        ? { offset: at, length: 1 + spaces, replacement: ` ${EM_DASH}` }
+        : { offset: at + 1, length: spaces, replacement: '' },
+    });
+  }
+  return out;
+};
+
+const LENGUA_AT_RE = new RegExp(`^(?:${TAG_PHRASE})(?!\\p{L})`, 'iu');
+const WORDS_RE = /^(\p{L}+)(?:\s+(\p{L}+))?/u;
+
+/** Qué es el comentario que arranca en `i`: de lengua (`dijo`, `le dijo`,
+ *  `Juan dijo`), narración segura (`sus manos`, `se levantó`, `golpeó`) o
+ *  algo que no se puede saber (un verbo que no está en ninguna lista). */
+function incisoKind(p: string, i: number): 'lengua' | 'narracion' | null {
+  const rest = p.slice(i);
+  const w = WORDS_RE.exec(rest);
+  if (!w) return null;
+  const w1 = w[1].toLowerCase();
+  const w2 = (w[2] ?? '').toLowerCase();
+  if (LENGUA_AT_RE.test(rest)) return 'lengua';
+  if (w2 && LENGUA_AT_RE.test(rest.slice(w[1].length).trimStart())) return 'lengua';
+  if (NON_VERB_STARTS.has(w1) || ACTION_VERBS.has(w1)) return 'narracion';
+  if (CLITICS.has(w1) && ACTION_VERBS.has(w2)) return 'narracion';
+  return null;
+}
+
+/** Caja del comentario del narrador que no lleva verbo de lengua (los de
+ *  lengua los ven verb-capitalized y period-before-verb). A mitad del
+ *  enunciado va en minúscula (DPD raya 2.3e); si no, el parlamento cierra con
+ *  punto y el comentario arranca en mayúscula (2.3d). */
+const ruleIncisoCase: Rule = (p) => {
+  const out: DedicatedViolation[] = [];
+  const dashes = incisoDashes(p);
+  dashes.forEach(({ at, opens }, k) => {
+    if (!opens || !/\p{L}/u.test(p[at + 1] ?? '')) return;
+    if (incisoKind(p, at + 1) !== 'narracion') return;
+    const first = p[at + 1];
+    const close = dashes[k + 1];
+    const mid = close !== undefined && /^(?:[,;:]|\s+\p{Ll})/u.test(p.slice(close.at + 1));
+    let j = at - 1;
+    while (j >= 0 && /\s/.test(p[j])) j--;
+    const prev = p[j] ?? '';
+    const push = (offset: number, length: number, replacement: string, message: string): void => {
+      out.push({
+        offset,
+        length,
+        ruleId: 'inciso-case',
+        severity: 'warning',
+        message,
+        shortMessage: 'Caja del inciso',
+        autoFix: { offset, length, replacement },
+      });
+    };
+    if (mid) {
+      if (prev === '.' && p[j - 1] !== '.') {
+        push(j, 1, '', 'El comentario queda a mitad del enunciado: sobra el punto (DPD raya 2.3e).');
+      } else if (first !== first.toLowerCase()) {
+        push(at + 1, 1, first.toLowerCase(),
+          'A mitad del enunciado el comentario del narrador va en minúscula (DPD raya 2.3e).');
+      }
+    } else if (/[.?!…]/.test(prev)) {
+      if (first === first.toLowerCase()) {
+        push(at + 1, 1, first.toUpperCase(),
+          'Tras un enunciado completo, el comentario del narrador que no introduce ' +
+          'palabras va en mayúscula (DPD raya 2.3d).');
+      }
+    } else {
+      // `—Hola —sus manos…`: falta cerrar el parlamento con punto.
+      const from = prev === ',' ? j : j + 1;
+      push(from, at + 2 - from, `. ${EM_DASH}${first.toUpperCase()}`,
+        'Cuando el narrador no introduce las palabras, el parlamento cierra con punto ' +
+        'y el comentario arranca en mayúscula (DPD raya 2.3d).');
+    }
+  });
+  return out;
+};
+
+/** Espacio doble entre palabras o signos. */
+const ruleDoubleSpace: Rule = (p) =>
+  [...p.matchAll(/(?<=\S)[ \t]{2,}(?=\S)/g)].map((m) => ({
+    offset: m.index ?? 0,
+    length: m[0].length,
+    ruleId: 'double-space',
+    severity: 'warning',
+    message: 'Espacio doble.',
+    shortMessage: 'Espacio doble',
+    autoFix: { offset: m.index ?? 0, length: m[0].length, replacement: ' ' },
+  }));
+
+/** Inciso entre rayas en la narración (no diálogo) al que le falta la de
+ *  cierre: va aunque detrás siga un punto (DPD raya 2.1). No se sabe dónde
+ *  termina el inciso, así que no hay arreglo. Las rayas tras dos puntos
+ *  (`dijo: —Vení.`) o punto (teatro, `María.— ¿Dónde vas?`, 3.4) no cuentan. */
+const ruleUnclosedAside: Rule = (p) => {
+  if (/^\s*—/.test(p)) return [];
+  const dashes = [...p.matchAll(/(?<![:.]\s*)—/g)];
+  if (dashes.length % 2 === 0) return [];
+  const last = dashes[dashes.length - 1];
+  return [
+    {
+      offset: last.index ?? 0,
+      length: 1,
+      ruleId: 'unclosed-aside',
+      severity: 'warning',
+      message:
+        'Inciso entre rayas sin raya de cierre. Va aunque detrás siga un punto: ' +
+        '«Esperaba a Emilio —un gran amigo—. No vino.» (DPD raya 2.1).',
+      shortMessage: 'Inciso sin cerrar',
+    },
+  ];
+};
+
 const RULES: readonly Rule[] = [
   ruleDashShort,
   ruleDashOrphan,
@@ -319,6 +569,11 @@ const RULES: readonly Rule[] = [
   ruleVerbCapitalized,
   rulePeriodBeforeVerb,
   ruleDoublePeriod,
+  ruleClosingDash,
+  ruleOpeningDash,
+  ruleIncisoCase,
+  ruleDoubleSpace,
+  ruleUnclosedAside,
 ];
 
 export function runDedicatedRules(paragraph: string): DedicatedViolation[] {
