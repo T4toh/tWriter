@@ -103,7 +103,7 @@ node scripts/run-estados-smoke.mjs                # ciclo de la novela + "necesi
 node scripts/run-zoom-smoke.mjs                   # encaje, zoom alrededor de un punto y clamp del pan del visor
 node scripts/run-mayusculas-smoke.mjs             # mayúsculas rancias (LLOra, ME) en el panel de auditoría de raya
 node scripts/run-undo-capitulo-smoke.mjs          # Ctrl+Z no cruza de un capítulo al otro (ProseMirror puro)
-node scripts/run-changelog-smoke.mjs              # cerrar «Sin publicar» y extraer una versión de CHANGELOG.md
+node scripts/run-changelog-smoke.mjs              # CHANGELOG.md: Keep a Changelog + SemVer (cerrar, siguiente, extraer)
 node scripts/run-raya-corpus-smoke.mjs            # corpus de diálogos contra el DPD (con lista de pendientes)
 ```
 
@@ -174,12 +174,19 @@ cabecera de `src/app/core/search-highlight.spec.ts` deja sentado ese criterio.
   menú contextual hace `stopPropagation()`, así que el click en una de sus
   entradas no llega al `document` y no cierra nada — el editor cierra sus
   popovers mirando `ctxMenu.current()` con un effect.
-- **Cada PR con un cambio visible suma su línea en `CHANGELOG.md` → `## Sin
-  publicar`**, escrita para quien usa la app (qué nota el autor, no cómo está
-  hecho). No es burocracia: `scripts/bump-version.sh` cierra esa sección con la
-  versión y **se niega a bumpear si está vacía**, y `release.yml` la pone en el
-  borrador del release. Un PR que se olvida la línea deja el próximo release sin
-  esa nota. Refactors, tests y docs internos no llevan línea.
+- **Cada PR con un cambio visible suma su línea en `CHANGELOG.md` → `##
+  [Unreleased]`, bajo su tipo** (`### Added` / `Changed` / `Deprecated` /
+  `Removed` / `Fixed` / `Security`, los de [Keep a Changelog
+  1.1.0](https://keepachangelog.com/es-ES/1.1.0/), en inglés como pide la
+  norma), escrita para quien usa la app (qué nota el autor, no cómo está hecho).
+  No es burocracia: `scripts/bump-version.sh` cierra esa sección con la versión
+  y **se niega a bumpear si está vacía, si tiene un tipo inventado o si el
+  número es más chico de lo que pide [SemVer](https://semver.org/lang/es/)**
+  (solo `Fixed`/`Security` → patch; algo en `Added`/`Changed`/`Deprecated`/
+  `Removed` → minor; desde 1.0 un `Removed` → major). `bump-version.sh auto`
+  elige el número solo. `release.yml` pone la sección en el borrador del
+  release. Un PR que se olvida la línea deja el próximo release sin esa nota.
+  Refactors, tests y docs internos no llevan línea.
 - **El remedio se da adentro de la app.** Si la app puede detectar un problema de
   entorno (daemon caído, runtime ausente, sidecar faltante, credencial vencida),
   tiene que decir **qué** pasó y dar el remedio **accionable** ahí mismo: un botón

@@ -28,18 +28,22 @@ export class AboutModal {
   /** Abre siempre en Novedades: `close()` la vuelve ahí. */
   protected readonly pestana = signal<'novedades' | 'licencias'>('novedades');
 
-  /** Del `CHANGELOG.md` del repo: la última versión, y aparte las
-   *  anteriores. Se corta en el primer `## v…`, así quedan afuera la intro
-   *  para quien contribuye y «Sin publicar». */
+  /** Del `CHANGELOG.md` del repo (Keep a Changelog): la última versión
+   *  publicada, y aparte las anteriores. Arranca en el primer `## [X.Y.Z]`,
+   *  así quedan afuera la intro y `[Unreleased]`. Los links de comparación del
+   *  final van con cada tramo: con ellos, `## [0.22.0]` es un link al diff. */
   protected readonly novedades: string;
   protected readonly anteriores: string;
 
   constructor() {
-    const desde = changelog.indexOf('\n## v');
-    const versiones = desde === -1 ? '' : changelog.slice(desde + 1);
-    const corte = versiones.indexOf('\n## ');
-    this.novedades = corte === -1 ? versiones : versiones.slice(0, corte);
-    this.anteriores = corte === -1 ? '' : versiones.slice(corte + 1);
+    const inicio = changelog.search(/^## \[\d/m);
+    const finLinks = changelog.search(/^\[unreleased\]: /im);
+    const links = finLinks === -1 ? '' : `\n\n${changelog.slice(finLinks)}`;
+    const cuerpo =
+      inicio === -1 ? '' : changelog.slice(inicio, finLinks === -1 ? undefined : finLinks);
+    const corte = cuerpo.indexOf('\n## [');
+    this.novedades = cuerpo ? (corte === -1 ? cuerpo : cuerpo.slice(0, corte)) + links : '';
+    this.anteriores = corte === -1 ? '' : cuerpo.slice(corte + 1) + links;
   }
 
   protected readonly totalPaquetes = computed(() =>
