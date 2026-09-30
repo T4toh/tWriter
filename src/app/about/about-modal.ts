@@ -25,6 +25,8 @@ export class AboutModal {
   /** Qué texto de licencia está desplegado. Uno a la vez: son de 1 a 11 KB y
    *  dos abiertos vuelven el modal ilegible. */
   protected readonly abierto = signal<string | null>(null);
+  /** Abre siempre en Novedades: `close()` la vuelve ahí. */
+  protected readonly pestana = signal<'novedades' | 'licencias'>('novedades');
 
   /** Del `CHANGELOG.md` del repo: la última versión, y aparte las
    *  anteriores. Se corta en el primer `## v…`, así quedan afuera la intro
@@ -56,6 +58,7 @@ export class AboutModal {
 
   protected close(): void {
     this.abierto.set(null);
+    this.pestana.set('novedades');
     this.about.close();
   }
 }

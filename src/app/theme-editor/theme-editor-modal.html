@@ -6,11 +6,11 @@
       <p class="path">{{ id }}</p>
     </header>
 
-    <nav class="te-tabs">
+    <nav class="modal-tabs">
       @for (t of tabs; track t.id) {
         <button
           type="button"
-          class="te-tab"
+          class="modal-tab"
           [class.is-active]="activeTab() === t.id"
           (click)="activeTab.set(t.id)"
         >
