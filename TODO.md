@@ -603,6 +603,10 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
     a la guía. El detalle de implementación por feature (lo que hoy es la
     sección Features) va a la referencia, y CLAUDE.md sigue siendo lo que lee
     el agente, no el usuario.
+  - **Primera página ya escrita**: `docs/raya.md`, la chuleta de diálogos con
+    raya (2026-09-30). La app la muestra desde el mismo archivo (modal de la
+    auditoría RAE y del popover), así que moverla a la wiki no puede copiarla:
+    tiene que seguir siendo una sola fuente.
 
 ## Archivos
 

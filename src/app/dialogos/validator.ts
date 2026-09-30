@@ -92,6 +92,7 @@ function pushPendingConversion(
       'Diálogo con comillas o guiones en vez de raya. Aplicá las reglas RAE ' +
       'para convertirlo a raya (—).',
     shortMessage: 'Conversión pendiente',
+    help: { entry: 'raya', section: '3.1', wrong: '"Hola", dijo Juan.', right: '—Hola —dijo Juan.' },
     autoFix: { offset, length: para.length, replacement: converted },
     paragraphRange: { offset, length: para.length },
   });
@@ -116,6 +117,7 @@ function pushDedicated(para: string, offset: number, out: RaeViolation[]): void 
           }
         : undefined,
       paragraphRange: { offset, length: para.length },
+      ...(v.help ? { help: v.help } : {}),
     });
   }
 }

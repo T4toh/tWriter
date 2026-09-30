@@ -31,6 +31,7 @@
             "polyfills": ["zone.js"],
             "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
+            "loader": { ".md": "text" },
             "assets": [
               {
                 "glob": "**/*",

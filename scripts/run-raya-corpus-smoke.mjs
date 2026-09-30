@@ -332,6 +332,11 @@ for (const [fam, input, exp0, sec, lang = 'es'] of C) {
   if (letters(conv) !== letters(input) || letters(pipe) !== letters(input)) f.push('PERDIDA');
   if (ellipses(conv) < ellipses(input) || ellipses(pipe) < ellipses(input)) f.push('PERDIDA-SUSP');
   if (lang === 'es' && convert(conv).text !== conv) f.push('NO-IDEMP');
+  // Toda marca enseña: trae su sección del DPD (el espacio doble no tiene).
+  const sinAyuda = [...viol(input, lang), ...viol(pipe, lang)].filter(
+    (v) => v.ruleId !== 'double-space' && !v.help?.section,
+  );
+  if (sinAyuda.length) f.push('SIN-AYUDA:' + sinAyuda.map((v) => v.ruleId).join('/'));
   rows.push({ fam, input, conv, pipe, exp, sec, vIn, vOut, vExp, f });
 }
 

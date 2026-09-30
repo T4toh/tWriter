@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import {
+  LucideBookOpen,
   LucideCircleAlert,
   LucideCircleX,
   LucideDynamicIcon,
@@ -13,13 +14,14 @@ import { ProjectService } from '../core/project-service';
 import { ChapterViolations, RaeAuditService } from '../core/rae-audit-service';
 import { RaeViolation } from '../core/types';
 import { SearchService } from '../core/search-service';
+import { RayaChuletaService } from '../core/raya-chuleta-service';
 import { auditAnchor, auditSnippet } from '../core/audit-snippet';
 import { findNodeByPath } from '../core/tree-utils';
 
 @Component({
   selector: 'app-rae-audit-panel',
   standalone: true,
-  imports: [LucideDynamicIcon, LucideRuler, LucideX],
+  imports: [LucideBookOpen, LucideDynamicIcon, LucideRuler, LucideX],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './rae-audit-panel.html',
   styleUrl: './rae-audit-panel.scss',
@@ -30,6 +32,7 @@ export class RaeAuditPanel {
   private project = inject(ProjectService);
   private nav = inject(NavigationService);
   private search = inject(SearchService);
+  protected readonly chuleta = inject(RayaChuletaService);
 
   protected readonly scope = this.svc.scope;
   protected readonly chapters = this.svc.chapters;

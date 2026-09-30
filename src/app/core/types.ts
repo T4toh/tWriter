@@ -138,6 +138,17 @@ export interface RaeViolation {
   shortMessage: string;
   autoFix?: RaeAutoFix;
   paragraphRange?: RaeParagraphRange;
+  help?: RaeHelp;
+}
+
+/** De dónde sale la regla y cómo se ve bien escrita, para que el popover
+ *  enseñe además de marcar. `entry` es la entrada del DPD (`raya`,
+ *  `comillas`, `puntos suspensivos`) y `section`, su apartado. */
+export interface RaeHelp {
+  entry: string;
+  section: string;
+  wrong?: string;
+  right?: string;
 }
 
 /** Repetición cercana de una palabra de contenido. La marca va en la aparición
