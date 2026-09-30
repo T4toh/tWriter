@@ -64,7 +64,7 @@ import { TesauroService } from '../core/tesauro-service';
 import { convert as convertRae } from '../dialogos/converter';
 import { suggestFromDictionary } from '../dictionary/suggest';
 import { educateQuotes } from '../quotes/educate';
-import { validateRae } from '../dialogos/validator';
+import { SkipParagraph, validateRae } from '../dialogos/validator';
 import { detectMayusculasRancias } from '../dictionary/mayusculas-rancias';
 import { Landing } from '../landing/landing';
 import { Spinner } from '../shared/spinner';
@@ -1552,8 +1552,20 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!force && plain === this.lastRaePlain) return;
     const lang = this.meta().idioma;
     // Mayúsculas rancias van en la misma pasada: mismo decorador, mismo popover.
+    const doc = this.tiptap.state.doc;
+    // Verso y títulos no son diálogo: el validador los saltea.
+    const skipNonProse: SkipParagraph = (offset) => {
+      const pos = offsetToPm(offset, ranges);
+      if (pos === null) return false;
+      const $pos = doc.resolve(pos);
+      for (let d = $pos.depth; d > 0; d--) {
+        const name = $pos.node(d).type.name;
+        if (name === 'blockquote' || name === 'heading') return true;
+      }
+      return false;
+    };
     const raw: RaeViolation[] = [
-      ...validateRae(plain, lang),
+      ...validateRae(plain, lang, skipNonProse),
       ...detectMayusculasRancias(plain, this.sagaCtx.dictionaryWords()),
     ];
     const positioned = mapViolationsToPm(raw, ranges, this.tiptap.state.doc);
@@ -1830,6 +1842,15 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!v.autoFix || v.fixFrom === undefined || v.fixTo === undefined) return;
     const from = v.fixFrom;
     const to = v.fixTo;
+    // Se tipeó adentro del rango desde el último chequeo: el reemplazo se
+    // calculó sobre otro texto y aplicarlo pisaría lo tipeado. Se descarta y
+    // se vuelve a chequear.
+    const doc = this.tiptap.state.doc;
+    if (to > doc.content.size || doc.textBetween(from, to) !== v.fixText) {
+      this.raePopover.set(null);
+      this.checkRae(true);
+      return;
+    }
     const replacement = v.autoFix.replacement;
     this.tiptap
       .chain()

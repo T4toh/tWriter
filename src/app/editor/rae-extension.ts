@@ -10,6 +10,10 @@ export interface RaeViolationPos extends RaeViolation {
   to: number;
   fixFrom?: number;
   fixTo?: number;
+  /** El texto que el arreglo espera encontrar entre `fixFrom` y `fixTo`. Las
+   *  posiciones se remapean al tipear, pero el reemplazo se calculó sobre
+   *  este texto: si ya no está, el arreglo es viejo y no se aplica. */
+  fixText?: string;
   paragraphFrom?: number;
   paragraphTo?: number;
 }
@@ -111,12 +115,14 @@ export function mapViolationsToPm(
     if (fromBlock !== toBlock && v.category !== 'pending-conversion') continue;
     let fixFrom: number | undefined;
     let fixTo: number | undefined;
+    let fixText: string | undefined;
     if (v.autoFix) {
       const ff = offsetToPm(v.autoFix.offset, ranges);
       const ft = offsetToPm(v.autoFix.offset + v.autoFix.length, ranges);
       if (ff !== null && ft !== null && ft >= ff) {
         fixFrom = ff;
         fixTo = ft;
+        fixText = doc.textBetween(ff, ft);
       }
     }
     let paragraphFrom: number | undefined;
@@ -139,6 +145,7 @@ export function mapViolationsToPm(
       to,
       fixFrom,
       fixTo,
+      fixText,
       paragraphFrom,
       paragraphTo,
     });

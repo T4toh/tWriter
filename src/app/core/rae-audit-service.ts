@@ -1,8 +1,9 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
-import { htmlToPlain, validateRae } from '../dialogos/validator';
+import { htmlToPlain, nonProseSkip, validateRae } from '../dialogos/validator';
 import { detectMayusculasRancias } from '../dictionary/mayusculas-rancias';
-import { detectLang } from '../dialogos/detect';
+import { resolverIdiomaEfectivo } from '../revision/deteccion';
+import { BookConfigService } from './book-config-service';
 import { RaeViolation } from './types';
 import { FontPreviewService } from './font-preview-service';
 import { ImageViewerService } from './image-viewer-service';
@@ -36,6 +37,7 @@ export class RaeAuditService {
   private fontPreview = inject(FontPreviewService);
   private markdownReader = inject(MarkdownReaderService);
   private debug = inject(DebugService);
+  private bookConfig = inject(BookConfigService);
 
   readonly scope = signal<AuditScope | null>(null);
   readonly chapters = signal<ChapterViolations[]>([]);
@@ -57,6 +59,17 @@ export class RaeAuditService {
     }
     return n;
   });
+
+  /** Idioma declarado en `book.json`, si el alcance está adentro de un libro.
+   *  Un fallo acá no es un error del escaneo: se cae al idioma del capítulo y
+   *  después a `detectLang` (ver `resolverIdiomaEfectivo`). */
+  private async idiomaDelLibro(path: string): Promise<string | null> {
+    try {
+      return (await this.bookConfig.load(path)).idioma ?? null;
+    } catch {
+      return null;
+    }
+  }
 
   isOpen(): boolean {
     return this.scope() !== null;
@@ -80,15 +93,17 @@ export class RaeAuditService {
       });
       this.progress.set({ done: 0, total: payloads.length });
       const dictWords = await this.palabrasDeLaSaga(scope.path);
+      const idiomaLibro = await this.idiomaDelLibro(scope.path);
 
       const accumulated: ChapterViolations[] = [];
       let processed = 0;
       for (const payload of payloads) {
-        const lang = payload.idioma ?? detectLang(payload.html);
+        // El libro manda, como en los otros dos paneles de auditoría.
+        const lang = resolverIdiomaEfectivo(idiomaLibro, payload.idioma, payload.html);
         const plain = htmlToPlain(payload.html);
         // RAE es solo español; las mayúsculas rancias no tienen idioma.
         const violations = [
-          ...(lang === 'es' ? validateRae(plain, 'es') : []),
+          ...(lang === 'es' ? validateRae(plain, 'es', nonProseSkip(payload.html)) : []),
           ...detectMayusculasRancias(plain, dictWords),
         ].sort((a, b) => a.offset - b.offset);
         if (violations.length > 0) {
