@@ -591,6 +591,28 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   iguales se unifican; dos copias parecidas que divergieron a propósito, no. Y
   antes de unificar una función duplicada, preguntarse si el framework ya la
   trae (`formatDate` ×4 se resolvió borrándola: era `DatePipe`).
+- **`keyring` 3 → 4: no subir sin motivo** (relevado el 2026-09-30, en la
+  tanda de dependencias #171–#175). La 3.6.3 no tiene advisories y sigue
+  compilando; subir no cierra nada ni se nota en la app. La 4 no es un bump:
+  es un wrapper sobre `keyring-core` más un crate de store por OS
+  (`apple-native-keyring-store`, `windows-native-keyring-store`,
+  `dbus-`/`zbus-secret-service-keyring-store`), todo reescrito, y su modo
+  compatible (feature `v1`) imita la API de la **1**, no la de la 3, así que
+  `secrets.rs` cambia igual. El riesgo es perder el apiKey de LT Premium ya
+  guardado: si el store nuevo busca la entrada con otros atributos (Secret
+  Service en Linux, target name en Windows), la app no la encuentra y parece
+  borrada. Subir cuando haya motivo (un advisory, que la 3 deje de compilar o
+  quede abandonada) y, ese día: (1) un test que lea con la 4 una entrada
+  escrita por la 3 en cada OS, o una migración que la lea con la API vieja y
+  la reescriba; (2) probar en macOS **y** en Linux; Windows no lo prueba
+  nadie, así que ahí la migración tiene que caer al fallback
+  `secrets-fallback.json` en vez de fallar callada.
+- **Advisories de Cargo que no se cierran desde acá** (OSV al 2026-09-30):
+  `glib` 0.18 (lo trae GTK3 vía tauri en Linux; se va cuando tauri pase a
+  GTK4), `lru` 0.16 vía tantivy (RUSTSEC-2026-0253, solo si el `Drop` de una
+  clave hace panic; tantivy 0.26 pide `^0.16`), y `unic-*` +
+  `proc-macro-error` sin mantenimiento, transitivos de tauri. Revisarlos en la
+  próxima tanda de dependencias, no antes.
 
 ## Documentación
 
