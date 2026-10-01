@@ -605,6 +605,10 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
     raya (2026-09-30). La app la muestra desde el mismo archivo (modal de la
     auditoría RAE y del popover), así que moverla a la wiki no puede copiarla:
     tiene que seguir siendo una sola fuente.
+  - **Citas del DPD**: link por entrada y fragmentos cortos con su sección,
+    nunca la entrada copiada. El criterio y dónde están hoy las fuentes, en
+    [docs/decisiones-cerradas.md](docs/decisiones-cerradas.md) → «Fuentes
+    normativas».
 
 ## Archivos
 

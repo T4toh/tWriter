@@ -527,3 +527,35 @@ para no volver a abrirlos ni rehacer la medición. Lo que sigue pendiente vive e
   campana del historial. Si algún día se quiere config de verdad, lo único con
   sentido son tres toggles: confirmaciones de éxito del árbol, banner de
   update, y una duración global. La matriz por tipo × canal está descartada.
+
+## Fuentes normativas
+
+- **El DPD no se copia al repo: se cita y se linkea** (decidido con el autor el
+  2026-10-01, para no volver a preguntarlo). El *Diccionario panhispánico de
+  dudas*, la *Ortografía* y la *Nueva gramática* son de la RAE y la ASALE, con
+  copyright y sin formato máquina (ver TODO.md → «Fuentes normativas del
+  español: no hay corpus libre»). Se descartó scrapear las entradas y tenerlas
+  en el repo, o un `.md` con el texto literal: el repo es **público**, y no vale
+  la pena porque el DPD casi no cambia y se consulta cuando hace falta.
+  - **Lo que sí se puede: la cita breve con la fuente.** En Argentina lo permite
+    la Ley 11.723, art. 10 (comentario, crítica o fines didácticos, hasta mil
+    palabras de una obra literaria o científica); en España, la LPI, art. 32.
+    O sea: fragmentos cortos para explicar una regla, siempre con entrada,
+    sección y link. Lo que **no**: reproducir entradas enteras.
+  - **Dónde están hoy las fuentes, y de dónde sale cada explicación:**
+    - `src/app/dialogos/rules-dedicated.ts` → `HELP`: cada regla del validador
+      lleva su entrada y sección del DPD (`raya` 2.1, 2.3a–f, §2, 3.1;
+      `puntos suspensivos` §1) y el par mal/bien. Varios ejemplos son los del
+      propio DPD (`doña Patro`, `Azucena`), citados con la fuente. El popover
+      arma el link a `rae.es/dpd/<entrada>` con `dpdUrl()`.
+    - `src/app/dialogos/validator.ts` → `pending-conversion`: `raya` 3.1.
+    - `docs/raya.md`: la chuleta de la raya con secciones. La app la muestra
+      desde el mismo archivo, así que es la fuente única también para la wiki.
+    - `scripts/run-raya-corpus-smoke.mjs`: cada caso lleva su sección.
+  - **Antes de citar un número de sección, verificarlo en la web.** La de la
+    RAE no se deja bajar con un fetch común: hay que abrirla con Playwright
+    (`rae.es/dpd/<entrada>`). Citar de memoria ya falló una vez: el 2026-10-01
+    salió «puntos suspensivos 3.1» para la minúscula después de los
+    suspensivos, y es §1 (3.1 es el punto de abreviatura).
+  - **Para la wiki:** un link por entrada, y las citas cortas con su sección,
+    que es lo que ya hace la app.
