@@ -164,6 +164,17 @@ cabecera de `src/app/core/search-highlight.spec.ts` deja sentado ese criterio.
   `reglas_lt_desactivadas` el 2026-09-18. Ojo: el `struct` de Rust puede estar
   perfecto —con su campo, su `rename` y hasta su test de round-trip— y perderse
   igual, así que revisar el lado Rust no alcanza para descartarlo.
+- **Los botones salen del `.btn` global, nunca de clases por componente.**
+  `src/styles.scss` tiene la escala y su criterio escrito: `btn-primary`
+  aplica, `btn-secondary` acompaña o cierra, `btn-danger` destruye, y
+  `btn-sm` es el tamaño compacto (popovers del editor). Al lado viven
+  `.card-btn` y lo de `src/app/shared/*.scss`. Si falta una variante o un
+  tamaño, se suma ahí; en el `.scss` del componente queda solo lo propio de
+  esa pieza. Los botones estuvieron copiados en diez `.scss` de componente,
+  cada uno con su variante del mismo bloque, hasta que se subieron a mano. Y
+  el 2026-10-01, la unificación de los popovers (#180) arrancó armando otra
+  escala paralela en `popover-shell.scss`. Antes de escribir CSS de un
+  control, buscar primero en esos dos lugares.
 - **Capas de `z-index`.** El chrome del editor va por debajo de 200
   (`.privacy-banner` 150, los tres popovers de `.editor-pop` 180), los modales
   toman 200/201 (`.modal-backdrop` / `.modal-card`), los toasts 300, y arriba de
