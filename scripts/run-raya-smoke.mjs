@@ -84,6 +84,24 @@ console.log('validateRaya');
   check('presente con sujeto detrás sí dispara dash-orphan', orphan !== undefined, v);
 }
 {
+  // Un verbo de habla adentro de una cita «…» es del texto citado, no un
+  // inciso del narrador al que le falte la raya (DPD comillas 2a).
+  const v = validateRaya('—Me escribió: «No vengas. Dijo mamá que no.» Y eso fue todo.', 'es');
+  const orphan = v.find((x) => x.ruleId === 'dash-orphan');
+  check('dicendi adentro de «…» NO dispara dash-orphan', orphan === undefined, v);
+}
+{
+  const v = validateRaya('—Leí “Sin raya. Dijo él.” anoche.', 'es');
+  const orphan = v.find((x) => x.ruleId === 'dash-orphan');
+  check('dicendi adentro de “…” NO dispara dash-orphan', orphan === undefined, v);
+}
+{
+  // La cita cerrada no tapa lo que viene después.
+  const v = validateRaya('—Me dijo «vení». Preguntó su hermana.', 'es');
+  const orphan = v.find((x) => x.ruleId === 'dash-orphan');
+  check('dicendi después de una cita cerrada sí dispara dash-orphan', orphan !== undefined, v);
+}
+{
   const v = validateRaya('"Hola" dijo Juan.', 'es');
   const p = v.find((x) => x.ruleId === 'pending-conversion');
   check('comillas con verbo dicendi → pending-conversion', p !== undefined, v);

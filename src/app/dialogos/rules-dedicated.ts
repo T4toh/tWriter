@@ -113,6 +113,24 @@ const SUBORDINATORS = new Set([
 ]);
 const IMPERATIVE_OBJECTS = new Set(['tu', 'tus', 'eso', 'esto', 'aquello']);
 
+/** `true` si `i` cae adentro de una cita «…» o “…” sin cerrar todavía. Lo que
+ *  está citado es texto de otro (una carta, un cartel, lo que dijo alguien), y
+ *  ahí un `Dijo` después de punto no es un inciso del narrador (DPD comillas
+ *  2a). Las rectas `"` no cuentan: en un párrafo con raya son conversión a
+ *  medio hacer y ya las marca `dash-quote-mix`. */
+function dentroDeCita(p: string, i: number): boolean {
+  let angulares = 0;
+  let inglesas = 0;
+  for (let k = 0; k < i; k++) {
+    const c = p[k];
+    if (c === '«') angulares++;
+    else if (c === '»') angulares = Math.max(0, angulares - 1);
+    else if (c === '“') inglesas++;
+    else if (c === '”') inglesas = Math.max(0, inglesas - 1);
+  }
+  return angulares > 0 || inglesas > 0;
+}
+
 const ruleDashOrphan: Rule = (p) => {
   if (!/^[\s]*—/.test(p)) return [];
   const out: DedicatedViolation[] = [];
@@ -128,6 +146,9 @@ const ruleDashOrphan: Rule = (p) => {
     // (`.?!…`), es un verbo regular dentro del contenido del diálogo, no un
     // dicendi-tag. Ej. `—Así le dicen al oro.` — `dicen` precedido por `le`.
     if (!SENTENCE_END_RE.test(p[j])) continue;
+    // Anti-falso-positivo 1b: adentro de una cita, el punto y el verbo son del
+    // texto citado. Ej. `—Me escribió: «No vengas. Dijo mamá que no.»`
+    if (dentroDeCita(p, i)) continue;
     // Anti-falso-positivo 2: si la palabra siguiente al tag es subordinante
     // (que, si, cuando, porque…), el tag funciona como verbo reportativo del
     // hablante, no como dicendi. Ej. `Dicen que una mansión está encantada`
