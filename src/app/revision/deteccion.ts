@@ -9,6 +9,7 @@ import {
   ExcepcionesDeliberadas,
 } from '../repeticiones/detector';
 import { findCompoundRanges, isInsideCompound } from '../dictionary/compound-terms';
+import { detectMayusculasRancias } from '../dictionary/mayusculas-rancias';
 import { RayaAutoFix } from '../core/types';
 
 /** Qué transformaciones aplicar. Repeticiones no está: no se auto-aplican,
@@ -31,6 +32,12 @@ export interface ResultadoDeteccionCapitulo {
   rayas: number;
   comillas: number;
   arreglosRaya: number;
+  /** Lo que el panel «Revisar raya» lista pero no se aplica solo: violaciones
+   *  de raya sin arreglo automático (`dash-orphan`, los de arreglo `manual`) y
+   *  mayúsculas rancias. El modal las tiene que contar: si no, después de
+   *  aplicar los automáticos dice «sin cambios» con errores todavía en el
+   *  libro. */
+  rayaAMano: number;
   repeticiones: number;
   /** Idioma EFECTIVO (con fallback a `detectLang`) que se usó para gatear
    *  rayas/comillas/arreglosRaya acá adentro. Lo expone el servicio de
@@ -142,9 +149,11 @@ export function detectarEnCapitulo(
   // de ser independiente de "rayas" — tildar solo arreglosRaya convertía el
   // diálogo igual.
   const violaciones = validateRaya(plain, idiomaEfectivo, nonProseSkip(html));
-  const arreglosRaya = violaciones.filter(
-    (v) => v.autoFix !== undefined && !v.autoFix.manual && v.category !== 'pending-conversion',
-  ).length;
+  const deRaya = violaciones.filter((v) => v.category !== 'pending-conversion');
+  const arreglosRaya = deRaya.filter((v) => v.autoFix !== undefined && !v.autoFix.manual).length;
+  // Mayúsculas rancias: sin idioma, igual que en `raya-audit-service`.
+  const rayaAMano =
+    deRaya.length - arreglosRaya + detectMayusculasRancias(plain, [...opts.diccionario]).length;
 
   // Las entradas compuestas del diccionario (`Kun Lian`, `Tres Torres`) no
   // pueden filtrarse por `ignorar`, que es token-level. Se sacan del mismo
@@ -156,7 +165,7 @@ export function detectarEnCapitulo(
     ignorar: opts.diccionario,
   }).filter((r) => !isInsideCompound(compuestas, r.offset, r.offset + r.length));
 
-  return { rayas, comillas, arreglosRaya, repeticiones: reps.length, esIngles };
+  return { rayas, comillas, arreglosRaya, rayaAMano, repeticiones: reps.length, esIngles };
 }
 
 /**

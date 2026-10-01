@@ -111,6 +111,7 @@ const SUBORDINATORS = new Set([
   'cuándo', 'cómo', 'cuánto', 'cuánta', 'cuántos', 'cuántas', 'quién',
   'quiénes', 'qué', 'cuál', 'cuáles',
 ]);
+const IMPERATIVE_OBJECTS = new Set(['tu', 'tus', 'eso', 'esto', 'aquello']);
 
 const ruleDashOrphan: Rule = (p) => {
   if (!/^[\s]*—/.test(p)) return [];
@@ -136,6 +137,12 @@ const ruleDashOrphan: Rule = (p) => {
     const nextWordMatch = after.match(/^([^\s.,;:!?]+)/);
     const nextWord = (nextWordMatch?.[1] ?? '').toLowerCase();
     if (SUBORDINATORS.has(nextWord)) continue;
+    // Anti-falso-positivo 2b: el presente (`repite`, `pregunta`, `cuenta`) es
+    // igual al imperativo de tú. Si lo que sigue es un posesivo de segunda
+    // persona o un demostrativo neutro, ninguno puede ser el sujeto que habla:
+    // es el personaje dando una orden. Ej. `—Se nota, mago. Repite tu
+    // historia, viajera.`
+    if (IMPERATIVE_OBJECTS.has(nextWord)) continue;
     // Anti-falso-positivo 3: el dicendi-inciso es típicamente corto
     // (`<tag> <sujeto>.` con ≤4 palabras entre el tag y el `.`). Si entre el
     // tag y el próximo sentence-end hay más palabras, es contenido del

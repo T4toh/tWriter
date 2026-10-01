@@ -66,6 +66,16 @@
           </div>
         }
         <div class="rl-fila rl-fila-reporte">
+          <span class="rl-nombre">A corregir a mano</span>
+          <span class="rl-conteo">{{ resumen(r.rayaAMano) }}</span>
+          @if (r.rayaAMano.cambios > 0) {
+            <button type="button" class="rl-ver" (click)="verRaya($event)" title="Ver las violaciones de raya una por una, con la oración y el salto al lugar">
+              ver <svg lucideArrowRight [size]="11"></svg>
+            </button>
+          }
+          <span class="rl-nota">avisos de raya sin arreglo automático y mayúsculas rancias: se corrigen a mano en el editor</span>
+        </div>
+        <div class="rl-fila rl-fila-reporte">
           <span class="rl-nombre">Repeticiones</span>
           <span class="rl-conteo">{{ resumen(r.repeticiones) }}</span>
           @if (r.repeticiones.cambios > 0) {

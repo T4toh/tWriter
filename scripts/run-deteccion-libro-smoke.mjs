@@ -199,6 +199,21 @@ console.log('detectarEnCapitulo: idioma en blanco no es una declaración');
   check('libro es + capítulo en blanco: comillas === 0', res.comillas === 0, res);
 }
 
+{
+  // `dash-orphan` no trae arreglo automático: no suma a arreglosRaya, pero
+  // tiene que contarse como pendiente a mano.
+  const html = '<p>—¿Nervioso? Preguntó su hermana.</p>';
+  const res = detectarEnCapitulo(html, 'es', null, opts);
+  check('raya sin arreglo automático: arreglosRaya === 0', res.arreglosRaya === 0, res);
+  check('raya sin arreglo automático: rayaAMano > 0', res.rayaAMano > 0, res);
+}
+
+{
+  // Mayúsculas rancias: sin idioma, cuentan también en un capítulo en inglés.
+  const res = detectarEnCapitulo('<p>She LOoked away.</p>', 'en', null, opts);
+  check('mayúscula rancia en inglés: rayaAMano > 0', res.rayaAMano > 0, res);
+}
+
 rmSync(outDir, { recursive: true, force: true });
 
 console.log(`\n${passed} ok, ${failed} fail`);

@@ -74,6 +74,16 @@ console.log('validateRaya');
   check('verbo regular mid-content NO dispara dash-orphan', orphan === undefined, v);
 }
 {
+  const v = validateRaya('—Torre Blanca. Se nota, mago. Repite tu historia, viajera.', 'es');
+  const orphan = v.find((x) => x.ruleId === 'dash-orphan');
+  check('imperativo con «tu» detrás NO dispara dash-orphan', orphan === undefined, v);
+}
+{
+  const v = validateRaya('—Ya está. Repite el viejo.', 'es');
+  const orphan = v.find((x) => x.ruleId === 'dash-orphan');
+  check('presente con sujeto detrás sí dispara dash-orphan', orphan !== undefined, v);
+}
+{
   const v = validateRaya('"Hola" dijo Juan.', 'es');
   const p = v.find((x) => x.ruleId === 'pending-conversion');
   check('comillas con verbo dicendi → pending-conversion', p !== undefined, v);
