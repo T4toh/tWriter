@@ -97,6 +97,7 @@ import { detectRepeticiones, DEFAULTS as REP_DEFAULTS } from '../repeticiones/de
 import { findCompoundRanges, isInsideCompound } from '../dictionary/compound-terms';
 import { RepeticionesAuditService } from '../core/repeticiones-audit-service';
 import { GrammarAuditService } from '../core/grammar-audit-service';
+import { RayaAuditService } from '../core/raya-audit-service';
 import {
   RangoPm,
   RepeticionPos,
@@ -165,6 +166,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected sagaCtx = inject(SagaContextService);
   private repeticionesAudit = inject(RepeticionesAuditService);
   private grammarAudit = inject(GrammarAuditService);
+  private rayaAudit = inject(RayaAuditService);
   protected systemFonts = inject(SystemFontsService);
   private fontsService = inject(FontsService);
   private ctxMenu = inject(ContextMenuService);
@@ -590,7 +592,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         const pending = this.search.consumePendingHighlight(node.path);
         if (pending) {
           setTimeout(() => {
-            highlightBestMatch(this.hostRef.nativeElement, pending.terms, pending.rawQuery, pending.fold);
+            highlightBestMatch(this.hostRef.nativeElement, pending.terms, pending.rawQuery, pending.fold, pending.nth);
           }, 0);
         }
       }
@@ -765,7 +767,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       const consumed = this.search.consumePendingHighlight(node.path);
       if (!consumed) return;
       setTimeout(() => {
-        highlightBestMatch(this.hostRef.nativeElement, consumed.terms, consumed.rawQuery, consumed.fold);
+        highlightBestMatch(this.hostRef.nativeElement, consumed.terms, consumed.rawQuery, consumed.fold, consumed.nth);
       }, 0);
     });
 
@@ -886,6 +888,21 @@ export class Editor implements AfterViewInit, OnDestroy {
           return;
         }
         void this.checkGrammar(true);
+      });
+    });
+
+    // Ídem para el panel RAE. `checkRaya` es sincrónico y consume el pedido al
+    // final, así que con forzarlo alcanza.
+    effect(() => {
+      const pedido = this.rayaAudit.pendingPopover();
+      if (!pedido || pedido.path !== this.active()?.path) return;
+      if (!this.viewReady() || !this.tiptap) return;
+      untracked(() => {
+        if (!this.canCheckRaya()) {
+          this.rayaAudit.limpiarPopoverPendiente();
+          return;
+        }
+        this.checkRaya(true);
       });
     });
 
@@ -1572,6 +1589,27 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.rayaViolations.set(positioned);
     this.applyRayaDecorations(positioned);
     this.lastRayaPlain = plain;
+    this.consumirPopoverRayaPendiente(plain, positioned);
+  }
+
+  /** El panel RAE pidió abrir el popover sobre una violación. Mismo criterio que
+   *  `consumirPopoverGramaticaPendiente`: `ruleId` dentro del ancla, y se limpia
+   *  SIEMPRE para que un ancla que ya no existe no salte en otro capítulo. */
+  private consumirPopoverRayaPendiente(plain: string, positioned: RayaViolationPos[]): void {
+    const pedido = untracked(() => this.rayaAudit.pendingPopover());
+    if (!pedido) return;
+    if (pedido.path !== this.active()?.path) return;
+    this.rayaAudit.limpiarPopoverPendiente();
+
+    const desde = plain.indexOf(pedido.anchor);
+    const hasta = desde < 0 ? -1 : desde + pedido.anchor.length;
+    const candidatas = positioned.filter((v) => v.ruleId === pedido.ruleId);
+    if (candidatas.length === 0) return;
+    const objetivo =
+      desde < 0
+        ? candidatas[0]
+        : candidatas.find((v) => v.offset >= desde && v.offset < hasta) ?? candidatas[0];
+    this.abrirPopoverRayaEn(objetivo);
   }
 
   protected toggleAutoRepeticiones(): void {
@@ -2028,6 +2066,20 @@ export class Editor implements AfterViewInit, OnDestroy {
     return { left: c.left, top: c.top, bottom: c.bottom };
   }
 
+  /** Al redimensionar, el texto se reacomoda y la caja guardada al abrir deja
+   *  de ser la del ancla. Se recalcula desde la posición de ProseMirror; el
+   *  popover se remide solo porque cambió la identidad de `anchor()`. */
+  @HostListener('window:resize')
+  protected reanclarPopovers(): void {
+    if (!this.tiptap) return;
+    const g = this.grammarPopover();
+    if (g) this.grammarPopover.set({ ...g, anchor: this.anchorAt(g.from) });
+    const r = this.rayaPopover();
+    if (r) this.rayaPopover.set({ ...r, anchor: this.anchorAt(r.violation.from) });
+    const rep = this.repPopover();
+    if (rep) this.repPopover.set({ ...rep, anchor: this.anchorAt(rep.from) });
+  }
+
   private openRepPopover(r: RepeticionPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
@@ -2102,6 +2154,10 @@ export class Editor implements AfterViewInit, OnDestroy {
   private openRayaPopover(v: RayaViolationPos, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
+    this.abrirPopoverRayaEn(v);
+  }
+
+  private abrirPopoverRayaEn(v: RayaViolationPos): void {
     this.cerrarPopovers();
     this.rayaPopover.set({
       violation: v,

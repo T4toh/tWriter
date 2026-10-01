@@ -10,6 +10,14 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+### Fixed
+
+- Abrir dos capítulos seguidos rápido deja abierto el último que se clickeó, no el que terminó de cargar último.
+- Saltar desde el panel «Revisar raya» abre el popover sobre la violación, como ya pasaba en gramática y repeticiones.
+- La fila «Rayas» de «Revisar» cuenta los diálogos por convertir, no los capítulos.
+- Al redimensionar la ventana, el popover abierto acompaña al texto en vez de quedar donde estaba la palabra antes.
+- En la búsqueda «Archivo actual», cada línea del resultado lleva a su párrafo y no todas al mismo.
+
 ## [0.23.0] - 2026-10-01
 
 ### Added

@@ -166,6 +166,28 @@ export function pickBestBlock(
   return best;
 }
 
+/**
+ * Índice del bloque número `nth` (desde 0) entre los que tienen al menos un
+ * match, con el mismo criterio que la búsqueda «Archivo actual», que arma un
+ * hit por párrafo con match. -1 si no hay tantos: el texto cambió entre la
+ * búsqueda y el click, y el caller cae a `pickBestBlock`.
+ */
+export function pickNthMatchingBlock(
+  texts: string[],
+  terms: string[],
+  rawQuery: string,
+  fold: boolean,
+  nth: number,
+): number {
+  let seen = 0;
+  for (let i = 0; i < texts.length; i += 1) {
+    if (findAllMatchesInPlain(texts[i] ?? '', terms, rawQuery, fold).length === 0) continue;
+    if (seen === nth) return i;
+    seen += 1;
+  }
+  return -1;
+}
+
 /** Compara rankings de bloque lexicográficamente. Estricto, así que a igualdad
  *  gana el que ya estaba, o sea el más temprano en el documento. */
 function esMejorRank(a: [number, number, number], b: [number, number, number]): boolean {
@@ -185,6 +207,7 @@ export function highlightBestMatch(
   terms: string[],
   rawQuery?: string,
   fold = false,
+  nth?: number,
 ): boolean {
   if (!host) return false;
   // Sólo bloques hoja: un `<blockquote>` con `<p>` adentro aparece dos veces en
@@ -192,12 +215,11 @@ export function highlightBestMatch(
   const blocks = Array.from(host.querySelectorAll<HTMLElement>(BLOCK_SELECTOR)).filter(
     (el) => el.querySelector(BLOCK_SELECTOR) === null,
   );
-  const idx = pickBestBlock(
-    blocks.map((b) => b.textContent ?? ''),
-    terms,
-    rawQuery ?? '',
-    fold,
-  );
+  const texts = blocks.map((b) => b.textContent ?? '');
+  // Con `nth` el click vino de una línea puntual del grupo: el mejor bloque
+  // mandaba las N líneas del capítulo al mismo lugar.
+  const nthIdx = nth === undefined ? -1 : pickNthMatchingBlock(texts, terms, rawQuery ?? '', fold, nth);
+  const idx = nthIdx >= 0 ? nthIdx : pickBestBlock(texts, terms, rawQuery ?? '', fold);
   // Un bloque por raíz, nunca el host entero: `selectFirstMatchIn` concatena
   // los text nodes de cada raíz, y concatenar bloques distintos pegaría el
   // final de un párrafo con el principio del siguiente ("la casa" + "grande"

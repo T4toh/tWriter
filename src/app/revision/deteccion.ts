@@ -29,6 +29,8 @@ export interface OpcionesDeteccion {
 }
 
 export interface ResultadoDeteccionCapitulo {
+  /** Párrafos de diálogo por convertir (`pending-conversion` del validador),
+   *  0 si `convertFragmentHtml` no cambiaría nada. */
   rayas: number;
   comillas: number;
   arreglosRaya: number;
@@ -134,8 +136,6 @@ export function detectarEnCapitulo(
   // como "1 cambio" y aplicar le aplana la tipografía de comillas a ASCII sin
   // convertir nada a raya — peor que no tocarlo. Los tres guards tienen que
   // mantenerse juntos.
-  const rayas = !esIngles && convertFragmentHtml(html) !== null ? 1 : 0;
-
   // Comillas: solo capítulos en inglés (efectivo, con fallback a detectLang si
   // no hay idioma seteado), igual que `quotes-fix-service`.
   const comillas = esIngles ? educateQuotes(html).changes : 0;
@@ -150,6 +150,14 @@ export function detectarEnCapitulo(
   // diálogo igual.
   const violaciones = validateRaya(plain, idiomaEfectivo, nonProseSkip(html));
   const deRaya = violaciones.filter((v) => v.category !== 'pending-conversion');
+  // El conteo es el del validador, uno por párrafo, que es lo mismo que lista
+  // el panel «ver». El gate sigue siendo `convertFragmentHtml`, que es lo que
+  // aplicar va a escribir: si cambia algo y el validador no lo ve párrafo por
+  // párrafo, igual cuenta uno en vez de esconder el capítulo.
+  const rayas =
+    !esIngles && convertFragmentHtml(html) !== null
+      ? Math.max(1, violaciones.length - deRaya.length)
+      : 0;
   const arreglosRaya = deRaya.filter((v) => v.autoFix !== undefined && !v.autoFix.manual).length;
   // Mayúsculas rancias: sin idioma, igual que en `raya-audit-service`.
   const rayaAMano =

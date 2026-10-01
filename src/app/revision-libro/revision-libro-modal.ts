@@ -128,7 +128,7 @@ export class RevisionLibroModal {
     void this.grammarAudit.open({ path: node.path, name: node.name });
   }
 
-  /** Rayas/comillas: no hay conteo real de cambios (ver `ConteoCapitulos`),
+  /** Comillas: no hay conteo real de cambios (ver `ConteoCapitulos`),
    *  así que la fila dice solo en cuántos capítulos hay algo para tocar. */
   protected resumenCapitulos(c: ConteoCapitulos): string {
     if (c.capitulos === 0) return 'sin cambios';

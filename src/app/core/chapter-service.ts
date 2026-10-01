@@ -32,6 +32,11 @@ export interface ChapterPane {
   wordCount: Signal<number>;
   canEdit: Signal<boolean>;
   autosaveTimer: ReturnType<typeof setTimeout> | null;
+  /** Sube con cada `openInPane`/`closeInPane`. Una apertura que vuelve de sus
+   *  `await` con otro número llegó tarde: clickear A y enseguida B deja las dos
+   *  lecturas en vuelo, y sin esto ganaba la que resolvía última — el árbol
+   *  marcando B y el editor mostrando A. */
+  openGen: number;
 }
 
 function makeChapterPane(): ChapterPane {
@@ -50,6 +55,7 @@ function makeChapterPane(): ChapterPane {
     wordCount: computed(() => countWords(content())),
     canEdit: computed(() => !!active()?.editable),
     autosaveTimer: null,
+    openGen: 0,
   };
 }
 
@@ -132,7 +138,9 @@ export class ChapterService {
     // el panel tiene que seguir mostrando las notas del libro que se escribe.
     if (paneId === 0) this.nav.setUltimoCapitulo(node.path);
     const pane = this.panes[paneId];
+    const gen = ++pane.openGen;
     await this.flushPendingInPane(paneId);
+    if (gen !== pane.openGen) return;
     pane.error.set(null);
 
     if (!node.editable) {
@@ -160,6 +168,7 @@ export class ChapterService {
       // va al archivo correcto. La rama no-dirty además cancela el timer que
       // hubiera quedado armado.
       await this.flushPendingInPane(paneId);
+      if (gen !== pane.openGen) return;
       let meta = metaRaw ?? EMPTY_META;
       // El idioma del libro manda, como en `resolverIdiomaEfectivo`: un
       // capítulo con un idioma viejo mal detectado (un diálogo corto en inglés
@@ -173,6 +182,7 @@ export class ChapterService {
         } catch {
           // logged via meta error signal si falla
         }
+        if (gen !== pane.openGen) return;
       }
       pane.content.set(html);
       pane.meta.set(meta);
@@ -180,6 +190,7 @@ export class ChapterService {
       pane.active.set(node);
       pane.loadedAt.set(Date.now());
     } catch (err) {
+      if (gen !== pane.openGen) return;
       pane.error.set(String(err));
       pane.active.set(node);
       pane.loadedAt.set(Date.now());
@@ -188,6 +199,7 @@ export class ChapterService {
 
   closeInPane(paneId: PaneId): void {
     const pane = this.panes[paneId];
+    pane.openGen++;
     this.cancelAutosaveInPane(paneId);
     pane.active.set(null);
     pane.content.set('');
