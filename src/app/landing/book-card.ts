@@ -16,10 +16,12 @@ import {
   ESTADO_LIBRO_LABEL,
   estadoLibro,
   necesitaRevisar,
+  ultimaEdicionDeContenido,
   ultimaRevisionMs,
 } from '../core/estado-libro';
 import { ExportsService } from '../core/exports-service';
 import { sinPrefijoNumerico } from '../core/nombre-carpeta';
+import { ProjectService } from '../core/project-service';
 import { RevisionLibroService } from '../core/revision-libro-service';
 import { SettingsService } from '../core/settings-service';
 import { TreeNode } from '../core/types';
@@ -39,6 +41,7 @@ export class BookCard {
   private coverCache = inject(CoverCache);
   private revision = inject(RevisionLibroService);
   private settings = inject(SettingsService);
+  private project = inject(ProjectService);
 
   readonly node = input.required<TreeNode>();
   /** `vertical` (default) es la tarjeta de la grilla: portada arriba a todo el
@@ -103,7 +106,8 @@ export class BookCard {
     const cfg = this.config();
     if (!cfg) return null;
     const estado = estadoLibro(cfg.estado);
-    const alerta = necesitaRevisar(estado, cfg.revisiones, this.node().modifiedMs);
+    const editado = ultimaEdicionDeContenido(this.node(), this.project.savedMs());
+    const alerta = necesitaRevisar(estado, cfg.revisiones, editado);
     const ultima = ultimaRevisionMs(cfg.revisiones);
     if (ultima !== null) {
       const fecha = formatFechaCorta(ultima, this.settings.dateFormat());
