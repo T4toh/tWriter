@@ -14,20 +14,6 @@ huela a "esto ya lo miramos", buscar ahí primero.
 
 ## Editor / UX
 
-- **Unificar los controles de los tres popovers del editor** (pedido del
-  autor, 2026-09-30: "son todos diferentes y se ven horribles"). Comparten
-  la cáscara (`popover-shell.scss`, `.editor-pop`), pero cada uno trae sus
-  botones con clases propias: `grammar-popover` (`.rep-btn`, `.ignore-btn`,
-  `.nunca-btn`, `.dict-btn`), `raya-popover` (`.raya-pop-link`/`-apply`/
-  `-dismiss`) y `repeticiones-popover` (`.rep-pop-goto`/`-dismiss`). En el de
-  gramática se nota peor: las sugerencias van con borde, «Ignorar» sin
-  borde, «Nunca más esta regla» con borde y partido en tres renglones, y
-  «+ diccionario»/«+ formas…» en dorado partidos en dos, todos de alto
-  distinto en el mismo footer. Falta una sola escala (primario, secundario,
-  peligroso, chip de sugerencia) en `popover-shell.scss` que los tres usen,
-  con `white-space: nowrap` en las acciones y el footer en dos filas si no
-  entra, en vez de apretar cada botón.
-
 - Más variantes de divisor de escena (más allá del `* * *`).
 - **Marcador huérfano post jump-to-term**: el highlight naranja de
   `requestHighlight` (search → click resultado) o de la selección nativa
