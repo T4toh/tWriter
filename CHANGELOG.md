@@ -18,7 +18,7 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 - Al redimensionar la ventana, el popover abierto acompaña al texto en vez de quedar donde estaba la palabra antes.
 - En la búsqueda «Archivo actual», cada línea del resultado lleva a su párrafo y no todas al mismo.
 - Pasar de un capítulo a una nota (o al revés), o cerrar el panel dividido, ya no pierde lo último que se tipeó antes del autoguardado.
-- El aviso de la tarjeta del libro (versión publicada con ediciones posteriores) se prende al editar un capítulo, sin esperar a exportar; ya no se prende solo por exportar, ni por tocar las notas del libro.
+- El chip «Publicada» de la tarjeta del libro va en verde cuando lo publicado está al día y en gris cuando hay ediciones posteriores. Se entera al editar un capítulo, sin esperar a exportar, y ya no cambia solo por exportar ni por tocar las notas del libro.
 
 ## [0.23.0] - 2026-10-01
 

@@ -233,9 +233,11 @@
   font-weight: 600;
   line-height: 1.7;
 
-  &.alerta {
-    border-color: var(--warn-tint-border);
-    color: var(--warn);
+  /* Publicada y sin ediciones posteriores. Sin la clase queda el gris del
+     chip, que es lo que el autor espera ver cuando lo publicado quedó viejo. */
+  &.al-dia {
+    border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+    color: var(--ok);
   }
 
   /* En el pie de la horizontal: en el flujo, sin fondo semiopaco (no hay tapa
