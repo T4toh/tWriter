@@ -696,16 +696,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   `pending-conversion`. Para fine-grain (saber qué regla del converter
   mordió en cada violación), instrumentar `convert()` con hooks que reporten
   qué subpattern matcheó por párrafo.
-- **Salvaguardas adicionales de `dash-orphan`**: la regla toma por inciso
-  sin raya cualquier verbo de habla después de punto con ≤4 palabras hasta el
-  próximo punto, y en las novelas del autor (medido el 2026-10-01) sus 3 hits
-  son falsos positivos: el personaje habla, no hay narrador. Están en el corpus
-  como `PENDIENTES` (familia 10 de `run-raya-corpus-smoke.mjs`):
-  - `—Bueno… Dicen pelotudeces en el pueblo.` — reportativo con objeto.
-  - `—No es para que disculpes, solo… decía.` — «solo decía» del hablante.
-  - `—Buenos días, Jony. Interrumpieron nuestros planes.` — objeto con
-    posesivo de primera persona, que no puede ser el sujeto.
-  Un verbo adentro de una cita «…» o “…” ya no dispara (2026-10-01).
 - **Tests con fixtures reales**: cuando `/home/tatoh/Repos/novelas/` tenga
   los capítulos viejos de Meridian 2.0 pulleados, sumar `validator.spec.ts`
   cases con párrafos textuales de esos archivos (incluyendo el caso "todo

@@ -101,6 +101,18 @@ console.log('validateRaya');
   const orphan = v.find((x) => x.ruleId === 'dash-orphan');
   check('dicendi después de una cita cerrada sí dispara dash-orphan', orphan !== undefined, v);
 }
+// Guardas de los anti-falsos-positivos de dash-orphan: lo que SÍ es un inciso
+// sin raya tiene que seguir saliendo.
+for (const [txt, nombre] of [
+  ['—¿Nervioso? preguntó su hermana.', 'minúscula después de ? sigue disparando'],
+  ['—Bueno… Dijo Juan.', 'mayúscula después de … sigue disparando'],
+  ['—Ya está. Dicen los niños.', '«dicen» con sujeto sigue disparando'],
+  ['—Ya está. Dicen Ana y Luis.', '«dicen» con nombre propio sigue disparando'],
+  ['—Basta. Preguntó mi hermana.', '«mi» puede arrancar el sujeto'],
+]) {
+  const v = validateRaya(txt, 'es');
+  check(nombre, v.some((x) => x.ruleId === 'dash-orphan'), v);
+}
 {
   const v = validateRaya('"Hola" dijo Juan.', 'es');
   const p = v.find((x) => x.ruleId === 'pending-conversion');

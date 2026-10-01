@@ -24,6 +24,7 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 - Pasar de un capítulo a una nota (o al revés), o cerrar el panel dividido, ya no pierde lo último que se tipeó antes del autoguardado.
 - El chip «Publicada» de la tarjeta del libro va en verde cuando lo publicado está al día y en gris cuando hay ediciones posteriores. Se entera al editar un capítulo, sin esperar a exportar, y ya no cambia solo por exportar ni por tocar las notas del libro.
 - El chequeo de raya ya no marca como «raya huérfana» un verbo de habla que está adentro de una cita «…» o “…” en el diálogo (`—Me escribió: «No vengas. Dijo mamá que no.»`).
+- Tampoco la marca cuando habla el personaje y no hay narrador: un verbo en minúscula después de los puntos suspensivos (`solo… decía.`), el «dicen» impersonal (`Dicen pelotudeces en el pueblo.`) o un verbo seguido de «nuestros» (`Interrumpieron nuestros planes.`).
 
 ## [0.23.0] - 2026-10-01
 

@@ -275,18 +275,13 @@ const C = [
   // narrador. Sin inciso no hay raya de cierre que falte (2.3).
   [10, '—Me escribió: «No vengas. Dijo mamá que no.» Y eso fue todo.', null, 'comillas 2a'],
   [10, '—Bueno… Dicen pelotudeces en el pueblo.', null, '2.3'],
-  [10, '—No es para que disculpes, solo… decía.', null, '2.3'],
+  [10, '—No es para que disculpes, solo… decía.', null, 'puntos suspensivos 1'],
   [10, '—Buenos días, Jony. Interrumpieron nuestros planes.', null, '2.3'],
 ];
 
 const PENDIENTES = new Set([
   "\"Esto que hiciste\", gritó, \"es una locura\".",
   "<p><em>\"Vení\"</em>, dijo ella.</p>",
-  // dash-orphan en las novelas del autor (medido el 2026-10-01): el personaje
-  // habla, no hay narrador. Ver TODO.md → Validador de raya → Salvaguardas.
-  '—Bueno… Dicen pelotudeces en el pueblo.',
-  '—No es para que disculpes, solo… decía.',
-  '—Buenos días, Jony. Interrumpieron nuestros planes.',
 ]);
 
 const letters = (s) => (s.replace(/<[^>]+>|&[a-z]+;/g, ' ').match(/\p{L}/gu) ?? []).join('').toLowerCase();
