@@ -10,6 +10,8 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-01
+
 ### Added
 
 - «Acerca de» muestra las novedades de la última versión, con las anteriores a un click.
@@ -493,7 +495,8 @@ _Sin cambios visibles registrados._
 
 _Sin cambios visibles registrados._
 
-[unreleased]: https://github.com/T4toh/tWriter/compare/v0.22.0...HEAD
+[unreleased]: https://github.com/T4toh/tWriter/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/T4toh/tWriter/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/T4toh/tWriter/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/T4toh/tWriter/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/T4toh/tWriter/compare/v0.19.0...v0.20.0
