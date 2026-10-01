@@ -112,6 +112,32 @@ const SUBORDINATORS = new Set([
   'quiénes', 'qué', 'cuál', 'cuáles',
 ]);
 const IMPERATIVE_OBJECTS = new Set(['tu', 'tus', 'eso', 'esto', 'aquello']);
+// Posesivos de primera y segunda del plural: el narrador casi nunca cuenta en
+// «nosotros», así que lo que arrancan es un objeto del que habla, no el sujeto
+// de un inciso. Ej. `—Buenos días, Jony. Interrumpieron nuestros planes.`
+// `mi`/`mis` NO van: «Preguntó mi hermana» es el narrador protagonista.
+const PLURAL_POSSESSIVES = new Set([
+  'nuestro', 'nuestra', 'nuestros', 'nuestras',
+  'vuestro', 'vuestra', 'vuestros', 'vuestras',
+]);
+// Lo que puede abrir el sujeto pospuesto de `dicen`. Si lo que sigue no es
+// nada de esto (ni un nombre propio), `dicen` es el impersonal «la gente
+// dice», y su complemento es lo dicho. Ej. `—…los duendes… Dicen pelotudeces
+// en el pueblo.`
+const SUBJECT_STARTS = new Set([
+  'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas',
+  'su', 'sus', 'mi', 'mis', 'tu', 'tus',
+  'este', 'esta', 'estos', 'estas', 'ese', 'esa', 'esos', 'esas',
+  'aquel', 'aquella', 'aquellos', 'aquellas',
+  'ellos', 'ellas', 'ustedes', 'todos', 'todas', 'ambos', 'ambas',
+  'varios', 'varias', 'algunos', 'algunas', 'muchos', 'muchas', 'otros', 'otras',
+  'dos', 'tres', 'cuatro', 'cinco',
+]);
+
+/** Los puntos suspensivos que terminan justo en `j`, como `…` o como `...`. */
+function terminaEnSuspensivos(p: string, j: number): boolean {
+  return p[j] === '…' || (p[j] === '.' && p[j - 1] === '.' && p[j - 2] === '.');
+}
 
 /** `true` si `i` cae adentro de una cita «…» o “…” sin cerrar todavía. Lo que
  *  está citado es texto de otro (una carta, un cartel, lo que dijo alguien), y
@@ -146,6 +172,11 @@ const ruleDashOrphan: Rule = (p) => {
     // (`.?!…`), es un verbo regular dentro del contenido del diálogo, no un
     // dicendi-tag. Ej. `—Así le dicen al oro.` — `dicen` precedido por `le`.
     if (!SENTENCE_END_RE.test(p[j])) continue;
+    // Anti-falso-positivo 1c: después de los suspensivos, la minúscula dice
+    // que el enunciado sigue (DPD puntos suspensivos §1): `solo… decía.` es
+    // una oración, no un inciso. Después de `?`/`!` no vale: `—¿Nervioso?
+    // preguntó su hermana.` es justamente la raya que falta.
+    if (terminaEnSuspensivos(p, j) && m[0][0] === m[0][0].toLowerCase()) continue;
     // Anti-falso-positivo 1b: adentro de una cita, el punto y el verbo son del
     // texto citado. Ej. `—Me escribió: «No vengas. Dijo mamá que no.»`
     if (dentroDeCita(p, i)) continue;
@@ -164,6 +195,13 @@ const ruleDashOrphan: Rule = (p) => {
     // es el personaje dando una orden. Ej. `—Se nota, mago. Repite tu
     // historia, viajera.`
     if (IMPERATIVE_OBJECTS.has(nextWord)) continue;
+    if (PLURAL_POSSESSIVES.has(nextWord)) continue;
+    // Anti-falso-positivo 2c: `dicen` impersonal. El nombre propio del sujeto
+    // (`Dicen Ana y Luis`) se reconoce por la mayúscula.
+    const nextIsProper = /^\p{Lu}/u.test(nextWordMatch?.[1] ?? '');
+    if (m[0].toLowerCase() === 'dicen' && nextWord && !nextIsProper && !SUBJECT_STARTS.has(nextWord)) {
+      continue;
+    }
     // Anti-falso-positivo 3: el dicendi-inciso es típicamente corto
     // (`<tag> <sujeto>.` con ≤4 palabras entre el tag y el `.`). Si entre el
     // tag y el próximo sentence-end hay más palabras, es contenido del
