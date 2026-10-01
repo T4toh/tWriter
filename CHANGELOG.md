@@ -10,6 +10,10 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+### Changed
+
+- Los popovers de gramática, raya y repeticiones usan los mismos botones: mismo alto, sin etiquetas partidas en dos renglones, «Ignorar» siempre al final y, si no entran en una fila, bajan a la siguiente.
+
 ### Fixed
 
 - Abrir dos capítulos seguidos rápido deja abierto el último que se clickeó, no el que terminó de cargar último.

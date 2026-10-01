@@ -25,47 +25,9 @@
   color: var(--fg);
 }
 
-.reps {
-  list-style: none;
-  margin: 0 0 6px;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.rep-btn {
-  border: 1px solid var(--border);
-  background: var(--bg-soft);
-  color: var(--fg);
-  border-radius: 4px;
-  padding: 3px 8px;
-  cursor: pointer;
-  font-family: var(--font-ui);
-  font-size: 12px;
-}
-
-.rep-btn:hover {
-  background: var(--accent);
-  color: var(--bg);
-  border-color: var(--accent);
-}
-
-.rep-btn--dict {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.rep-chip {
-  flex: none;
-  font-size: 0.7em;
-  text-transform: lowercase;
-  opacity: 0.75;
-  border: 1px solid currentcolor;
-  border-radius: 999px;
-  padding: 0 0.4em;
+/* Chips de sugerencia: la escala vive en `popover-shell.scss`. */
+.grammar-pop-chips {
+  margin-bottom: 6px;
 }
 
 .no-reps {
@@ -74,63 +36,9 @@
   margin-bottom: 6px;
 }
 
-.grammar-pop-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  /* El `space-between` solo deja aire cuando sobra lugar: con la fila de
-     botones ancha, el logo de LT queda pegado al último. El gap es el piso. */
-  gap: 12px;
-  margin-top: 4px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border);
-}
-
-.footer-actions {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-
-.ignore-btn,
-.dict-btn {
-  border: none;
-  background: transparent;
-  color: var(--fg-muted);
-  cursor: pointer;
-  font-size: 11px;
-  font-family: var(--font-ui);
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-
-.ignore-btn:hover,
-.dict-btn:hover {
-  background: var(--border);
-  color: var(--fg);
-}
-
-.dict-btn {
-  color: var(--accent);
-  font-weight: 500;
-}
-
-/* "Nunca más esta regla" mata la regla en TODA la novela y estaba pintado
-   igual que "Ignorar", que solo saca una marca — a 4px de distancia. El borde
-   y el rojo del hover son para que la mano frene antes, no decoración. */
-.nunca-btn {
-  margin-left: 8px;
-  border: 1px solid var(--border);
-}
-
-.nunca-btn:hover {
-  background: transparent;
-  border-color: var(--err);
-  color: var(--err);
-}
-
 .lt-attrib {
+  /* Primer item del footer: empuja los botones a la derecha. */
+  margin-right: auto;
   display: inline-flex;
   align-items: center;
   opacity: 0.65;
