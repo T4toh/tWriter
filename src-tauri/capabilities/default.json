@@ -9,6 +9,23 @@
     "core:window:allow-destroy",
     "core:window:allow-set-theme",
     "opener:default",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        { "path": "**/Exportados/*.[eE][pP][uU][bB]" },
+        { "path": "**/fonts/**/*.[tT][tT][fF]" },
+        { "path": "**/fonts/**/*.[oO][tT][fF]" },
+        { "path": "**/fonts/**/*.[wW][oO][fF][fF]" },
+        { "path": "**/fonts/**/*.[wW][oO][fF][fF]2" },
+        { "path": "**/extras/**/*.[pP][dD][fF]" },
+        { "path": "**/extras/**/*.[eE][pP][uU][bB]" },
+        { "path": "**/extras/**/*.[dD][oO][cC][xX]" },
+        { "path": "**/extras/**/*.[dD][oO][cC]" },
+        { "path": "**/extras/**/*.[oO][dD][tT]" },
+        { "path": "**/extras/**/*.[rR][tT][fF]" },
+        { "path": "**/extras/**/*.[tT][xX][tT]" }
+      ]
+    },
     "updater:default",
     "process:default"
   ]

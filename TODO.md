@@ -101,7 +101,7 @@ huela a "esto ya lo miramos", buscar ahí primero.
   del autor del 2026-09-22, "poner EPUB y esas yerbas"; el zoom del visor de
   imágenes salió en #154). **Falta decidir el alcance** antes de tocar código: un
   renderer de EPUB embebido es otra cosa que un lightbox. Hoy los `.epub`
-  salen al visor del OS (ver "Abrir la carpeta del EPUB exportado" en EPUB).
+  salen al visor del OS (botón «Abrir» del aviso de export, #186).
 
 - **Las marcas inline abren un hueco falso antes de la marca** (visto por el
   autor el 2026-09-29): `—Yo...` con la marca de LT `PUNTOS_SUSPENSIVOS` se ve
@@ -466,12 +466,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   problema aparte que depende del conteo de páginas final). Preguntar al
   autor si el destino es KDP (tiene reglas fijas de márgenes por rango de
   páginas, se pueden codificar) antes de diseñar la UI.
-- **Abrir la carpeta del EPUB exportado / abrirlo en el visor**: al terminar el
-  export la app dice dónde quedó el archivo y ahí muere; el autor tiene que ir a
-  buscarlo a mano. Sumar en el aviso de export exitoso dos acciones: "Mostrar en
-  la carpeta" y "Abrir" (visor EPUB default del OS). `tauri-plugin-opener` ya
-  está instalado y registrado (`lib.rs:114`), así que es `reveal_item_in_dir` +
-  `opener::open_path`, sin dependencia nueva.
 - **Blurb y sinopsis por libro** (pedido del autor, 2026-09-01). Dos textos
   distintos y con usos distintos: el **blurb** es el gancho de contratapa; la
   **sinopsis** es el resumen largo, el que va en la ficha de la tienda. Hoy no

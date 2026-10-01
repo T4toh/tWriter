@@ -1,6 +1,7 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { openPath } from '@tauri-apps/plugin-opener';
 import { detectLang } from '../dialogos/detect';
 import { BookConfigService } from './book-config-service';
 import { DebugService } from './debug-service';
@@ -515,8 +516,13 @@ export class ChapterService {
         'epub',
         `${node.name} → ${result.epub_path} (${result.chapters} parte${result.chapters === 1 ? '' : 's'})`,
       );
+      // «Abrir» lo manda al lector del sistema sin ir a buscar el archivo. Dura
+      // lo que un toast de epubcheck para que dé tiempo a clickearlo.
       this.toast.success(
         `EPUB generado: ${filename} (${result.chapters} parte${result.chapters === 1 ? '' : 's'})`,
+        EPUBCHECK_TOAST_MS,
+        undefined,
+        { label: 'Abrir', run: () => void this.abrirEpub(result.epub_path) },
       );
       // Los avisos no son errores: el EPUB salió igual. Pero si la app
       // detectó que faltaba una tapa, decirlo es lo mínimo — el autor no
@@ -550,6 +556,17 @@ export class ChapterService {
       // siempre. Va en `finally` para que valga también cuando el export falla.
       unlisten?.();
       this.toast.dismiss(toastId);
+    }
+  }
+
+  /** Abre el EPUB con la app que el sistema tenga para `.epub`. El permiso
+   *  de `openPath` está acotado en `capabilities/default.json` a los `.epub`
+   *  de `Exportados/`. */
+  private async abrirEpub(epubPath: string): Promise<void> {
+    try {
+      await openPath(epubPath);
+    } catch (err) {
+      this.toast.error(`No se pudo abrir el EPUB: ${String(err)}`);
     }
   }
 
