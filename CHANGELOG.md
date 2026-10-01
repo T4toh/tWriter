@@ -10,6 +10,8 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-01
+
 ### Changed
 
 - Los popovers de gramática, raya y repeticiones usan los mismos botones: mismo alto, sin etiquetas partidas en dos renglones, «Ignorar» siempre al final y, si no entran en una fila, bajan a la siguiente.
@@ -512,7 +514,8 @@ _Sin cambios visibles registrados._
 
 _Sin cambios visibles registrados._
 
-[unreleased]: https://github.com/T4toh/tWriter/compare/v0.23.0...HEAD
+[unreleased]: https://github.com/T4toh/tWriter/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/T4toh/tWriter/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/T4toh/tWriter/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/T4toh/tWriter/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/T4toh/tWriter/compare/v0.20.0...v0.21.0
