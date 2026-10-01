@@ -97,13 +97,6 @@ huela a "esto ya lo miramos", buscar ahí primero.
   costo estructural que un capítulo nunca guardado por la app se recuente en
   cada carga del árbol (`chapter_word_count` lee y cuenta el HTML cuando no
   hay clave); si alguna vez molesta, cachear por mtime.
-- **Pasar de capítulo a nota en el centro pierde lo último que se tipeó**
-  (encontrado leyendo el código el 2026-10-01, en el PR de `openGen`).
-  `NoteService.openInPane` llama `chapter.closeInPane`, y `Tree.select` llama
-  `note.close()` antes de abrir un capítulo: los dos `closeInPane` cancelan el
-  autosave y bajan `dirty` **sin guardar**. Lo tipeado en los 1,5 s antes del
-  cambio no llega al disco. Falta flushear el pane que se cierra (sin perder el
-  `openGen++` sincrónico, que es lo que descarta la apertura tardía).
 - **Abrir los `.epub` de `Exportados` adentro de la app** (resto del pedido
   del autor del 2026-09-22, "poner EPUB y esas yerbas"; el zoom del visor de
   imágenes salió en #154). **Falta decidir el alcance** antes de tocar código: un
