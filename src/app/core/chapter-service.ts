@@ -85,6 +85,10 @@ export class ChapterService {
   private git = inject(GitService);
   private toast = inject(ToastService);
   private exports = inject(ExportsService);
+  /** Guardados que dejó `closeInPane` en segundo plano. Abrir y flushear los
+   *  esperan: si no, reabrir enseguida el capítulo recién cerrado podía leer
+   *  el disco antes de que llegara la escritura. */
+  private closeWrites: Promise<unknown> = Promise.resolve();
   /** El "epubcheck no está instalado" se dice una vez por sesión. */
   private epubcheckAvisado = false;
 
@@ -153,6 +157,7 @@ export class ChapterService {
     }
 
     try {
+      await this.closeWrites;
       const [html, metaRaw, idiomaLibro] = await Promise.all([
         invoke<string>('read_chapter', { path: node.path }),
         invoke<ChapterMeta>('read_meta', { chapterPath: node.path }),
@@ -197,9 +202,22 @@ export class ChapterService {
     }
   }
 
-  closeInPane(paneId: PaneId): void {
+  /** Cierra el pane. Lo tipeado que el autosave todavía no escribió se guarda
+   *  primero, salvo con `discardPending`: es para cuando el archivo ya no
+   *  existe (borrado, movido), donde guardar lo recrearía. Sin esto, pasar a
+   *  una nota en el centro perdía los últimos 1,5 s de tipeo. El guardado
+   *  corre en segundo plano sobre una copia, así que el cierre sigue siendo
+   *  sincrónico y el `openGen++` descarta igual la apertura tardía. */
+  closeInPane(paneId: PaneId, discardPending = false): void {
     const pane = this.panes[paneId];
     pane.openGen++;
+    const node = pane.active();
+    if (!discardPending && node?.editable && pane.dirty()) {
+      const write = this.writeChapter(node, pane.content()).catch((err) => {
+        this.toast.error(`No se pudo guardar «${node.name}» al cerrarlo: ${String(err)}`);
+      });
+      this.closeWrites = Promise.all([this.closeWrites, write]);
+    }
     this.cancelAutosaveInPane(paneId);
     pane.active.set(null);
     pane.content.set('');
@@ -237,36 +255,44 @@ export class ChapterService {
     this.cancelAutosaveInPane(paneId);
     pane.saving.set(true);
     try {
-      await invoke('write_chapter', { path: node.path, html: pane.content() });
-      const root = this.project.root();
-      if (root) {
-        // Persistimos palabras + ultima_edicion en `.twriter/stats.json` (no
-        // tocamos `meta.json` en cada save — antes generaba 1 commit ruidoso
-        // por cada autosave). meta.json solo se reescribe al cambiar idioma,
-        // titulo, status u orden.
-        await invoke('write_chapter_stats', {
-          root,
-          chapterPath: node.path,
-          palabras: countWords(pane.content()),
-          ultimaEdicion: new Date().toISOString(),
-        });
-      }
-      const savedAt = Date.now();
+      const savedAt = await this.writeChapter(node, pane.content());
       pane.dirty.set(false);
       pane.lastSavedAt.set(savedAt);
-      // Patch puntual del nodo en el signal `tree` para que el badge "recién
-      // editado" del árbol refleje el save sin esperar a un `loadTree()`
-      // completo (que reescaneaba FS y parpadeaba la selección).
-      this.project.touchNodeModifiedMs(node.path, savedAt);
-      // Refresh reactivo del status git para que el dot del header y el
-      // count de "X capítulos modificados" reflejen el cambio sin esperar
-      // al próximo poll de 60s o al commit-timer de 5min. fire-and-forget.
-      void this.git.refreshStatus();
     } catch (err) {
       pane.error.set(String(err));
     } finally {
       pane.saving.set(false);
     }
+  }
+
+  /** Escribe `html` en el capítulo y devuelve el momento del guardado. No toca
+   *  el pane: `closeInPane` lo llama con una copia cuando el pane ya muestra
+   *  otra cosa. */
+  private async writeChapter(node: TreeNode, html: string): Promise<number> {
+    await invoke('write_chapter', { path: node.path, html });
+    const root = this.project.root();
+    if (root) {
+      // Persistimos palabras + ultima_edicion en `.twriter/stats.json` (no
+      // tocamos `meta.json` en cada save — antes generaba 1 commit ruidoso
+      // por cada autosave). meta.json solo se reescribe al cambiar idioma,
+      // titulo, status u orden.
+      await invoke('write_chapter_stats', {
+        root,
+        chapterPath: node.path,
+        palabras: countWords(html),
+        ultimaEdicion: new Date().toISOString(),
+      });
+    }
+    const savedAt = Date.now();
+    // Patch puntual del nodo en el signal `tree` para que el badge "recién
+    // editado" del árbol refleje el save sin esperar a un `loadTree()`
+    // completo (que reescaneaba FS y parpadeaba la selección).
+    this.project.touchNodeModifiedMs(node.path, savedAt);
+    // Refresh reactivo del status git para que el dot del header y el
+    // count de "X capítulos modificados" reflejen el cambio sin esperar
+    // al próximo poll de 60s o al commit-timer de 5min. fire-and-forget.
+    void this.git.refreshStatus();
+    return savedAt;
   }
 
   async setLanguageInPane(lang: 'es' | 'en', paneId: PaneId): Promise<void> {
@@ -362,7 +388,7 @@ export class ChapterService {
       });
       this.debug.info('cleanup', `Borré ${result.deleted.length} archivo(s) de ${node.name}.${node.ext}`);
       for (const i of PANE_IDS) {
-        if (this.panes[i].active()?.path === node.path) this.closeInPane(i);
+        if (this.panes[i].active()?.path === node.path) this.closeInPane(i, true);
       }
       await this.project.loadTree();
       void this.git.refreshStatus();
@@ -386,7 +412,7 @@ export class ChapterService {
       await invoke('delete_directory', { root, target: node.path });
       this.debug.info('cleanup', `Borré carpeta ${node.name}`);
       for (const i of PANE_IDS) {
-        if (this.panes[i].active()?.path.startsWith(node.path)) this.closeInPane(i);
+        if (this.panes[i].active()?.path.startsWith(node.path)) this.closeInPane(i, true);
       }
       await this.project.loadTree();
       void this.git.refreshStatus();
@@ -686,7 +712,7 @@ export class ChapterService {
         if (newPath && newPath !== before) {
           const node = this.findNode(this.project.tree(), newPath);
           if (node) await this.openInPane(node, i);
-          else this.closeInPane(i);
+          else this.closeInPane(i, true);
         }
       }
       this.debug.info('reorder', `relocate ${result.from} → ${result.to}`);
@@ -826,7 +852,7 @@ export class ChapterService {
   /** Flushea autosave de TODOS los panes con dirty. No-op si ningún pane
    *  está dirty. Usado por GitService.flushAndSync antes de commit+push. */
   async flushAllDirty(): Promise<void> {
-    await Promise.all(PANE_IDS.map((id) => this.flushPendingInPane(id)));
+    await Promise.all([this.closeWrites, ...PANE_IDS.map((id) => this.flushPendingInPane(id))]);
   }
 
   /** `idioma` del `book.json` del libro que contiene el capítulo, o `null`.

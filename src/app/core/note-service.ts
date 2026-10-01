@@ -4,6 +4,7 @@ import { ChapterService, PaneId } from './chapter-service';
 import { DebugService } from './debug-service';
 import { GitService } from './git-service';
 import { ProjectService } from './project-service';
+import { ToastService } from './toast-service';
 
 const AUTOSAVE_MS = 1500;
 const PANE_IDS: readonly PaneId[] = [0, 1] as const;
@@ -46,6 +47,10 @@ export class NoteService {
   private debug = inject(DebugService);
   private project = inject(ProjectService);
   private git = inject(GitService);
+  private toast = inject(ToastService);
+
+  /** Ver `ChapterService.closeWrites`. */
+  private closeWrites: Promise<unknown> = Promise.resolve();
 
   /** Dos panes. pane 0 = principal. pane 1 = secundario (split). */
   readonly panes: readonly [NotePane, NotePane] = [makeNotePane(), makeNotePane()];
@@ -87,6 +92,7 @@ export class NoteService {
     this.chapter.closeInPane(paneId);
     pane.error.set(null);
     try {
+      await this.closeWrites;
       const md = await invoke<string>('read_note', { path: target.path });
       if (gen !== pane.openGen) return;
       pane.content.set(md);
@@ -103,9 +109,21 @@ export class NoteService {
     }
   }
 
-  closeInPane(paneId: PaneId): void {
+  /** Mismo criterio que `ChapterService.closeInPane`: guarda lo pendiente en
+   *  segundo plano, salvo `discardPending` cuando la nota ya no existe. */
+  closeInPane(paneId: PaneId, discardPending = false): void {
     const pane = this.panes[paneId];
     pane.openGen++;
+    const target = pane.active();
+    if (!discardPending && target && pane.dirty()) {
+      const write = invoke('write_note', { path: target.path, content: pane.content() })
+        .then(() => void this.git.refreshStatus())
+        .catch((err) => {
+          this.debug.error('note', String(err));
+          this.toast.error(`No se pudo guardar «${target.name}» al cerrarla: ${String(err)}`);
+        });
+      this.closeWrites = Promise.all([this.closeWrites, write]);
+    }
     this.cancelAutosaveInPane(paneId);
     pane.active.set(null);
     pane.content.set('');
@@ -200,7 +218,7 @@ export class NoteService {
       await invoke('delete_note', { path: target.path });
       this.debug.info('note', `Nota borrada: ${target.path}`);
       for (const i of PANE_IDS) {
-        if (this.panes[i].active()?.path === target.path) this.closeInPane(i);
+        if (this.panes[i].active()?.path === target.path) this.closeInPane(i, true);
       }
       await this.project.loadTree();
       void this.git.refreshStatus();
@@ -241,6 +259,6 @@ export class NoteService {
   /** Flushea autosave de TODOS los panes con dirty. No-op si ningún pane
    *  está dirty. Usado por GitService.flushAndSync antes de commit+push. */
   async flushAllDirty(): Promise<void> {
-    await Promise.all(PANE_IDS.map((id) => this.flushPendingInPane(id)));
+    await Promise.all([this.closeWrites, ...PANE_IDS.map((id) => this.flushPendingInPane(id))]);
   }
 }
