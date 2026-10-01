@@ -16,6 +16,8 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ### Fixed
 
+- «Revisar» de la novela cuenta también lo que se corrige a mano (avisos de raya sin arreglo automático y mayúsculas rancias), con su «ver»: antes decía «sin cambios» aunque quedaran errores.
+- El chequeo de raya ya no confunde una orden del personaje («—Se nota, mago. Repite tu historia.») con un verbo de habla al que le falta la raya.
 - La pestaña Licencias de «Acerca de» ya no repite `zip` y `reqwest` con una versión que no es la que usa tWriter.
 
 ## [0.22.0] - 2026-09-30

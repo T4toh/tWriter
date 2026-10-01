@@ -37,6 +37,7 @@ export interface ResumenRevision {
   rayas: ConteoCapitulos;
   comillas: ConteoCapitulos;
   arreglosRaya: ConteoDetector;
+  rayaAMano: ConteoDetector;
   repeticiones: ConteoDetector;
   /** Capítulos por idioma EFECTIVO (`detectarEnCapitulo::esIngles`), contados
    *  mientras se escanea. Es lo que decide si rayas/arreglosRaya (necesitan
@@ -152,7 +153,7 @@ export class RevisionLibroService {
       const vacioCap = (): ConteoCapitulos => ({ capitulos: 0 });
       const vacio = (): ConteoDetector => ({ cambios: 0, capitulos: 0 });
       const res: ResumenRevision = {
-        rayas: vacioCap(), comillas: vacioCap(), arreglosRaya: vacio(), repeticiones: vacio(),
+        rayas: vacioCap(), comillas: vacioCap(), arreglosRaya: vacio(), rayaAMano: vacio(), repeticiones: vacio(),
         capitulosEs: 0, capitulosEn: 0, idiomaLibroDeclarado: idiomaLibro,
       };
       // Los nombres propios inventados del mundo. Sin esto, que `Kallai`
@@ -167,6 +168,7 @@ export class RevisionLibroService {
         if (det.rayas > 0) res.rayas.capitulos += 1;
         if (det.comillas > 0) res.comillas.capitulos += 1;
         if (det.arreglosRaya > 0) { res.arreglosRaya.cambios += det.arreglosRaya; res.arreglosRaya.capitulos += 1; }
+        if (det.rayaAMano > 0) { res.rayaAMano.cambios += det.rayaAMano; res.rayaAMano.capitulos += 1; }
         if (det.repeticiones > 0) { res.repeticiones.cambios += det.repeticiones; res.repeticiones.capitulos += 1; }
 
         procesados += 1;
