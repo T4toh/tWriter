@@ -466,12 +466,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   problema aparte que depende del conteo de páginas final). Preguntar al
   autor si el destino es KDP (tiene reglas fijas de márgenes por rango de
   páginas, se pueden codificar) antes de diseñar la UI.
-- **Abrir la carpeta del EPUB exportado / abrirlo en el visor**: al terminar el
-  export la app dice dónde quedó el archivo y ahí muere; el autor tiene que ir a
-  buscarlo a mano. Sumar en el aviso de export exitoso dos acciones: "Mostrar en
-  la carpeta" y "Abrir" (visor EPUB default del OS). `tauri-plugin-opener` ya
-  está instalado y registrado (`lib.rs:114`), así que es `reveal_item_in_dir` +
-  `opener::open_path`, sin dependencia nueva.
 - **Blurb y sinopsis por libro** (pedido del autor, 2026-09-01). Dos textos
   distintos y con usos distintos: el **blurb** es el gancho de contratapa; la
   **sinopsis** es el resumen largo, el que va en la ficha de la tienda. Hoy no

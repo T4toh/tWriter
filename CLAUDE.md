@@ -175,6 +175,13 @@ cabecera de `src/app/core/search-highlight.spec.ts` deja sentado ese criterio.
   el 2026-10-01, la unificación de los popovers (#180) arrancó armando otra
   escala paralela en `popover-shell.scss`. Antes de escribir CSS de un
   control, buscar primero en esos dos lugares.
+- **`openPath` necesita su alcance en `src-tauri/capabilities/default.json`.**
+  `opener:default` deja abrir URLs y mostrar un archivo en la carpeta, pero
+  **no** `open_path`: sin permiso, cada «Abrir» tira error. El permiso está
+  acotado a propósito (`.epub` de `Exportados/`, fuentes de `fonts/`,
+  documentos de `extras/`), porque abrir con el sistema un `.app` o un script
+  lo ejecuta. Un caller nuevo de `openPath` suma su glob ahí; `cargo check`
+  valida el JSON.
 - **Capas de `z-index`.** El chrome del editor va por debajo de 200
   (`.privacy-banner` 150, los tres popovers de `.editor-pop` 180), los modales
   toman 200/201 (`.modal-backdrop` / `.modal-card`), los toasts 300, y arriba de
