@@ -101,7 +101,7 @@ huela a "esto ya lo miramos", buscar ahí primero.
   del autor del 2026-09-22, "poner EPUB y esas yerbas"; el zoom del visor de
   imágenes salió en #154). **Falta decidir el alcance** antes de tocar código: un
   renderer de EPUB embebido es otra cosa que un lightbox. Hoy los `.epub`
-  salen al visor del OS (ver "Abrir la carpeta del EPUB exportado" en EPUB).
+  salen al visor del OS (botón «Abrir» del aviso de export, #186).
 
 - **Las marcas inline abren un hueco falso antes de la marca** (visto por el
   autor el 2026-09-29): `—Yo...` con la marca de LT `PUNTOS_SUSPENSIVOS` se ve
