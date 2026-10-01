@@ -16,10 +16,12 @@ import {
   ESTADO_LIBRO_LABEL,
   estadoLibro,
   necesitaRevisar,
+  ultimaEdicionDeContenido,
   ultimaRevisionMs,
 } from '../core/estado-libro';
 import { ExportsService } from '../core/exports-service';
 import { sinPrefijoNumerico } from '../core/nombre-carpeta';
+import { ProjectService } from '../core/project-service';
 import { RevisionLibroService } from '../core/revision-libro-service';
 import { SettingsService } from '../core/settings-service';
 import { TreeNode } from '../core/types';
@@ -39,6 +41,7 @@ export class BookCard {
   private coverCache = inject(CoverCache);
   private revision = inject(RevisionLibroService);
   private settings = inject(SettingsService);
+  private project = inject(ProjectService);
 
   readonly node = input.required<TreeNode>();
   /** `vertical` (default) es la tarjeta de la grilla: portada arriba a todo el
@@ -89,21 +92,24 @@ export class BookCard {
    *  subió esa novela a las tiendas por última vez.
    *
    *  Antes decía «Revisar» y nada más, que no informa nada: el libro siempre
-   *  se puede revisar. El aviso no se pierde, pasa a ser el color — naranja
-   *  cuando hay ediciones posteriores al último sello, o sea cuando lo que
-   *  está publicado quedó viejo. El `title` dice cuál de los dos casos es.
+   *  se puede revisar. El aviso no se pierde, pasa a ser el color: verde
+   *  cuando lo publicado está al día, gris apagado cuando hay ediciones
+   *  posteriores al último sello (lo publicado quedó viejo). Estuvo al revés,
+   *  gris al día y dorado con cambios, y el autor lo leía como «publicada,
+   *  todo bien». El `title` dice cuál de los dos casos es.
    *
    *  Sin sellos y en curso no muestra nada: es casi toda la grilla. El
    *  historial completo sigue estando en el modal de configuración. */
   protected readonly badge = computed<{
     texto: string;
     title: string;
-    alerta: boolean;
+    alDia: boolean;
   } | null>(() => {
     const cfg = this.config();
     if (!cfg) return null;
     const estado = estadoLibro(cfg.estado);
-    const alerta = necesitaRevisar(estado, cfg.revisiones, this.node().modifiedMs);
+    const editado = ultimaEdicionDeContenido(this.node(), this.project.savedMs());
+    const alerta = necesitaRevisar(estado, cfg.revisiones, editado);
     const ultima = ultimaRevisionMs(cfg.revisiones);
     if (ultima !== null) {
       const fecha = formatFechaCorta(ultima, this.settings.dateFormat());
@@ -112,14 +118,14 @@ export class BookCard {
         title: alerta
           ? `Publicada el ${fecha}, con ediciones posteriores sin publicar`
           : `Última versión publicada el ${fecha}`,
-        alerta,
+        alDia: !alerta,
       };
     }
     if (estado === 'en_curso') return null;
     return {
       texto: ESTADO_LIBRO_LABEL[estado],
       title: 'Todavía no se publicó ninguna versión',
-      alerta,
+      alDia: false,
     };
   });
 

@@ -14,6 +14,11 @@ export class ProjectService {
   readonly tree = signal<TreeNode | null>(null);
   readonly loading = signal<boolean>(false);
   readonly error = signal<string | null>(null);
+  /** Momento exacto de cada save de esta sesión, por path. El árbol no lo
+   *  tiene: `touchNodeModifiedMs` saltea el patch mientras la fecha relativa
+   *  no cambie. Lo lee el aviso de versión publicada de la tarjeta del libro
+   *  (`ultimaEdicionDeContenido`), que compara contra el sello al minuto. */
+  readonly savedMs = signal<ReadonlyMap<string, number>>(new Map());
 
   async loadTree(): Promise<void> {
     const root = this.root();
@@ -73,6 +78,7 @@ export class ProjectService {
    *  guardar para que el badge "recién editado" del árbol refleje la edición
    *  sin esperar a un `loadTree()` completo. */
   touchNodeModifiedMs(path: string, modifiedMs: number): void {
+    this.savedMs.update((m) => new Map(m).set(path, modifiedMs));
     this.tree.update((root) => {
       if (!root) return root;
       return patchNodeMtime(root, path, modifiedMs);

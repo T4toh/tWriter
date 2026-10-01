@@ -91,13 +91,18 @@ export function ultimaRevisionMs(revisiones: readonly string[] | null | undefine
   return max;
 }
 
+/** El sello guarda hasta el minuto, así que `12:34` cubre de 12:34:00 a
+ *  12:34:59. Comparar contra el 12:34:00 pelado marcaba como «sin publicar» lo
+ *  que el export acababa de guardar segundos antes de sellar: el aviso se
+ *  prendía justo al exportar. */
+const SELLO_CUBRE_MS = 60_000;
+
 /** Deriva el «necesita revisar» que el autor pidió sin guardarlo en ningún
  *  lado: un libro terminado o publicado que nunca se revisó, o que se editó
  *  después de la última revisión.
  *
- *  `ultimaEdicionMs` es el `modifiedMs` del nodo del libro, que Rust ya manda
- *  como el máximo mtime de sus hijos. Un libro en curso nunca lo necesita —
- *  todavía se está escribiendo. */
+ *  `ultimaEdicionMs` sale de `ultimaEdicionDeContenido`. Un libro en curso
+ *  nunca lo necesita — todavía se está escribiendo. */
 export function necesitaRevisar(
   estado: EstadoLibro,
   revisiones: readonly string[] | null | undefined,
@@ -106,5 +111,43 @@ export function necesitaRevisar(
   if (estado === 'en_curso') return false;
   const ultima = ultimaRevisionMs(revisiones);
   if (ultima === null) return true;
-  return !!ultimaEdicionMs && ultimaEdicionMs > ultima;
+  return !!ultimaEdicionMs && ultimaEdicionMs >= ultima + SELLO_CUBRE_MS;
+}
+
+/** Lo mínimo de un `TreeNode` que hace falta acá, para que el módulo siga
+ *  compilando solo en el smoke runner. */
+export interface NodoConFecha {
+  path: string;
+  kind: string;
+  modifiedMs?: number;
+  children: NodoConFecha[];
+}
+
+/** Última edición de **contenido** de un libro: el mtime más nuevo de sus
+ *  capítulos, con o sin sección de por medio.
+ *
+ *  No usa el `modifiedMs` del nodo del libro, que Rust arma con el máximo de
+ *  todos los hijos y ahí entra la carpeta `notas`: anotar algo en las notas
+ *  prendía el «publicada con ediciones posteriores» sin haber tocado el texto.
+ *
+ *  `guardados` son los saves de esta sesión (`ProjectService.savedMs`). El
+ *  árbol no se entera de cada autosave — `touchNodeModifiedMs` lo saltea
+ *  mientras la fecha relativa del capítulo no cambie, para no re-renderizar el
+ *  árbol entero — así que sin esto el aviso recién se actualizaba con un
+ *  `loadTree()`, que es lo que hace el export. */
+export function ultimaEdicionDeContenido(
+  node: NodoConFecha,
+  guardados?: ReadonlyMap<string, number>,
+): number | null {
+  if (node.kind === 'chapter') {
+    const ms = Math.max(node.modifiedMs ?? 0, guardados?.get(node.path) ?? 0);
+    return ms > 0 ? ms : null;
+  }
+  if (node.kind === 'notes' || node.kind === 'note') return null;
+  let max: number | null = null;
+  for (const c of node.children) {
+    const ms = ultimaEdicionDeContenido(c, guardados);
+    if (ms !== null && (max === null || ms > max)) max = ms;
+  }
+  return max;
 }

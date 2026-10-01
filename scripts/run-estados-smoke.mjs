@@ -31,6 +31,7 @@ const {
   esSelloRevision,
   ultimaRevisionMs,
   necesitaRevisar,
+  ultimaEdicionDeContenido,
 } = await import(pathToFileURL(join(outDir, 'estado-libro.js')).href);
 
 let fails = 0;
@@ -93,6 +94,32 @@ check('revisado después de la última edición no necesita',
   necesitaRevisar('publicada', ['2026-09-18T14:30'], antes), false);
 check('sin fecha de edición alcanza con haber revisado',
   necesitaRevisar('terminada', ['2026-09-18T14:30'], undefined), false);
+
+// El sello es al minuto: lo guardado en el mismo minuto del export (el flush
+// de antes de exportar) ya está publicado. Antes prendía el aviso al exportar.
+check('editado dentro del minuto del sello no necesita',
+  necesitaRevisar('publicada', ['2026-09-18T14:30'], tarde + 50_000), false);
+check('editado en el minuto siguiente al sello necesita',
+  necesitaRevisar('publicada', ['2026-09-18T14:30'], tarde + 60_000), true);
+
+// Contenido = capítulos, con o sin sección. Las notas no cuentan.
+const cap = (path, ms) => ({ path, kind: 'chapter', modifiedMs: ms, children: [] });
+const libro = {
+  path: '/s/l', kind: 'book', modifiedMs: 900, children: [
+    cap('/s/l/1.html', 100),
+    { path: '/s/l/P1', kind: 'section', children: [cap('/s/l/P1/1.html', 300)] },
+    { path: '/s/l/notas', kind: 'notes', modifiedMs: 900, children: [
+      { path: '/s/l/notas/a.md', kind: 'note', modifiedMs: 900, children: [] },
+    ] },
+  ],
+};
+check('última edición de contenido saltea las notas', ultimaEdicionDeContenido(libro), 300);
+check('un save de la sesión le gana al mtime del árbol',
+  ultimaEdicionDeContenido(libro, new Map([['/s/l/1.html', 500]])), 500);
+check('un save de otro libro no cuenta',
+  ultimaEdicionDeContenido(libro, new Map([['/s/otro/1.html', 800]])), 300);
+check('libro sin capítulos no tiene fecha',
+  ultimaEdicionDeContenido({ path: '/s/v', kind: 'book', children: [] }), null);
 
 rmSync(outDir, { recursive: true, force: true });
 if (fails) { console.error(`\n${fails} fallo(s)`); process.exit(1); }

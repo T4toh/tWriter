@@ -8,7 +8,7 @@
 >
   <div class="cover-slot">
     @if (layout() === 'vertical' && badge(); as b) {
-      <span class="badge" [class.alerta]="b.alerta" [title]="b.title">{{ b.texto }}</span>
+      <span class="badge" [class.al-dia]="b.alDia" [title]="b.title">{{ b.texto }}</span>
     }
     @if (coverDataUrl(); as url) {
       <img [src]="url" [alt]="displayTitle()" />
@@ -36,7 +36,7 @@
           }
         </span>
         @if (layout() === 'horizontal' && badge(); as b) {
-          <span class="badge inline" [class.alerta]="b.alerta" [title]="b.title">{{ b.texto }}</span>
+          <span class="badge inline" [class.al-dia]="b.alDia" [title]="b.title">{{ b.texto }}</span>
         }
       </div>
       <div class="card-actions">
