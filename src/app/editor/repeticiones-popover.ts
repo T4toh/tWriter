@@ -79,11 +79,11 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
         }
         <footer class="pop-footer">
           @if (repeticion()) {
-            <button type="button" class="pop-btn pop-btn--secondary" (click)="goToPrevious.emit()">
+            <button type="button" class="btn btn-sm btn-secondary" (click)="goToPrevious.emit()">
               Ir a la anterior
             </button>
           }
-          <button type="button" class="pop-btn pop-btn--quiet" (click)="dismiss.emit()">
+          <button type="button" class="btn btn-sm btn-secondary" (click)="dismiss.emit()">
             {{ repeticion() ? 'Ignorar' : 'Cerrar' }}
           </button>
         </footer>

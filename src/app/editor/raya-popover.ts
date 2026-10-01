@@ -57,21 +57,21 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
         }
         <footer class="pop-footer">
           @if (canAutoFix()) {
-            <button type="button" class="pop-btn pop-btn--primary" (click)="apply.emit()">
+            <button type="button" class="btn btn-sm btn-primary" (click)="apply.emit()">
               Aplicar
             </button>
           }
           @if (canApplyParagraph()) {
             <button
               type="button"
-              class="pop-btn pop-btn--primary"
+              class="btn btn-sm btn-primary"
               (click)="applyParagraph.emit()"
               title="Aplicar reglas de raya al párrafo entero (preview)"
             >
               Aplicar raya al párrafo
             </button>
           }
-          <button type="button" class="pop-btn pop-btn--quiet" (click)="dismiss.emit()">
+          <button type="button" class="btn btn-sm btn-secondary" (click)="dismiss.emit()">
             @if (canAutoFix() || canApplyParagraph()) {
               Ignorar
             } @else {

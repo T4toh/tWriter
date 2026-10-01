@@ -456,6 +456,21 @@ body {
     filter: brightness(1.1);
   }
 
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  // Compacto, para los popovers del editor, que van a 12px. El `nowrap` es
+  // porque ahí el ancho es chico: «Nunca más esta regla» salía partido en tres
+  // renglones. El footer del popover hace `flex-wrap` y baja a otra fila.
+  &.btn-sm {
+    padding: 3px 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;

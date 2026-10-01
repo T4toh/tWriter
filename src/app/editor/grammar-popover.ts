@@ -61,7 +61,7 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
           @if (canAddToDict()) {
             <button
               type="button"
-              class="pop-btn pop-btn--secondary"
+              class="btn btn-sm btn-secondary"
               (click)="addToDict.emit()"
               title="Agregar al diccionario de esta novela"
             >
@@ -71,7 +71,7 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
           @if (canAddToDict() && canDeriveForms()) {
             <button
               type="button"
-              class="pop-btn pop-btn--secondary"
+              class="btn btn-sm btn-secondary"
               (click)="addToDictWithForms.emit()"
               title="Agregar la palabra y sus formas derivadas"
             >
@@ -80,13 +80,13 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
           }
           <button
             type="button"
-            class="pop-btn pop-btn--danger"
+            class="btn btn-sm btn-danger"
             (click)="disableRule.emit()"
             [title]="'Desactivar la regla ' + m.ruleId + ' en toda esta novela'"
           >
             Nunca más esta regla
           </button>
-          <button type="button" class="pop-btn pop-btn--quiet" (click)="dismiss.emit()">Ignorar</button>
+          <button type="button" class="btn btn-sm btn-secondary" (click)="dismiss.emit()">Ignorar</button>
         </footer>
       </div>
     }

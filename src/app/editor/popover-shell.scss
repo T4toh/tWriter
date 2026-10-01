@@ -37,84 +37,15 @@
   visibility: hidden;
 }
 
-/* Controles de los tres popovers: una sola escala en vez de un juego de clases
- * por popover, que daba botones de alto distinto en el mismo footer y
- * etiquetas partidas en dos o tres renglones (pedido del autor, 2026-09-30).
+/* Los botones de los tres popovers son el `.btn` global (`styles.scss`) con
+ * `btn-sm`, mismo criterio de variantes que los modales: `btn-primary` aplica,
+ * `btn-secondary` acompaña o cierra («Ignorar», siempre al final),
+ * `btn-danger` lo que no se deshace con un click («Nunca más esta regla»).
+ * Acá queda solo lo propio del popover: los chips de sugerencia y el footer.
  *
- * - `.pop-chip`: una sugerencia que reemplaza la palabra (LT, tesauro).
- * - `.pop-btn--primary`: la acción del popover («Aplicar»).
- * - `.pop-btn--secondary`: acciones de apoyo («+ diccionario», «Ir a la
- *   anterior»).
- * - `.pop-btn--quiet`: salir sin hacer nada («Ignorar»), siempre al final.
- * - `.pop-btn--danger`: lo que no se deshace con un click («Nunca más esta
- *   regla» apaga la regla en toda la novela).
- *
- * El borde es de 1px en todos, transparente en `quiet`, para que el alto sea
- * el mismo. Las etiquetas no se parten: si la fila no entra, el footer baja
- * a otra fila (`flex-wrap`).
+ * `.pop-chip`: una sugerencia que reemplaza la palabra (LT, tesauro). Estaba
+ * dos veces con forma distinta, rectángulo en LT y píldora en el tesauro.
  */
-.pop-btn,
-.pop-chip {
-  border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 3px 10px;
-  font-family: var(--font-ui);
-  font-size: 12px;
-  line-height: 1.4;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.pop-btn:focus-visible,
-.pop-chip:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.pop-btn--primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--bg);
-  font-weight: 500;
-}
-
-.pop-btn--primary:hover {
-  filter: brightness(1.08);
-}
-
-.pop-btn--secondary {
-  border-color: var(--border);
-  background: transparent;
-  color: var(--fg);
-}
-
-.pop-btn--secondary:hover {
-  background: var(--bg-soft);
-}
-
-.pop-btn--quiet {
-  background: transparent;
-  color: var(--fg-muted);
-}
-
-.pop-btn--quiet:hover {
-  background: var(--border);
-  color: var(--fg);
-}
-
-/* El borde y el rojo del hover son para que la mano frene antes, no
-   decoración: está en el mismo footer que «Ignorar», que solo saca una marca. */
-.pop-btn--danger {
-  border-color: var(--border);
-  background: transparent;
-  color: var(--fg-muted);
-}
-
-.pop-btn--danger:hover {
-  border-color: var(--err);
-  color: var(--err);
-}
-
 .pop-chips {
   list-style: none;
   margin: 0;
@@ -125,10 +56,21 @@
 }
 
 .pop-chip {
+  border: 1px solid var(--border);
+  border-radius: 4px;
   padding: 2px 8px;
-  border-color: var(--border);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
   background: var(--bg-soft);
   color: var(--fg);
+}
+
+.pop-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .pop-chip:hover {
