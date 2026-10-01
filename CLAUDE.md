@@ -105,6 +105,7 @@ node scripts/run-mayusculas-smoke.mjs             # mayúsculas rancias (LLOra, 
 node scripts/run-undo-capitulo-smoke.mjs          # Ctrl+Z no cruza de un capítulo al otro (ProseMirror puro)
 node scripts/run-changelog-smoke.mjs              # CHANGELOG.md: Keep a Changelog + SemVer (cerrar, siguiente, extraer)
 node scripts/run-raya-corpus-smoke.mjs            # corpus de diálogos contra el DPD (con lista de pendientes)
+node scripts/run-updater-json-smoke.mjs           # latest.json del updater: las 8 claves salen de las 4 firmas
 ```
 
 Primera build de Rust tarda ~5 min. Después es incremental.

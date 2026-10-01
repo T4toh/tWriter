@@ -123,6 +123,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
+          # El latest.json lo arma `updater-json` cuando terminaron todos.
+          includeUpdaterJson: false
 
   build-windows:
     needs: create-release
@@ -163,6 +165,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
+          # El latest.json lo arma `updater-json` cuando terminaron todos.
+          includeUpdaterJson: false
 
   build-macos:
     needs: create-release
@@ -216,3 +220,30 @@ jobs:
         with:
           args: --target ${{ matrix.target }}
           releaseId: ${{ needs.create-release.outputs.release_id }}
+          # El latest.json lo arma `updater-json` cuando terminaron todos.
+          includeUpdaterJson: false
+
+  # latest.json (lo que lee el updater de la app) se arma acá y no en cada
+  # build. Con `includeUpdaterJson` cada tauri-action lo bajaba, le sumaba su
+  # plataforma y lo volvía a subir: dos builds terminando juntos se pisaban.
+  # En v0.24.0 el de macOS x86_64 falló con 404 al subirlo y quedaron afuera
+  # Linux y macOS Intel. Este job corre una vez, con todas las firmas ya
+  # subidas, y `updater-json.mjs` corta si falta alguna.
+  updater-json:
+    needs: [create-release, build-linux, build-windows, build-macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Armar y subir latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir sigs
+          gh release download "$TAG" --pattern '*.sig' --dir sigs
+          node scripts/updater-json.mjs sigs "$TAG" > latest.json
+          gh release upload "$TAG" latest.json --clobber
