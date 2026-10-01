@@ -36,3 +36,66 @@
 .editor-pop--measuring {
   visibility: hidden;
 }
+
+/* Los botones de los tres popovers son el `.btn` global (`styles.scss`) con
+ * `btn-sm`, mismo criterio de variantes que los modales: `btn-primary` aplica,
+ * `btn-secondary` acompaña o cierra («Ignorar», siempre al final),
+ * `btn-danger` lo que no se deshace con un click («Nunca más esta regla»).
+ * Acá queda solo lo propio del popover: los chips de sugerencia y el footer.
+ *
+ * `.pop-chip`: una sugerencia que reemplaza la palabra (LT, tesauro). Estaba
+ * dos veces con forma distinta, rectángulo en LT y píldora en el tesauro.
+ */
+.pop-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pop-chip {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  background: var(--bg-soft);
+  color: var(--fg);
+}
+
+.pop-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.pop-chip:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* Etiqueta adentro del chip («tu diccionario»): de dónde sale la sugerencia. */
+.pop-chip-tag {
+  margin-left: 6px;
+  font-size: 0.75em;
+  opacity: 0.75;
+  border: 1px solid currentcolor;
+  border-radius: 999px;
+  padding: 0 0.4em;
+}
+
+.pop-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}

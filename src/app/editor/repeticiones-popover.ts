@@ -60,11 +60,11 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
                 @if (a.categoria) {
                   <span class="rep-pop-cat">{{ categoriaEs(a.categoria) }}</span>
                 }
-                <div class="rep-pop-chips">
+                <div class="pop-chips">
                   @for (s of a.sinonimos; track s) {
                     <button
                       type="button"
-                      class="rep-pop-chip"
+                      class="pop-chip"
                       (click)="reemplazar.emit(s)"
                     >
                       {{ s }}
@@ -77,13 +77,13 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
         } @else {
           <div class="rep-pop-sin">Buscando sinónimos…</div>
         }
-        <footer class="rep-pop-footer">
+        <footer class="pop-footer">
           @if (repeticion()) {
-            <button type="button" class="rep-pop-goto" (click)="goToPrevious.emit()">
+            <button type="button" class="btn btn-sm btn-secondary" (click)="goToPrevious.emit()">
               Ir a la anterior
             </button>
           }
-          <button type="button" class="rep-pop-dismiss" (click)="dismiss.emit()">
+          <button type="button" class="btn btn-sm btn-secondary" (click)="dismiss.emit()">
             {{ repeticion() ? 'Ignorar' : 'Cerrar' }}
           </button>
         </footer>

@@ -32,55 +32,24 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
         </div>
         <div class="msg">{{ m.message }}</div>
         @if (hasAnySuggestion()) {
-          <ul class="reps">
+          <ul class="pop-chips grammar-pop-chips">
             @for (r of dictSuggestions(); track r) {
               <li>
-                <button type="button" class="rep-btn rep-btn--dict" (click)="apply.emit(r)">
-                  {{ r }}<span class="rep-chip">tu diccionario</span>
+                <button type="button" class="pop-chip" (click)="apply.emit(r)">
+                  {{ r }}<span class="pop-chip-tag">tu diccionario</span>
                 </button>
               </li>
             }
             @for (r of suggestions(); track r) {
               <li>
-                <button type="button" class="rep-btn" (click)="apply.emit(r)">{{ r }}</button>
+                <button type="button" class="pop-chip" (click)="apply.emit(r)">{{ r }}</button>
               </li>
             }
           </ul>
         } @else {
           <div class="no-reps">Sin sugerencias automáticas</div>
         }
-        <footer class="grammar-pop-footer">
-          <div class="footer-actions">
-            <button type="button" class="ignore-btn" (click)="dismiss.emit()">Ignorar</button>
-            <button
-              type="button"
-              class="ignore-btn nunca-btn"
-              (click)="disableRule.emit()"
-              [title]="'Desactivar la regla ' + m.ruleId + ' en toda esta novela'"
-            >
-              Nunca más esta regla
-            </button>
-            @if (canAddToDict()) {
-              <button
-                type="button"
-                class="dict-btn"
-                (click)="addToDict.emit()"
-                title="Agregar al diccionario de esta novela"
-              >
-                + diccionario
-              </button>
-            }
-            @if (canAddToDict() && canDeriveForms()) {
-              <button
-                type="button"
-                class="dict-btn"
-                (click)="addToDictWithForms.emit()"
-                title="Agregar la palabra y sus formas derivadas"
-              >
-                + formas…
-              </button>
-            }
-          </div>
+        <footer class="pop-footer">
           <a
             class="lt-attrib"
             href="https://languagetool.org"
@@ -89,6 +58,35 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
           >
             <img src="assets/LT.svg" alt="LanguageTool" />
           </a>
+          @if (canAddToDict()) {
+            <button
+              type="button"
+              class="btn btn-sm btn-secondary"
+              (click)="addToDict.emit()"
+              title="Agregar al diccionario de esta novela"
+            >
+              + diccionario
+            </button>
+          }
+          @if (canAddToDict() && canDeriveForms()) {
+            <button
+              type="button"
+              class="btn btn-sm btn-secondary"
+              (click)="addToDictWithForms.emit()"
+              title="Agregar la palabra y sus formas derivadas"
+            >
+              + formas…
+            </button>
+          }
+          <button
+            type="button"
+            class="btn btn-sm btn-danger"
+            (click)="disableRule.emit()"
+            [title]="'Desactivar la regla ' + m.ruleId + ' en toda esta novela'"
+          >
+            Nunca más esta regla
+          </button>
+          <button type="button" class="btn btn-sm btn-secondary" (click)="dismiss.emit()">Ignorar</button>
         </footer>
       </div>
     }
