@@ -111,24 +111,13 @@ huela a "esto ya lo miramos", buscar ahí primero.
   costo estructural que un capítulo nunca guardado por la app se recuente en
   cada carga del árbol (`chapter_word_count` lee y cuenta el HTML cuando no
   hay clave); si alguna vez molesta, cachear por mtime.
-- **El `resize` reposiciona los popovers con el ancla vieja**: el cierre por
-  scroll y el reposicionamiento ya andan (`popover-position.ts`), pero cada
-  popover maneja el `resize` por su cuenta (`afterRenderEffect` + listener de
-  `window`) y reejecuta `placePopover` con las coordenadas de ancla de antes.
-  Si al redimensionar el texto se reacomoda, el flotante queda desfasado.
-  Necesita recalcular el rect del ancla, no reusar el guardado.
-- **Dos capítulos abiertos rápido y te podés quedar en el equivocado.**
-  `openInPane` (`chapter-service.ts:124`) no tiene forma de saber que llegó
-  tarde: si clickeás el capítulo A y enseguida el B, las dos lecturas están en
-  vuelo a la vez y **gana la que resuelve última**, no la que pediste última.
-  Con una lectura lenta (capítulo grande, disco en la nube) terminás con el
-  árbol marcando B y el editor mostrando A. El fix es un contador de
-  generación: `openInPane` se lo lleva al entrar y descarta todo si cambió al
-  volver de los `await`. No medido todavía — anotado leyendo el código el
-  2026-09-22, mientras se investigaba un supuesto swap de partes que al final
-  **no era un bug** (el autor había cortado y pegado el texto a mano; el
-  historial del repo de novelas lo muestra creciendo por autosave toda la
-  noche en `4.html` y mudándose a `3.html` en dos saves normales).
+- **Pasar de capítulo a nota en el centro pierde lo último que se tipeó**
+  (encontrado leyendo el código el 2026-10-01, en el PR de `openGen`).
+  `NoteService.openInPane` llama `chapter.closeInPane`, y `Tree.select` llama
+  `note.close()` antes de abrir un capítulo: los dos `closeInPane` cancelan el
+  autosave y bajan `dirty` **sin guardar**. Lo tipeado en los 1,5 s antes del
+  cambio no llega al disco. Falta flushear el pane que se cierra (sin perder el
+  `openGen++` sincrónico, que es lo que descarta la apertura tardía).
 - **Abrir los `.epub` de `Exportados` adentro de la app** (resto del pedido
   del autor del 2026-09-22, "poner EPUB y esas yerbas"; el zoom del visor de
   imágenes salió en #154). **Falta decidir el alcance** antes de tocar código: un
@@ -440,12 +429,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
 
 ## Búsqueda
 
-- **Varios hits del mismo capítulo mandan todos al mismo lugar**: el salto ya
-  cae en el bloque correcto (`pickBestBlock` + ancla de texto), pero cuando un
-  capítulo tiene N apariciones, las N líneas del grupo llevan al **mejor**
-  bloque, no una a cada aparición. Para distinguirlas hace falta o el offset
-  real de cada ocurrencia desde el backend, o navegación prev/next sobre los
-  matches del capítulo abierto (que además sirve sin volver al panel).
 - **Autocompletar términos del proyecto**: tipear `kel` y que sugiera `Kallai`,
   para atacar de raíz el "me olvido cómo se escribe" que hoy se compensa con el
   modo fuzzy. **Herramienta viable**: `@tiptap/suggestion` para el popup inline,
@@ -745,16 +728,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   los capítulos viejos de Meridian 2.0 pulleados, sumar `validator.spec.ts`
   cases con párrafos textuales de esos archivos (incluyendo el caso "todo
   colapsado en un párrafo" detectado en exploración) para regresión.
-- **Las rayas del modal de revisión cuentan capítulos, no ocurrencias**: la
-  fila sigue diciendo «N capítulos» porque `ConteoCapitulos` sale de
-  `convertFragmentHtml`, que devuelve 0|1 por capítulo. El botón «ver» tapa el
-  agujero llevando al panel, donde el conteo real sí está, pero el número del
-  modal miente.
-- **El salto del panel RAE no abre el popover**: el panel de repeticiones ya
-  abre el capítulo con el popover puesto sobre la aparición (`pendingPopover` +
-  identificación por palabra normalizada). El panel RAE tiene el mismo salto y
-  se quedó sin esa mitad: lleva al bloque y ahí hay que encontrar la violación
-  a ojo.
 
 ## Plataformas
 
