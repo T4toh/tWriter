@@ -135,6 +135,12 @@ console.log('detectarEnCapitulo');
   const res = detectarEnCapitulo(html, null, 'es', opts);
   check('ES con diálogo de verdad sin convertir: rayas > 0', res.rayas > 0, res);
 }
+{
+  // Cuenta párrafos, no capítulos: el modal decía «1 capítulo» con tres diálogos.
+  const html = '<p>"Hola," dijo ella.</p><p>Pasó un rato.</p><p>"Chau," dijo él.</p><p>"Sí," dijo ella.</p>';
+  const res = detectarEnCapitulo(html, null, 'es', opts);
+  check('ES con tres diálogos sin convertir: rayas === 3', res.rayas === 3, res);
+}
 
 console.log('detectarEnCapitulo: idioma del libro manda sobre el del capítulo');
 {

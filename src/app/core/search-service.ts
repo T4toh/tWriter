@@ -36,6 +36,10 @@ export interface SearchHit {
    *  el término existente al abrir el hit, en vez del literal tipeado que puede
    *  no estar en el doc. Ausente en hits client-side ("Archivo actual"). */
   matchedTerms?: string[];
+  /** Solo en hits de «Archivo actual», que son uno por párrafo: el número de
+   *  este párrafo entre los que matchean, para que el salto vaya a ese y no al
+   *  mejor bloque del capítulo. */
+  nth?: number;
   /** Score BM25 puro antes de boosts client-side. Solo presente cuando el
    *  modo debug está on (settings.searchDebug). */
   bm25_score?: number;
@@ -102,6 +106,8 @@ export interface PendingHighlight {
   /** Si true, el matching del highlight plega acentos (modo fuzzy). En exacto
    *  va false ⇒ accent-sensitive, no resalta variantes con tilde no buscadas. */
   fold: boolean;
+  /** Ver `SearchHit.nth`. */
+  nth?: number;
   requestId: number;
 }
 
@@ -407,6 +413,7 @@ export class SearchService {
         title: file.title,
         snippet: snippetWithMarks(para.text, matches),
         score: -total,
+        nth: total,
       });
       total++;
     }
@@ -502,6 +509,7 @@ export class SearchService {
     queryOverride?: string,
     termsOverride?: string[],
     foldOverride?: boolean,
+    nth?: number,
   ): void {
     const q = (queryOverride ?? this.query()).trim();
     // El fold sale del toggle `≈`, salvo que el caller lo fije: un ancla exacta
@@ -519,6 +527,7 @@ export class SearchService {
         terms: override,
         rawQuery: '',
         fold: false,
+        nth,
         requestId: ++this.highlightCounter,
       });
       return;
@@ -531,6 +540,7 @@ export class SearchService {
       terms,
       rawQuery: q,
       fold,
+      nth,
       requestId: ++this.highlightCounter,
     });
   }

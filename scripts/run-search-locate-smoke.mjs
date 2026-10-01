@@ -43,7 +43,7 @@ if (r.status !== 0) {
 }
 
 const mod = await import(pathToFileURL(join(outDir, 'search-highlight.js')).href);
-const { pickBestBlock, tokenize, findAllMatchesInPlain, esInicioDePalabra, esMatchDeTermino,
+const { pickBestBlock, pickNthMatchingBlock, tokenize, findAllMatchesInPlain, esInicioDePalabra, esMatchDeTermino,
         esPalabraCompleta, buscarPalabraCompleta, mapRangeToNodes } = mod;
 
 let passed = 0;
@@ -320,6 +320,17 @@ function marcados(plain, query, fold = false) {
   check('rango vacío ⇒ null', mapRangeToNodes([5], 3, 3) === null);
   check('rango que se pasa del final ⇒ null', mapRangeToNodes([5], 3, 9) === null);
   check('sin nodos ⇒ null', mapRangeToNodes([], 0, 1) === null);
+}
+
+// «Archivo actual» arma un hit por párrafo con match; la línea N del grupo
+// tiene que ir al N-ésimo de esos bloques, no al mejor del capítulo.
+{
+  const bloques = ['Llovía.', 'Kallai abrió.', 'Nadie habló.', 'Y Kallai rió.', 'Kallai, Kallai.'];
+  const nth = (n) => pickNthMatchingBlock(bloques, tokenize('Kallai'), 'Kallai', false, n);
+  check('nth 0 ⇒ primer bloque con match', nth(0) === 1);
+  check('nth 1 ⇒ saltea los que no matchean', nth(1) === 3);
+  check('nth 2 ⇒ tercer bloque con match', nth(2) === 4);
+  check('nth fuera de rango ⇒ -1', nth(3) === -1);
 }
 
 rmSync(outDir, { recursive: true, force: true });

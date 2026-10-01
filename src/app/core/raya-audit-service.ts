@@ -45,6 +45,22 @@ export class RayaAuditService {
   readonly error = signal<string | null>(null);
   readonly progress = signal<{ done: number; total: number } | null>(null);
 
+  /** Pedido de "abrime el popover sobre ESTA violación", que el editor consume
+   *  al final de `checkRaya`. Mismo patrón que el de gramática: se identifica
+   *  por `ruleId` + `anchor`, no por offset, porque el panel calcula sobre
+   *  `htmlToPlain` y el editor sobre `extractPlainText`. */
+  readonly pendingPopover = signal<{ path: string; ruleId: string; anchor: string } | null>(
+    null,
+  );
+
+  pedirPopover(path: string, ruleId: string, anchor: string): void {
+    this.pendingPopover.set({ path, ruleId, anchor });
+  }
+
+  limpiarPopoverPendiente(): void {
+    this.pendingPopover.set(null);
+  }
+
   readonly totalViolations = computed(() =>
     this.chapters().reduce((sum, c) => sum + c.violations.length, 0),
   );

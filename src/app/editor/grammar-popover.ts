@@ -1,11 +1,9 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  DestroyRef,
   ElementRef,
   afterRenderEffect,
   computed,
-  inject,
   input,
   output,
   signal,
@@ -124,13 +122,8 @@ export class GrammarPopover {
    *  real (200.4px medido → 200px de tope) y, con `overflow-y: auto` siempre
    *  activo, aparece un scrollbar espurio con lugar de sobra adentro. */
   protected readonly clippedMaxHeight = signal<number | null>(null);
-  private readonly resizeTick = signal(0);
 
   constructor() {
-    const onResize = (): void => this.resizeTick.update((n) => n + 1);
-    window.addEventListener('resize', onResize);
-    inject(DestroyRef).onDestroy(() => window.removeEventListener('resize', onResize));
-
     // Medición real: el alto depende de cuántas sugerencias haya, así que no
     // se puede estimar desde el CSS. Se mide el elemento ya renderizado y se
     // recoloca en el mismo ciclo. La remedición depende de que cambie la
@@ -141,7 +134,6 @@ export class GrammarPopover {
     // error" que solo cambia `match`), hay que sumar esas señales de
     // contenido a las que lee este efecto.
     afterRenderEffect(() => {
-      this.resizeTick();
       const anchor = this.anchor();
       const el = this.root()?.nativeElement;
       if (!anchor || !el) {

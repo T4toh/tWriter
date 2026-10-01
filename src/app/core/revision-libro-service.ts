@@ -19,22 +19,21 @@ interface ChapterPayload {
   idioma?: string | null;
 }
 
-/** Rayas y comillas: `converter`/`educateQuotes` devuelven `changes` 0|1 por
- *  capítulo (¿hubo cambio?, no cuántos), así que lo único real que se puede
- *  mostrar es en cuántos capítulos hay algo para tocar — no un conteo de
- *  cambios inventado. */
+/** Comillas: `educateQuotes` devuelve `changes` 0|1 por capítulo (¿hubo
+ *  cambio?, no cuántos), así que lo único real que se puede mostrar es en
+ *  cuántos capítulos hay algo para tocar — no un conteo de cambios inventado. */
 export interface ConteoCapitulos {
   capitulos: number;
 }
 
-/** Arreglos de raya y repeticiones sí traen conteo real de violaciones. */
+/** Rayas, arreglos de raya y repeticiones sí traen conteo real. */
 export interface ConteoDetector {
   cambios: number;
   capitulos: number;
 }
 
 export interface ResumenRevision {
-  rayas: ConteoCapitulos;
+  rayas: ConteoDetector;
   comillas: ConteoCapitulos;
   arreglosRaya: ConteoDetector;
   rayaAMano: ConteoDetector;
@@ -153,7 +152,7 @@ export class RevisionLibroService {
       const vacioCap = (): ConteoCapitulos => ({ capitulos: 0 });
       const vacio = (): ConteoDetector => ({ cambios: 0, capitulos: 0 });
       const res: ResumenRevision = {
-        rayas: vacioCap(), comillas: vacioCap(), arreglosRaya: vacio(), rayaAMano: vacio(), repeticiones: vacio(),
+        rayas: vacio(), comillas: vacioCap(), arreglosRaya: vacio(), rayaAMano: vacio(), repeticiones: vacio(),
         capitulosEs: 0, capitulosEn: 0, idiomaLibroDeclarado: idiomaLibro,
       };
       // Los nombres propios inventados del mundo. Sin esto, que `Kallai`
@@ -165,7 +164,7 @@ export class RevisionLibroService {
       for (const p of payloads) {
         const det = detectarEnCapitulo(p.html, idiomaLibro, p.idioma, { excepciones, diccionario });
         if (det.esIngles) res.capitulosEn += 1; else res.capitulosEs += 1;
-        if (det.rayas > 0) res.rayas.capitulos += 1;
+        if (det.rayas > 0) { res.rayas.cambios += det.rayas; res.rayas.capitulos += 1; }
         if (det.comillas > 0) res.comillas.capitulos += 1;
         if (det.arreglosRaya > 0) { res.arreglosRaya.cambios += det.arreglosRaya; res.arreglosRaya.capitulos += 1; }
         if (det.rayaAMano > 0) { res.rayaAMano.cambios += det.rayaAMano; res.rayaAMano.capitulos += 1; }

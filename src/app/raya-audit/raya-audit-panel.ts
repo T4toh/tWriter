@@ -84,6 +84,9 @@ export class RayaAuditPanel {
       // plegar acentos sólo abre la puerta a que una variante sin tilde de un
       // párrafo anterior le gane al bloque de la violación.
       this.search.requestHighlight(chapter.path, anchor, undefined, false);
+      // Y el popover sobre la violación: ahí están la regla, el ejemplo y el
+      // arreglo, que es lo que el autor vino a ver.
+      this.svc.pedirPopover(chapter.path, v.ruleId, anchor);
     }
     // Si el capítulo ya está abierto, NO recargarlo: `chapter.open` vuelve a
     // hacer `setContent`, y el resaltado que el editor ya consumió sobre el DOM

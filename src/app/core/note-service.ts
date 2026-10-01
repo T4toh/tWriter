@@ -22,6 +22,8 @@ interface NotePane {
   lastSavedAt: WritableSignal<number | null>;
   loadedAt: WritableSignal<number>;
   autosaveTimer: ReturnType<typeof setTimeout> | null;
+  /** Mismo descarte de aperturas tardías que `ChapterPane.openGen`. */
+  openGen: number;
 }
 
 function makeNotePane(): NotePane {
@@ -34,6 +36,7 @@ function makeNotePane(): NotePane {
     lastSavedAt: signal<number | null>(null),
     loadedAt: signal<number>(0),
     autosaveTimer: null,
+    openGen: 0,
   };
 }
 
@@ -78,16 +81,20 @@ export class NoteService {
 
   async openInPane(target: NoteTarget, paneId: PaneId): Promise<void> {
     const pane = this.panes[paneId];
+    const gen = ++pane.openGen;
     await this.flushPendingInPane(paneId);
+    if (gen !== pane.openGen) return;
     this.chapter.closeInPane(paneId);
     pane.error.set(null);
     try {
       const md = await invoke<string>('read_note', { path: target.path });
+      if (gen !== pane.openGen) return;
       pane.content.set(md);
       pane.dirty.set(false);
       pane.active.set(target);
       pane.loadedAt.set(Date.now());
     } catch (err) {
+      if (gen !== pane.openGen) return;
       pane.error.set(String(err));
       pane.content.set('');
       pane.dirty.set(false);
@@ -98,6 +105,7 @@ export class NoteService {
 
   closeInPane(paneId: PaneId): void {
     const pane = this.panes[paneId];
+    pane.openGen++;
     this.cancelAutosaveInPane(paneId);
     pane.active.set(null);
     pane.content.set('');

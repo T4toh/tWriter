@@ -445,7 +445,7 @@ export class SearchPanel implements AfterViewInit {
       // tendrías que esperar el read del disco. Solo encolá el highlight; el
       // editor reacciona al pendingHighlight aunque el archivo ya esté abierto.
       if (this.chapter.panes[0].active()?.path === hit.path) {
-        this.svc.requestHighlight(hit.path, undefined, hit.matchedTerms);
+        this.svc.requestHighlight(hit.path, undefined, hit.matchedTerms, undefined, hit.nth);
         return;
       }
       const node = findNodeByPath(this.project.tree(), hit.path);
@@ -453,7 +453,7 @@ export class SearchPanel implements AfterViewInit {
         const parent = hit.path.replace(/\/[^/]+$/, '');
         this.nav.setBrowsing(parent);
         // Pedir highlight ANTES del open: el editor lo consume al renderizar.
-        this.svc.requestHighlight(hit.path, undefined, hit.matchedTerms);
+        this.svc.requestHighlight(hit.path, undefined, hit.matchedTerms, undefined, hit.nth);
         await this.chapter.open(node);
       }
       return;

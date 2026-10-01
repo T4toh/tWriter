@@ -1,10 +1,8 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  DestroyRef,
   ElementRef,
   afterRenderEffect,
-  inject,
   input,
   output,
   signal,
@@ -144,15 +142,9 @@ export class RepeticionesPopover {
   private readonly root = viewChild<ElementRef<HTMLElement>>('root');
   protected readonly placed = signal<Placement | null>(null);
   protected readonly clippedMaxHeight = signal<number | null>(null);
-  private readonly resizeTick = signal(0);
 
   constructor() {
-    const onResize = (): void => this.resizeTick.update((n) => n + 1);
-    window.addEventListener('resize', onResize);
-    inject(DestroyRef).onDestroy(() => window.removeEventListener('resize', onResize));
-
     afterRenderEffect(() => {
-      this.resizeTick();
       // Se lee acá aunque no se use: el alto del popover cambia cuando aterriza
       // la consulta (de "Buscando sinónimos…" a los chips), y sin esta lectura
       // el effect no se reejecuta — `placed` y `clippedMaxHeight` quedarían
