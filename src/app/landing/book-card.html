@@ -15,6 +15,11 @@
     } @else {
       <div class="cover-placeholder">
         <span>{{ displayTitle() }}</span>
+        @if (coverMissing(); as falta) {
+          <span class="cover-missing" [title]="'No encontré ' + falta + ' — cambiala desde Configurar novela'">
+            Tapa no encontrada
+          </span>
+        }
       </div>
     }
   </div>

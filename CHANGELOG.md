@@ -14,6 +14,10 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 - «Arreglos de raya» en «Revisar» también corrige el punto antes de la raya cuando el personaje retoma después del comentario (`—Hola. —Se sentó. —Ya voy` → `—Hola. —Se sentó—. Ya voy`). Solo queda para revisar de a uno si el párrafo parece tener varios hablantes pegados o el arreglo toca una cursiva.
 
+### Fixed
+
+- Si la tapa (o la contratapa) de un libro apunta a una imagen que no está en disco, la configuración del libro muestra el path que falta con un botón «Elegir otra», la tarjeta del landing dice «Tapa no encontrada», y el export del EPUB avisa que salió sin portada en vez de saltearla en silencio.
+
 ## [0.24.0] - 2026-10-01
 
 ### Changed

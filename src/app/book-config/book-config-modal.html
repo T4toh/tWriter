@@ -216,6 +216,12 @@
                 />
                 <button type="button" (click)="pickCover()">Buscar…</button>
               </div>
+              @if (tapaFaltante(); as falta) {
+                <div class="imagen-faltante">
+                  <span>No encontré <code>{{ falta }}</code>: el EPUB sale sin portada.</span>
+                  <button type="button" class="btn btn-sm btn-secondary" (click)="pickCover()">Elegir otra</button>
+                </div>
+              }
             </label>
           </div>
           <div class="row">
@@ -230,6 +236,12 @@
                 />
                 <button type="button" (click)="pickBackCover()">Buscar…</button>
               </div>
+              @if (contratapaFaltante(); as falta) {
+                <div class="imagen-faltante">
+                  <span>No encontré <code>{{ falta }}</code>: el EPUB sale sin contratapa.</span>
+                  <button type="button" class="btn btn-sm btn-secondary" (click)="pickBackCover()">Elegir otra</button>
+                </div>
+              }
             </label>
           </div>
           <div class="row">

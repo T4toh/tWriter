@@ -54,6 +54,9 @@ export class BookCard {
 
   protected readonly config = signal<BookConfig | null>(null);
   protected readonly coverDataUrl = signal<string | null>(null);
+  /** Path de la tapa configurada que no carga. El remedio («Elegir otra»)
+   *  vive en el modal del engranaje; acá alcanza con no callarlo. */
+  protected readonly coverMissing = signal<string | null>(null);
   protected readonly loading = signal<boolean>(false);
 
   protected readonly displayTitle = computed(() => {
@@ -179,12 +182,14 @@ export class BookCard {
     } catch {
       this.config.set(null);
       this.coverDataUrl.set(null);
+      this.coverMissing.set(null);
     } finally {
       this.loading.set(false);
     }
   }
 
   private async loadCover(bookPath: string, tapa: string | null): Promise<void> {
+    this.coverMissing.set(null);
     if (!tapa || !tapa.trim()) {
       this.coverDataUrl.set(null);
       return;
@@ -195,6 +200,7 @@ export class BookCard {
       this.coverDataUrl.set(url);
     } catch {
       this.coverDataUrl.set(null);
+      this.coverMissing.set(tapa);
     }
   }
 }
