@@ -564,6 +564,7 @@ Botón 📝 en el header del tree abre un wizard separado para traer notas markd
 - CSS subset estilo Reedsy embebido.
 - Templates 6×9" / 5×8" / A5 inyectados como `@page`.
 - Cover image, dedicatoria, copyright, TOC navegable.
+- **Textos de promoción en el EPUB**: el blurb va a `<dc:description>` (la ficha que muestran Calibre, Kobo o Apple Books) y, con `blurb_en_epub`, como página «Sinopsis» entre la tapa y la portada interior — la contratapa del ebook en español. Los créditos salen en la página de copyright, uno por `<p>`. Palabras clave y géneros no van al EPUB: las tiendas no leen `<dc:subject>`, se cargan en su panel.
 - Página "Sobre el autor" generada al final: título, epígrafe opcional en itálica, bio, y una **firma** al pie (foto chica, nombre, QR + web en una línea). La foto va abajo a propósito: leída al terminar la novela, la página cierra como una carta. Auto-detect de `author.*`/`autor.*` desde disco.
 - **Back matter completo** (spec en `docs/superpowers/specs/2026-09-01-back-matter-epub-design.md`):
   - **"Otros libros"**: se arma escaneando el root (`catalogo.rs`) — un libro está publicado si su `book.json` tiene `link`. Si el `numero_en_serie + 1` está publicado, va **solo en su página** como «La historia sigue en» con tapa grande y la URL escrita (en tinta electrónica el link del título no se ve). Después la galería de a dos (`inline-block`, sin flex/grid): el resto de la serie en orden y, de cada otra saga, solo el primer publicado — la puerta de entrada, no el catálogo entero.
