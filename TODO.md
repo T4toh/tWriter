@@ -34,10 +34,12 @@ huela a "esto ya lo miramos", buscar ahí primero.
      parte del párrafo no la borra ni debería. Si esto es lo que se ve, no es
      un bug de cleanup — es la decisión de "resaltar todas las ocurrencias
      mientras buscás", y el cambio sería de diseño.
-  2. La **selección nativa** de `highlightFirstMatch`
+  2. La **selección nativa** de `highlightBestMatch`
      (`core/search-highlight.ts`), que sí se va al clickear. Sobre un em-dash
-     entra por el camino de `rae-audit-panel.ts:81`, que pasa como término el
-     `slice` crudo de la violación (muchas veces arranca con la raya).
+     entraba por el panel de auditoría de raya, que pasaba como término el
+     `slice` crudo de la violación (muchas veces arranca con la raya). Desde
+     `06a1248` pasa `auditAnchor` (`core/audit-snippet.ts`), texto exacto del
+     bloque, así que si vuelve a pasar no asumir que es el mismo camino.
 
   **Falta para poder arreglarlo**: saber si el panel de búsqueda estaba abierto
   o cerrado cuando la marca quedó pegada. Con el panel abierto es (1) y es
@@ -76,7 +78,7 @@ huela a "esto ya lo miramos", buscar ahí primero.
     `computeCursorPos`, que recorría `doc.descendants()` entero para contar
     bloques. **Arreglado** en `20dc294`: `$from.index(0)` da el mismo número
     en O(1). Era O(bloques) por tecla y por movimiento de cursor.
-  - **`onUpdate` hace `editor.getHTML()` en cada tecla** (`editor.ts:2128`) y
+  - **`onUpdate` hace `editor.getHTML()` en cada tecla** (`editor.ts:2247`) y
     mete el string en `pane.content`. Eso serializa el documento **entero**
     por cada carácter: en el capítulo de 300k palabras es armar 1,7 MB de
     string por tecla. Es el costo O(n) por tecla que queda, y el que
@@ -106,7 +108,7 @@ huela a "esto ya lo miramos", buscar ahí primero.
 - **Las marcas inline abren un hueco falso antes de la marca** (visto por el
   autor el 2026-09-29): `—Yo...` con la marca de LT `PUNTOS_SUSPENSIVOS` se ve
   `—Yo ...`. En disco no hay espacio: el `border-bottom` de `.grammar-error` /
-  `.rae-violation` en un inline corta el run de shaping en WebKit y se pierde
+  `.raya-violation` en un inline corta el run de shaping en WebKit y se pierde
   el kerning `o.` de Merriweather. `text-decoration` (lo que ya usa
   `.repeticion`) no lo corta, pero las marcas usan borde a propósito para no
   pisarse con el subrayado de repeticiones (ver `editor.scss`): resolverlo
@@ -125,6 +127,10 @@ huela a "esto ya lo miramos", buscar ahí primero.
   cada fila lleve al capítulo y al offset, o sea que necesita las mismas
   posiciones que ya calculan `validator.ts` y `detector.ts`, pero corridas
   server-side.
+  **Lo que ya existe**: el modal «Revisión por libro» (#92) y la auditoría de
+  gramática por alcance (`e00c8f3`) ya agregan por libro con salto al lugar.
+  Faltan las densidades, el ranking de capítulos y las formas repetidas en todo
+  el libro.
 
 - **Guionado para el EPUB**. rla-es trae `separacion/hyph_es.dic`, **6.207
   patrones** (Javier Bezos / CervanTeX). Sirve para justificado con separación
@@ -149,15 +155,6 @@ huela a "esto ya lo miramos", buscar ahí primero.
   **entero sin marcas** porque el `check` tira. Merece el trato accionable del
   CLAUDE.md: decir que el chequeo de *este* capítulo falló y ofrecer reintentar,
   en vez de tirar el status HTTP a la barra de estado.
-
-- **Fuentes normativas del español: no hay corpus libre.** La *Nueva gramática
-  de la lengua española*, la *Ortografía* y el DPD son de la RAE, con
-  copyright y sin formato máquina. No existe un "manual de la lengua española"
-  parseable para usar de base. Lo que sí hay como sustrato son **FreeLing**
-  (morfología + parsing de dependencias, UPC, open source) y los modelos de
-  spaCy en español — pero ojo: para el detector de repeticiones **no hacen
-  falta**, y son la clase de dependencia que conviene no sumar sin un caso que
-  la exija.
 
 - **Wizard de revisión de errores** (paralelo al chequeo inline, a pedido del
   autor): botón al lado de `Auto` / `LT` en la barra de arriba que abre un
@@ -267,23 +264,10 @@ huela a "esto ya lo miramos", buscar ahí primero.
        `output_config: {effort}` — `budget_tokens` está removido y devuelve
        400 en Opus 5. Sin prefill de assistant (también 400).
 - **Capacidades de LanguageTool que hoy NO usamos** (relevadas contra el
-  swagger oficial + probadas contra el container local, LT 6.8 OSS):
-  - ~~`level=picky`~~ **hecho** (ver README → Gramática): toggle "Modo
-    exigente", `grammarPicky` en `settings.json`, `grammar.rs::level_for`.
-    Solo suma matches en inglés.
-  - ~~`disabledRules`~~ **hecho** (ver README → Gramática): el popover muestra
-    el `ruleId` y "Nunca más esta regla" lo persiste en
-    `saga.json::reglas_lt_desactivadas`. Queda pendiente `enabledOnly`, que es
-    la punta opuesta —correr SOLO un set de reglas— y no tiene caso de uso
-    todavía.
-    **Regla concreta ya identificada**, que hoy se apaga desde el popover: con `picky` prendido, LT marca `Shit`
-    en diálogo con `PROFANITY_XML` (categoría `STYLE`, "This word is
-    considered offensive"). Verificado que es picky-only (en `default` no
-    aparece) y que `disabledRules=PROFANITY_XML` la apaga limpio. No es un
-    bug — el toggle está haciendo exactamente lo que promete — pero en
-    ficción con personajes que putean es una regla que el autor va a querer
-    apagar sin perder el resto de `picky`. Junto con `TOO_LONG_SENTENCE`,
-    son las dos primeras candidatas de la lista per-saga.
+  swagger oficial + probadas contra el container local, LT 6.8 OSS). `picky` y
+  `disabledRules` ya están (ver README → Gramática).
+  - `enabledOnly` — la punta opuesta de `disabledRules`: correr SOLO un set de
+    reglas. No tiene caso de uso todavía.
   - `motherTongue` — habilita chequeos de false friends. Probado con
     `motherTongue=es` sobre texto en inglés: cero matches en las muestras,
     el archivo de false friends es-en parece muy chico. Bajo valor.
@@ -500,23 +484,22 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
 - **Limpiar `autor` de los `book.json` del repo de novelas**. La parte de la
   app ya está: `epub.rs` resuelve `autor.json` → `book.json` → `saga.json` y
   el campo salió del modal del libro (decidido con el autor el 2026-09-01).
-  Lo que queda es de contenido: 43 `book.json` de `~/novelas` todavía
-  tienen `autor` cargado (contado el 2026-09-14) y ahora es un fallback muerto. Borrarlo es un `jq`
+  Lo que queda es de contenido: 44 `book.json` de `~/novelas` todavía
+  tienen `autor` cargado (contado el 2026-10-02) y ahora es un fallback muerto. Borrarlo es un `jq`
   sobre el repo de novelas, no toca este repo; y solo tiene sentido cuando
   las dos PCs corran una versión que ya lea `autor.json`.
 
 - **Tapa que no existe: avisar en vez de placeholder mudo.** Lo que quedó afuera
   del item de arriba: si no hay **ninguna** imagen al lado, `CoverCache.urlFor`
   tira y la UI cae al placeholder sin decir nada, y el EPUB se exporta sin
-  portada en silencio (`epub.rs::embed_image` devuelve `Ok(None)`). Contra la
+  portada en silencio (`book_config.rs::resolver_imagen` devuelve `None`). Contra la
   convención "el remedio se da adentro de la app": tiene que mostrar el path que
   no existe y el botón "Elegir otra", y el export avisar que salió sin portada.
 - Preview tipo Kindle (B/N, distintos tamaños — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
-- Pesos extra de fuente (300 Light, 600 SemiBold, 900 Black). Hoy solo Regular/Bold/Italic/BoldItalic; pesos custom requieren edit manual del `theme.json`.
+- Pesos extra de fuente (300 Light, 600 SemiBold, 900 Black). El editor de temas ya elige el peso sintético de itálica y negrita (`2bc69be`); lo que falta es reconocer las caras extra: hoy `Merriweather-Light` cae como 400 (test en `theme.rs`).
 - Auto-migración de tema renombrado: hoy renombrar un tema deja sagas/libros con `base` dangling (warning). Implementar scan recursivo de `*.json` y rewrite del `base`.
 - Colores en el tema (body color, heading color, scene-break color). Hoy el tema es solo tipografía + márgenes.
 - Theme presets compartibles entre repos distintos (export/import como zip).
-- Revisiones de EPUB: hoy sobreescribe siempre `Exportados/<titulo>.epub`. Sumar "guardar últimas N revisiones" (default 5) — renombrar la actual a `<titulo>-revN.epub` antes de generar la nueva.
 
 ## Deuda transversal
 
@@ -536,17 +519,12 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   La salida es oscurecer `--ok` y `--warn` en el tema claro, pero eso cambia
   TODOS sus usos y no solo los recuadros, así que es una decisión aparte. Hoy
   los afectados son los chips `.ok` y `.warn` de Configuración.
-- **Loop de escaneo duplicado en los tres auditores** (`rae-audit-service`,
+- **Loop de escaneo duplicado en los tres auditores** (`raya-audit-service`,
   `repeticiones-audit-service`, `grammar-audit-service`): `progress` + guard
   de scope + publicación incremental es casi el mismo en los tres, y no se
   unificó porque las tres firmas de `progress` difieren. Si aparece un cuarto
   auditor, ahí sí conviene el helper de loop. `yieldToEventLoop` ya está
   compartido en `core/yield-to-event-loop.ts`.
-- **Criterio para cualquier pasada de duplicación futura**: se unifica lo que
-  ya está duplicado y duele, no lo que podría llegar a compartirse. Dos copias
-  iguales se unifican; dos copias parecidas que divergieron a propósito, no. Y
-  antes de unificar una función duplicada, preguntarse si el framework ya la
-  trae (`formatDate` ×4 se resolvió borrándola: era `DatePipe`).
 - **`keyring` 3 → 4: no subir sin motivo** (relevado el 2026-09-30, en la
   tanda de dependencias #171–#175). La 3.6.3 no tiene advisories y sigue
   compilando; subir no cierra nada ni se nota en la app. La 4 no es un bump:
@@ -573,7 +551,7 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
 ## Documentación
 
 - [ ] **Wiki o sitio de docs; el README quedó demasiado grande** (pedido del
-  autor el 2026-09-14). Hoy `README.md` tiene ~1.000 líneas y mezcla cuatro
+  autor el 2026-09-14). Hoy `README.md` tiene ~1.070 líneas y mezcla cuatro
   cosas para cuatro lectores distintos: instalación (usuario nuevo), features
   con detalle de implementación (mantenedor), configuración avanzada de LT
   (usuario que ya usa la app) y setup de desarrollo + release (autor). Cada
@@ -606,7 +584,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
 
 ## Archivos
 
-- Changelog screen in-app: panel/modal accesible desde el header (junto a «Acerca de») parseando `CHANGELOG.md` o release notes de GitHub. Útil para gente nueva post-AUR.
 - **En el modal "Acerca de", cuando se retome** (ideas del autor al construirlo, no
   para ahora): el chequeo de versión nueva — hoy vive en el `UpdateBanner` y el
   plugin `updater`, así que sería exponer el "buscar actualizaciones" a mano desde
@@ -629,17 +606,16 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
 
 - Diff/historial visual via `git log`.
 - Stats: gráfico palabras/día.
-- Preview pre-push: hoy el indicador del header dice "15 archivos para subir" sin detalle. Tooltip con lista de paths (M/A/D) en hover, y/o dialog "Ver cambios pendientes" con `git status --short` + `git diff --stat`.
+- Preview pre-push: la lista de paths con su tipo ya está en el desplegable del indicador del header (`a006461`). Falta ver el contenido: un dialog "Ver cambios pendientes" con `git diff --stat`.
 
 ## Git / Sync
 
 - **Bug — cambio de carpetas en remoto no refresca el árbol**: si en otra
   PC se crean/renombran/mueven carpetas, hay que recargar el árbol a mano
-  para verlas. El refresh post-pull (`loadTree()` sobre `PullPathChange`)
-  ya cubre `.html`/`.md`, pero los cambios de estructura de carpetas no se
-  reflejan. Verificar si `PullPathChange` reporta dirs y si `loadTree()`
-  realmente se dispara para este caso. (Posible que ya esté resuelto —
-  confirmar con repro entre dos PCs.)
+  para verlas. **El código ya lo cubre** (relevado el 2026-10-02): desde
+  `c45e869`, `applyPullChanges` (`git-service.ts`) llama a `loadTree()` ante
+  cualquier cambio del pull, y `git.rs` reporta también los renames. Falta
+  la repro entre dos PCs para cerrarlo; si no aparece, se borra.
 
 ## Validador de raya
 
@@ -660,8 +636,9 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
     acción/habla van a `AMBIGUOUS_TAGS`.
   - 2.3b sin raya de cierre (`—Lo principal… —añadió Pilar. Afortunada…`)
     se escribe igual que un 2.3a con narración que sigue: no se marca.
-  - `dash-orphan`: FP con imperativos (`—No sé. Pregunta a tu madre.`) y FN
-    con `—Hola dijo Juan.`.
+  - `dash-orphan`: FN con `—Hola dijo Juan.`. Del FP con imperativos, #177
+    cubrió el imperativo seguido de `tu`/`eso`; con otra palabra atrás
+    (`—No sé. Pregunta a mamá.`) puede seguir marcando.
   - NFD: acentos descompuestos no matchean verbos (sintético, sin saber si
     aparece en el corpus real).
   - `validator.spec.ts` (dormido): 3 casos fallan contra el código de hoy.
@@ -725,8 +702,10 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   mismo día que la auditoría de gramática le encontró errores en una novela ya
   publicada). El ciclo de estados y el historial de revisiones ya están hechos
   (`estado: en curso → terminada → publicada` + `revisiones[]` sellado desde el
-  export, ver README → «Estado de la novela + revisiones»); lo que sigue sin
-  resolver es esto.
+  export, ver README → «Estado de la novela + revisiones»), y también el aviso
+  de ediciones posteriores a la publicación en la tarjeta del libro (`d809f59`,
+  `6951837`) y la carga manual de publicaciones (`ac80505`). Lo que sigue sin
+  resolver es saber *qué* cambió.
   El autor arregló un error y no tiene forma de saber que ese arreglo **no está
   en la edición publicada**: `publicada` es un punto del ciclo, no un punto en el
   tiempo ni una versión del contenido, y `revisiones[]` sella *cuándo* se exportó,
