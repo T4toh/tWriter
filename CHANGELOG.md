@@ -10,6 +10,8 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-02
+
 ### Added
 
 - Botón «Revisar» al lado de LT en la barra del editor: recorre los errores de LanguageTool del capítulo uno por uno en el popover de siempre («3 de 12 · Siguiente ›»), salta a cada uno y pasa solo al siguiente después de aceptar, ignorar o agregar al diccionario. Mientras dura, el chequeo automático espera, así que lo ignorado no vuelve a aparecer a mitad de camino.
@@ -529,7 +531,8 @@ _Sin cambios visibles registrados._
 
 _Sin cambios visibles registrados._
 
-[unreleased]: https://github.com/T4toh/tWriter/compare/v0.24.0...HEAD
+[unreleased]: https://github.com/T4toh/tWriter/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/T4toh/tWriter/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/T4toh/tWriter/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/T4toh/tWriter/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/T4toh/tWriter/compare/v0.21.0...v0.22.0
