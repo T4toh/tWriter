@@ -13,6 +13,7 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 ### Added
 
 - Botón «Revisar» al lado de LT en la barra del editor: recorre los errores de LanguageTool del capítulo uno por uno en el popover de siempre («3 de 12 · Siguiente ›»), salta a cada uno y pasa solo al siguiente después de aceptar, ignorar o agregar al diccionario. Mientras dura, el chequeo automático espera, así que lo ignorado no vuelve a aparecer a mitad de camino.
+- Sección «Blurb y sinopsis» en la configuración del libro: el gancho de contratapa y el resumen largo de la tienda, en español y en inglés, guardados con el libro y con sus saltos de párrafo. Por ahora no van al EPUB; están para copiarlos al publicar.
 
 ### Changed
 

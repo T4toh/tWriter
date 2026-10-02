@@ -364,6 +364,8 @@ export class BookConfigModal {
         aviso_contenido: cfg.aviso_contenido ?? null,
         textos_legales: cfg.textos_legales ?? null,
         dedicatoria: cfg.dedicatoria ?? '',
+        blurb: cfg.blurb ?? null,
+        sinopsis: cfg.sinopsis ?? null,
         imprenta: cfg.imprenta ?? 'Independiente',
         serie: cfg.serie ?? '',
         numero_en_serie: cfg.numero_en_serie ?? null,
@@ -438,6 +440,16 @@ export class BookConfigModal {
     const cur = this.config();
     if (!cur) return;
     this.config.set({ ...cur, [key]: value });
+  }
+
+  protected texto(campo: 'blurb' | 'sinopsis', idioma: 'es' | 'en'): string {
+    return this.config()?.[campo]?.[idioma] ?? '';
+  }
+
+  protected setTexto(campo: 'blurb' | 'sinopsis', idioma: 'es' | 'en', valor: string): void {
+    const cur = this.config();
+    if (!cur) return;
+    this.config.set({ ...cur, [campo]: { ...(cur[campo] ?? {}), [idioma]: valor } });
   }
 
   protected incisoActivo(clave: string): boolean {
@@ -521,6 +533,8 @@ export class BookConfigModal {
         aviso_contenido: cfg.aviso_contenido ?? null,
         textos_legales: cfg.textos_legales ?? null,
         dedicatoria: blank(cfg.dedicatoria),
+        blurb: porIdioma(cfg.blurb),
+        sinopsis: porIdioma(cfg.sinopsis),
         imprenta: blank(cfg.imprenta),
         serie: blank(cfg.serie),
         numero_en_serie: cfg.numero_en_serie || null,
@@ -550,6 +564,16 @@ export class BookConfigModal {
   protected close(): void {
     this.svc.close();
   }
+}
+
+/** Saca los idiomas en blanco; sin ninguno, `null` para que no quede `{}` en el JSON. */
+function porIdioma(map: Record<string, string> | null | undefined): Record<string, string> | null {
+  const limpio = Object.fromEntries(
+    Object.entries(map ?? {})
+      .map(([idioma, t]) => [idioma, t.trim()] as const)
+      .filter(([, t]) => t.length > 0),
+  );
+  return Object.keys(limpio).length ? limpio : null;
 }
 
 function blank(s: string | null | undefined): string | null {
