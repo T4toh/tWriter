@@ -13,7 +13,8 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 ### Added
 
 - Botón «Revisar» al lado de LT en la barra del editor: recorre los errores de LanguageTool del capítulo uno por uno en el popover de siempre («3 de 12 · Siguiente ›»), salta a cada uno y pasa solo al siguiente después de aceptar, ignorar o agregar al diccionario. Mientras dura, el chequeo automático espera, así que lo ignorado no vuelve a aparecer a mitad de camino.
-- Sección «Promoción» en la configuración del libro, con tagline, blurb, sinopsis, palabras clave y géneros, y un campo de créditos (tapa, corrección, traducción) en «Publicación». Se guardan con el libro, el blurb y la sinopsis con sus saltos de párrafo. Por ahora no van al EPUB: están para copiarlos al publicar.
+- Sección «Promoción» en la configuración del libro, con tagline, blurb, sinopsis, palabras clave y géneros, y un campo de créditos (tapa, corrección, traducción) en «Publicación». Se guardan con el libro, el blurb y la sinopsis con sus saltos de párrafo. Las palabras clave y los géneros están para copiarlos al panel de la tienda al publicar.
+- El EPUB usa los textos del libro: los créditos salen en la página de copyright, el blurb es la descripción que muestran Calibre, Kobo o Apple Books en la ficha del libro, y con una casilla en «Promoción» el blurb va también como página «Sinopsis» justo después de la tapa, la contratapa del ebook.
 
 ### Changed
 

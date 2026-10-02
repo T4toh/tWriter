@@ -166,6 +166,7 @@
                 rows="3"
                 placeholder="Uno por línea, ej: Tapa: Fulano"
               ></textarea>
+              <small class="hint">Van a la página de copyright del EPUB.</small>
             </label>
           </div>
           <div class="row">
@@ -289,6 +290,16 @@
                 rows="6"
                 placeholder="El gancho de contratapa"
               ></textarea>
+            </label>
+          </div>
+          <div class="row">
+            <label class="checkbox">
+              <input
+                type="checkbox"
+                [checked]="c.blurb_en_epub ?? false"
+                (change)="update('blurb_en_epub', $any($event.target).checked)"
+              />
+              <span>Poner el blurb en el EPUB, en una página «Sinopsis» después de la tapa</span>
             </label>
           </div>
           <div class="row">

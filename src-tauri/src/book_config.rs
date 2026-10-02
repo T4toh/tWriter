@@ -245,10 +245,15 @@ pub struct BookConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dedicatoria: Option<String>,
     /// Gancho de contratapa, en el idioma del libro (la edición en otro
-    /// idioma es otro libro). Texto plano con sus saltos de párrafo. Por
-    /// ahora solo se guarda con el libro; ningún export lo usa todavía.
+    /// idioma es otro libro). Texto plano con sus saltos de párrafo. Va al
+    /// `<dc:description>` del EPUB y, con `blurb_en_epub`, a la página
+    /// «Sinopsis» después de la tapa.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blurb: Option<String>,
+    /// Página «Sinopsis» con el blurb entre la tapa y la portada interior: la
+    /// contratapa del ebook en español. Apagada por default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blurb_en_epub: Option<bool>,
     /// Resumen largo para la ficha de la tienda. Mismo criterio que `blurb`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sinopsis: Option<String>,
@@ -494,6 +499,7 @@ mod tests {
         let cfg = BookConfig {
             titulo: "Test".into(),
             blurb: Some(blurb.clone()),
+            blurb_en_epub: Some(true),
             sinopsis: Some("Resumen largo.".into()),
             tagline: Some("Una ciudad que nunca apaga las luces.".into()),
             palabras_clave: Some(vec!["space opera".into(), "distopía".into()]),
@@ -506,6 +512,7 @@ mod tests {
         let leido = leer_book_config(libro.path()).unwrap();
 
         assert_eq!(leido.blurb, Some(blurb));
+        assert_eq!(leido.blurb_en_epub, Some(true));
         assert_eq!(leido.sinopsis.as_deref(), Some("Resumen largo."));
         assert_eq!(leido.tagline.as_deref(), Some("Una ciudad que nunca apaga las luces."));
         assert_eq!(leido.palabras_clave, Some(vec!["space opera".into(), "distopía".into()]));

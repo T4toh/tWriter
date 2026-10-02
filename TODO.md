@@ -263,20 +263,14 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   problema aparte que depende del conteo de páginas final). Preguntar al
   autor si el destino es KDP (tiene reglas fijas de márgenes por rango de
   páginas, se pueden codificar) antes de diseñar la UI.
-- **Usar los textos de promoción** (blurb, sinopsis, tagline, palabras clave,
-  géneros y créditos existen desde 2026-10-02 y por ahora solo se guardan con el
-  libro, como pidió el autor). Destinos, ninguno urgente:
-  - **Contratapa de texto generada**, que va con el export para imprenta (ver
-    «Formatear para libro físico» arriba): hoy no hay contratapa, ni de imagen.
-    El blurb real (La Caballera Esmeralda) son tres párrafos cortos, ~50
-    palabras; el ritmo vive en los cortes, así que un `<p>` por párrafo, como
-    `build_about_author_xhtml` hace con la bio.
-  - **`<dc:description>` en el OPF**: Calibre, Apple Books y Kobo la muestran
-    como descripción del libro.
-  - **Palabras clave y géneros como `<dc:subject>`**, uno por entrada.
-  - **Créditos en la página de copyright**, una línea por `<p>`.
-  En «Otros libros» del back matter tres párrafos son demasiados: o va el
-  primero o nada, decidirlo mirando la página armada.
+- **Contratapa de texto generada**, para el export a imprenta (ver «Formatear
+  para libro físico» arriba): hoy no hay contratapa de texto, solo la de
+  imagen. El blurb ya va al EPUB (página «Sinopsis» y `<dc:description>`, PR
+  de 2026-10-02); en el físico va en la contratapa, al lado del lomo. Las
+  palabras clave y los géneros **no** van al EPUB a propósito: las tiendas no
+  leen `<dc:subject>`, se cargan en su panel. En «Otros libros» del back matter
+  tres párrafos de blurb son demasiados: o va el primero o nada, decidirlo
+  mirando la página armada.
 
 - **Limpiar `autor` de los `book.json` del repo de novelas**. La parte de la
   app ya está: `epub.rs` resuelve `autor.json` → `book.json` → `saga.json` y

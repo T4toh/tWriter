@@ -588,6 +588,22 @@ fn export_impl(
         }));
     }
 
+    // 1b) Sinopsis (opcional): el blurb como contratapa del ebook, que en
+    // español va justo después de la tapa.
+    if let Some(blurb) = blurb_de(&cfg).filter(|_| cfg.blurb_en_epub.unwrap_or(false)) {
+        spine_idx += 1;
+        let xhtml = build_sinopsis_xhtml(&cfg, blurb);
+        zip.start_file("OEBPS/0_sinopsis.xhtml", opts).map_err(|e| e.to_string())?;
+        zip.write_all(xhtml.as_bytes()).map_err(|e| e.to_string())?;
+        items.push(Item {
+            id: "sinopsis".into(),
+            href: "0_sinopsis.xhtml".into(),
+            media_type: "application/xhtml+xml".into(),
+            spine_order: Some(spine_idx),
+            properties: None,
+        });
+    }
+
     // 2) Title page
     spine_idx += 1;
     let xhtml = build_title_xhtml(&cfg);
@@ -1045,7 +1061,11 @@ fn export_impl(
         editorial: true,
         ocultar_hijos: false,
     };
-    let mut front: Vec<TocEntry> = vec![ed("2_copyright.xhtml", "Copyright")];
+    let mut front: Vec<TocEntry> = Vec::new();
+    if items.iter().any(|i| i.id == "sinopsis") {
+        front.push(ed("0_sinopsis.xhtml", if is_en { "About the Book" } else { "Sinopsis" }));
+    }
+    front.push(ed("2_copyright.xhtml", "Copyright"));
     if items.iter().any(|i| i.id == "dedication") {
         front.push(ed(
             "3_dedication.xhtml",
@@ -1752,6 +1772,29 @@ fn build_seguir_leyendo_xhtml(cfg: &BookConfig, link: Option<&str>) -> String {
     xhtml_shell(&cfg.titulo, &body, lang, "about-author-body")
 }
 
+/// El blurb sin espacios de más, o `None` si está vacío.
+fn blurb_de(cfg: &BookConfig) -> Option<&str> {
+    cfg.blurb.as_deref().map(str::trim).filter(|b| !b.is_empty())
+}
+
+/// Página «Sinopsis»: el blurb, un `<p>` por línea igual que la bio, porque
+/// el ritmo de un texto de contratapa vive en los cortes.
+fn build_sinopsis_xhtml(cfg: &BookConfig, blurb: &str) -> String {
+    let lang = cfg.idioma.as_deref().unwrap_or("es");
+    let heading = if lang == "en" { "About the Book" } else { "Sinopsis" };
+    let parrafos: String = blurb
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(|l| format!("<p>{}</p>\n", xml_escape(l)))
+        .collect();
+    let body = format!(
+        "<h1 class=\"about-author-title\">{}</h1>\n<div class=\"about-author-bio\">\n{}</div>",
+        heading, parrafos
+    );
+    xhtml_shell(heading, &body, lang, "about-author-body")
+}
+
 fn build_copyright_xhtml(cfg: &BookConfig) -> String {
     let autor = cfg.autor.as_deref().unwrap_or("");
     let anio = cfg.copyright_anio.unwrap_or_else(current_year);
@@ -1795,6 +1838,11 @@ fn build_copyright_xhtml(cfg: &BookConfig) -> String {
     }
     if let Some(isbn) = cfg.isbn.as_deref().filter(|s| !s.is_empty()) {
         body.push_str(&format!("<p>ISBN: {}</p>\n", xml_escape(isbn)));
+    }
+    if let Some(creditos) = cfg.creditos.as_deref() {
+        for linea in creditos.lines().map(str::trim).filter(|l| !l.is_empty()) {
+            body.push_str(&format!("<p>{}</p>\n", xml_escape(linea)));
+        }
     }
     let publicado = if is_en {
         format!("Published by {}", imprenta)
@@ -2336,6 +2384,12 @@ fn build_opf(cfg: &BookConfig, items: &[Item], book_uuid: &str) -> String {
         ""
     };
 
+    // Lo que muestran Calibre, Kobo o Apple Books en la ficha del libro
+    // cargado a mano. La tienda no lo lee: ahí se carga en su panel.
+    let description = blurb_de(cfg)
+        .map(|b| format!("<dc:description>{}</dc:description>", xml_escape(b)))
+        .unwrap_or_default();
+
     let isbn_id = cfg
         .isbn
         .as_deref()
@@ -2379,6 +2433,7 @@ fn build_opf(cfg: &BookConfig, items: &[Item], book_uuid: &str) -> String {
 <dc:title>{}</dc:title>
 {}
 <dc:language>{}</dc:language>
+{}
 <meta property="dcterms:modified">{}</meta>
 {}
 {}
@@ -2399,6 +2454,7 @@ fn build_opf(cfg: &BookConfig, items: &[Item], book_uuid: &str) -> String {
         xml_escape(&cfg.titulo),
         creator,
         lang,
+        description,
         modified,
         cover_meta,
         serie_meta,
@@ -4741,6 +4797,15 @@ mod tests {
     fn epubcheck_aprueba_el_epub_del_demo_si_esta_instalado() {
         let tmp = TempDir::new().unwrap();
         let libro = libro_demo(tmp.path(), "es");
+        // Las páginas opcionales también tienen que pasar: sinopsis, créditos
+        // y `<dc:description>` no salen en el demo pelado.
+        let json_path = libro.join("book.json");
+        let mut json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&json_path).unwrap()).unwrap();
+        json["blurb"] = "Uno.\n\nDos & tres.".into();
+        json["blurb_en_epub"] = true.into();
+        json["creditos"] = "Tapa: Fulano".into();
+        fs::write(&json_path, json.to_string()).unwrap();
         let r = export_impl(libro.to_str().unwrap()).expect("export del demo");
 
         let reporte = crate::epubcheck::validar_impl(&r.epub_path).expect("epubcheck corrió");
@@ -4760,6 +4825,62 @@ mod tests {
             (0, 0),
             "epubcheck rechazó el EPUB del demo:\n{}",
             reporte.mensajes.join("\n")
+        );
+    }
+
+    fn entradas_de(book_json: &str) -> std::collections::HashMap<String, String> {
+        let tmp = TempDir::new().unwrap();
+        let book = libro_de_tres_capitulos(tmp.path(), book_json);
+        let result = export_impl(book.to_str().unwrap()).expect("export ok");
+        read_epub_entries(std::path::Path::new(&result.epub_path))
+            .into_iter()
+            .filter(|(k, _)| k.ends_with(".xhtml") || k.ends_with(".opf"))
+            .map(|(k, v)| (k, String::from_utf8(v).unwrap()))
+            .collect()
+    }
+
+    #[test]
+    fn sinopsis_va_entre_la_tapa_y_la_portada_con_un_parrafo_por_linea() {
+        let e = entradas_de(
+            r#"{"titulo":"Test","blurb":"Uno.\n\nDos & tres.","blurb_en_epub":true}"#,
+        );
+        let pagina = e.get("OEBPS/0_sinopsis.xhtml").expect("página de sinopsis");
+        assert!(pagina.contains("<h1 class=\"about-author-title\">Sinopsis</h1>"), "{}", pagina);
+        assert!(pagina.contains("<p>Uno.</p>\n<p>Dos &amp; tres.</p>"), "{}", pagina);
+
+        let opf = e.get("OEBPS/content.opf").unwrap();
+        let sin = opf.find("<itemref idref=\"sinopsis\"/>").expect("en el spine");
+        let tit = opf.find("<itemref idref=\"title\"/>").unwrap();
+        assert!(sin < tit, "la sinopsis va antes de la portada interior");
+        assert!(e.get("OEBPS/toc.xhtml").unwrap().contains("0_sinopsis.xhtml"));
+    }
+
+    #[test]
+    fn sin_el_toggle_no_hay_pagina_pero_el_blurb_va_a_la_descripcion() {
+        let e = entradas_de(r#"{"titulo":"Test","blurb":"Uno.\nDos."}"#);
+        assert!(!e.contains_key("OEBPS/0_sinopsis.xhtml"));
+        let opf = e.get("OEBPS/content.opf").unwrap();
+        assert!(opf.contains("<dc:description>Uno.\nDos.</dc:description>"), "{}", opf);
+    }
+
+    #[test]
+    fn sin_blurb_no_hay_pagina_ni_descripcion_aunque_el_toggle_este_prendido() {
+        let e = entradas_de(r#"{"titulo":"Test","blurb":"   ","blurb_en_epub":true}"#);
+        assert!(!e.contains_key("OEBPS/0_sinopsis.xhtml"));
+        assert!(!e.get("OEBPS/content.opf").unwrap().contains("dc:description"));
+    }
+
+    #[test]
+    fn creditos_van_a_la_pagina_de_copyright_uno_por_parrafo() {
+        let cfg: BookConfig = serde_json::from_str(
+            r#"{"titulo":"X","isbn":"123","creditos":"Tapa: Fulano\n\n  Corrección: Mengana  "}"#,
+        )
+        .unwrap();
+        let xhtml = build_copyright_xhtml(&cfg);
+        assert!(
+            xhtml.contains("<p>ISBN: 123</p>\n<p>Tapa: Fulano</p>\n<p>Corrección: Mengana</p>\n"),
+            "{}",
+            xhtml
         );
     }
 }

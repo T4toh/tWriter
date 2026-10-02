@@ -22,9 +22,11 @@ export interface BookConfig {
   aviso_contenido?: boolean | null;
   textos_legales?: Record<string, string> | null;
   dedicatoria?: string | null;
-  /** Gancho de contratapa, con sus saltos de párrafo. Por ahora solo se
-   *  guarda con el libro. */
+  /** Gancho de contratapa, con sus saltos de párrafo. Va al
+   *  `<dc:description>` del EPUB. */
   blurb?: string | null;
+  /** Página «Sinopsis» con el blurb, después de la tapa del EPUB. */
+  blurb_en_epub?: boolean | null;
   /** Resumen largo para la ficha de la tienda. */
   sinopsis?: string | null;
   /** Frase corta para anuncios y redes; no es el blurb. */
