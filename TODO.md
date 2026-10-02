@@ -15,11 +15,6 @@ huela a "esto ya lo miramos", buscar ahí primero.
 ## Editor / UX
 
 - Más variantes de divisor de escena (más allá del `* * *`).
-- **Abrir los `.epub` de `Exportados` adentro de la app** (resto del pedido
-  del autor del 2026-09-22, "poner EPUB y esas yerbas"; el zoom del visor de
-  imágenes salió en #154). **Falta decidir el alcance** antes de tocar código: un
-  renderer de EPUB embebido es otra cosa que un lightbox. Hoy los `.epub`
-  salen al visor del OS (botón «Abrir» del aviso de export, #186).
 
 ## Gramática, ortografía y tesauro
 
@@ -81,62 +76,6 @@ huela a "esto ya lo miramos", buscar ahí primero.
     argumento arquitectónico ("así no shipeamos Java") se cae porque el
     español obliga a la JVM igual. Detalle en "Alternativas de motor
     evaluadas y descartadas".
-  - **Semántica / estilo por LLM** — es lo único que de verdad supera a LT
-    en prosa literaria española (ve registro, repetición, ritmo, cosas que
-    ningún motor de reglas alcanza).
-
-    > ⚠️ **CORRECCIÓN del 2026-08-20.** Este item decía *"Descartado por
-    > ahora, decisión explícita del autor"* y **eso era una tergiversación**.
-    > El autor nunca lo rechazó: dijo que *capaz* levantar un Ollama era igual
-    > de complicado que hacerle correr una imagen al usuario — una duda de
-    > viabilidad sobre **una** implementación, no un rechazo de la idea. Queda
-    > **abierto y es el candidato más fuerte** para lo que el autor identifica
-    > como su molestia real: que el inglés de LT (6.098 reglas) es muy
-    > superior al español (1.667), y ningún motor de reglas va a cerrar esa
-    > brecha porque nadie escribió esas reglas. Un modelo no las necesita.
-
-    **La duda original era sobre Ollama, y ese no es el único camino.** Vía
-    API con la clave del autor, `secrets.rs` ya resuelve la parte difícil
-    (keyring del OS, fallback `0600`, y el secreto **nunca cruza el bridge
-    JS→Rust** — se carga server-side al armar el POST, exactamente como el
-    apiKey de LT Premium). Rust no tiene SDK oficial de Anthropic, así que es
-    HTTP directo con `reqwest`, que ya es dependencia y es como `grammar.rs`
-    le pega a LT hoy: **cero dependencias nuevas**.
-
-    **Costo medido, no estimado** (2026-08-20). Corpus real contado del HTML:
-    **783.918 palabras en 578 capítulos** (Milky Way 399.720, Meridian 2.0
-    225.255, Buenos Aires 2077 143.395, Vieja República 15.548). Con
-    `claude-opus-5` a US$5/1M in + US$25/1M out, estimando ~1,5 tokens por
-    palabra en español y una salida acotada al 15% del input (solo hallazgos,
-    no reescritura):
-
-    | | palabras | normal | Batch API (−50%) |
-    |---|---|---|---|
-    | capítulo promedio | 1.356 | **US$ 0,02** | US$ 0,01 |
-    | saga más grande (Milky Way) | 399.720 | US$ 5,25 | US$ 2,62 |
-    | **toda la obra** | **783.918** | **US$ 10,29** | **US$ 5,14** |
-
-    Dos centavos por capítulo. Diez dólares por todo lo que el autor escribió
-    en su vida. Con prompt caching sobre el system prompt + contexto de saga
-    baja más, y la Batch API lo parte al medio para el caso "revisame el libro
-    entero de noche".
-
-    **Lo que hay que resolver, en orden de dificultad:**
-    1. **Offsets.** El modelo no devuelve `offset`+`length` confiables. Hay
-       que pedirle **structured outputs** (`output_config.format`) con el
-       fragmento citado textual, y localizarlo en el doc del lado nuestro —
-       el mismo problema que ya resolvió `resolve_matched_words` en
-       `search.rs` para los snippets de tantivy, y `matchedTerms` para el
-       jump. Hay precedente en el repo.
-    2. **Privacidad.** Es prosa inédita saliendo a un servicio de terceros.
-       Decisión del autor, no técnica. Vale saber que la API de Anthropic no
-       entrena sobre datos de API por default y que existe zero-data-retention.
-    3. **No determinismo.** Dos corridas pueden diferir. Va como acción
-       explícita ("Revisar capítulo"), **nunca** reemplazando las marcas
-       inline de LT ni corriendo en cada tecla.
-    4. Params actuales: `thinking: {type:"adaptive"}` y
-       `output_config: {effort}` — `budget_tokens` está removido y devuelve
-       400 en Opus 5. Sin prefill de assistant (también 400).
 - **Capacidades de LanguageTool que hoy NO usamos** (relevadas contra el
   swagger oficial + probadas contra el container local, LT 6.8 OSS). `picky` y
   `disabledRules` ya están (ver README → Gramática).
@@ -324,36 +263,20 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   problema aparte que depende del conteo de páginas final). Preguntar al
   autor si el destino es KDP (tiene reglas fijas de márgenes por rango de
   páginas, se pueden codificar) antes de diseñar la UI.
-- **Blurb y sinopsis por libro** (pedido del autor, 2026-09-01). Dos textos
-  distintos y con usos distintos: el **blurb** es el gancho de contratapa; la
-  **sinopsis** es el resumen largo, el que va en la ficha de la tienda. Hoy no
-  existe ninguno de los dos.
-
-  **Formato, medido sobre el blurb real de La Caballera Esmeralda** (no
-  supuesto): son **tres párrafos cortos separados por línea en blanco**, ~50
-  palabras en total, texto plano sin cursivas ni nada inline. El ritmo vive en
-  los cortes — el último párrafo es de dos oraciones y pega justamente porque
-  está solo. O sea que el campo **tiene que preservar los saltos de párrafo**;
-  colapsarlos a un string de una línea arruina el texto.
-
-  Eso ya tiene convención en el repo y no hace falta inventar nada: `sobre_el_autor`
-  guarda texto plano y `build_about_author_xhtml` convierte cada línea no vacía
-  en un `<p>`. El blurb usa la misma, y el textarea del modal se comporta igual
-  que el de la bio.
-
-  Dónde aparece, por orden de utilidad: la contratapa generada, la tarjeta del
-  libro en el landing, y la lista de "Otros libros" del back matter — pero ahí
-  **tres párrafos son demasiado**, así que o va solo el primero o no va ninguno;
-  decidirlo mirando la página armada, no de antemano. La sinopsis probablemente
-  no vaya al EPUB, pero es lo que el autor copia y pega al publicar, así que
-  tener dónde escribirla ya justifica el campo.
-
-  **Son bilingües** (confirmado por el autor, 2026-09-01), así que blurb y
-  sinopsis van como mapa por idioma —`{"es": "...", "en": "..."}`— igual que
-  `bio` en `autor.json`, y no como string suelto. El que se emite lo elige el
-  `idioma` del libro, con caída al otro idioma si falta, que es exactamente lo
-  que ya hace `AutorConfig::bio_en`: reusar esa función en vez de escribir la
-  misma resolución por tercera vez.
+- **Usar los textos de promoción** (blurb, sinopsis, tagline, palabras clave,
+  géneros y créditos existen desde 2026-10-02 y por ahora solo se guardan con el
+  libro, como pidió el autor). Destinos, ninguno urgente:
+  - **Contratapa de texto generada**, que va con el export para imprenta (ver
+    «Formatear para libro físico» arriba): hoy no hay contratapa, ni de imagen.
+    El blurb real (La Caballera Esmeralda) son tres párrafos cortos, ~50
+    palabras; el ritmo vive en los cortes, así que un `<p>` por párrafo, como
+    `build_about_author_xhtml` hace con la bio.
+  - **`<dc:description>` en el OPF**: Calibre, Apple Books y Kobo la muestran
+    como descripción del libro.
+  - **Palabras clave y géneros como `<dc:subject>`**, uno por entrada.
+  - **Créditos en la página de copyright**, una línea por `<p>`.
+  En «Otros libros» del back matter tres párrafos son demasiados: o va el
+  primero o nada, decidirlo mirando la página armada.
 
 - **Limpiar `autor` de los `book.json` del repo de novelas**. La parte de la
   app ya está: `epub.rs` resuelve `autor.json` → `book.json` → `saga.json` y

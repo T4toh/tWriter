@@ -364,6 +364,12 @@ export class BookConfigModal {
         aviso_contenido: cfg.aviso_contenido ?? null,
         textos_legales: cfg.textos_legales ?? null,
         dedicatoria: cfg.dedicatoria ?? '',
+        blurb: cfg.blurb ?? '',
+        sinopsis: cfg.sinopsis ?? '',
+        tagline: cfg.tagline ?? '',
+        palabras_clave: cfg.palabras_clave ?? null,
+        generos: cfg.generos ?? null,
+        creditos: cfg.creditos ?? '',
         imprenta: cfg.imprenta ?? 'Independiente',
         serie: cfg.serie ?? '',
         numero_en_serie: cfg.numero_en_serie ?? null,
@@ -438,6 +444,17 @@ export class BookConfigModal {
     const cur = this.config();
     if (!cur) return;
     this.config.set({ ...cur, [key]: value });
+  }
+
+  /** Las listas se editan como una entrada por línea. Al tipear se guardan
+   *  con sus líneas vacías, para que Enter no se coma el renglón nuevo; se
+   *  limpian recién en `save()`. */
+  protected lineas(campo: 'palabras_clave' | 'generos'): string {
+    return (this.config()?.[campo] ?? []).join('\n');
+  }
+
+  protected setLineas(campo: 'palabras_clave' | 'generos', valor: string): void {
+    this.update(campo, valor.split('\n'));
   }
 
   protected incisoActivo(clave: string): boolean {
@@ -521,6 +538,12 @@ export class BookConfigModal {
         aviso_contenido: cfg.aviso_contenido ?? null,
         textos_legales: cfg.textos_legales ?? null,
         dedicatoria: blank(cfg.dedicatoria),
+        blurb: blank(cfg.blurb),
+        sinopsis: blank(cfg.sinopsis),
+        tagline: blank(cfg.tagline),
+        palabras_clave: lista(cfg.palabras_clave),
+        generos: lista(cfg.generos),
+        creditos: blank(cfg.creditos),
         imprenta: blank(cfg.imprenta),
         serie: blank(cfg.serie),
         numero_en_serie: cfg.numero_en_serie || null,
@@ -550,6 +573,11 @@ export class BookConfigModal {
   protected close(): void {
     this.svc.close();
   }
+}
+
+function lista(xs: string[] | null | undefined): string[] | null {
+  const limpia = (xs ?? []).map((x) => x.trim()).filter((x) => x.length > 0);
+  return limpia.length ? limpia : null;
 }
 
 function blank(s: string | null | undefined): string | null {

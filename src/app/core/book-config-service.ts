@@ -22,6 +22,19 @@ export interface BookConfig {
   aviso_contenido?: boolean | null;
   textos_legales?: Record<string, string> | null;
   dedicatoria?: string | null;
+  /** Gancho de contratapa, con sus saltos de párrafo. Por ahora solo se
+   *  guarda con el libro. */
+  blurb?: string | null;
+  /** Resumen largo para la ficha de la tienda. */
+  sinopsis?: string | null;
+  /** Frase corta para anuncios y redes; no es el blurb. */
+  tagline?: string | null;
+  /** Frases de búsqueda de las tiendas (KDP acepta 7). */
+  palabras_clave?: string[] | null;
+  /** Géneros o categorías de tienda en texto libre. */
+  generos?: string[] | null;
+  /** Créditos de la edición, uno por línea ("Tapa: Fulano"). */
+  creditos?: string | null;
   imprenta?: string | null;
   serie?: string | null;
   numero_en_serie?: number | null;
