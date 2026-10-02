@@ -21,6 +21,7 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 ### Fixed
 
 - Si la tapa (o la contratapa) de un libro apunta a una imagen que no está en disco, la configuración del libro muestra el path que falta con un botón «Elegir otra», la tarjeta del landing dice «Tapa no encontrada», y el export del EPUB avisa que salió sin portada en vez de saltearla en silencio.
+- Una tapa renombrada, borrada o reemplazada por fuera de la app (desde el explorador de archivos o con un pull) ya no se sigue viendo la vieja: la tarjeta y la configuración del libro muestran la que está en disco, o avisan que no la encuentran.
 
 ## [0.24.0] - 2026-10-01
 

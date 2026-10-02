@@ -36,7 +36,9 @@ mod util;
 
 use audit::list_chapters_for_audit;
 use autor::{get_autor_config, set_autor_config};
-use book_config::{adopt_config_image, get_book_config, mark_as_epilogo, set_book_config};
+use book_config::{
+    adopt_config_image, get_book_config, image_mtime, mark_as_epilogo, set_book_config,
+};
 use saga_config::{
     find_saga_dir, get_saga_config, get_saga_dictionary, set_saga_config, set_saga_dictionary,
 };
@@ -165,6 +167,7 @@ pub fn run() {
             get_book_config,
             set_book_config,
             adopt_config_image,
+            image_mtime,
             mark_as_epilogo,
             get_autor_config,
             set_autor_config,
