@@ -29,6 +29,23 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
       >
         <div class="grammar-pop-head">
           <span class="grammar-pop-rule">{{ m.ruleId }}</span>
+          @if (review(); as r) {
+            <span class="grammar-pop-nav">
+              <span class="grammar-pop-count">{{ r.n }} de {{ r.total }}</span>
+              <button type="button" class="btn btn-sm btn-secondary" (click)="next.emit()">
+                Siguiente ›
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-secondary"
+                (click)="endReview.emit()"
+                title="Terminar la revisión"
+                aria-label="Terminar la revisión"
+              >
+                ✕
+              </button>
+            </span>
+          }
         </div>
         <div class="msg">{{ m.message }}</div>
         @if (hasAnySuggestion()) {
@@ -103,6 +120,10 @@ export class GrammarPopover {
   disableRule = output<void>();
   canDeriveForms = input<boolean>(false);
   addToDictWithForms = output<void>();
+  /** «3 de 12» del recorrido de «Revisar»; `null` fuera de él (popover por click). */
+  review = input<{ n: number; total: number } | null>(null);
+  next = output<void>();
+  endReview = output<void>();
   suggestions = computed(() => {
     const room = Math.max(0, 5 - this.dictSuggestions().length);
     return (this.match()?.replacements ?? []).slice(0, room);
@@ -127,10 +148,11 @@ export class GrammarPopover {
     // recoloca en el mismo ciclo. La remedición depende de que cambie la
     // identidad de `anchor()` (el efecto no lee `match()`/`dictSuggestions()`
     // directamente): hoy alcanza porque el editor siempre cierra el popover
-    // (pasa el signal a `null`) antes de abrir el siguiente. Si en algún
-    // momento se reusa un popover ya abierto (ej. un "saltar al próximo
-    // error" que solo cambia `match`), hay que sumar esas señales de
-    // contenido a las que lee este efecto.
+    // (pasa el signal a `null`) antes de abrir el siguiente. El «Siguiente ›»
+    // de «Revisar» también pasa por ahí (`abrirPopoverGramaticaEn` arma un
+    // `anchorAt` nuevo en cada paso), así que la identidad cambia igual. Si en
+    // algún momento se reusa un popover ya abierto cambiando solo `match`, hay
+    // que sumar esas señales de contenido a las que lee este efecto.
     afterRenderEffect(() => {
       const anchor = this.anchor();
       const el = this.root()?.nativeElement;

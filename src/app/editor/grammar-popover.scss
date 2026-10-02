@@ -10,6 +10,23 @@
    ahí vive solo la caja y esto es el segundo caso, no el tercero. */
 .grammar-pop-head {
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Navegación del recorrido de «Revisar»: a la derecha del id de la regla. */
+.grammar-pop-nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.grammar-pop-count {
+  font-size: 11px;
+  color: var(--fg-muted);
+  white-space: nowrap;
 }
 
 .grammar-pop-rule {

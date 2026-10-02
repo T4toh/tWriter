@@ -86,6 +86,7 @@ import { Verso, aplicarVerso } from './verso-extension';
 import { AnchorBox } from './popover-position';
 import { buildEditorProps } from './editor-props';
 import { GrammarPopover } from './grammar-popover';
+import { nextReviewMatch, reviewPosition } from './grammar-wizard';
 import {
   RayaExtension,
   RayaViolationPos,
@@ -228,6 +229,24 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly grammarError = this.grammar.lastError;
   protected readonly grammarMatches = signal<GrammarMatchPos[]>([]);
   protected readonly grammarPopover = signal<{ match: GrammarMatch; anchor: AnchorBox; from: number; to: number; dictSuggestions: string[] } | null>(null);
+  /** Recorrido de «Revisar»: los matches de LT uno por uno sobre el popover
+   *  de siempre. Mientras está prendido no corre ningún re-check automático:
+   *  traería de vuelta lo que el autor ya ignoró y pisaría la lista a mitad
+   *  del recorrido. */
+  protected readonly reviewing = signal<boolean>(false);
+  /** Ids que el autor pasó con «Siguiente» sin resolver. */
+  private reviewSkipped = new Set<string>();
+  /** La edición que hace el propio popover (aplicar una sugerencia) no corta
+   *  el recorrido; cualquier otra edición del doc, sí. */
+  private reviewApplying = false;
+  /** Dónde estaba el match del popover abierto: de ahí sigue el recorrido
+   *  cuando el autor lo resuelve. */
+  private reviewFrom = 0;
+  protected readonly reviewNav = computed<{ n: number; total: number } | null>(() => {
+    const popover = this.grammarPopover();
+    if (!this.reviewing() || !popover) return null;
+    return reviewPosition(this.grammarMatches(), (popover.match as GrammarMatchPos).id);
+  });
   /** Palabra para la que está abierto el panel de formas derivadas, o null. */
   protected readonly formasPara = signal<string | null>(null);
   protected readonly idiomaFlexion = this.sagaCtx.idiomaFlexion;
@@ -495,6 +514,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       // Limpiar las marcas del capítulo anterior antes de cargar el nuevo
       // para que no se vea "todo marcado" durante el round-trip a LT.
       this.cerrarPopovers();
+      this.endReview();
       this.grammarMatches.set([]);
       this.applyDecorations([]);
       this.lastCheckedPlain = null;
@@ -849,7 +869,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     // flotando sobre el modal que abría esa entrada.
     effect(() => {
       if (!this.ctxMenu.current()) return;
-      untracked(() => this.cerrarPopovers());
+      untracked(() => {
+        this.cerrarPopovers();
+        this.closeReview();
+      });
     });
 
     // El panel de repeticiones pidió abrir el popover sobre una aparición. El
@@ -1248,6 +1271,13 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   protected async checkGrammar(force = false): Promise<void> {
     if (!this.tiptap || !this.canCheckGrammar()) return;
+    if (untracked(() => this.reviewing())) {
+      // Durante «Revisar» un check automático espera; uno pedido a mano (el
+      // botón LT, el «Deshacer» de un toast) termina el recorrido.
+      if (!force) return;
+      this.endReview();
+      this.grammarPopover.set(null);
+    }
     const meta = this.meta().idioma;
     const lang: 'es' | 'en' | 'auto' = meta === 'es' || meta === 'en' ? meta : 'auto';
     const { plain, ranges } = extractPlainText(this.tiptap.state.doc);
@@ -1278,6 +1308,8 @@ export class Editor implements AfterViewInit, OnDestroy {
         this.scheduleGrammarRecheck();
         return;
       }
+      // Arrancó «Revisar» mientras el request volaba: no pisarle la lista.
+      if (this.reviewing()) return;
       const positioned = mapMatchesToPm(
         matches,
         ranges,
@@ -1355,18 +1387,24 @@ export class Editor implements AfterViewInit, OnDestroy {
         category: popover.match.category,
       }),
     );
-    this.tiptap
-      .chain()
-      .focus()
-      .setTextSelection({ from: popover.from, to: popover.to })
-      .insertContent(replacement)
-      .run();
+    this.reviewApplying = true;
+    try {
+      this.tiptap
+        .chain()
+        .focus()
+        .setTextSelection({ from: popover.from, to: popover.to })
+        .insertContent(replacement)
+        .run();
+    } finally {
+      this.reviewApplying = false;
+    }
     this.grammarPopover.set(null);
     this.grammarMatches.update((list) => list.filter((m) => m.id !== dismissedId));
     this.applyDecorations(this.grammarMatches());
     if (this.grammar.autoEnabled() && this.canAutoGrammar()) {
       this.scheduleGrammarRecheck();
     }
+    this.reviewNext(this.reviewFrom);
   }
 
   protected dismissGrammarMatch(): void {
@@ -1376,6 +1414,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.grammarMatches.update((list) => list.filter((m) => m.id !== dismissedId));
     this.applyDecorations(this.grammarMatches());
     this.grammarPopover.set(null);
+    this.reviewNext(this.reviewFrom);
   }
 
   /** "Nunca más esta regla": la persiste en la saga y limpia TODAS sus marcas
@@ -1392,6 +1431,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.grammarPopover.set(null);
     if (!result.ok) {
       this.toast.error(result.reason ?? 'No se pudo desactivar la regla');
+      this.closeReview();
       return;
     }
     this.grammarMatches.update((list) => list.filter((m) => m.ruleId !== regla));
@@ -1408,6 +1448,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       },
       { label: 'Deshacer', run: () => void this.revivirRegla(regla) },
     );
+    this.reviewNext(this.reviewFrom);
   }
 
   /** El "Deshacer" del toast de `disableCurrentRule`. El re-check va forzado
@@ -1431,6 +1472,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!result.ok) {
       this.toast.error(result.reason ?? 'No se pudo agregar al diccionario');
       this.grammarPopover.set(null);
+      this.closeReview();
       return;
     }
     this.grammarMatches.update((list) =>
@@ -1453,6 +1495,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       },
       { label: 'Deshacer', run: () => void this.sacarDelDiccionario(word) },
     );
+    this.reviewNext(this.reviewFrom);
   }
 
   /** El "Deshacer" del toast de `addCurrentToDictionary`. Mismo `force` que
@@ -1497,6 +1540,96 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   protected cerrarFormasDerivadas(): void {
     this.formasPara.set(null);
+    // Durante «Revisar», cerrar sin agregar vuelve al mismo match.
+    this.reviewNext(this.reviewFrom);
+  }
+
+  /** Arranca (o termina, si ya estaba) el recorrido de «Revisar». Sin un check
+   *  previo —Auto apagado, capítulo recién abierto— no hay lista que recorrer,
+   *  así que primero se chequea. */
+  protected async startReview(event: MouseEvent): Promise<void> {
+    // Sin esto el click sigue hasta `document` y `onDocumentClick` cierra el
+    // popover que se acaba de abrir.
+    event.stopPropagation();
+    if (this.reviewing()) {
+      this.closeReview();
+      return;
+    }
+    if (this.lastCheckedPlain === null) await this.checkGrammar(true);
+    // Sigue en null: LT falló y el error ya está en el footer.
+    if (!this.tiptap || this.lastCheckedPlain === null) return;
+    if (this.grammarMatches().length === 0) {
+      this.toast.info('LanguageTool no marca nada en este capítulo');
+      return;
+    }
+    this.reviewSkipped.clear();
+    this.reviewing.set(true);
+    this.reviewNext(0);
+  }
+
+  /** «Siguiente ›»: pasa el match sin resolverlo. */
+  protected skipReview(): void {
+    const popover = this.grammarPopover();
+    if (!popover) return;
+    this.reviewSkipped.add((popover.match as GrammarMatchPos).id);
+    this.reviewNext(popover.from);
+  }
+
+  /** Paso del recorrido: selecciona el match que toca, lo trae a la vista y le
+   *  abre el popover. Sin `reviewing()` no hace nada, así que las acciones del
+   *  popover lo llaman siempre. */
+  private reviewNext(desde: number): void {
+    if (!this.tiptap || !this.reviewing()) return;
+    const doc = this.tiptap.state.doc;
+    // «+ formas…» saca sus TYPOS de la lista recién cuando corre el effect de
+    // re-filtrado, y el paso siguiente no puede caer en uno de esos.
+    const pendientes = this.grammarMatches().filter(
+      (m) =>
+        m.category !== 'TYPOS' ||
+        !this.sagaCtx.isInDictionary(doc.textBetween(m.from, m.to, ' ').trim()),
+    );
+    const next = nextReviewMatch(pendientes, desde, this.reviewSkipped);
+    if (!next) {
+      const salteados = pendientes.filter((m) => this.reviewSkipped.has(m.id)).length;
+      this.closeReview();
+      this.toast.info(
+        salteados === 0
+          ? 'Revisión terminada'
+          : `Revisión terminada: ${salteados === 1 ? 'queda 1 salteado' : `quedan ${salteados} salteados`}`,
+      );
+      return;
+    }
+    this.tiptap
+      .chain()
+      .focus()
+      .setTextSelection({ from: next.from, to: next.to })
+      .scrollIntoView()
+      .run();
+    this.abrirPopoverGramaticaEn(next);
+  }
+
+  /** Corte del recorrido por el autor (✕, Esc, click afuera). Recién acá vuelve
+   *  el re-check automático, que estuvo en pausa. */
+  protected closeReview(): void {
+    if (!this.reviewing()) return;
+    this.endReview();
+    this.grammarPopover.set(null);
+    if (this.grammar.autoEnabled() && this.canAutoGrammar() && this.canCheckGrammar()) {
+      this.scheduleGrammarRecheck();
+    }
+  }
+
+  /** Apaga el recorrido sin tocar nada más: lo usan los caminos que ya cierran
+   *  el popover o que lanzan su propio check (cambio de capítulo, check a mano,
+   *  edición del doc). No lee signals, así que se puede llamar desde un effect. */
+  private endReview(): void {
+    this.reviewing.set(false);
+    this.reviewSkipped.clear();
+  }
+
+  @HostListener('window:keydown.escape')
+  protected onEscapeReview(): void {
+    this.closeReview();
   }
 
   protected async agregarFormasDerivadas(formas: string[]): Promise<void> {
@@ -1511,6 +1644,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.formasPara.set(null);
     // No hace falta re-filtrar a mano: `addManyToDictionary` actualiza
     // `dictWords`, y el effect de re-filtrado en vivo lo toma solo.
+    this.reviewNext(this.reviewFrom);
   }
 
   private applyDecorations(matches: GrammarMatchPos[]): void {
@@ -1544,6 +1678,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   private scheduleGrammarRecheck(): void {
+    if (this.reviewing()) return;
     if (this.grammarDebounceHandle !== null) {
       clearTimeout(this.grammarDebounceHandle);
     }
@@ -2030,6 +2165,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       return;
     }
     this.cerrarPopovers();
+    this.closeReview();
   }
 
   /**
@@ -2053,6 +2189,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     // dejara de burbujear hasta su root, el guard evita que se cierre solo.
     if (target?.closest('.editor-pop')) return;
     this.cerrarPopovers();
+    this.closeReview();
   }
 
   /** Ancla del popover por posición del doc, no por el span de la decoración.
@@ -2197,6 +2334,7 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  coordenadas salen de `anchorAt`, igual que el de repeticiones. */
   private abrirPopoverGramaticaEn(m: GrammarMatchPos): void {
     this.cerrarPopovers();
+    this.reviewFrom = m.from;
     // El diccionario de la saga hasta ahora solo silenciaba falsos positivos.
     // Para los TYPOS también aporta candidatos: si el autor escribió mal un
     // nombre propio del mundo, LT nunca lo va a ofrecer.
@@ -2277,6 +2415,7 @@ export class Editor implements AfterViewInit, OnDestroy {
           if (this.repPopover()) this.repPopover.set(null);
           return;
         }
+        if (this.reviewing() && !this.reviewApplying) this.endReview();
         if (this.grammarMatches().length > 0) {
           const docSize = transaction.doc.content.size;
           const remapped = this.grammarMatches()

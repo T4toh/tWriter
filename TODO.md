@@ -44,20 +44,6 @@ huela a "esto ya lo miramos", buscar ahí primero.
   en sílabas en el export. Nada que ver con el corrector, pero sale del mismo
   repo y es acotado. Cruza con el item de tipografía del EPUB.
 
-- **Wizard de revisión de errores** (paralelo al chequeo inline, a pedido del
-  autor): botón al lado de `Auto` / `LT` en la barra de arriba que abre un
-  popup y camina los matches del capítulo **uno por uno** — mostrar contexto,
-  la sugerencia, y Aceptar / Ignorar / Agregar al diccionario / Siguiente.
-  No reemplaza las marcas inline: se apoya en `grammarMatches()`, que ya
-  tiene los `from`/`to` mapeados a posiciones PM (`GrammarMatchPos`), así que
-  el wizard solo necesita ordenarlos por `from`, hacer `scrollIntoView` +
-  selección en cada paso y reusar el apply de `grammar-popover.ts`. Ojo con
-  dos cosas: (a) aceptar una sugerencia cambia el doc y por lo tanto invalida
-  los offsets de los matches siguientes — remapear con `tr.mapping` como ya
-  hace el plugin, NO re-chequear en cada paso; (b) el `Auto` puede disparar un
-  `checkGrammar` a mitad del recorrido y pisar la lista — pausar el auto-check
-  mientras el wizard está abierto. Decidir si incluye también violaciones RAE
-  (`raeViolations()`) o solo gramática.
 - **Ortografía y semántica sin depender de un servicio que el autor levante**
   (pedido del autor; prioriza **embebido o de fondo** sobre "instalate un
   runtime"). El criterio: si hay que explicarle al usuario cómo levantar un
