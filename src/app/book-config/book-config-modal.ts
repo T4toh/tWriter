@@ -3,11 +3,14 @@ import {
   computed,
   effect,
   inject,
-  signal
+  Signal,
+  signal,
+  WritableSignal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { invoke } from '@tauri-apps/api/core';
 import { BookConfig, BookConfigService } from '../core/book-config-service';
+import { CoverCache } from '../core/cover-cache';
 import {
   ESTADO_LIBRO_DETALLE,
   ESTADO_LIBRO_LABEL,
@@ -68,12 +71,22 @@ export class BookConfigModal {
   private dialogs = inject(NativeDialogsService);
   private nodeActions = inject(NodeActionsService);
   private settings = inject(SettingsService);
+  private coverCache = inject(CoverCache);
 
   protected readonly editing = this.svc.editing;
   protected readonly config = signal<BookConfig | null>(null);
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly bookPath = computed(() => this.editing()?.path ?? null);
+
+  /** Path de tapa/contratapa que el campo nombra y no carga, o `null`. Sin
+   *  esto el campo mostraba un path muerto como si estuviera bien y el EPUB
+   *  salía sin portada. Los `computed` del valor crudo dedupean: tipear en
+   *  cualquier otro campo no vuelve a pedir la imagen. */
+  protected readonly tapaFaltante = signal<string | null>(null);
+  protected readonly contratapaFaltante = signal<string | null>(null);
+  private readonly tapaCampo = computed(() => this.config()?.tapa?.trim() ?? '');
+  private readonly contratapaCampo = computed(() => this.config()?.contratapa?.trim() ?? '');
 
   protected readonly themeBase = signal<string>('');
   protected readonly ovBodyFont = signal<string>('');
@@ -224,6 +237,40 @@ export class BookConfigModal {
       void this.fontsSvc.refresh(node.path);
       void this.loadSagaTheme(node.path);
     });
+    effect(() => {
+      void this.verificarImagen(this.tapaCampo(), this.bookPath(), this.tapaFaltante, this.tapaCampo);
+    });
+    effect(() => {
+      void this.verificarImagen(
+        this.contratapaCampo(),
+        this.bookPath(),
+        this.contratapaFaltante,
+        this.contratapaCampo,
+      );
+    });
+  }
+
+  /** Mismo criterio que la tarjeta del landing: si `CoverCache` no la puede
+   *  levantar, no está. `campo` se relee al volver porque el fetch es async y
+   *  el autor pudo haber seguido tipeando. */
+  private async verificarImagen(
+    valor: string,
+    dir: string | null,
+    faltante: WritableSignal<string | null>,
+    campo: Signal<string>,
+  ): Promise<void> {
+    if (!valor || !dir) {
+      faltante.set(null);
+      return;
+    }
+    const fullPath = valor.startsWith('/') ? valor : `${dir}/${valor}`;
+    let falta = false;
+    try {
+      await this.coverCache.urlFor(fullPath, this.svc.savedAt());
+    } catch {
+      falta = true;
+    }
+    if (campo() === valor) faltante.set(falta ? valor : null);
   }
 
   private async loadSagaTheme(bookPath: string): Promise<void> {

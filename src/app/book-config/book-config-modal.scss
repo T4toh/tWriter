@@ -134,3 +134,25 @@
     padding: 0;
   }
 }
+
+/* Tapa o contratapa que el campo nombra y no está en disco. El texto va en
+   --fg y el color de aviso solo en el borde: --warn como texto no llega a AA
+   en el tema claro. */
+.imagen-faltante {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--warn-tint);
+  border-left: 2px solid var(--warn);
+  color: var(--fg);
+  font-size: 11px;
+  line-height: 1.4;
+
+  code {
+    font-family: var(--font-mono);
+    word-break: break-all;
+  }
+}

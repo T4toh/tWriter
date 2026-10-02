@@ -582,6 +582,10 @@ fn export_impl(
                 properties: None,
             });
         }
+    } else {
+        avisos.push(aviso_sin_imagen("portada", cfg.tapa.as_deref()).unwrap_or_else(|| {
+            "El EPUB salió sin portada: el libro no tiene tapa configurada ni un cover.jpg o cover.png al lado de su book.json.".into()
+        }));
     }
 
     // 2) Title page
@@ -1026,6 +1030,9 @@ fn export_impl(
                 properties: None,
             });
         }
+    } else if let Some(aviso) = aviso_sin_imagen("contratapa", cfg.contratapa.as_deref()) {
+        // Sin campo no se avisa: la contratapa es opcional.
+        avisos.push(aviso);
     }
 
     // Índice: las páginas editoriales van agrupadas, delante y detrás de los
@@ -1542,6 +1549,16 @@ fn collect_html_parts(dir: &Path) -> Result<Vec<PathBuf>, String> {
 /// `nitido` usa el camino PNG sin recomprimir (QR); si no, va a JPEG.
 /// Devuelve el nombre del archivo dentro del EPUB, o None si no se pudo —
 /// nunca aborta el export por una imagen.
+/// Aviso para una imagen configurada que no está en disco (`resolver_imagen`
+/// dio `None` con el campo cargado). `None` si el campo está vacío: ahí el
+/// que llama decide si la falta merece aviso.
+fn aviso_sin_imagen(que: &str, campo: Option<&str>) -> Option<String> {
+    let path = campo.map(str::trim).filter(|s| !s.is_empty())?;
+    Some(format!(
+        "El EPUB salió sin {que}: no encontré \"{path}\". Elegí otra imagen en Configurar novela → Portada y dedicatoria."
+    ))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn embebido_reescalado(
     origen: &Path,
@@ -2603,6 +2620,52 @@ mod tests {
         book
     }
 
+    fn avisos_de(book_json: &str, archivos: &[&str]) -> Vec<String> {
+        let tmp = TempDir::new().unwrap();
+        let book = libro_de_tres_capitulos(tmp.path(), book_json);
+        for a in archivos {
+            ::image::RgbImage::from_pixel(10, 10, ::image::Rgb([10, 10, 10]))
+                .save(book.join(a))
+                .unwrap();
+        }
+        export_impl(book.to_str().unwrap()).expect("export ok").avisos
+    }
+
+    #[test]
+    fn el_export_avisa_si_sale_sin_portada() {
+        let sin_campo = avisos_de(r#"{"titulo":"Test"}"#, &[]);
+        assert!(
+            sin_campo.iter().any(|a| a.contains("sin portada") && a.contains("no tiene tapa")),
+            "{:?}",
+            sin_campo
+        );
+        let path_muerto = avisos_de(r#"{"titulo":"Test","tapa":"no-esta.png"}"#, &[]);
+        assert!(
+            path_muerto.iter().any(|a| a.contains("sin portada") && a.contains("no-esta.png")),
+            "{:?}",
+            path_muerto
+        );
+    }
+
+    #[test]
+    fn con_portada_no_hay_aviso_de_portada() {
+        // Path muerto pero `cover.png` al lado: el autodiscovery la levanta.
+        let avisos = avisos_de(r#"{"titulo":"Test","tapa":"/otra/pc/tapa.png"}"#, &["cover.png"]);
+        assert!(!avisos.iter().any(|a| a.contains("portada")), "{:?}", avisos);
+    }
+
+    #[test]
+    fn la_contratapa_avisa_solo_si_esta_configurada() {
+        let sin_campo = avisos_de(r#"{"titulo":"Test"}"#, &["cover.png"]);
+        assert!(!sin_campo.iter().any(|a| a.contains("contratapa")), "{:?}", sin_campo);
+        let path_muerto = avisos_de(r#"{"titulo":"Test","contratapa":"atras.png"}"#, &["cover.png"]);
+        assert!(
+            path_muerto.iter().any(|a| a.contains("sin contratapa") && a.contains("atras.png")),
+            "{:?}",
+            path_muerto
+        );
+    }
+
     #[test]
     fn el_nombre_del_epub_lleva_el_sello() {
         let tmp = TempDir::new().unwrap();
@@ -2672,7 +2735,8 @@ mod tests {
             .expect("export ok");
         assert!(r.epub_path.ends_with("Test - Muestra 2026-09-18 1430.epub"), "{}", r.epub_path);
         assert_eq!(r.chapters, 2, "dos partes escritas, ni la tercera ni el epílogo");
-        assert!(r.avisos.is_empty(), "{:?}", r.avisos);
+        // El fixture no tiene tapa: ese aviso es esperado, cualquier otro no.
+        assert!(r.avisos.iter().all(|a| a.contains("sin portada")), "{:?}", r.avisos);
 
         let entries = read_epub_entries(std::path::Path::new(&r.epub_path));
         let nombres: Vec<&str> = entries.keys().map(|k| k.as_str()).collect();
@@ -4610,7 +4674,13 @@ mod tests {
                 .unwrap_or_else(|e| panic!("export del demo en {}: {}", lang, e));
 
             assert_eq!(r.chapters, 15, "[{}] 15 partes escritas", lang);
-            assert!(r.avisos.is_empty(), "[{}] avisos: {:?}", lang, r.avisos);
+            // El demo no trae tapa: ese aviso es esperado, cualquier otro no.
+            assert!(
+                r.avisos.iter().all(|a| a.contains("sin portada")),
+                "[{}] avisos: {:?}",
+                lang,
+                r.avisos
+            );
 
             let epub = std::path::Path::new(&r.epub_path);
             assert!(epub.is_file(), "[{}] no quedó el archivo en disco", lang);

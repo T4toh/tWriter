@@ -377,12 +377,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   sobre el repo de novelas, no toca este repo; y solo tiene sentido cuando
   las dos PCs corran una versión que ya lea `autor.json`.
 
-- **Tapa que no existe: avisar en vez de placeholder mudo.** Lo que quedó afuera
-  del item de arriba: si no hay **ninguna** imagen al lado, `CoverCache.urlFor`
-  tira y la UI cae al placeholder sin decir nada, y el EPUB se exporta sin
-  portada en silencio (`book_config.rs::resolver_imagen` devuelve `None`). Contra la
-  convención "el remedio se da adentro de la app": tiene que mostrar el path que
-  no existe y el botón "Elegir otra", y el export avisar que salió sin portada.
 - Preview tipo Kindle (B/N, distintos tamaños — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
 - Pesos extra de fuente (300 Light, 600 SemiBold, 900 Black). El editor de temas ya elige el peso sintético de itálica y negrita (`2bc69be`); lo que falta es reconocer las caras extra: hoy `Merriweather-Light` cae como 400 (test en `theme.rs`).
 - Auto-migración de tema renombrado: hoy renombrar un tema deja sagas/libros con `base` dangling (warning). Implementar scan recursivo de `*.json` y rewrite del `base`.
