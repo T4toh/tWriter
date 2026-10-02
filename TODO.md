@@ -272,8 +272,7 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
     palabras; el ritmo vive en los cortes, así que un `<p>` por párrafo, como
     `build_about_author_xhtml` hace con la bio.
   - **`<dc:description>` en el OPF**: Calibre, Apple Books y Kobo la muestran
-    como descripción del libro. Resolver el idioma con `por_idioma` de
-    `autor.rs` (caída al otro idioma si falta), no con una tercera copia.
+    como descripción del libro.
   En «Otros libros» del back matter tres párrafos son demasiados: o va el
   primero o nada, decidirlo mirando la página armada.
 

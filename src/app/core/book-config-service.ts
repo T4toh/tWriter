@@ -22,11 +22,11 @@ export interface BookConfig {
   aviso_contenido?: boolean | null;
   textos_legales?: Record<string, string> | null;
   dedicatoria?: string | null;
-  /** Gancho de contratapa por idioma (`{es, en}`), con sus saltos de párrafo.
-   *  Por ahora solo se guarda con el libro. */
-  blurb?: Record<string, string> | null;
-  /** Resumen largo para la ficha de la tienda, por idioma como `blurb`. */
-  sinopsis?: Record<string, string> | null;
+  /** Gancho de contratapa, con sus saltos de párrafo. Por ahora solo se
+   *  guarda con el libro. */
+  blurb?: string | null;
+  /** Resumen largo para la ficha de la tienda. */
+  sinopsis?: string | null;
   imprenta?: string | null;
   serie?: string | null;
   numero_en_serie?: number | null;

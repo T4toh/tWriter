@@ -244,14 +244,14 @@ pub struct BookConfig {
     pub textos_legales: Option<BTreeMap<String, String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dedicatoria: Option<String>,
-    /// Gancho de contratapa por idioma: `{"es": "...", "en": "..."}`, como la
-    /// bio de `autor.json`. Texto plano con sus saltos de párrafo. Por ahora
-    /// solo se guarda con el libro; ningún export lo usa todavía.
+    /// Gancho de contratapa, en el idioma del libro (la edición en otro
+    /// idioma es otro libro). Texto plano con sus saltos de párrafo. Por
+    /// ahora solo se guarda con el libro; ningún export lo usa todavía.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub blurb: Option<BTreeMap<String, String>>,
-    /// Resumen largo para la ficha de la tienda, por idioma como `blurb`.
+    pub blurb: Option<String>,
+    /// Resumen largo para la ficha de la tienda. Mismo criterio que `blurb`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sinopsis: Option<BTreeMap<String, String>>,
+    pub sinopsis: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imprenta: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -481,16 +481,16 @@ mod tests {
         let blurb = "Primer párrafo.\n\nSegundo.\n\nTercero, solo.".to_string();
         let cfg = BookConfig {
             titulo: "Test".into(),
-            blurb: Some(BTreeMap::from([("es".into(), blurb.clone())])),
-            sinopsis: Some(BTreeMap::from([("en".into(), "Long synopsis.".into())])),
+            blurb: Some(blurb.clone()),
+            sinopsis: Some("Resumen largo.".into()),
             ..Default::default()
         };
 
         set_book_config(libro.path().to_string_lossy().to_string(), cfg).unwrap();
         let leido = leer_book_config(libro.path()).unwrap();
 
-        assert_eq!(leido.blurb.unwrap().get("es"), Some(&blurb));
-        assert_eq!(leido.sinopsis.unwrap().get("en").map(String::as_str), Some("Long synopsis."));
+        assert_eq!(leido.blurb, Some(blurb));
+        assert_eq!(leido.sinopsis.as_deref(), Some("Resumen largo."));
     }
 
     #[test]

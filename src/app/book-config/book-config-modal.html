@@ -258,41 +258,25 @@
         </details>
         <details class="bc-sec">
           <summary>Blurb y sinopsis</summary>
-          <div class="row split">
+          <div class="row">
             <label>
-              <span>Blurb en español</span>
+              <span>Blurb</span>
               <textarea
-                [ngModel]="texto('blurb', 'es')"
-                (ngModelChange)="setTexto('blurb', 'es', $event)"
+                [ngModel]="c.blurb"
+                (ngModelChange)="update('blurb', $event)"
                 rows="6"
                 placeholder="El gancho de contratapa"
               ></textarea>
             </label>
-            <label>
-              <span>Blurb en inglés</span>
-              <textarea
-                [ngModel]="texto('blurb', 'en')"
-                (ngModelChange)="setTexto('blurb', 'en', $event)"
-                rows="6"
-              ></textarea>
-            </label>
           </div>
-          <div class="row split">
+          <div class="row">
             <label>
-              <span>Sinopsis en español</span>
+              <span>Sinopsis</span>
               <textarea
-                [ngModel]="texto('sinopsis', 'es')"
-                (ngModelChange)="setTexto('sinopsis', 'es', $event)"
+                [ngModel]="c.sinopsis"
+                (ngModelChange)="update('sinopsis', $event)"
                 rows="8"
                 placeholder="El resumen largo, para la ficha de la tienda"
-              ></textarea>
-            </label>
-            <label>
-              <span>Sinopsis en inglés</span>
-              <textarea
-                [ngModel]="texto('sinopsis', 'en')"
-                (ngModelChange)="setTexto('sinopsis', 'en', $event)"
-                rows="8"
               ></textarea>
             </label>
           </div>
