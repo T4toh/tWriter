@@ -158,6 +158,17 @@
             </label>
           </div>
           <div class="row">
+            <label>
+              <span>Créditos</span>
+              <textarea
+                [ngModel]="c.creditos"
+                (ngModelChange)="update('creditos', $event)"
+                rows="3"
+                placeholder="Uno por línea, ej: Tapa: Fulano"
+              ></textarea>
+            </label>
+          </div>
+          <div class="row">
             <label class="field">
               <span>Link público</span>
               <input
@@ -257,7 +268,18 @@
           </div>
         </details>
         <details class="bc-sec">
-          <summary>Blurb y sinopsis</summary>
+          <summary>Promoción</summary>
+          <div class="row">
+            <label>
+              <span>Tagline</span>
+              <input
+                type="text"
+                [ngModel]="c.tagline"
+                (ngModelChange)="update('tagline', $event)"
+                placeholder="La frase corta para anuncios y redes"
+              />
+            </label>
+          </div>
           <div class="row">
             <label>
               <span>Blurb</span>
@@ -277,6 +299,27 @@
                 (ngModelChange)="update('sinopsis', $event)"
                 rows="8"
                 placeholder="El resumen largo, para la ficha de la tienda"
+              ></textarea>
+            </label>
+          </div>
+          <div class="row split">
+            <label>
+              <span>Palabras clave</span>
+              <textarea
+                [ngModel]="lineas('palabras_clave')"
+                (ngModelChange)="setLineas('palabras_clave', $event)"
+                rows="7"
+                placeholder="Una por línea"
+              ></textarea>
+              <small class="hint">KDP acepta hasta 7.</small>
+            </label>
+            <label>
+              <span>Géneros</span>
+              <textarea
+                [ngModel]="lineas('generos')"
+                (ngModelChange)="setLineas('generos', $event)"
+                rows="7"
+                placeholder="Uno por línea, ej: Ciencia ficción > Space opera"
               ></textarea>
             </label>
           </div>

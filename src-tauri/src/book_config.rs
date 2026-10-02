@@ -252,6 +252,18 @@ pub struct BookConfig {
     /// Resumen largo para la ficha de la tienda. Mismo criterio que `blurb`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sinopsis: Option<String>,
+    /// Frase corta para anuncios y redes; no es el blurb.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tagline: Option<String>,
+    /// Frases de búsqueda de las tiendas (KDP acepta 7).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub palabras_clave: Option<Vec<String>>,
+    /// Géneros o categorías de tienda en texto libre ("Ciencia ficción > Space opera").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generos: Option<Vec<String>>,
+    /// Créditos de la edición, uno por línea ("Tapa: Fulano"). Texto plano.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creditos: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imprenta: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -476,13 +488,17 @@ mod tests {
     }
 
     #[test]
-    fn blurb_y_sinopsis_sobreviven_el_round_trip_con_sus_parrafos() {
+    fn los_textos_de_promocion_sobreviven_el_round_trip() {
         let libro = TempDir::new().unwrap();
         let blurb = "Primer párrafo.\n\nSegundo.\n\nTercero, solo.".to_string();
         let cfg = BookConfig {
             titulo: "Test".into(),
             blurb: Some(blurb.clone()),
             sinopsis: Some("Resumen largo.".into()),
+            tagline: Some("Una ciudad que nunca apaga las luces.".into()),
+            palabras_clave: Some(vec!["space opera".into(), "distopía".into()]),
+            generos: Some(vec!["Ciencia ficción > Space opera".into()]),
+            creditos: Some("Tapa: Fulano\nCorrección: Mengana".into()),
             ..Default::default()
         };
 
@@ -491,6 +507,10 @@ mod tests {
 
         assert_eq!(leido.blurb, Some(blurb));
         assert_eq!(leido.sinopsis.as_deref(), Some("Resumen largo."));
+        assert_eq!(leido.tagline.as_deref(), Some("Una ciudad que nunca apaga las luces."));
+        assert_eq!(leido.palabras_clave, Some(vec!["space opera".into(), "distopía".into()]));
+        assert_eq!(leido.generos, Some(vec!["Ciencia ficción > Space opera".into()]));
+        assert_eq!(leido.creditos.as_deref(), Some("Tapa: Fulano\nCorrección: Mengana"));
     }
 
     #[test]

@@ -263,9 +263,9 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   problema aparte que depende del conteo de páginas final). Preguntar al
   autor si el destino es KDP (tiene reglas fijas de márgenes por rango de
   páginas, se pueden codificar) antes de diseñar la UI.
-- **Usar el blurb y la sinopsis** (los campos existen desde 2026-10-02 y por
-  ahora solo se guardan con el libro, como pidió el autor). Dos destinos, ninguno
-  urgente:
+- **Usar los textos de promoción** (blurb, sinopsis, tagline, palabras clave,
+  géneros y créditos existen desde 2026-10-02 y por ahora solo se guardan con el
+  libro, como pidió el autor). Destinos, ninguno urgente:
   - **Contratapa de texto generada**, que va con el export para imprenta (ver
     «Formatear para libro físico» arriba): hoy no hay contratapa, ni de imagen.
     El blurb real (La Caballera Esmeralda) son tres párrafos cortos, ~50
@@ -273,6 +273,8 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
     `build_about_author_xhtml` hace con la bio.
   - **`<dc:description>` en el OPF**: Calibre, Apple Books y Kobo la muestran
     como descripción del libro.
+  - **Palabras clave y géneros como `<dc:subject>`**, uno por entrada.
+  - **Créditos en la página de copyright**, una línea por `<p>`.
   En «Otros libros» del back matter tres párrafos son demasiados: o va el
   primero o nada, decidirlo mirando la página armada.
 
