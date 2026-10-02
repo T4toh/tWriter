@@ -111,6 +111,16 @@ pub struct CropRect {
 /// (libro, saga y autor). `crop` es `None` para los tres llamadores viejos
 /// (tapa/contratapa/QR) — el comportamiento no cambia. El modal del autor lo
 /// manda cuando la foto no es cuadrada y hubo que recortarla a mano.
+/// Fecha de modificación (ms desde epoch) de una imagen, o `None` si no es un
+/// archivo. La usa `CoverCache` para no servir del cache una tapa renombrada o
+/// reemplazada desde afuera de la app: mira el disco sin leer los bytes.
+#[tauri::command]
+pub fn image_mtime(path: String) -> Option<u64> {
+    let meta = fs::metadata(&path).ok().filter(|m| m.is_file())?;
+    let ms = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_millis();
+    u64::try_from(ms).ok()
+}
+
 #[tauri::command]
 pub fn adopt_config_image(
     dir_path: String,
@@ -631,6 +641,17 @@ mod tests {
         let out = ::image::open(libro.path().join("autor.png")).unwrap();
         assert_eq!((out.width(), out.height()), (100, 100));
         assert_eq!(out.to_rgb8().get_pixel(0, 0).0, [250, 250, 0]);
+    }
+
+    #[test]
+    fn image_mtime_es_none_si_el_archivo_no_esta() {
+        let dir = TempDir::new().unwrap();
+        let tapa = dir.path().join("cover.png");
+        std::fs::write(&tapa, b"x").unwrap();
+        assert!(image_mtime(tapa.to_string_lossy().into_owned()).is_some());
+        std::fs::rename(&tapa, dir.path().join("cover-x.png")).unwrap();
+        assert_eq!(image_mtime(tapa.to_string_lossy().into_owned()), None);
+        assert_eq!(image_mtime(dir.path().to_string_lossy().into_owned()), None, "carpeta");
     }
 
     #[test]
