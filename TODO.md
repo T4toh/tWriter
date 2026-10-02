@@ -15,104 +15,11 @@ huela a "esto ya lo miramos", buscar ahí primero.
 ## Editor / UX
 
 - Más variantes de divisor de escena (más allá del `* * *`).
-- **Marcador huérfano post jump-to-term**: el highlight naranja de
-  `requestHighlight` (search → click resultado) o de la selección nativa
-  del jump queda pegado sobre el carácter (típicamente un em-dash) aún
-  después de mover el cursor. Repro: search → click hit → click en otra
-  parte del párrafo → el highlight persiste.
-
-  **Relevado el 2026-08-21 y la premisa de arriba estaba mal**: no existe
-  ninguna limpieza por `mouseup`/`keydown` que se esté escapando — en
-  `editor.ts` no hay un solo listener de esos (los únicos `HostListener` de
-  teclado son los de `Ctrl/⌘+Shift+Y`). Hay **dos** naranjas distintos y hay
-  que decidir cuál es el que molesta antes de tocar código:
-  1. La **decoración PM `.search-hit`** (`search-highlight-extension.ts`,
-     estilo en `editor.scss:558`), que el effect de `editor.ts:731` pinta
-     desde `search.highlightTerms()`. Ese computed depende de
-     `search.open()` + `search.query()`, así que la marca **es viva a
-     propósito** mientras el panel de búsqueda esté abierto: clickear en otra
-     parte del párrafo no la borra ni debería. Si esto es lo que se ve, no es
-     un bug de cleanup — es la decisión de "resaltar todas las ocurrencias
-     mientras buscás", y el cambio sería de diseño.
-  2. La **selección nativa** de `highlightBestMatch`
-     (`core/search-highlight.ts`), que sí se va al clickear. Sobre un em-dash
-     entraba por el panel de auditoría de raya, que pasaba como término el
-     `slice` crudo de la violación (muchas veces arranca con la raya). Desde
-     `06a1248` pasa `auditAnchor` (`core/audit-snippet.ts`), texto exacto del
-     bloque, así que si vuelve a pasar no asumir que es el mismo camino.
-
-  **Falta para poder arreglarlo**: saber si el panel de búsqueda estaba abierto
-  o cerrado cuando la marca quedó pegada. Con el panel abierto es (1) y es
-  diseño; con el panel cerrado es (2) y ahí sí hay bug. Preguntado al autor el
-  2026-08-21: **no se acuerda**, la captura es vieja. Así que este item queda
-  esperando que vuelva a pasar — cuando pase, anotar el estado del panel y con
-  eso alcanza para cerrarlo. No arrancar a tocar `editor.ts` sin ese dato: los
-  dos naranjas se pintan por caminos distintos y el fix de uno no toca al otro.
-- **Bug — cursor fantasma**: queda una barra de cursor pintada en un
-  punto del editor (típicamente arriba a la izquierda, fuera del flujo de
-  texto) además del caret real donde se está escribiendo. Ver captura.
-  Probable caret residual de TipTap/ProseMirror al perder/recuperar foco o
-  tras un scroll. Investigar si es el caret nativo o un overlay de
-  decoración (highlight/gapcursor) que no se limpia.
-- **Bug — artefacto de glifo en algunas letras**: al renderizar el texto del
-  editor, algunas letras salen con un trazo espurio pegado al principio del
-  glifo (visto en una `N` mayúscula, fuente serif del editor). Ver captura.
-  Probable problema de hinting/subpixel de la fuente en la webview (macOS) o
-  de la variante sintetizada (italic oblique / bold synthesis) aplicándose
-  donde no corresponde. Verificar primero si pasa con la fuente en otro
-  tamaño/zoom y en otro OS antes de tocar el theme.
-- **Performance en archivos grandes**: lag/scroll pesado en capítulos largos.
-
-  **Analizado el 2026-09-02 leyendo el código, no midiendo.** Se armó un
-  banco de pruebas (`3 - Banco de Pruebas` del repo de prueba: 5k / 25k /
-  100k / 300k palabras) y en la M5 del autor **hasta el de 300k va liso**, o
-  sea que en este hardware no hay nada que medir. Perseguir un número que no
-  se reproduce es cómo se termina virtualizando de gusto. Así que el criterio
-  pasa a ser: arreglar lo que es **algorítmicamente incorrecto** —eso no
-  depende de la máquina, solo del tamaño del documento— y dejar el resto para
-  cuando haya una queja real en hardware más lento.
-
-  Lo que corre por tecla tipeada, relevado sobre `editor.ts`:
-
-  - `refreshState()` (en `onTransaction` **y** `onSelectionUpdate`) llamaba a
-    `computeCursorPos`, que recorría `doc.descendants()` entero para contar
-    bloques. **Arreglado** en `20dc294`: `$from.index(0)` da el mismo número
-    en O(1). Era O(bloques) por tecla y por movimiento de cursor.
-  - **`onUpdate` hace `editor.getHTML()` en cada tecla** (`editor.ts:2247`) y
-    mete el string en `pane.content`. Eso serializa el documento **entero**
-    por cada carácter: en el capítulo de 300k palabras es armar 1,7 MB de
-    string por tecla. Es el costo O(n) por tecla que queda, y el que
-    explicaría el síntoma en una máquina lenta.
-
-    **No se toca todavía**, a propósito. El arreglo es marcar sucio (barato) y
-    debouncear la serialización, pero `content()` se lee en 16 lugares y el
-    save tendría que forzar un flush antes de escribir. Es un cambio de
-    contrato, no una optimización local: sin un número que muestre que hace
-    falta, el riesgo de romper un save supera al beneficio. **Disparador para
-    hacerlo**: que aparezca lag reportado en hardware más lento.
-  - El resto de lo que corre por tecla ya está debounceado y no acumula:
-    gramática 2000 ms, RAE 1500 ms, repeticiones 1500 ms, autosave 1500 ms.
-    Cuando disparan son O(n), pero una vez por pausa, no por tecla.
-
-  Del lado del árbol: las claves huérfanas de `stats.json` tras un rename ya
-  las remapea `reconciliar_stats` (ver README → Tree explorer). Queda como
-  costo estructural que un capítulo nunca guardado por la app se recuente en
-  cada carga del árbol (`chapter_word_count` lee y cuenta el HTML cuando no
-  hay clave); si alguna vez molesta, cachear por mtime.
 - **Abrir los `.epub` de `Exportados` adentro de la app** (resto del pedido
   del autor del 2026-09-22, "poner EPUB y esas yerbas"; el zoom del visor de
   imágenes salió en #154). **Falta decidir el alcance** antes de tocar código: un
   renderer de EPUB embebido es otra cosa que un lightbox. Hoy los `.epub`
   salen al visor del OS (botón «Abrir» del aviso de export, #186).
-
-- **Las marcas inline abren un hueco falso antes de la marca** (visto por el
-  autor el 2026-09-29): `—Yo...` con la marca de LT `PUNTOS_SUSPENSIVOS` se ve
-  `—Yo ...`. En disco no hay espacio: el `border-bottom` de `.grammar-error` /
-  `.raya-violation` en un inline corta el run de shaping en WebKit y se pierde
-  el kerning `o.` de Merriweather. `text-decoration` (lo que ya usa
-  `.repeticion`) no lo corta, pero las marcas usan borde a propósito para no
-  pisarse con el subrayado de repeticiones (ver `editor.scss`): resolverlo
-  junto con ese canal, no a pedazos.
 
 ## Gramática, ortografía y tesauro
 
@@ -136,25 +43,6 @@ huela a "esto ya lo miramos", buscar ahí primero.
   patrones** (Javier Bezos / CervanTeX). Sirve para justificado con separación
   en sílabas en el export. Nada que ver con el corrector, pero sale del mismo
   repo y es acotado. Cruza con el item de tipografía del EPUB.
-
-- **Bug de LT 6.8 encontrado de rebote: `500` esporádico en `es-AR`**
-  (2026-08-21). Escaneando el corpus, 2 de 578 capítulos devuelven
-  `HTTP 500` y el capítulo entero se queda **sin chequear**. No es el corpus ni
-  la regla: es un `NullPointerException` adentro del desambiguador de LT,
-  `DisambiguationPatternRuleReplacer.keepByDisambig` → `PatternRuleMatcher.match`,
-  reportado como `Error analyzing sentence: ... with rule VerbAdjective_antipattern:5`.
-  Es **flaky**: la misma oración aislada devuelve `200`, y con `language=es`
-  (sin variante) tampoco explota — huele a thread-safety en el pipeline del
-  server, no a un patrón puntual. Dos cosas que salen de esto: (a) para aportar
-  upstream hay que reproducirlo determinísticamente (pegarle concurrente al
-  mismo texto), (b) del lado nuestro el aviso es pobre: `check()`
-  guarda el mensaje en `grammar.lastError` y el footer de `editor.html`
-  (`@if (grammarError(); as err)`) lo pinta como
-  indicador crudo (`LanguageTool 500 Internal Server Error: …`),
-  o sea jargon de HTTP en un lugar fácil de no ver, mientras el capítulo queda
-  **entero sin marcas** porque el `check` tira. Merece el trato accionable del
-  CLAUDE.md: decir que el chequeo de *este* capítulo falló y ofrecer reintentar,
-  en vez de tirar el status HTTP a la barra de estado.
 
 - **Wizard de revisión de errores** (paralelo al chequeo inline, a pedido del
   autor): botón al lado de `Auto` / `LT` en la barra de arriba que abre un
@@ -608,15 +496,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
 - Stats: gráfico palabras/día.
 - Preview pre-push: la lista de paths con su tipo ya está en el desplegable del indicador del header (`a006461`). Falta ver el contenido: un dialog "Ver cambios pendientes" con `git diff --stat`.
 
-## Git / Sync
-
-- **Bug — cambio de carpetas en remoto no refresca el árbol**: si en otra
-  PC se crean/renombran/mueven carpetas, hay que recargar el árbol a mano
-  para verlas. **El código ya lo cubre** (relevado el 2026-10-02): desde
-  `c45e869`, `applyPullChanges` (`git-service.ts`) llama a `loadTree()` ante
-  cualquier cambio del pull, y `git.rs` reporta también los renames. Falta
-  la repro entre dos PCs para cerrarlo; si no aparece, se borra.
-
 ## Validador de raya
 
 - **Revisión a fondo del módulo de diálogos contra el DPD** (pedido del autor
@@ -741,3 +620,46 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   por texto de la frase, no por offset: editar el capítulo desancla el offset.
   Base que ya está: el índice tantivy con `matchedTerms`, el highlight/salto del
   editor y las notas por saga.
+
+## Sin repro
+
+Bugs que se vieron alguna vez pero no hay con qué reproducirlos ni capturas.
+**No se ofrecen cuando se pregunta qué hay para hacer**: cada vez que se
+retomaron se llegó a la misma conclusión, falta evidencia. Se reabren cuando el
+autor los vuelva a ver, con el dato que pide cada uno. Lo ya descartado queda
+anotado para no volver a medirlo.
+
+- **Cursor fantasma**: una barra de cursor pintada fuera del flujo de texto
+  (típicamente arriba a la izquierda) además del caret real. Aparece seguido,
+  pero el inspector no lo puede seleccionar: no es un nodo del DOM, así que
+  apunta al caret nativo de WebKit y no a una decoración de PM.
+  **Cuando pase**: captura, y anotar qué se hizo justo antes (cambio de
+  capítulo, popover, scroll, foco en otro input).
+- **Trazo de más al principio de un glifo** (visto en una `N`). Descartado el
+  2026-10-02: la `N` de `merriweather.woff2` es un solo contorno, sin
+  contornos superpuestos (la causa clásica en fuentes variables). Sospecha sin
+  confirmar: es el mismo cursor fantasma pintado pegado a la letra.
+  **Cuando pase**: captura con zoom, y ver si se va al mover el caret.
+- **Hueco falso antes de una marca inline**: `—Yo...` con la marca de LT
+  `PUNTOS_SUSPENSIVOS` se vio `—Yo ...` (2026-09-29); en disco no hay espacio.
+  Descartado el 2026-10-02: el kerning `o.` de Merriweather es -48/2000 em
+  (~0,4 px a 17 px), no da para un espacio visible, y en el WebKit de macOS
+  (render con `qlmanage`, misma fuente) el `border-bottom` de las marcas, el
+  `text-decoration`, el fondo y un span pelado terminan en el mismo píxel.
+  **Cuando pase**: captura, OS, y fuente/tamaño del editor en Configuración.
+- **Marcador naranja huérfano post jump-to-term**: el highlight queda pegado
+  (típicamente sobre una raya) después de mover el cursor. Hay dos naranjas
+  por caminos distintos: la decoración `.search-hit`
+  (`search-highlight-extension.ts`), viva a propósito mientras el panel de
+  búsqueda está abierto, y la selección nativa de `highlightBestMatch`
+  (`core/search-highlight.ts`), que se va al clickear. Desde `06a1248` el panel
+  de auditoría de raya pasa `auditAnchor` en vez del `slice` crudo.
+  **Cuando pase**: anotar si el panel de búsqueda estaba abierto (abierto =
+  diseño, cerrado = bug en el segundo camino).
+- **Performance en capítulos largos**: en la M5 del autor hasta 300k palabras
+  va liso (banco `3 - Banco de Pruebas` del repo de prueba), así que acá no hay
+  qué medir. Lo algorítmicamente incorrecto ya se arregló (`20dc294`). Queda un
+  O(n) por tecla a propósito: `onUpdate` hace `editor.getHTML()` del documento
+  entero; debouncearlo cambia el contrato de `content()` (16 lectores, el save
+  tendría que forzar un flush), así que no se toca sin un número.
+  **Cuando pase**: queja concreta en hardware más lento, con el capítulo.
