@@ -513,8 +513,11 @@ const ruleClosingDash: Rule = (p) => {
         `El «${signo}» va después de la raya de cierre: ` +
         `«—${signo}».`;
       // Tras un punto puede ser también otro hablante pegado en el mismo
-      // párrafo, y ahí el arreglo es otro: se ofrece de a uno, nunca en
-      // bloque (decisión del autor, 2026-09-30).
+      // párrafo, y ahí el arreglo es otro. Un párrafo es un hablante (DPD
+      // 3.1), así que va en bloque salvo que el párrafo parezca colapsado:
+      // ahí es dudoso y se ofrece de a uno (decisión del autor, 2026-10-02;
+      // hasta entonces era siempre de a uno, y La Ciudad de las Luces tenía
+      // 98 escritos así a mano).
       push(
         at - 2,
         3,
@@ -523,7 +526,7 @@ const ruleClosingDash: Rule = (p) => {
           : msg,
         `${EM_DASH}${signo} `,
         signo === '.' ? HELP.resume : signo === ':' ? HELP.colonAfter : HELP.punctAfter,
-        signo === '.',
+        signo === '.' && ruleParagraphCollapsed(p).length > 0,
       );
     } else if (PUNCT_AROUND_CLOSE.test(before) && !(before === '.' && p[at - 2] === '.')) {
       push(

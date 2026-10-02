@@ -95,7 +95,8 @@ const C = [
   // 2.3b sin raya de cierre: se escribe igual que un 2.3a con narración que
   // sigue (`—Hola —dijo Juan. Luego se fue.`). No se marca.
   [4, '—Lo principal es sentirse viva —añadió Pilar. Afortunada o desafortunada, pero viva.', null, '2.3b/2.3a indistinguibles'],
-  [4, '—Hola —dijo Juan. —¿Venís mañana?', { marca: 'closing-dash' }, '2.3b u otro hablante: sin arreglo'],
+  [4, '—Hola —dijo Juan. —¿Venís mañana?', '—Hola —dijo Juan—. ¿Venís mañana?', '2.3b (un párrafo, un hablante: 3.1)'],
+  [4, '—Hola —dijo Juan. —Chau —respondió Ana. —Bueno —murmuró Pedro. —Listo.', { marca: 'closing-dash' }, '2.3b u otro hablante en párrafo colapsado: de a uno'],
   [4, '—No sé —dijo Pedro, —capaz mañana.', '—No sé —dijo Pedro—, capaz mañana.', '2.3c'],
   [4, '—Anoche estuve en una fiesta —me confesó, y añadió:— Conocí gente.', '—Anoche estuve en una fiesta —me confesó, y añadió—: Conocí gente.', '2.3f'],
   [4, '—Anoche estuve en una fiesta —me confesó, y añadió: —Conocí gente.', '—Anoche estuve en una fiesta —me confesó, y añadió—: Conocí gente.', '2.3f'],
@@ -254,7 +255,7 @@ const C = [
   [11, '—Bueno —se rascó la cabeza—, vamos.', null, '2.3e con coma'],
   [11, '—Hola —Pedro golpeó la mesa— y se fue.', null, 'nombre propio a mitad (no se toca)'],
   [11, '—Hola —saludó Ana.', null, 'verbo fuera de las listas: no se marca'],
-  [11, '—¡Duendes! —gritó. —Todo apestaba.', { marca: 'closing-dash' }, '2.3b u otro hablante: sin arreglo'],
+  [11, '—¡Duendes! —gritó. —Todo apestaba.', '—¡Duendes! —gritó—. Todo apestaba.', '2.3b (un párrafo, un hablante: 3.1)'],
   [11, 'Entonces gritó: —¡Vení!', null, 'raya tras dos puntos en narración'],
   [11, 'Esperaba a Emilio —un gran amigo. Lamentablemente, no vino.', { marca: 'unclosed-aside' }, '2.1'],
   [11, '—Leí "Rayuela" anoche.', null, 'comillas internas (§4)'],

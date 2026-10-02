@@ -9,6 +9,8 @@ import { planoConMapa } from './plano-con-mapa';
  * Un fix cuyo rango en el HTML contiene un tag NO se aplica: cruzaría el borde
  * de una cursiva y se comería un `</em>`. En una operación masiva que el autor
  * no va a revisar archivo por archivo, saltear es la única opción defendible.
+ * Lo mismo con dos fixes que se pisan: se aplica uno y el otro queda para el
+ * panel, porque el segundo se calculó sobre un texto que ya no existe.
  */
 export function aplicarFixesHtml(
   html: string,
@@ -23,7 +25,13 @@ export function aplicarFixesHtml(
   // fixes que faltan procesar. Como `mapa` es monótono, el reemplazo de un
   // fix nunca toca posiciones anteriores a las de los fixes que siguen.
   const ordenados = [...fixes].sort((a, b) => b.offset - a.offset);
+  // Inicio en el plano del último fix aplicado: uno que termine después se pisa.
+  let tope = Infinity;
   for (const fix of ordenados) {
+    if (fix.offset + fix.length > tope) {
+      salteados += 1;
+      continue;
+    }
     // length 0 es una inserción válida (ver `space-before-verb` en
     // rules-dedicated.ts, que inserta un espacio faltante): offset puede
     // entonces llegar hasta `plain.length` (insertar después del último
@@ -52,6 +60,7 @@ export function aplicarFixesHtml(
       continue;
     }
     out = out.slice(0, desde) + fix.replacement + out.slice(hasta);
+    tope = fix.offset;
     aplicados += 1;
   }
   return { html: out, aplicados, salteados };
