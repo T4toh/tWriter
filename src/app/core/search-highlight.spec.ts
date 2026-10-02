@@ -1,7 +1,7 @@
 /**
  * Tests del matching client-side de búsqueda (`search-highlight.ts`).
  *
- * Igual que `dialogos/validator.spec.ts`: no hay Karma/Jasmine corriendo aún
+ * Igual que `quotes/educate.spec.ts`: no hay Karma/Jasmine corriendo aún
  * (no está la entrada `test` en angular.json). Estos `describe/it` corren tal
  * cual cuando se sume. Se cubren sólo las funciones puras (sin DOM):
  * `foldAccents` y `findAllMatchesInPlain`. `highlightFirstMatch` depende del DOM

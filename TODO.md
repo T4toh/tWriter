@@ -412,13 +412,11 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
     acción/habla van a `AMBIGUOUS_TAGS`.
   - 2.3b sin raya de cierre (`—Lo principal… —añadió Pilar. Afortunada…`)
     se escribe igual que un 2.3a con narración que sigue: no se marca.
-  - `dash-orphan`: FN con `—Hola dijo Juan.`. Del FP con imperativos, #177
+  - `dash-orphan`: FN con `—Hola dijo Juan.` (pendiente en el corpus). Del FP con imperativos, #177
     cubrió el imperativo seguido de `tu`/`eso`; con otra palabra atrás
     (`—No sé. Pregunta a mamá.`) puede seguir marcando.
   - NFD: acentos descompuestos no matchean verbos (sintético, sin saber si
     aparece en el corpus real).
-  - `validator.spec.ts` (dormido): 3 casos fallan contra el código de hoy.
-    Pasarlos al corpus y borrarlo.
   Base de regresión: `scripts/run-raya-corpus-smoke.mjs`, con la lista de
   `PENDIENTES`; cada arreglo saca sus casos de ahí. ReDoS, `lastIndex`,
   astrales e idempotencia salieron limpios.
@@ -444,8 +442,8 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   mordió en cada violación), instrumentar `convert()` con hooks que reporten
   qué subpattern matcheó por párrafo.
 - **Tests con fixtures reales**: cuando `/home/tatoh/Repos/novelas/` tenga
-  los capítulos viejos de Meridian 2.0 pulleados, sumar `validator.spec.ts`
-  cases con párrafos textuales de esos archivos (incluyendo el caso "todo
+  los capítulos viejos de Meridian 2.0 pulleados, sumar al corpus
+  (`scripts/run-raya-corpus-smoke.mjs`) casos con párrafos textuales de esos archivos (incluyendo el caso "todo
   colapsado en un párrafo" detectado en exploración) para regresión.
 
 ## Plataformas
