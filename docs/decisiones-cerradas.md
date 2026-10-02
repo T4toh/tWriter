@@ -509,8 +509,20 @@ para no volver a abrirlos ni rehacer la medición. Lo que sigue pendiente vive e
     consistentes — una migración de contenido por cero beneficio observable.
     **No vale.**
 
+- **Guardar las últimas N revisiones del EPUB: NO** (estuvo en el TODO hasta
+  el 2026-10-02). En `Exportados/` queda **solo el último** EPUB de cada
+  variante, con sello de fecha y hora en el nombre, y el historial de
+  revisiones son las fechas de `book.json::revisiones` (#147), no los
+  archivos: guardar cada export son 7-8 MB más en un repo que es git. El
+  porqué quedó escrito en `epub.rs::export_book`.
+
 ## Deuda transversal
 
+- **Criterio para cualquier pasada de duplicación**: se unifica lo que ya está
+  duplicado y duele, no lo que podría llegar a compartirse. Dos copias iguales
+  se unifican; dos copias parecidas que divergieron a propósito, no. Y antes de
+  unificar una función duplicada, preguntarse si el framework ya la trae
+  (`formatDate` ×4 se resolvió borrándola: era `DatePipe`).
 - **Configurar las notificaciones: MEDIDO, casi nada que gobernar**
   (inventario del 2026-09-18, para no rehacerlo). Lo que pedía este item era
   una sección en Configuración para elegir por tipo si el aviso se muestra,
@@ -530,11 +542,18 @@ para no volver a abrirlos ni rehacer la medición. Lo que sigue pendiente vive e
 
 ## Fuentes normativas
 
+- **No hay corpus libre del español.** La *Nueva gramática de la lengua
+  española*, la *Ortografía* y el DPD son de la RAE, con copyright y sin
+  formato máquina. No existe un "manual de la lengua española" parseable para
+  usar de base. Lo que sí hay como sustrato son **FreeLing** (morfología +
+  parsing de dependencias, UPC, open source) y los modelos de spaCy en español
+  — pero ojo: para el detector de repeticiones **no hacen falta**, y son la
+  clase de dependencia que conviene no sumar sin un caso que la exija.
 - **El DPD no se copia al repo: se cita y se linkea** (decidido con el autor el
   2026-10-01, para no volver a preguntarlo). El *Diccionario panhispánico de
   dudas*, la *Ortografía* y la *Nueva gramática* son de la RAE y la ASALE, con
-  copyright y sin formato máquina (ver TODO.md → «Fuentes normativas del
-  español: no hay corpus libre»). Se descartó scrapear las entradas y tenerlas
+  copyright y sin formato máquina (ver «No hay corpus libre del español»,
+  arriba). Se descartó scrapear las entradas y tenerlas
   en el repo, o un `.md` con el texto literal: el repo es **público**, y no vale
   la pena porque el DPD casi no cambia y se consulta cuando hace falta.
   - **Lo que sí se puede: la cita breve con la fuente.** En Argentina lo permite
