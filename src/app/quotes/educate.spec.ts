@@ -1,7 +1,7 @@
 /**
  * Tests del educador de comillas tipográficas (inglés).
  *
- * Misma convención que `../dialogos/validator.spec.ts`: no hay Karma/Jasmine
+ * Misma convención que `../core/search-highlight.spec.ts`: no hay Karma/Jasmine
  * corriendo todavía, así que `describe/it/expect` se declaran localmente y los
  * mismos casos se validan con el runner standalone `educate.smoke.ts`
  * (asserts con `node:assert`, corrido con `node --experimental-strip-types`).

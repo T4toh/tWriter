@@ -278,11 +278,15 @@ const C = [
   [10, '—Bueno… Dicen pelotudeces en el pueblo.', null, '2.3'],
   [10, '—No es para que disculpes, solo… decía.', null, 'puntos suspensivos 1'],
   [10, '—Buenos días, Jony. Interrumpieron nuestros planes.', null, '2.3'],
+  // Inciso sin raya de apertura: falta la que separa el parlamento del
+  // narrador. Se marca y no se arregla en bloque.
+  [10, '—Hola dijo Juan.', { marca: 'dash-orphan' }, '2.3a'],
 ];
 
 const PENDIENTES = new Set([
   "\"Esto que hiciste\", gritó, \"es una locura\".",
   "<p><em>\"Vení\"</em>, dijo ella.</p>",
+  "—Hola dijo Juan.",
 ]);
 
 const letters = (s) => (s.replace(/<[^>]+>|&[a-z]+;/g, ' ').match(/\p{L}/gu) ?? []).join('').toLowerCase();
