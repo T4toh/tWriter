@@ -212,6 +212,18 @@
           AUTO
         </button>
       }
+      @if (canCheckGrammar()) {
+        <button
+          type="button"
+          class="tb-btn tb-text"
+          [class.active]="reviewing()"
+          [disabled]="grammarChecking()"
+          (click)="startReview($event)"
+          title="Recorrer los errores de LanguageTool del capítulo uno por uno"
+        >
+          REVISAR
+        </button>
+      }
     }
 
     <span class="spacer"></span>
@@ -452,6 +464,9 @@
     (addToDict)="addCurrentToDictionary()"
     (disableRule)="disableCurrentRule()"
     (addToDictWithForms)="abrirFormasDerivadas()"
+    [review]="reviewNav()"
+    (next)="skipReview()"
+    (endReview)="closeReview()"
   />
 }
 

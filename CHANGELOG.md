@@ -10,6 +10,10 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+### Added
+
+- Botón «Revisar» al lado de LT en la barra del editor: recorre los errores de LanguageTool del capítulo uno por uno en el popover de siempre («3 de 12 · Siguiente ›»), salta a cada uno y pasa solo al siguiente después de aceptar, ignorar o agregar al diccionario. Mientras dura, el chequeo automático espera, así que lo ignorado no vuelve a aparecer a mitad de camino.
+
 ### Changed
 
 - «Arreglos de raya» en «Revisar» también corrige el punto antes de la raya cuando el personaje retoma después del comentario (`—Hola. —Se sentó. —Ya voy` → `—Hola. —Se sentó—. Ya voy`). Solo queda para revisar de a uno si el párrafo parece tener varios hablantes pegados o el arreglo toca una cursiva.
