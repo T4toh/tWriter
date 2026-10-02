@@ -121,6 +121,15 @@ const casos = [
     fixes: [{ offset: 10, length: 0, replacement: '!' }],
     esperado: { html: '<p>Hola mundo!</p>', aplicados: 1, salteados: 0 },
   },
+  {
+    desc: 'dos fixes que se pisan: se aplica el de más adelante, el otro se saltea',
+    html: '<p>uno dos tres</p>',
+    fixes: [
+      { offset: 0, length: 7, replacement: 'X' },
+      { offset: 4, length: 3, replacement: 'DOS' },
+    ],
+    esperado: { html: '<p>uno DOS tres</p>', aplicados: 1, salteados: 1 },
+  },
 ];
 let fallos = 0;
 for (const c of casos) {

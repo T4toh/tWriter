@@ -10,6 +10,10 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+### Changed
+
+- «Arreglos de raya» en «Revisar» también corrige el punto antes de la raya cuando el personaje retoma después del comentario (`—Hola. —Se sentó. —Ya voy` → `—Hola. —Se sentó—. Ya voy`). Solo queda para revisar de a uno si el párrafo parece tener varios hablantes pegados o el arreglo toca una cursiva.
+
 ## [0.24.0] - 2026-10-01
 
 ### Changed
