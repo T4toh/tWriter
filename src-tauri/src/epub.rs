@@ -1343,11 +1343,18 @@ fn load_part(html_path: &Path) -> Result<ChapterPart, String> {
 /// Google Play Books borra los selectores de atributo de la hoja, así que ahí
 /// los párrafos centrados quedaban con `text-indent`. Con una clase, la regla
 /// sobrevive a cualquier sanitizador. Otros valores (justify) se dejan.
+///
+/// `left` sale como párrafo de prosa común: es lo que marca el botón de
+/// alinear a la izquierda del editor cuando el autor deshace un centrado, y
+/// en el EPUB la prosa va justificada. Como clase propia dejaba el resto del
+/// capítulo en bandera y sin sangría (142 párrafos de Camino a Casa, Sidra,
+/// después de un conjuro centrado).
 fn align_style_to_class(html: &str) -> String {
     let re = regex::Regex::new(r#"(?i)<p style="text-align:\s*(center|right|left);?"\s*>"#)
         .expect("regex de text-align válida");
-    re.replace_all(html, |caps: &regex::Captures| {
-        format!(r#"<p class="{}-align">"#, caps[1].to_ascii_lowercase())
+    re.replace_all(html, |caps: &regex::Captures| match caps[1].to_ascii_lowercase().as_str() {
+        "left" => "<p>".to_string(),
+        a => format!(r#"<p class="{}-align">"#, a),
     })
     .into_owned()
 }
@@ -4000,7 +4007,7 @@ mod tests {
     }
 
     #[test]
-    fn align_style_to_class_mapea_center_right_left() {
+    fn align_style_to_class_mapea_center_right_y_left_es_prosa() {
         assert_eq!(
             align_style_to_class(r#"<p style="text-align: center;">a</p>"#),
             r#"<p class="center-align">a</p>"#
@@ -4011,7 +4018,7 @@ mod tests {
         );
         assert_eq!(
             align_style_to_class(r#"<p style="text-align: left;">c</p>"#),
-            r#"<p class="left-align">c</p>"#
+            "<p>c</p>"
         );
         // justify y párrafos sin style quedan iguales.
         let j = r#"<p style="text-align: justify;">d</p><p>e</p>"#;

@@ -56,11 +56,12 @@
     // Mismas excepciones que el EPUB: primer párrafo, después de un título o
     // de un divisor de escena, y los alineados a mano (TextAlign escribe el
     // style inline; el export lo traduce a `.center-align` y compañía, que
-    // también van sin sangría).
+    // también van sin sangría). `left` no cuenta: el export lo saca como
+    // prosa común, con sangría.
     > p:first-child,
     h1 + p,
     hr + p,
-    p[style*='text-align'] {
+    p[style*='text-align']:not([style*='left']) {
       text-indent: 0;
     }
 
