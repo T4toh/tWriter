@@ -12,6 +12,8 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ### Added
 
+- Botón «Abrir en terminal» en la guía de git de una carpeta sin repo: abre la terminal del sistema ya parada en la carpeta de la novela, para correr los comandos de la guía sin copiar el `cd`.
+- El tema elige el ornamento del divisor de escena: `* * *` (como hasta ahora), `***`, `• • •`, `❦`, `~` o en blanco, en Temas → Capítulos, y también como ajuste por saga o por libro. El editor sigue mostrando `* * *`; el cambio se ve en el EPUB.
 
 ### Changed
 
