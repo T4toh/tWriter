@@ -220,7 +220,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
 
 ## Tree / Importer
 
-- Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
 - **Plantillas para el back matter** (idea del autor, 2026-09-02, no para ahora).
