@@ -19,6 +19,7 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ### Fixed
 
+- El índice del EPUB listaba partes con el número equivocado («1, 2, 2, 4») y desplegaba esa lista cuando no hacía falta: al insertar una parte en el medio o reordenarlas, el número que la app les pone de título no acompañaba al archivo. Ahora lo acompaña, y el export ignora un título que es solo un número aunque el archivo venga de antes.
 - En las Kindle viejas, la foto y la firma de «Sobre el autor» y las tapas de «Otros libros» salían corridas a la izquierda en vez de centradas.
 - Después de centrar un verso a mano y volver con «Alinear a la izquierda», el resto del capítulo salía en el EPUB sin sangría y sin justificar. Ahora esos párrafos salen como prosa normal, y el botón de izquierda saca el centrado en vez de marcar el párrafo.
 
