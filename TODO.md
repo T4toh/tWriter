@@ -396,7 +396,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   en los templates, así que eso es un item propio y grande, no un agregado al
   modal).
 - Guía in-app de primer uso: tour con flechas la primera vez que se abre la app (tree explorer, idioma, RAE, gramática, sync). Persiste flag en `settings.json`.
-- Botón "Abrir en terminal" dentro del modal storage-help (`xdg-open` / `konsole` / `gnome-terminal` / `wt`).
 - **Sincronizar `settings.json` entre PCs**: hoy la config vive en
   `app_config_dir` local (Linux: `~/.config/twriter/`) — cada PC arranca
   con su propio tema, idioma, font recents, grammar mode, diccionario,
