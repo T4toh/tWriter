@@ -12,10 +12,6 @@ cambió el speller, por qué LT no va como sidecar, qué mide el corpus) viven e
 rehacer la medición, no para volver a discutirlos. Antes de abrir un item que
 huela a "esto ya lo miramos", buscar ahí primero.
 
-## Editor / UX
-
-- Más variantes de divisor de escena (más allá del `* * *`).
-
 ## Gramática, ortografía y tesauro
 
 - **Dashboard de estilo por novela** (idea del autor, no para ahora). Lo que hoy
