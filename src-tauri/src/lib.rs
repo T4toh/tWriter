@@ -29,6 +29,7 @@ mod split_chapter;
 mod stats;
 mod storage;
 mod system_fonts;
+mod terminal;
 mod tesauro;
 mod theme;
 mod themes;
@@ -73,6 +74,7 @@ use reorder::{move_node, relocate_node};
 use replace::{replace_apply, replace_preview, replace_undo};
 use search::{search_apply_path_change, search_index_status, search_query, search_reindex};
 use secrets::{lt_api_key_save, lt_api_key_status};
+use terminal::open_terminal;
 use settings::{get_settings, set_settings};
 use split_chapter::{list_part_paths, split_chapter_apply, split_chapter_preview};
 use stats::write_chapter_stats;
@@ -145,6 +147,7 @@ pub fn run() {
             git_fetch,
             detect_storage_backend,
             import_chapter,
+            open_terminal,
             delete_chapter_file,
             delete_directory,
             create_chapter,
