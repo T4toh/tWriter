@@ -10,6 +10,13 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+### Fixed
+
+- Dialogue conversion now handles paragraphs whose opening quote sits inside inline markup (`<em>"Vení"</em>, dijo ella.`), typical of imported `.docx`; the markup is kept in place.
+- `"Esto que hiciste", gritó, "es una locura"` converts without the English comma after the aside (DPD raya 2.3e).
+- The missing-dash check now flags `—Hola dijo Juan.` and no longer flags an imperative inside the speech (`—No sé. Pregunta a mamá.`).
+- Decomposed accents (NFD) no longer hide speech verbs from the dialogue converter.
+
 ## [0.26.0] - 2026-10-10
 
 ### Added

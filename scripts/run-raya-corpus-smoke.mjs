@@ -207,7 +207,7 @@ const C = [
   [6, 'Le dijo «te quiero» y ella dijo «yo también».', null, 'comillas'],
   // 7. HTML del editor
   [7, '<p>"Hola", dijo <em>Juan</em>.</p><p>"¿Venís?", preguntó Ana.</p>', '<p>—Hola —dijo <em>Juan</em>.</p><p>—¿Venís? —preguntó Ana.</p>', 'html'],
-  [7, '<p><em>"Vení"</em>, dijo ella.</p>', '<p><em>—Vení</em> —dijo ella.</p>', 'html (em)'],
+  [7, '<p><em>"Vení"</em>, dijo ella.</p>', '<p>—<em>Vení</em> —dijo ella.</p>', 'html (em)'],
   [7, '<p>"Tom &amp; Jerry", dijo&nbsp;Ana.</p>', '<p>—Tom &amp; Jerry —dijo&nbsp;Ana.</p>', 'html (&amp; &nbsp;)'],
   [7, '<p>"Hola",&nbsp;dijo Ana.</p>', '<p>—Hola —dijo Ana.</p>', 'html (&nbsp; antes del verbo)'],
   [7, '<p>--Hola, Roberto. --sus manos temblaban.</p>', '<p>—Hola, Roberto. —Sus manos temblaban.</p>', 'html 2.3d'],
@@ -281,13 +281,13 @@ const C = [
   // Inciso sin raya de apertura: falta la que separa el parlamento del
   // narrador. Se marca y no se arregla en bloque.
   [10, '—Hola dijo Juan.', { marca: 'dash-orphan' }, '2.3a'],
+  [10, "—No sé. Pregunta a mamá.", null, "imperativo, no inciso"],
+  [10, "—¿Venís? pregunta ella.", { marca: "dash-orphan" }, "2.3c presente"],
+  [10, "\"Est\u00e1 bien\", dijo, \"lo har\u00e9\".", "—Está bien —dijo—, lo haré.", "2.3c (sin relativa, coma)"],
+  [7, "<p>\"Hola\", dijo <em>Juan</em>. \"Chau.\"</p>", "<p>—Hola —dijo <em>Juan</em>—. Chau.</p>", "html (em en el inciso)"],
 ];
 
-const PENDIENTES = new Set([
-  "\"Esto que hiciste\", gritó, \"es una locura\".",
-  "<p><em>\"Vení\"</em>, dijo ella.</p>",
-  "—Hola dijo Juan.",
-]);
+const PENDIENTES = new Set([]);
 
 const letters = (s) => (s.replace(/<[^>]+>|&[a-z]+;/g, ' ').match(/\p{L}/gu) ?? []).join('').toLowerCase();
 const ellipses = (s) => (s.match(/\.\.\.|…/g) ?? []).length;

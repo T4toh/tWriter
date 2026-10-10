@@ -22,7 +22,8 @@ export interface ConvertResult {
 }
 
 export function convert(text: string): ConvertResult {
-  let result = text;
+  // Acentos descompuestos (NFD) no matchean ningún verbo de la lista.
+  let result = text.normalize('NFC');
 
   // Si el input tiene <p>…</p> (caso normal del editor TipTap), convertir cada
   // párrafo de forma independiente. El converter original opera línea-por-línea
@@ -52,7 +53,7 @@ export function convert(text: string): ConvertResult {
     }
     result = converted.join('\n');
   }
-  const changes = text === result ? 0 : 1;
+  const changes = text.normalize('NFC') === result ? 0 : 1;
   return { text: result, changes };
 }
 
@@ -145,11 +146,58 @@ function isThoughtOrQuote(line: string): boolean {
 
 function convertLine(html: string): string {
   if (!html.trim()) return html;
+  const fn = INLINE_TAG_RE.test(html) ? convertKeepingTags : convertPlainLine;
   // `&nbsp;` es una entidad en el HTML del editor y ninguna regex la ve como
   // espacio: se pasa al carácter (que `\s` sí matchea) y se vuelve después.
   // Si la conversión consumió ese espacio, no vuelve, y está bien.
-  if (!html.includes('&nbsp;')) return convertPlainLine(html);
-  return convertPlainLine(html.replaceAll('&nbsp;', '\u00a0')).replaceAll('\u00a0', '&nbsp;');
+  if (!html.includes('&nbsp;')) return fn(html);
+  return fn(html.replaceAll('&nbsp;', '\u00a0')).replaceAll('\u00a0', '&nbsp;');
+}
+
+const INLINE_TAG_RE = /<[^>]+>/;
+/** Lo que la conversión nunca toca: todo menos espacios, comillas, puntos,
+ *  comas y guiones. La caja sí cambia (el verbo del inciso baja a minúscula),
+ *  así que se compara en minúscula. */
+const STABLE_RE = /[^\s"“”«»'‘’.,\-–—―−]/u;
+
+/** Un párrafo con markup inline (`<em>"Vení"</em>, dijo ella.`) se convierte
+ *  sobre el texto sin tags y los tags vuelven después, cada uno pegado al
+ *  mismo carácter estable que tenía delante. Si la conversión cambió algún
+ *  carácter estable (no debería), el párrafo queda como estaba. */
+function convertKeepingTags(html: string): string {
+  const tags: { pos: number; tag: string }[] = [];
+  let plain = '';
+  let last = 0;
+  for (const m of html.matchAll(/<[^>]+>/g)) {
+    plain += html.slice(last, m.index);
+    tags.push({ pos: plain.length, tag: m[0] });
+    last = m.index + m[0].length;
+  }
+  plain += html.slice(last);
+  const converted = convertPlainLine(plain);
+  if (converted === plain) return html;
+  const stable = (t: string): number[] =>
+    [...t].flatMap((c, i) => (STABLE_RE.test(c) ? [i] : []));
+  const a = stable(plain);
+  const b = stable(converted);
+  if (a.length !== b.length || a.some((i, k) => plain[i].toLowerCase() !== converted[b[k]].toLowerCase())) {
+    return html;
+  }
+  let out = '';
+  let from = 0;
+  let s = 0; // estables del plano antes del tag
+  for (const t of tags) {
+    while (s < a.length && a[s] < t.pos) s++;
+    // Cierre: pegado al último estable de adentro. Apertura: pegada al
+    // primero (`dijo <em>Juan`, `—. <strong>Ahora`).
+    let at = t.tag.startsWith('</')
+      ? (s === 0 ? 0 : b[s - 1] + 1)
+      : (s < b.length ? b[s] : converted.length);
+    at = Math.max(at, from);
+    out += converted.slice(from, at) + t.tag;
+    from = at;
+  }
+  return out + converted.slice(from);
 }
 
 function convertPlainLine(line: string): string {
@@ -194,6 +242,9 @@ function fixPunctuationBeforeTag(line: string): string {
   });
 }
 
+const SPLIT_SUBJECT_RE = /^(?:esto|eso|aquello|lo|el|la|los|las)\s[^,;:]*\bque\b/iu;
+const SPLIT_PREDICATE_RE = /^(?:es|era|fue|son|eran|fueron|será|sería|está|estaba|parece|parecía)(?!\p{L})/iu;
+
 /** D3: Inciso del narrador con verbo entre dos parlamentos. Cuatro formas:
  *  con o sin coma entre la comilla y el verbo, y el segundo parlamento tras
  *  coma (sigue el enunciado) o tras punto (enunciado nuevo). Si el segundo
@@ -214,7 +265,12 @@ function applyD3(line: string): string {
           const text2 = verb2
             ? `${stripClosing(t2)} ${EM_DASH}${verb2.toLowerCase()}`
             : t2.trim();
-          return `${EM_DASH}${stripClosing(t1)} ${EM_DASH}${inciso}${EM_DASH}${join} ${text2}`;
+          // `"Esto que hiciste", gritó, "es una locura"`: el inciso parte una
+          // oración y la coma inglesa sobra (DPD 2.3e). Solo se reconoce el
+          // sujeto con relativa y un verbo copulativo detrás; cualquier otra
+          // forma conserva la coma. ponytail: dos listas, crecen con el corpus.
+          const sinComa = join === ',' && SPLIT_SUBJECT_RE.test(t1.trim()) && SPLIT_PREDICATE_RE.test(text2);
+          return `${EM_DASH}${stripClosing(t1)} ${EM_DASH}${inciso}${EM_DASH}${sinComa ? '' : join} ${text2}`;
         },
       );
     }

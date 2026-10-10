@@ -413,11 +413,11 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   manda (lo dijo él). Dos pasadas ese día: corpus de 155 borradores mal
   escritos (43 OK) y revisión de código (24 hallazgos). La resolvieron
   #159, #160, #162, #163 y #164 (verificados por el autor, 2026-09-30); el
-  corpus quedó en 207 de 209. Lo que queda abierto:
-  - `"Esto que hiciste", gritó, "es una locura".` (2.3e, ambiguo: hoy sale
-    `—gritó—, es`). Pendiente en el corpus.
-  - Markup inline antes de la comilla: ver el item «El ancla de D1» abajo.
-    Pendiente en el corpus.
+  corpus quedó en 207 de 209; el 2026-10-10 se cerraron los tres pendientes
+  del corpus (2.3e con sujeto partido, markup inline antes de la comilla,
+  `—Hola dijo Juan.`), el FP de imperativos de `dash-orphan` y NFD (0
+  archivos en el corpus real; `convert()` normaliza igual). Lo que queda
+  abierto:
   - `inciso-case` solo actúa con palabras de `NON_VERB_STARTS` o
     `ACTION_VERBS`: con un verbo que no está en ninguna lista no marca.
     Sumar verbos a medida que aparezcan (o resolverlo con el etiquetador de
@@ -425,31 +425,16 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
     acción/habla van a `AMBIGUOUS_TAGS`.
   - 2.3b sin raya de cierre (`—Lo principal… —añadió Pilar. Afortunada…`)
     se escribe igual que un 2.3a con narración que sigue: no se marca.
-  - `dash-orphan`: FN con `—Hola dijo Juan.` (pendiente en el corpus). Del FP con imperativos, #177
-    cubrió el imperativo seguido de `tu`/`eso`; con otra palabra atrás
-    (`—No sé. Pregunta a mamá.`) puede seguir marcando.
-  - NFD: acentos descompuestos no matchean verbos (sintético, sin saber si
-    aparece en el corpus real).
+  - `dash-orphan` sin puntuación antes del verbo solo se marca con un
+    arranque de la lista cerrada (`hola`, `bueno`, `sí`…) y nombre propio
+    detrás: `—Eso dijo Juan.` es contenido y no se distingue.
+  - La coma tras el inciso de 2.3e (`"Esto que hiciste", gritó, "es una
+    locura"`) solo se saca con sujeto con relativa y verbo copulativo
+    detrás; `"Mi amor", dijo, "es tarde"` conserva la coma, como debe.
   Base de regresión: `scripts/run-raya-corpus-smoke.mjs`, con la lista de
   `PENDIENTES`; cada arreglo saca sus casos de ahí. ReDoS, `lastIndex`,
   astrales e idempotencia salieron limpios.
-- **El ancla de D1 no tolera markup inline de apertura** (limitación del
-  converter, no del popover): la regla D1 ancla el diálogo con `^(\s*)"`, o sea
-  que la comilla de apertura tiene que ser el primer carácter no-espacio del
-  texto del párrafo. Si el párrafo arranca con un tag —`<em>"Vení"</em>, dijo
-  ella.`, típico de un `.docx` importado donde el diálogo va en cursiva— el tag
-  corre la comilla y la regla no dispara. Como el ancla es del converter, **el
-  agujero es el mismo por los dos caminos**: ni el popover inline
-  ("Aplicar RAE al párrafo") ni el botón "RAE" del toolbar (capítulo entero)
-  convierten ese párrafo. Hoy el popover al menos avisa con un toast en vez de
-  quedarse mudo; el botón del toolbar lo saltea en silencio. Arreglo de fondo:
-  que el converter tolere tags inline antes de la comilla de apertura —
-  reconocer el prefijo de markup y anclar sobre el texto, no sobre el string
-  crudo. Medido el 2026-09-30 sobre las novelas del autor: **0** párrafos en
-  español abren con markup antes de la comilla (todos los `<p><em>"` son de
-  los libros en inglés), así que hoy solo le pega a un `.docx` viejo recién
-  importado. El arreglo de fondo no es anclar distinto: es convertir sobre el
-  texto sin tags y volver a meter los tags alineando los dos planos.
+
 - **Atribución D1-D5 en `pending-conversion`**: hoy el ruleId es genérico
   `pending-conversion`. Para fine-grain (saber qué regla del converter
   mordió en cada violación), instrumentar `convert()` con hooks que reporten
