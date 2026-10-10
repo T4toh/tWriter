@@ -10,6 +10,8 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-10
+
 ### Added
 
 - Botón «Abrir en terminal» en la guía de git de una carpeta sin repo: abre la terminal del sistema ya parada en la carpeta de la novela, para correr los comandos de la guía sin copiar el `cd`.
@@ -546,7 +548,8 @@ _Sin cambios visibles registrados._
 
 _Sin cambios visibles registrados._
 
-[unreleased]: https://github.com/T4toh/tWriter/compare/v0.25.0...HEAD
+[unreleased]: https://github.com/T4toh/tWriter/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/T4toh/tWriter/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/T4toh/tWriter/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/T4toh/tWriter/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/T4toh/tWriter/compare/v0.22.0...v0.23.0
