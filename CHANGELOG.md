@@ -13,6 +13,10 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 ### Added
 
 
+### Changed
+
+- «Importar a HTML» sobre un `.docx`/`.odt` que ya tiene su `.html` pregunta si sobrescribirlo, en vez de pedir que lo borres a mano. El título y el orden del capítulo se conservan. «Importar todos» sigue salteando los que ya están.
+
 ### Fixed
 
 - En las Kindle viejas, la foto y la firma de «Sobre el autor» y las tapas de «Otros libros» salían corridas a la izquierda en vez de centradas.

@@ -11,6 +11,7 @@ import { sinPrefijoNumerico } from './nombre-carpeta';
 import { ExportsService } from './exports-service';
 import { GitService } from './git-service';
 import { NavigationService } from './navigation-service';
+import { ModalService } from '../shared/modal-service';
 import { ProjectService } from './project-service';
 import { findNodeByPath } from './tree-utils';
 import { ToastDetalle, ToastService } from './toast-service';
@@ -85,6 +86,7 @@ export class ChapterService {
   private debug = inject(DebugService);
   private git = inject(GitService);
   private toast = inject(ToastService);
+  private modal = inject(ModalService);
   private exports = inject(ExportsService);
   /** Guardados que dejó `closeInPane` en segundo plano. Abrir y flushear los
    *  esperan: si no, reabrir enseguida el capítulo recién cerrado podía leer
@@ -365,7 +367,8 @@ export class ChapterService {
       const n = nodes[i];
       this.bulkProgress.set({ done: i, total, current: n.name });
       try {
-        await invoke<{ html_path: string }>('import_chapter', { path: n.path });
+        // «Importar todos» nunca pisa un .html que ya está: eso se hace de a uno.
+        await invoke<{ html_path: string }>('import_chapter', { path: n.path, overwrite: false });
         this.debug.info('bulk-import', `${n.name}.${n.ext} → HTML`);
         ok++;
       } catch (err) {
@@ -807,15 +810,35 @@ export class ChapterService {
     return { ok, failed };
   }
 
-  /** Importa un .docx/.odt a HTML usando pandoc. Recarga árbol al terminar. */
+  /** Importa un .docx/.odt a HTML usando pandoc. Recarga árbol al terminar.
+   *  Si el `.html` ya existe, pregunta antes de pisarlo; el `.meta.json`
+   *  (título, orden) sobrevive del lado Rust. */
   async importChapter(node: TreeNode): Promise<void> {
     if (node.kind !== 'chapter' || node.editable) return;
     if (node.ext !== 'docx' && node.ext !== 'odt') return;
+    const htmlPath = node.path.replace(/\.(docx|odt)$/i, '.html');
+    const existing = findNodeByPath(this.project.tree(), htmlPath);
+    if (existing) {
+      const ok = await this.modal.confirm({
+        title: 'Sobrescribir capítulo',
+        message: `Ya existe «${existing.name}.html». ¿Reemplazarlo con el .${node.ext}?\nLo que editaste en tWriter se pierde (queda en el historial si la carpeta es un repo git).`,
+        okLabel: 'Sobrescribir',
+        danger: true,
+      });
+      if (!ok) return;
+      // Cerrar el .html viejo descartando lo pendiente: un autosave que
+      // llegara después pisaría el import con el contenido anterior.
+      for (const i of PANE_IDS) {
+        if (this.panes[i].active()?.path === htmlPath) this.closeInPane(i, true);
+      }
+      await this.closeWrites;
+    }
     this.importing.set(true);
     this.panes[0].error.set(null);
     try {
       const result = await invoke<{ html_path: string }>('import_chapter', {
         path: node.path,
+        overwrite: existing !== null,
       });
       await this.project.loadTree();
       // Reabrir como el nuevo .html en pane 0.
