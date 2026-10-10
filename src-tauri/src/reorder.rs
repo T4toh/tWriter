@@ -1011,22 +1011,8 @@ fn mirror_orden_in_siblings(siblings: &[SiblingEntry]) {
         let Some(meta_path) = &sib.meta_path else {
             continue;
         };
-        let _ = update_meta_orden(meta_path, num);
+        let _ = crate::util::renumber_part_meta(meta_path, num);
     }
-}
-
-fn update_meta_orden(meta_path: &Path, new_orden: u32) -> Result<(), String> {
-    let raw = fs::read_to_string(meta_path).map_err(|e| e.to_string())?;
-    let mut v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-    if let Some(obj) = v.as_object_mut() {
-        obj.insert(
-            "orden".to_string(),
-            serde_json::Value::Number(serde_json::Number::from(new_orden)),
-        );
-        let out = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
-        fs::write(meta_path, out).map_err(|e| e.to_string())?;
-    }
-    Ok(())
 }
 
 fn sync_search(old_path: &str, new_path: &str, kind: NodeKind) {

@@ -1540,7 +1540,10 @@ fn read_part_meta_title(html_path: &Path) -> Option<String> {
     let raw = fs::read_to_string(&meta).ok()?;
     let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
     let t = v.get("titulo")?.as_str()?.trim().to_string();
-    if t.is_empty() || t == stem {
+    // Un número nunca es un título: es el automático que pone la app, y si
+    // no coincide con el stem es porque la parte se renumeró y el meta
+    // quedó viejo (pasó con 53 partes antes de que el shift lo actualizara).
+    if t.is_empty() || t == stem || t.chars().all(|c| c.is_ascii_digit()) {
         return None;
     }
     Some(t)
@@ -3834,6 +3837,18 @@ mod tests {
         let xhtml = build_about_author_xhtml(&cfg, "bio", None, None, Some("https://tatoh.ar"), None);
         assert!(xhtml.contains("https://tatoh.ar"));
         assert!(!xhtml.contains("autor-qr"));
+    }
+
+    #[test]
+    fn read_part_meta_title_ignora_un_numero_que_no_es_el_stem() {
+        // Parte renumerada por fuera con el título automático viejo
+        // («3.html» con «titulo: 2»): un número nunca es un título.
+        let tmp = tempfile::tempdir().unwrap();
+        let html = tmp.path().join("3.html");
+        fs::write(tmp.path().join("3.meta.json"), r#"{"orden":3,"titulo":"2"}"#).unwrap();
+        assert_eq!(read_part_meta_title(&html), None);
+        fs::write(tmp.path().join("3.meta.json"), r#"{"orden":3,"titulo":"La huida"}"#).unwrap();
+        assert_eq!(read_part_meta_title(&html).as_deref(), Some("La huida"));
     }
 
     #[test]

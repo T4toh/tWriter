@@ -141,7 +141,7 @@ fn insert_part_after_impl(part_path: &str) -> Result<CreateResult, String> {
             renames.push((old_meta, new_meta_dst.clone()));
 
             // Actualizar `orden` en meta movida.
-            if let Err(e) = bump_orden_in_meta(&new_meta_dst, n + 1) {
+            if let Err(e) = crate::util::renumber_part_meta(&new_meta_dst, n + 1) {
                 revert_renames(&renames);
                 return Err(e);
             }
@@ -179,22 +179,6 @@ fn revert_renames(renames: &[(PathBuf, PathBuf)]) {
     for (from, to) in renames.iter().rev() {
         let _ = fs::rename(to, from);
     }
-}
-
-fn bump_orden_in_meta(meta_path: &Path, new_orden: u32) -> Result<(), String> {
-    let raw = fs::read_to_string(meta_path)
-        .map_err(|e| format!("leer {}: {}", meta_path.display(), e))?;
-    let mut v: serde_json::Value = serde_json::from_str(&raw)
-        .map_err(|e| format!("parse {}: {}", meta_path.display(), e))?;
-    if let Some(obj) = v.as_object_mut() {
-        obj.insert(
-            "orden".to_string(),
-            serde_json::Value::Number(new_orden.into()),
-        );
-    }
-    let out = serde_json::to_string_pretty(&v).unwrap_or(raw);
-    fs::write(meta_path, out).map_err(|e| format!("escribir {}: {}", meta_path.display(), e))?;
-    Ok(())
 }
 
 /// Crea un directorio dentro de `parent_dir` con `name`.
@@ -453,6 +437,19 @@ mod tests {
         assert_eq!(read_orden(dir, 4), Some(4));
         assert_eq!(read_orden(dir, 3), Some(3));
         assert_eq!(read_orden(dir, 2), Some(2));
+    }
+
+    #[test]
+    fn insert_part_after_renumbers_titulo_automatico() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
+        write_part(dir, 1, "<p>uno</p>");
+        write_part(dir, 2, "<p>dos</p>");
+        insert_part_after_impl(dir.join("1.html").to_str().unwrap()).unwrap();
+        // «dos» pasó a ser 3.html: su título automático «2» tiene que seguirlo.
+        let v: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join("3.meta.json")).unwrap()).unwrap();
+        assert_eq!(v["titulo"], "3");
     }
 
     #[test]
