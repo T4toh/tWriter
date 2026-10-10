@@ -46,6 +46,11 @@ pub async fn import_chapter(path: String, overwrite: bool) -> Result<ImportResul
 
 /// Guard de re-importación: con el `.html` ya en disco, solo pasa con `overwrite`.
 fn overwrite_guard(html_out: &std::path::Path, overwrite: bool) -> Result<(), String> {
+    // `fs::write` sigue symlinks: pisar un .html que es link escribiría en
+    // su destino, que puede estar fuera del repo. Un capítulo nunca es link.
+    if html_out.is_symlink() {
+        return Err(format!("{} es un enlace simbólico — no lo sobrescribo", html_out.display()));
+    }
     if html_out.exists() && !overwrite {
         return Err(format!(
             "ya existe {} — confirmá sobrescribir si querés re-importar",
@@ -218,6 +223,19 @@ mod tests {
         let err = overwrite_guard(&html, false).unwrap_err();
         assert!(err.contains("ya existe"), "{err}");
         assert!(overwrite_guard(&html, true).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reimportar_no_pisa_un_symlink_ni_con_overwrite() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("afuera.html");
+        std::fs::write(&target, "<p>ajeno</p>").unwrap();
+        let link = dir.path().join("4.html");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let err = overwrite_guard(&link, true).unwrap_err();
+        assert!(err.contains("enlace simbólico"), "{err}");
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "<p>ajeno</p>");
     }
 
     #[test]
