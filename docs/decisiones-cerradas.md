@@ -540,6 +540,17 @@ para no volver a abrirlos ni rehacer la medición. Lo que sigue pendiente vive e
   sentido son tres toggles: confirmaciones de éxito del árbol, banner de
   update, y una duración global. La matriz por tipo × canal está descartada.
 
+## Plataformas
+
+- **Homebrew (cask) para macOS: descartado** (decidido con el autor el
+  2026-10-10). Las piezas estaban (el release publica `.dmg` por arch con
+  `sha256`, el AUR ya tiene su `publish.sh` para espejar), pero el updater de
+  Tauri ya actualiza la app por el canal propio y avisa solo. Un cask obliga a
+  tirar `brew upgrade` a mano y no dice que hay versión nueva: en macOS no hay
+  el centralizado de Linux que lo justifique, y dos canales (updater + cask)
+  se pisan. Instalación en Mac: bajar el `.dmg` del release una vez, el
+  updater hace el resto.
+
 ## Fuentes normativas
 
 - **No hay corpus libre del español.** La *Nueva gramática de la lengua

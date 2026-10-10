@@ -447,26 +447,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
 ## Plataformas
 
 - Mobile (no urgente, capaz solo un exportador a EPUB para ver archivos desde gh). El tomador de notas para la Kindle quedó descartado el 2026-09-14 (ver `## Proofreading`): no ahorra tipeo contra Keep, y git en el teléfono ya lo resuelven GitJournal / Obsidian con plugin git / Working Copy sin código propio.
-- [ ] **Publicar en Homebrew (cask) para macOS**
-  Hoy la instalación en Mac es bajar el `.dmg` a mano del release y comerse el
-  primer arranque con Gatekeeper. En Arch ya está resuelto vía AUR
-  (`packaging/aur/PKGBUILD` + `publish.sh`); falta el equivalente Mac.
-  Las piezas ya están: el job `build-macos` de `.github/workflows/release.yml`
-  publica `.dmg` para `aarch64-apple-darwin` y `x86_64-apple-darwin` en el
-  release del tag, que es exactamente lo que un cask necesita — URL estable por
-  versión + `sha256` por arch (`on_arm` / `on_intel`).
-  **Tap propio** (`T4toh/homebrew-twriter`), no homebrew-cask oficial: el repo
-  central pide notoriedad (estrellas/forks) y la app no está notarizada, solo
-  firmada ad-hoc (`signingIdentity: "-"`). En un tap propio eso no bloquea, pero
-  el cask conviene que declare el trámite de cuarentena para que
-  `brew install --cask` no termine en el "está dañada" que ya nos comimos.
-  **Trabajo**: un `Casks/twriter.rb` con `version`, `sha256 arm/intel`, `app
-  "tWriter.app"`, `zap` de `~/Library/Application Support/tWriter`, y un paso en
-  el workflow de release que reescriba versión + hashes y commitee al tap
-  (espejo de `packaging/aur/publish.sh`). Ojo con el updater de Tauri: si la app
-  se auto-actualiza, el cask queda desfasado respecto del `.app` instalado
-  — o se documenta que en Mac gana el updater, o el cask lleva
-  `auto_updates true` para que `brew upgrade` no pelee.
 
 ## Proofreading
 
