@@ -10,6 +10,13 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+### Added
+
+
+### Changed
+
+- «Importar a HTML» sobre un `.docx`/`.odt` que ya tiene su `.html` pregunta si sobrescribirlo, en vez de pedir que lo borres a mano. El título y el orden del capítulo se conservan. «Importar todos» sigue salteando los que ya están.
+
 ### Fixed
 
 - El índice del EPUB listaba partes con el número equivocado («1, 2, 2, 4») y desplegaba esa lista cuando no hacía falta: al insertar una parte en el medio o reordenarlas, el número que la app les pone de título no acompañaba al archivo. Ahora lo acompaña, y el export ignora un título que es solo un número aunque el archivo venga de antes.

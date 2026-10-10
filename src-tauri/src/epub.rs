@@ -161,8 +161,43 @@ fn build_font_face_block(fonts: &[FontEmbed]) -> String {
     out
 }
 
+/// Presets del divisor de escena: `(id, content CSS)`. El id va en
+/// `theme.json` → `scene_break` y en el select del editor de temas
+/// (`theme-editor-modal.ts::sceneBreakOptions`, mantener las dos listas a
+/// mano). Para sumar uno: una fila acá con el glifo entre comillas y su
+/// opción en el select. Si un preset necesita más que el glifo —otro
+/// tamaño, otra fuente, un `letter-spacing` distinto— se le agrega una
+/// tercera columna con las declaraciones extra; hoy ninguno lo necesita.
+/// `None` como content = divisor en blanco (solo el espacio vertical, como
+/// en imprenta). Whitelist a propósito: el CSS nunca sale de un string del
+/// JSON.
+pub const SCENE_BREAK_PRESETS: &[(&str, Option<&str>)] = &[
+    ("asteriscos", Some("* * *")), // default del CSS base, no emite nada
+    ("tres", Some("***")),
+    ("puntos", Some("\u{2022} \u{2022} \u{2022}")),
+    ("fleuron", Some("\u{2766}")),
+    ("tilde", Some("~")),
+    ("blanco", None),
+];
+
 fn build_theme_rules_block(theme: &ResolvedTheme) -> String {
     let mut out = String::new();
+
+    // Divisor de escena: solo los presets que cambian el `* * *` del CSS
+    // base emiten override.
+    let scene_break = theme
+        .scene_break
+        .as_deref()
+        .map(str::trim)
+        .filter(|id| *id != "asteriscos")
+        .and_then(|id| SCENE_BREAK_PRESETS.iter().find(|(k, _)| *k == id));
+    if let Some((_, content)) = scene_break {
+        let decl = match content {
+            Some(glifo) => format!("content: \"{glifo}\";"),
+            None => "content: none;".to_string(),
+        };
+        out.push_str(&format!("hr::before,\n.scene-break::before {{\n  {decl}\n}}\n"));
+    }
 
     let body_family = theme.body_font.as_deref().map(str::trim).filter(|s| !s.is_empty());
     let body_size = theme.body_size.as_deref().map(str::trim).filter(|s| !s.is_empty());
@@ -2887,6 +2922,7 @@ mod tests {
             editorial_body_font: None,
             editorial_heading_font: None,
             chapter_title_position: None,
+            scene_break: None,
             prefijo_capitulo: None,
             mostrar_titulo_capitulo: None,
             dropcap: None,
@@ -3323,6 +3359,39 @@ mod tests {
         assert!(!block.contains("padding-top: 2em"));
         assert!(!block.contains("vertical-align: bottom"));
         assert!(!block.contains("amzn-kf8"));
+    }
+
+    #[test]
+    fn theme_rules_emit_scene_break_preset() {
+        let resolved = ResolvedTheme {
+            scene_break: Some("fleuron".into()),
+            ..Default::default()
+        };
+        let block = build_theme_rules_block(&resolved);
+        assert!(block.contains(".scene-break::before {"), "{block}");
+        assert!(block.contains("content: \"\u{2766}\";"), "{block}");
+    }
+
+    #[test]
+    fn theme_rules_scene_break_blanco_emits_no_glyph() {
+        let resolved = ResolvedTheme {
+            scene_break: Some("blanco".into()),
+            ..Default::default()
+        };
+        let block = build_theme_rules_block(&resolved);
+        assert!(block.contains("content: none;"), "{block}");
+    }
+
+    #[test]
+    fn theme_rules_scene_break_default_and_unknown_emit_nothing() {
+        for val in [None, Some("asteriscos"), Some("garbage"), Some("")] {
+            let resolved = ResolvedTheme {
+                scene_break: val.map(String::from),
+                ..Default::default()
+            };
+            let block = build_theme_rules_block(&resolved);
+            assert!(!block.contains(".scene-break"), "expected nothing for {val:?}: {block}");
+        }
     }
 
     #[test]

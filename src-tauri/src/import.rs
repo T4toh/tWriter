@@ -34,15 +34,33 @@ pub struct DeleteResult {
 
 /// Importa un capítulo .docx/.odt a HTML usando pandoc CLI.
 /// Genera `<stem>.html` en la misma carpeta y `<stem>.meta.json` mínimo.
-/// Si ya existe `<stem>.html`, falla (no sobrescribe).
+/// Si ya existe `<stem>.html`, falla salvo que `overwrite` venga en true
+/// (el frontend lo pide después de confirmar con el autor). El `.meta.json`
+/// no se pisa nunca: título y orden sobreviven a la re-importación.
 #[tauri::command]
-pub async fn import_chapter(path: String) -> Result<ImportResult, String> {
-    tauri::async_runtime::spawn_blocking(move || import_impl(&path))
+pub async fn import_chapter(path: String, overwrite: bool) -> Result<ImportResult, String> {
+    tauri::async_runtime::spawn_blocking(move || import_impl(&path, overwrite))
         .await
         .map_err(|e| format!("task: {}", e))?
 }
 
-fn import_impl(input_path: &str) -> Result<ImportResult, String> {
+/// Guard de re-importación: con el `.html` ya en disco, solo pasa con `overwrite`.
+fn overwrite_guard(html_out: &std::path::Path, overwrite: bool) -> Result<(), String> {
+    // `fs::write` sigue symlinks: pisar un .html que es link escribiría en
+    // su destino, que puede estar fuera del repo. Un capítulo nunca es link.
+    if html_out.is_symlink() {
+        return Err(format!("{} es un enlace simbólico — no lo sobrescribo", html_out.display()));
+    }
+    if html_out.exists() && !overwrite {
+        return Err(format!(
+            "ya existe {} — confirmá sobrescribir si querés re-importar",
+            html_out.display()
+        ));
+    }
+    Ok(())
+}
+
+fn import_impl(input_path: &str, overwrite: bool) -> Result<ImportResult, String> {
     let input = PathBuf::from(input_path);
     if !input.is_file() {
         return Err(format!("no es archivo: {}", input_path));
@@ -61,12 +79,7 @@ fn import_impl(input_path: &str) -> Result<ImportResult, String> {
         .ok_or_else(|| "sin nombre".to_string())?;
     let parent = input.parent().ok_or_else(|| "sin carpeta padre".to_string())?;
     let html_out = parent.join(format!("{}.html", stem));
-    if html_out.exists() {
-        return Err(format!(
-            "ya existe {} — borralo o renombralo si querés re-importar",
-            html_out.display()
-        ));
-    }
+    overwrite_guard(&html_out, overwrite)?;
 
     // Pandoc → HTML5 fragment, sin highlight, sin wrap
     // Pandoc auto-detecta el formato desde la extensión del input.
@@ -197,7 +210,33 @@ pub(crate) fn clean_html(raw: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::clean_html;
+    use super::{clean_html, overwrite_guard};
+
+    #[test]
+    fn reimportar_pide_overwrite_si_el_html_ya_existe() {
+        let dir = tempfile::tempdir().unwrap();
+        let html = dir.path().join("3.html");
+        // Sin .html en disco pasa siempre.
+        assert!(overwrite_guard(&html, false).is_ok());
+        std::fs::write(&html, "<p>editado</p>").unwrap();
+        // Con .html: falla sin overwrite, pasa con overwrite.
+        let err = overwrite_guard(&html, false).unwrap_err();
+        assert!(err.contains("ya existe"), "{err}");
+        assert!(overwrite_guard(&html, true).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reimportar_no_pisa_un_symlink_ni_con_overwrite() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("afuera.html");
+        std::fs::write(&target, "<p>ajeno</p>").unwrap();
+        let link = dir.path().join("4.html");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let err = overwrite_guard(&link, true).unwrap_err();
+        assert!(err.contains("enlace simbólico"), "{err}");
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "<p>ajeno</p>");
+    }
 
     #[test]
     fn br_inside_p_becomes_paragraph_break() {

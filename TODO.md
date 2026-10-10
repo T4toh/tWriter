@@ -12,10 +12,6 @@ cambió el speller, por qué LT no va como sidecar, qué mide el corpus) viven e
 rehacer la medición, no para volver a discutirlos. Antes de abrir un item que
 huela a "esto ya lo miramos", buscar ahí primero.
 
-## Editor / UX
-
-- Más variantes de divisor de escena (más allá del `* * *`).
-
 ## Gramática, ortografía y tesauro
 
 - **Dashboard de estilo por novela** (idea del autor, no para ahora). Lo que hoy
@@ -220,7 +216,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
 
 ## Tree / Importer
 
-- Re-importar capítulo sobrescribiendo el `.html` existente (hoy hay que borrar primero).
 - Sumar más importers de notas: Obsidian (vault con `.obsidian/`), Notion (export ZIP), Bear (`.bear`), Logseq (graph), Markdown plano con frontmatter. El trait `NoteImporter` ya está armado — agregar uno nuevo no requiere tocar el wizard genérico.
 - Joplin JEX format (preserva adjuntos + tags + timestamps). Hoy solo soporta el export raw MD.
 - **Plantillas para el back matter** (idea del autor, 2026-09-02, no para ahora).
@@ -396,7 +391,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   en los templates, así que eso es un item propio y grande, no un agregado al
   modal).
 - Guía in-app de primer uso: tour con flechas la primera vez que se abre la app (tree explorer, idioma, RAE, gramática, sync). Persiste flag en `settings.json`.
-- Botón "Abrir en terminal" dentro del modal storage-help (`xdg-open` / `konsole` / `gnome-terminal` / `wt`).
 - **Sincronizar `settings.json` entre PCs**: hoy la config vive en
   `app_config_dir` local (Linux: `~/.config/twriter/`) — cada PC arranca
   con su propio tema, idioma, font recents, grammar mode, diccionario,
