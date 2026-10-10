@@ -10,6 +10,10 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+### Added
+
+- Botón «Abrir en terminal» en la guía de git de una carpeta sin repo: abre la terminal del sistema ya parada en la carpeta de la novela, para correr los comandos de la guía sin copiar el `cd`.
+
 ### Changed
 
 - «Importar a HTML» sobre un `.docx`/`.odt` que ya tiene su `.html` pregunta si sobrescribirlo, en vez de pedir que lo borres a mano. El título y el orden del capítulo se conservan. «Importar todos» sigue salteando los que ya están.
