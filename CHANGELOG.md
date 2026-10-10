@@ -12,7 +12,6 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ### Added
 
-- El tema elige el ornamento del divisor de escena: `* * *` (como hasta ahora), `***`, `• • •`, `❦`, `~` o en blanco, en Temas → Capítulos, y también como ajuste por saga o por libro. El editor sigue mostrando `* * *`; el cambio se ve en el EPUB.
 
 ### Fixed
 
