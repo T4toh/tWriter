@@ -44,6 +44,10 @@ export interface Theme {
   /** Posición vertical del bloque título+prefix en la página de chapter-title.
    *  `top` | `center` | `bottom`. null o ausente = `center` (default). */
   chapter_title_position?: string | null;
+  /** Ornamento del divisor de escena: preset de `epub::SCENE_BREAK_PRESETS`
+   *  (`asteriscos` | `tres` | `puntos` | `fleuron` | `tilde` | `blanco`).
+   *  null o ausente = `* * *`. */
+  scene_break?: string | null;
   /** Prefijo del capítulo: `none` | `decimal` | `roman`. Default: `none`. */
   prefijo_capitulo?: string | null;
   /** Mostrar el título del capítulo en chapter title page. Default: true. */

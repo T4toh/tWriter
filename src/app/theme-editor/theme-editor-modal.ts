@@ -21,6 +21,7 @@ interface EditableTheme {
   editorial_body_font: string;
   editorial_heading_font: string;
   chapter_title_position: string;
+  scene_break: string;
   prefijo_capitulo: string;
   mostrar_titulo_capitulo: boolean;
   dropcap: boolean;
@@ -145,6 +146,17 @@ export class ThemeEditorModal {
     { value: 'top', label: 'Arriba' },
     { value: 'center', label: 'Centrado (explícito)' },
     { value: 'bottom', label: 'Abajo' },
+  ];
+  /** Espejo de `epub::SCENE_BREAK_PRESETS` (Rust manda; sumar un preset
+   *  es una fila allá y una acá). */
+  protected readonly sceneBreakOptions: SelectOption[] = [
+    { value: '', label: '* * * (default)' },
+    { value: 'asteriscos', label: '* * * (explícito)' },
+    { value: 'tres', label: '***' },
+    { value: 'puntos', label: '• • •' },
+    { value: 'fleuron', label: '❦ (fleurón)' },
+    { value: 'tilde', label: '~' },
+    { value: 'blanco', label: 'En blanco (solo espacio)' },
   ];
   protected readonly prefijoCapituloOptions: SelectOption[] = [
     { value: '', label: 'Sin prefijo (default)' },
@@ -395,6 +407,7 @@ export class ThemeEditorModal {
         editorial_body_font: t.editorial_body_font ?? '',
         editorial_heading_font: t.editorial_heading_font ?? '',
         chapter_title_position: t.chapter_title_position ?? '',
+        scene_break: t.scene_break ?? '',
         prefijo_capitulo: t.prefijo_capitulo ?? '',
         mostrar_titulo_capitulo: t.mostrar_titulo_capitulo ?? true,
         dropcap: t.dropcap ?? false,
@@ -561,6 +574,7 @@ export class ThemeEditorModal {
         editorial_body_font: blank(cur.editorial_body_font),
         editorial_heading_font: blank(cur.editorial_heading_font),
         chapter_title_position: blank(cur.chapter_title_position),
+        scene_break: blank(cur.scene_break),
         prefijo_capitulo: blank(cur.prefijo_capitulo),
         mostrar_titulo_capitulo: cur.mostrar_titulo_capitulo,
         dropcap: cur.dropcap,

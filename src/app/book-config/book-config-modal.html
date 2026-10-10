@@ -458,6 +458,16 @@
                   />
                 </label>
               </div>
+              <div class="row">
+                <label>
+                  <span>Divisor de escena</span>
+                  <app-select
+                    [ngModel]="ovSceneBreak()"
+                    (ngModelChange)="ovSceneBreak.set($event)"
+                    [options]="sceneBreakOptions()"
+                  />
+                </label>
+              </div>
               <datalist id="bc-fams">
                 @for (fam of availableFamilies(); track fam) {
                   <option [value]="fam"></option>

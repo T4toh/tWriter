@@ -19,6 +19,9 @@ body {
   line-height: 1.6;
   hyphens: auto;
   -epub-hyphens: auto;
+  /* Google Play Books avisa «Bad property: -webkit-hyphens» y la descarta,
+     sin bloquear la publicación. Se queda a propósito: Apple Books (WebKit
+     hasta iOS 16) y Kobo solo parten palabras con el prefijo. */
   -webkit-hyphens: auto;
 }
 
@@ -485,6 +488,8 @@ hr,
   font-size: 1.2em;
 }
 
+/* El ornamento lo elige el tema (`scene_break`, presets en
+   `epub.rs::SCENE_BREAK_PRESETS`); acá va el default. */
 hr::before,
 .scene-break::before {
   content: "* * *";

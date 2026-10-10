@@ -62,6 +62,10 @@ pub struct Theme {
     /// vía @media amzn-kf8 en epub_style.css).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chapter_title_position: Option<String>,
+    /// Ornamento del divisor de escena (`<hr class="scene-break"/>`), un
+    /// preset de `epub::SCENE_BREAK_PRESETS`. None = `* * *` del CSS base.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scene_break: Option<String>,
     /// Prefijo del capítulo: `none` | `decimal` | `roman`. Default: `none`.
     /// Antes vivía en book.json/saga.json; ahora pertenece al tema para que
     /// múltiples libros que comparten tema tengan el mismo formato.
@@ -126,6 +130,8 @@ pub struct ResolvedTheme {
     /// Posición vertical del bloque título+prefix en la página de chapter-title.
     /// `top` | `bottom`. None = default (center vía CSS base).
     pub chapter_title_position: Option<String>,
+    /// Preset del divisor de escena. None = `* * *` del CSS base.
+    pub scene_break: Option<String>,
     /// Estilo de capítulos: prefijo (`none`/`decimal`/`roman`). None = `none`.
     pub prefijo_capitulo: Option<String>,
     /// Mostrar el título del capítulo en chapter title page. None = true.
@@ -324,6 +330,9 @@ fn merge_overrides(base: &mut Theme, ov: &Theme) {
     if ov.chapter_title_position.is_some() {
         base.chapter_title_position = ov.chapter_title_position.clone();
     }
+    if ov.scene_break.is_some() {
+        base.scene_break = ov.scene_break.clone();
+    }
     if ov.prefijo_capitulo.is_some() {
         base.prefijo_capitulo = ov.prefijo_capitulo.clone();
     }
@@ -476,6 +485,7 @@ pub fn resolve_theme(
     if effective_base.is_none() && theme.body_font.is_none() && theme.heading_font.is_none() {
         return ResolvedTheme {
             chapter_title_position: theme.chapter_title_position,
+            scene_break: theme.scene_break,
             prefijo_capitulo: theme.prefijo_capitulo,
             mostrar_titulo_capitulo: theme.mostrar_titulo_capitulo,
             dropcap: theme.dropcap,
@@ -544,6 +554,7 @@ pub fn resolve_theme(
         editorial_body_font: theme.editorial_body_font,
         editorial_heading_font: theme.editorial_heading_font,
         chapter_title_position: theme.chapter_title_position,
+        scene_break: theme.scene_break,
         prefijo_capitulo: theme.prefijo_capitulo,
         mostrar_titulo_capitulo: theme.mostrar_titulo_capitulo,
         dropcap: theme.dropcap,

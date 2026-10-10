@@ -239,6 +239,20 @@
                 </div>
 
                 <div class="ctrl-group">
+                  <span class="group-label">Divisor de escena</span>
+                  <div class="row">
+                    <label>
+                      <span>Ornamento entre escenas</span>
+                      <app-select
+                        [ngModel]="f.scene_break"
+                        (ngModelChange)="update('scene_break', $event)"
+                        [options]="sceneBreakOptions"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="ctrl-group">
                   <span class="group-label">Partes</span>
                   <div class="row split">
                     <label class="checkbox">

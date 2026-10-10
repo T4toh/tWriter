@@ -44,6 +44,7 @@ export class SagaConfigModal {
   protected readonly ovEditorialBodyFont = signal<string>('');
   protected readonly ovEditorialHeadingFont = signal<string>('');
   protected readonly ovChapterTitlePosition = signal<string>('');
+  protected readonly ovSceneBreak = signal<string>('');
 
   protected readonly availableThemes = computed(() => this.themesSvc.list());
   protected readonly selectedBaseTheme = computed(() => {
@@ -86,6 +87,15 @@ export class SagaConfigModal {
     { value: 'top', label: 'Arriba' },
     { value: 'center', label: 'Centrado (explícito)' },
     { value: 'bottom', label: 'Abajo' },
+  ]);
+  protected readonly sceneBreakOptions = computed<SelectOption[]>(() => [
+    { value: '', label: this.selectedBaseTheme()?.scene_break || 'Heredar (* * *)' },
+    { value: 'asteriscos', label: '* * *' },
+    { value: 'tres', label: '***' },
+    { value: 'puntos', label: '• • •' },
+    { value: 'fleuron', label: '❦ (fleurón)' },
+    { value: 'tilde', label: '~' },
+    { value: 'blanco', label: 'En blanco (solo espacio)' },
   ]);
 
   protected setVarianteEs(value: string): void {
@@ -146,6 +156,7 @@ export class SagaConfigModal {
     this.ovEditorialBodyFont.set(ov?.editorial_body_font ?? '');
     this.ovEditorialHeadingFont.set(ov?.editorial_heading_font ?? '');
     this.ovChapterTitlePosition.set(ov?.chapter_title_position ?? '');
+    this.ovSceneBreak.set(ov?.scene_break ?? '');
   }
 
   private buildThemeRef(): ThemeRef | null {
@@ -160,6 +171,7 @@ export class SagaConfigModal {
       editorial_body_font: blank(this.ovEditorialBodyFont()),
       editorial_heading_font: blank(this.ovEditorialHeadingFont()),
       chapter_title_position: blank(this.ovChapterTitlePosition()),
+      scene_break: blank(this.ovSceneBreak()),
     };
     const hasOverrides = Object.values(overrides).some((v) => v !== null);
     if (!base && !hasOverrides) return null;
