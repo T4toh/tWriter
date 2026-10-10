@@ -214,10 +214,12 @@ p.about-author-epigrafe {
   border-top: 1px solid;
   /* Ancho del filete: el borde no se puede acortar, así que se acorta el
      bloque y se centra. En % porque acá el padre es el flujo del body,
-     que sí tiene ancho definido (no es el caso de la foto, ver abajo). */
+     que sí tiene ancho definido (no es el caso de la foto, ver abajo).
+     Margen en % y no `auto`: el EPUB deja que el lector resuelva `auto`
+     como 0, y la Kindle vieja lo hace — el filete quedaba a la izquierda. */
   width: 60%;
-  margin-left: auto;
-  margin-right: auto;
+  margin-left: 20%;
+  margin-right: 20%;
   text-align: center;
 }
 
@@ -232,9 +234,13 @@ p.about-author-epigrafe {
    falla, la imagen sale a su tamaño real y ocupa media página. El em resuelve
    contra el font-size, que siempre existe. El % queda solo como tope para
    pantallas angostas. */
+/* Inline, no `display: block` + `margin: auto`: el EPUB deja que el lector
+   resuelva `auto` como 0, y la Kindle vieja (7ª gen) lo hace, así que la
+   imagen salía pegada a la izquierda. Inline la centra el text-align del
+   padre, que respetan todos. Va sola en su línea porque lo que sigue es un
+   <p>. Lo mismo vale para las tapas de "Otros libros". */
 .about-author-photo {
-  display: block;
-  margin: 0 auto 0.6em;
+  margin: 0 0 0.6em;
   width: 4.5em;
   max-width: 35%;
   height: auto;
@@ -308,8 +314,7 @@ body.otros-libros-body {
 }
 .libro-siguiente h2 { margin-top: 0; }
 img.libro-tapa-grande {
-  display: block;
-  margin: 0 auto 0.8em;
+  margin: 0 0 0.8em;
   width: 11em;
   max-width: 60%;
   height: auto;
@@ -334,7 +339,7 @@ li.libro {
   padding: 0 1%;
   text-align: center;
 }
-img.libro-tapa { display: block; margin: 0 auto 0.6em; width: 6em; max-width: 70%; height: auto; }
+img.libro-tapa { margin: 0 0 0.6em; width: 6em; max-width: 70%; height: auto; }
 p.libro-titulo { margin: 0; font-weight: bold; line-height: 1.3; text-indent: 0; }
 p.libro-subtitulo { margin: 0.2em 0 0 0; font-size: 0.9em; line-height: 1.3; text-indent: 0; }
 
@@ -627,6 +632,5 @@ nav ol.toc > li.toc-part + li.toc-editorial {
    clases (epub.rs::align_style_to_class). */
 .center-align { text-align: center; text-indent: 0; }
 .right-align { text-align: right; text-indent: 0; }
-.left-align { text-align: left; text-indent: 0; }
 
 /* @THEME_RULES */

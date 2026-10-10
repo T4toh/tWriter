@@ -10,6 +10,11 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+### Fixed
+
+- En las Kindle viejas, la foto y la firma de «Sobre el autor» y las tapas de «Otros libros» salían corridas a la izquierda en vez de centradas.
+- Después de centrar un verso a mano y volver con «Alinear a la izquierda», el resto del capítulo salía en el EPUB sin sangría y sin justificar. Ahora esos párrafos salen como prosa normal, y el botón de izquierda saca el centrado en vez de marcar el párrafo.
+
 ## [0.25.0] - 2026-10-02
 
 ### Added

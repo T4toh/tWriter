@@ -280,6 +280,25 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   sobre el repo de novelas, no toca este repo; y solo tiene sentido cuando
   las dos PCs corran una versión que ya lea `autor.json`.
 
+- **Links de «Otros libros» por tienda** (pedido del autor, 2026-10-09).
+  Hoy cada libro tiene un solo `link` en `book.json` (su página en
+  `tatoh.ar`) y ese va en todos los EPUB. La idea: que el EPUB que se sube a
+  KDP lleve los links de Amazon y el de Kobo los de Kobo, así el lector toca la
+  tapa y cae en la tienda de su propio aparato. Diseño propuesto:
+  `link_amazon` / `link_kobo` opcionales en `book.json` (con su lugar en el
+  modal del libro, en `load()` **y** en `save()`), un selector «Para: Genérico
+  / Kindle / Kobo» al exportar, y `catalogo.rs` que elige el de esa tienda con
+  fallback a `link`. Separar por tienda no es capricho: KDP rechaza o marca
+  libros con links a tiendas de la competencia, y conviene asumir que Kobo hace
+  lo mismo.
+
+  Lo que **no** se sabe y hay que probar en el aparato antes de prometer nada:
+  si en la Kindle (la vieja de 7ª gen del autor) un `amazon.com/dp/<ASIN>` abre
+  la tienda nativa o el navegador experimental. En el peor caso cae en la web
+  de Amazon con la cuenta iniciada, que sigue siendo su tienda. En Kobo lo mismo
+  con su navegador beta. Arranca cuando los libros publicados tengan sus URLs
+  de tienda; sin eso no hay nada que cargar.
+
 - Preview tipo Kindle (B/N, distintos tamaños — Paperwhite, Oasis, Scribe). Amazon discontinuó Kindle Previewer en Linux.
 - Pesos extra de fuente (300 Light, 600 SemiBold, 900 Black). El editor de temas ya elige el peso sintético de itálica y negrita (`2bc69be`); lo que falta es reconocer las caras extra: hoy `Merriweather-Light` cae como 400 (test en `theme.rs`).
 - Auto-migración de tema renombrado: hoy renombrar un tema deja sagas/libros con `base` dangling (warning). Implementar scan recursivo de `*.json` y rewrite del `base`.

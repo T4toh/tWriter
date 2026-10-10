@@ -1083,7 +1083,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   protected setAlign(align: 'left' | 'center' | 'right'): void {
-    this.tiptap?.chain().focus().setTextAlign(align).run();
+    if (align === 'left') this.tiptap?.chain().focus().unsetTextAlign().run();
+    else this.tiptap?.chain().focus().setTextAlign(align).run();
   }
 
   protected insertSceneBreak(): void {
@@ -2366,7 +2367,14 @@ export class Editor implements AfterViewInit, OnDestroy {
           gapcursor: false,
         }),
         Typography,
-        TextAlign.configure({ types: ['paragraph', 'heading'] }),
+        // «Izquierda» es la alineación de la prosa, así que no se escribe:
+        // saca el centrado en vez de marcar `text-align: left`, que en el
+        // EPUB dejaba el párrafo sin sangría y sin justificar.
+        TextAlign.extend({
+          addKeyboardShortcuts() {
+            return { ...this.parent?.(), 'Mod-Shift-l': () => this.editor.commands.unsetTextAlign() };
+          },
+        }).configure({ types: ['paragraph', 'heading'] }),
         Grammar,
         RayaExtension,
         RepeticionesExtension,
@@ -2585,7 +2593,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       italic: e.isActive('italic'),
       underline: e.isActive('underline'),
       verso: e.isActive('blockquote'),
-      alignLeft: e.isActive({ textAlign: 'left' }),
+      alignLeft: !e.isActive({ textAlign: 'center' }) && !e.isActive({ textAlign: 'right' }),
       alignCenter: e.isActive({ textAlign: 'center' }),
       alignRight: e.isActive({ textAlign: 'right' }),
       hasSelection: !empty && from !== to,
