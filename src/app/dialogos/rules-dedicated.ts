@@ -184,6 +184,12 @@ const ruleDashOrphan: Rule = (p) => {
     if (j < 0) continue;
     // Legítimo: la raya de cierre del inciso ya está antes (—dijo).
     if (p[j] === EM_DASH) continue;
+    // `—Sí… Terminó salvándome más que nada.`: un verbo que también es de
+    // acción, sin raya, es contenido del parlamento.
+    if (AMBIGUOUS_TAGS.has(m[0].toLowerCase())) continue;
+    // Tras `—.` o `—,` el personaje retomó la palabra: lo que sigue es
+    // parlamento (`—dijo Ihsahan—. Pregunta.`), no un inciso sin raya.
+    if (PUNCT_AROUND_CLOSE.test(p[j]) && p[j - 1] === EM_DASH) continue;
     // Anti-falso-positivo 1: si el verbo NO viene después de sentence boundary
     // (`.?!…`), es un verbo regular dentro del contenido del diálogo, no un
     // dicendi-tag. Ej. `—Así le dicen al oro.` — `dicen` precedido por `le`.
@@ -706,10 +712,31 @@ const ruleUnclosedAside: Rule = (p) => {
   ];
 };
 
+// Un párrafo que abre con comilla y no la cierra (o cierra de más): el
+// converter no lo toca y, sin aviso, el diálogo queda entre comillas para
+// siempre. Vieja República trae 5 en 12.669 párrafos.
+const ruleQuoteUnclosed: Rule = (p) => {
+  if (p.includes(EM_DASH) || !/^\s*["“«]/.test(p)) return [];
+  const abren = (p.match(/[“«]/g) ?? []).length;
+  const cierran = (p.match(/[”»]/g) ?? []).length;
+  const rectas = (p.match(/"/g) ?? []).length;
+  if (abren === cierran && rectas % 2 === 0) return [];
+  return [{
+    offset: 0,
+    length: 1,
+    ruleId: 'quote-unclosed',
+    help: { entry: 'comillas', section: '2a' },
+    severity: 'warning',
+    message: 'Comillas sin cerrar (o cerradas de más): el párrafo no se puede convertir a raya hasta que cada apertura tenga su cierre.',
+    shortMessage: 'Comillas sin cerrar',
+  }];
+};
+
 const RULES: readonly Rule[] = [
   ruleDashShort,
   ruleDashOrphan,
   ruleDashQuoteMix,
+  ruleQuoteUnclosed,
   ruleParagraphCollapsed,
   ruleSpaceAfterOpen,
   ruleSpaceBeforeVerb,

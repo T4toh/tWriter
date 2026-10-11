@@ -16,6 +16,12 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 - `"Esto que hiciste", gritó, "es una locura"` converts without the English comma after the aside (DPD raya 2.3e).
 - The missing-dash check now flags `—Hola dijo Juan.` and no longer flags an imperative inside the speech (`—No sé. Pregunta a mamá.`).
 - Decomposed accents (NFD) no longer hide speech verbs from the dialogue converter.
+- Speech verbs the author actually uses (`opinó`, `terminó`, `empezó`, `sumó`, `resumió`, `completó`, `recordó`, `mintió`, `ladró`, `tradujo`, `repreguntó`, and `pensó en voz alta` / `al aire`) are now recognised, so `—Cierra la boca. —Ladró la muchacha.` gets flagged and `“…” Opinó Cen.` converts as a speech aside instead of narration.
+- A paragraph with three or more speeches by the same character (`“…” Dijo X. “…” Agregó Y. “…”`) converts with every aside closed (`—agregó Y—. …`), instead of leaving a stray opening dash on the third speech.
+
+### Added
+
+- The dialogue audit flags a paragraph whose quotes do not pair up (`quote-unclosed`); the converter leaves such paragraphs alone instead of converting them halfway.
 
 ## [0.26.0] - 2026-10-10
 

@@ -144,6 +144,18 @@ huela a "esto ya lo miramos", buscar ahí primero.
 
 ## Aportes a la corrección del español
 
+- **Repo público con las reglas de raya** (pedido del autor, 2026-10-10). No
+  hay lista normalizada de verbos dicendi: el DPD habla de «verbo de lengua»
+  y da seis ejemplos, y el resto lo pone cada autor. La lista de `tags.ts`
+  (medida sobre las novelas del autor), el converter, el validador y el
+  corpus de `run-raya-corpus-smoke.mjs` son la única implementación
+  ejecutable de DPD «raya» que conocemos. Publicarlo como paquete aparte
+  (`dialogos/` es puro: cero DOM, cero Angular) con el corpus como test y el
+  DPD citado por sección, para que otro editor o un plugin de LT lo use. Ojo:
+  separar el paquete obliga a versionarlo y a que tWriter lo consuma desde
+  npm; mientras sea un solo consumidor, puede ser un repo espejo generado
+  desde acá (`git subtree split src/app/dialogos`) sin tocar el build.
+
 Lo que tWriter aprende corrigiendo español y vale devolver al mundo (pedido
 del autor el 2026-09-30: «me gusta sumar para estas cosas y que la corrección
 de español mejore»). Criterio para todo lo de acá: **la norma es la fuente**
@@ -439,10 +451,13 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   `pending-conversion`. Para fine-grain (saber qué regla del converter
   mordió en cada violación), instrumentar `convert()` con hooks que reporten
   qué subpattern matcheó por párrafo.
-- **Tests con fixtures reales**: cuando `/home/tatoh/Repos/novelas/` tenga
-  los capítulos viejos de Meridian 2.0 pulleados, sumar al corpus
-  (`scripts/run-raya-corpus-smoke.mjs`) casos con párrafos textuales de esos archivos (incluyendo el caso "todo
-  colapsado en un párrafo" detectado en exploración) para regresión.
+- **Tests con fixtures reales**: hecho para Vieja República el 2026-10-10
+  (170 `.docx` en borrador, 12.669 párrafos con comillas: de ahí salieron los
+  verbos nuevos de `tags.ts`, `pensó en voz alta`, las cadenas de tres y
+  cuatro parlamentos y `quote-unclosed`). `scripts/barrer-raya-novelas.mjs`
+  repite la medición sobre cualquier repo de novelas; cada vez que algo
+  salga raro ahí, el párrafo va al corpus. Falta lo mismo con los capítulos
+  viejos de Meridian 2.0 cuando estén pulleados.
 
 ## Plataformas
 
