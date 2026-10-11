@@ -179,7 +179,7 @@ export class NodeActionsService {
       const entries: CtxMenuEntry[] = [];
       if (isImportable && !node.editable) {
         entries.push({
-          label: 'Importar a HTML',
+          label: 'Importar este capítulo a HTML',
           kbd: `.${node.ext}`,
           onClick: () => this.importThis(node),
         });
@@ -285,8 +285,7 @@ export class NodeActionsService {
     }
     if (importable.length > 0) {
       entries.push({
-        label: 'Importar todos a HTML',
-        kbd: String(importable.length),
+        label: `Importar el libro entero a HTML (${importable.length})`,
         onClick: () => this.importBulk(node),
       });
     }

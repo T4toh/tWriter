@@ -19,6 +19,10 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 - Speech verbs the author actually uses (`opinó`, `terminó`, `empezó`, `sumó`, `resumió`, `completó`, `recordó`, `mintió`, `ladró`, `tradujo`, `repreguntó`, and `pensó en voz alta` / `al aire`) are now recognised, so `—Cierra la boca. —Ladró la muchacha.` gets flagged and `“…” Opinó Cen.` converts as a speech aside instead of narration.
 - A paragraph with three or more speeches by the same character (`“…” Dijo X. “…” Agregó Y. “…”`) converts with every aside closed (`—agregó Y—. …`), instead of leaving a stray opening dash on the third speech.
 
+### Changed
+
+- The toolbar no longer shows two buttons both called «Raya»: the one that converts the whole chapter now reads «Aplicar raya», and the inline checker keeps «Raya» like its siblings «Repeticiones» and «Gramática». The import entries in the tree menu say their scope («Importar este capítulo a HTML» / «Importar el libro entero a HTML (N)»).
+
 ### Added
 
 - The dialogue audit flags a paragraph whose quotes do not pair up (`quote-unclosed`); the converter leaves such paragraphs alone instead of converting them halfway.
