@@ -75,6 +75,24 @@ export const DIALOG_TAGS: readonly string[] = [
   'insistía', 'explicaba', 'repetía', 'mascullaba',
   // Enclíticos (registro arcaizante).
   'díjole', 'preguntóle', 'respondióle',
+  // Los que el autor usa como dicendi (medidos en Vieja República, 170
+  // capítulos en borrador, 2026-10-10: `Opinó` ×55, `Terminó` ×35, `Empezó`
+  // ×12…). Los de acción posible van también en AMBIGUOUS_TAGS.
+  'opinó', 'opina', 'opinaron', 'opinan',
+  'terminó', 'termina', 'terminaron', 'terminan',
+  'empezó', 'empieza', 'empezaron', 'empiezan',
+  'siguió', 'sigue', 'siguieron', 'siguen',
+  'sumó', 'sumaron',
+  'completó', 'completa', 'completaron', 'completan',
+  'resumió', 'resume', 'resumieron', 'resumen',
+  'recordó', 'recuerda', 'recordaron', 'recuerdan',
+  'mintió', 'miente', 'mintieron', 'mienten',
+  'ladró', 'ladra', 'ladraron', 'ladran',
+  'tradujo', 'traduce', 'tradujeron', 'traducen',
+  'repreguntó', 'repregunta', 'repreguntaron', 'repreguntan',
+  // Sin los de acción posible en primera persona: `—Sí. Empecé con una
+  // espada…` es contenido.
+  'opiné', 'resumí', 'mentí',
 ];
 
 const TAGS_SET = new Set(DIALOG_TAGS.map((t) => t.toLowerCase()));
@@ -92,6 +110,12 @@ export const AMBIGUOUS_TAGS: ReadonlySet<string> = new Set([
   'aportó', 'aporta', 'aportaron', 'aportan',
   'sollozó', 'solloza', 'sollozaron', 'sollozan',
   'gimió', 'gime', 'gimieron', 'gimen',
+  'terminó', 'termina', 'terminaron', 'terminan',
+  'empezó', 'empieza', 'empezaron', 'empiezan',
+  'siguió', 'sigue', 'siguieron', 'siguen',
+  'sumó', 'sumaron',
+  'completó', 'completa', 'completaron', 'completan',
+  'recordó', 'recuerda', 'recordaron', 'recuerdan',
 ]);
 
 export function isDialogTag(word: string): boolean {
@@ -105,7 +129,11 @@ export const TAGS_ALT = DIALOG_TAGS.join('|');
  *  grupo del que lo usa. */
 export const TAG_PHRASE =
   `(?:(?:me|te|le|les|nos|os|se|lo|la|los|las)\\s+)?` +
-  `(?:(?:volvió|volvía|vuelve|volví)\\s+a\\s+(?:decir|preguntar|repetir|gritar|insistir)|${TAGS_ALT})`;
+  `(?:(?:volvió|volvía|vuelve|volví)\\s+a\\s+(?:decir|preguntar|repetir|gritar|insistir)` +
+  // `pensó` solo es pensamiento (va entre comillas, DPD comillas 2b); en voz
+  // alta o al aire es habla.
+  `|(?:pensó|pensaba|pensé|piensa|opinó|opina|opiné)\\s+(?:en\\s+voz\\s+alta|al\\s+aire)` +
+  `|${TAGS_ALT})`;
 
 /** Clíticos que pueden ir antes del verbo del inciso (`se levantó`, `le dijo`). */
 export const CLITICS: ReadonlySet<string> = new Set([

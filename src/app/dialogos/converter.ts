@@ -22,7 +22,8 @@ export interface ConvertResult {
 }
 
 export function convert(text: string): ConvertResult {
-  let result = text;
+  // Acentos descompuestos (NFD) no matchean ningún verbo de la lista.
+  let result = text.normalize('NFC');
 
   // Si el input tiene <p>…</p> (caso normal del editor TipTap), convertir cada
   // párrafo de forma independiente. El converter original opera línea-por-línea
@@ -52,7 +53,7 @@ export function convert(text: string): ConvertResult {
     }
     result = converted.join('\n');
   }
-  const changes = text === result ? 0 : 1;
+  const changes = text.normalize('NFC') === result ? 0 : 1;
   return { text: result, changes };
 }
 
@@ -62,6 +63,11 @@ function convertBrSeparated(inner: string): string {
   return parts
     .map((p) => (/^<br\s*\/?>$/i.test(p) ? p : convertLine(p)))
     .join('');
+}
+
+function quotesUnbalanced(line: string): boolean {
+  const n = (re: RegExp): number => (line.match(re) ?? []).length;
+  return n(/“/g) !== n(/”/g) || n(/«/g) !== n(/»/g) || n(/"/g) % 2 === 1;
 }
 
 function normalizeQuotes(text: string): string {
@@ -138,18 +144,65 @@ function isThoughtOrQuote(line: string): boolean {
     // cada párrafo siguiente con `»` (DPD comillas 2c). Se mira sobre la
     // línea original: normalizada, ese `»` es una comilla más.
     /^\s*»/.test(line) ||
-    /^\s*["“«][^"“”«»]+["”»][,.]?\s+pens\p{L}*/iu.test(line) ||
+    /^\s*["“«][^"“”«»]+["”»][,.]?\s+pens\p{L}*(?!\p{L})(?!\s+(?:en\s+voz\s+alta|al\s+aire))/iu.test(line) ||
     /^\s*["“«][^"“”«»]*—[^"“”«»]*["”»]\.?\s*$/u.test(line)
   );
 }
 
 function convertLine(html: string): string {
   if (!html.trim()) return html;
+  const fn = INLINE_TAG_RE.test(html) ? convertKeepingTags : convertPlainLine;
   // `&nbsp;` es una entidad en el HTML del editor y ninguna regex la ve como
   // espacio: se pasa al carácter (que `\s` sí matchea) y se vuelve después.
   // Si la conversión consumió ese espacio, no vuelve, y está bien.
-  if (!html.includes('&nbsp;')) return convertPlainLine(html);
-  return convertPlainLine(html.replaceAll('&nbsp;', '\u00a0')).replaceAll('\u00a0', '&nbsp;');
+  if (!html.includes('&nbsp;')) return fn(html);
+  return fn(html.replaceAll('&nbsp;', '\u00a0')).replaceAll('\u00a0', '&nbsp;');
+}
+
+const INLINE_TAG_RE = /<[^>]+>/;
+/** Lo que la conversión nunca toca: todo menos espacios, comillas, puntos,
+ *  comas y guiones. La caja sí cambia (el verbo del inciso baja a minúscula),
+ *  así que se compara en minúscula. */
+const STABLE_RE = /[^\s"“”«»'‘’.,\-–—―−]/u;
+
+/** Un párrafo con markup inline (`<em>"Vení"</em>, dijo ella.`) se convierte
+ *  sobre el texto sin tags y los tags vuelven después, cada uno pegado al
+ *  mismo carácter estable que tenía delante. Si la conversión cambió algún
+ *  carácter estable (no debería), el párrafo queda como estaba. */
+function convertKeepingTags(html: string): string {
+  const tags: { pos: number; tag: string }[] = [];
+  let plain = '';
+  let last = 0;
+  for (const m of html.matchAll(/<[^>]+>/g)) {
+    plain += html.slice(last, m.index);
+    tags.push({ pos: plain.length, tag: m[0] });
+    last = m.index + m[0].length;
+  }
+  plain += html.slice(last);
+  const converted = convertPlainLine(plain);
+  if (converted === plain) return html;
+  const stable = (t: string): number[] =>
+    [...t].flatMap((c, i) => (STABLE_RE.test(c) ? [i] : []));
+  const a = stable(plain);
+  const b = stable(converted);
+  if (a.length !== b.length || a.some((i, k) => plain[i].toLowerCase() !== converted[b[k]].toLowerCase())) {
+    return html;
+  }
+  let out = '';
+  let from = 0;
+  let s = 0; // estables del plano antes del tag
+  for (const t of tags) {
+    while (s < a.length && a[s] < t.pos) s++;
+    // Cierre: pegado al último estable de adentro. Apertura: pegada al
+    // primero (`dijo <em>Juan`, `—. <strong>Ahora`).
+    let at = t.tag.startsWith('</')
+      ? (s === 0 ? 0 : b[s - 1] + 1)
+      : (s < b.length ? b[s] : converted.length);
+    at = Math.max(at, from);
+    out += converted.slice(from, at) + t.tag;
+    from = at;
+  }
+  return out + converted.slice(from);
 }
 
 function convertPlainLine(line: string): string {
@@ -158,6 +211,10 @@ function convertPlainLine(line: string): string {
   // Normalizar por línea y no el documento entero: si no, un solo párrafo
   // convertido aplana las «» y los ’ de todo el capítulo.
   if (isThoughtOrQuote(line)) return line;
+  // Comillas desparejas (`“¿Qué?” Preguntó Alara.”`): convertir a medias deja
+  // raya y comilla mezcladas. El validador lo marca (`quote-unclosed`) y el
+  // autor cierra el par antes de convertir.
+  if (quotesUnbalanced(line)) return line;
   const dashed = normalizeDashes(line);
   const normalized = normalizeSpacingBeforeTags(normalizeQuotes(dashed));
 
@@ -194,6 +251,9 @@ function fixPunctuationBeforeTag(line: string): string {
   });
 }
 
+const SPLIT_SUBJECT_RE = /^(?:esto|eso|aquello|lo|el|la|los|las)\s[^,;:]*\bque\b/iu;
+const SPLIT_PREDICATE_RE = /^(?:es|era|fue|son|eran|fueron|será|sería|está|estaba|parece|parecía)(?!\p{L})/iu;
+
 /** D3: Inciso del narrador con verbo entre dos parlamentos. Cuatro formas:
  *  con o sin coma entre la comilla y el verbo, y el segundo parlamento tras
  *  coma (sigue el enunciado) o tras punto (enunciado nuevo). Si el segundo
@@ -203,18 +263,24 @@ function applyD3(line: string): string {
   for (const sep of [',\\s+', '\\s+']) {
     for (const [middle, join] of [['([^,"]*),', ','], ['([^"]*?)\\.', '.']]) {
       const re = new RegExp(
-        `"([^"]+)"${sep}(${TAG_PHRASE})${NOT_LETTER}${middle}\\s+"([^"]+)"` +
+        `([.?!…]\\s+)?"([^"]+)"${sep}(${TAG_PHRASE})${NOT_LETTER}${middle}\\s+"([^"]+)"` +
           `(?:,?\\s+(${TAG_PHRASE})${NOT_LETTER})?`,
         'giu',
       );
+      const base = result;
       result = result.replace(
         re,
-        (_, t1: string, verb: string, rest: string, t2: string, verb2?: string) => {
+        (_, pre: string | undefined, t1: string, verb: string, rest: string, t2: string, verb2: string | undefined, at: number) => {
           const inciso = rest.trim() ? `${verb.toLowerCase()} ${rest.trim()}` : verb.toLowerCase();
           const text2 = verb2
             ? `${stripClosing(t2)} ${EM_DASH}${verb2.toLowerCase()}`
             : t2.trim();
-          return `${EM_DASH}${stripClosing(t1)} ${EM_DASH}${inciso}${EM_DASH}${join} ${text2}`;
+          // `"Esto que hiciste", gritó, "es una locura"`: el inciso parte una
+          // oración y la coma inglesa sobra (DPD 2.3e). Solo se reconoce el
+          // sujeto con relativa y un verbo copulativo detrás; cualquier otra
+          // forma conserva la coma. ponytail: dos listas, crecen con el corpus.
+          const sinComa = join === ',' && SPLIT_SUBJECT_RE.test(t1.trim()) && SPLIT_PREDICATE_RE.test(text2);
+          return `${openSpeech(base, at, pre ?? '')}${stripClosing(t1)} ${EM_DASH}${inciso}${EM_DASH}${sinComa ? '' : join} ${text2}`;
         },
       );
     }
@@ -232,8 +298,8 @@ function stripClosing(raw: string): string {
 
 /** D4: Narración intermedia sin verbo. */
 function applyD4(line: string): string {
-  const re = /"([^"]+)"\s+([A-ZÁÉÍÓÚÑ][^"]*?)\.\s+"([^"]+)"/gu;
-  return line.replace(re, (full, t1: string, narration: string, t2: string) => {
+  const re = /([.?!…]\s+)?"([^"]+)"\s+([A-ZÁÉÍÓÚÑ][^"]*?)\.\s+"([^"]+)"/gu;
+  return line.replace(re, (full, pre: string | undefined, t1: string, narration: string, t2: string, at: number) => {
     const words = narration.trim().split(/\s+/);
     for (const w of words) {
       if (isDialogTag(w)) return full;
@@ -242,8 +308,25 @@ function applyD4(line: string): string {
     // se preserva. Ej: "Hola." Cerró la puerta. "Adiós." → —Hola. —Cerró la
     // puerta—. Adiós. (el punto del "Hola" queda adentro de la raya).
     const text1 = t1.trim();
-    return `${EM_DASH}${text1} ${EM_DASH}${narration.trim()}${EM_DASH}. ${t2.trim()}`;
+    return `${openSpeech(line, at, pre ?? '')}${text1} ${EM_DASH}${narration.trim()}${EM_DASH}. ${t2.trim()}`;
   });
+}
+
+const INCISO_ABIERTO = new RegExp(`^(?:${TAG_PHRASE})(?!\\p{L})[^"]*$`, 'iu');
+
+/** La raya que abre un parlamento tras `pre` (lo que capturó DIALOG_START).
+ *  Si lo anterior es un inciso de verbo de lengua que sigue abierto
+ *  (`—agregó mirando a Ana. "Está…"`), el mismo hablante retoma y la raya
+ *  cierra el inciso: `—agregó mirando a Ana—. Está…` (DPD 2.3b). Pasa en los
+ *  párrafos con tres o más parlamentos del mismo personaje. */
+function openSpeech(line: string, at: number, pre: string): string {
+  if (!/^[.?!…]/.test(pre)) return `${pre}${EM_DASH}`;
+  // `line` es la entrada de la pasada: un inciso que la misma pasada acaba
+  // de convertir todavía está como `" Agregó mirando. ` ahí, por eso se
+  // mira también desde la última comilla.
+  const desde = Math.max(line.lastIndexOf(EM_DASH, at), line.lastIndexOf('"', at)) + 1;
+  const inciso = line.slice(desde, at).replace(/^[,\s]+/, '');
+  return INCISO_ABIERTO.test(inciso) ? `${EM_DASH}${pre.trimEnd()} ` : `${pre}${EM_DASH}`;
 }
 
 /** D2: Etiqueta de diálogo. Las comillas tienen que abrir la línea o venir
@@ -256,8 +339,8 @@ function applyD2(line: string): string {
     `${DIALOG_START}${QUOTES_CHAR_CLASS}([^"\\u201C\\u201D]+)${QUOTES_CHAR_CLASS},?\\s+(${TAG_PHRASE})${NOT_LETTER}`,
     'giu',
   );
-  let result = line.replace(re1, (_, pre: string, content: string, tag: string) =>
-    `${pre}${EM_DASH}${stripClosing(content)} ${EM_DASH}${tag.toLowerCase()}`,
+  let result = line.replace(re1, (_, pre: string, content: string, tag: string, at: number) =>
+    `${openSpeech(line, at, pre)}${stripClosing(content)} ${EM_DASH}${tag.toLowerCase()}`,
   );
 
   // Sujeto antes del verbo: `"No sé", Juan dijo.` es un inciso de verbo de
@@ -269,10 +352,10 @@ function applyD2(line: string): string {
     );
     // Con el parlamento cerrado en punto, lo que sigue es narración nueva
     // (`"Vení." María dice que no.`): eso lo resuelve el patrón 2.
-    result = result.replace(reSubject, (full, pre: string, content: string, inciso: string) =>
+    result = result.replace(reSubject, (full, pre: string, content: string, inciso: string, at: number) =>
       /(?<!\.)\.\s*$/.test(content)
         ? full
-        : `${pre}${EM_DASH}${stripClosing(content)} ${EM_DASH}${inciso}`,
+        : `${openSpeech(line, at, pre)}${stripClosing(content)} ${EM_DASH}${inciso}`,
     );
   }
 
@@ -282,14 +365,15 @@ function applyD2(line: string): string {
     'gu',
   );
   if (result === line) {
-    result = result.replace(re2, (_, pre: string, content: string, _sep: string, word: string) => {
+    result = result.replace(re2, (_, pre: string, content: string, _sep: string, word: string, at: number) => {
       const c = content.trim();
+      const open = openSpeech(line, at, pre);
       if (isDialogTag(word)) {
-        return `${pre}${EM_DASH}${stripClosing(c)} ${EM_DASH}${word.toLowerCase()}`;
+        return `${open}${stripClosing(c)} ${EM_DASH}${word.toLowerCase()}`;
       }
       // Narración nueva con mayúscula
-      if (/[.?!…]$/.test(c)) return `${pre}${EM_DASH}${c} ${EM_DASH}${word}`;
-      return `${pre}${EM_DASH}${c.replace(/,+$/, '')}. ${EM_DASH}${word}`;
+      if (/[.?!…]$/.test(c)) return `${open}${c} ${EM_DASH}${word}`;
+      return `${open}${c.replace(/,+$/, '')}. ${EM_DASH}${word}`;
     });
   }
 
@@ -299,8 +383,8 @@ function applyD2(line: string): string {
     `${DIALOG_START}${SINGLE_QUOTES_CHAR_CLASS}([^'\\u2018\\u2019]+)${SINGLE_QUOTES_CHAR_CLASS},?\\s+(${TAG_PHRASE})${NOT_LETTER}`,
     'giu',
   );
-  result = result.replace(re3, (_, pre: string, content: string, tag: string) =>
-    `${pre}${EM_DASH}${stripClosing(content)} ${EM_DASH}${tag.toLowerCase()}`,
+  result = result.replace(re3, (_, pre: string, content: string, tag: string, at: number) =>
+    `${openSpeech(line, at, pre)}${stripClosing(content)} ${EM_DASH}${tag.toLowerCase()}`,
   );
 
   return result;
@@ -349,12 +433,11 @@ function applyD1(line: string): string {
       `([.?!…]\\s+)${QUOTES_CHAR_CLASS}([^"\\u201C\\u201D]+)${QUOTES_CHAR_CLASS}`,
       'gu',
     );
-    result = result.replace(reAdd, (full, pre: string, content: string) => {
+    const base = result;
+    result = result.replace(reAdd, (full, pre: string, content: string, at: number) => {
       const c = content.trim();
-      if (c && (/^[A-ZÁÉÍÓÚÑ]/.test(c) || c.startsWith('¿') || c.startsWith('¡'))) {
-        return `${pre}${EM_DASH}${content}`;
-      }
-      return full;
+      if (!c || !(/^[A-ZÁÉÍÓÚÑ]/.test(c) || c.startsWith('¿') || c.startsWith('¡'))) return full;
+      return `${openSpeech(base, at, pre)}${content}`;
     });
   }
 

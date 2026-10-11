@@ -112,6 +112,22 @@ const SUBORDINATORS = new Set([
   'quiénes', 'qué', 'cuál', 'cuáles',
 ]);
 const IMPERATIVE_OBJECTS = new Set(['tu', 'tus', 'eso', 'esto', 'aquello']);
+// Presente de 3.ª (`pregunta`, `dicen`), que en singular es también el
+// imperativo de tú. Fuera quedan el imperfecto (`-ía`, `-ían`, `-aban`) y el
+// pretérito de 1.ª en `-e` (`dije`, `repuse`).
+const PRESENT_TAG_RE = /^(?!dije$|repuse$)\p{L}+(?:[^í]a|[^í]e|[^bí]an|[^í]en)$/u;
+// `—Hola dijo Juan.`: saludo o muletilla, dicendi y nombre propio, y nada
+// más. ponytail: lista cerrada de arranques; `—Eso dijo Juan.` es contenido
+// («eso fue lo que dijo») y no se distingue.
+const ORPHAN_OPENERS = new Set([
+  'hola', 'chau', 'adiós', 'gracias', 'bueno', 'perdón', 'claro', 'basta',
+  'vamos', 'cuidado', 'sí', 'dale', 'buenas',
+]);
+const saludoSinRaya = (p: string, i: number, tag: string): boolean => {
+  const head = /^\s*—(\p{L}+)\s+$/u.exec(p.slice(0, i));
+  return !!head && ORPHAN_OPENERS.has(head[1].toLowerCase()) &&
+    /^\s+\p{Lu}\p{L}*\.\s*$/u.test(p.slice(i + tag.length));
+};
 // Posesivos de primera y segunda del plural: el narrador casi nunca cuenta en
 // «nosotros», así que lo que arrancan es un objeto del que habla, no el sujeto
 // de un inciso. Ej. `—Buenos días, Jony. Interrumpieron nuestros planes.`
@@ -129,7 +145,7 @@ const SUBJECT_STARTS = new Set([
   'su', 'sus', 'mi', 'mis', 'tu', 'tus',
   'este', 'esta', 'estos', 'estas', 'ese', 'esa', 'esos', 'esas',
   'aquel', 'aquella', 'aquellos', 'aquellas',
-  'ellos', 'ellas', 'ustedes', 'todos', 'todas', 'ambos', 'ambas',
+  'él', 'ella', 'ellos', 'ellas', 'ustedes', 'todos', 'todas', 'ambos', 'ambas',
   'varios', 'varias', 'algunos', 'algunas', 'muchos', 'muchas', 'otros', 'otras',
   'dos', 'tres', 'cuatro', 'cinco',
 ]);
@@ -168,10 +184,16 @@ const ruleDashOrphan: Rule = (p) => {
     if (j < 0) continue;
     // Legítimo: la raya de cierre del inciso ya está antes (—dijo).
     if (p[j] === EM_DASH) continue;
+    // `—Sí… Terminó salvándome más que nada.`: un verbo que también es de
+    // acción, sin raya, es contenido del parlamento.
+    if (AMBIGUOUS_TAGS.has(m[0].toLowerCase())) continue;
+    // Tras `—.` o `—,` el personaje retomó la palabra: lo que sigue es
+    // parlamento (`—dijo Ihsahan—. Pregunta.`), no un inciso sin raya.
+    if (PUNCT_AROUND_CLOSE.test(p[j]) && p[j - 1] === EM_DASH) continue;
     // Anti-falso-positivo 1: si el verbo NO viene después de sentence boundary
     // (`.?!…`), es un verbo regular dentro del contenido del diálogo, no un
     // dicendi-tag. Ej. `—Así le dicen al oro.` — `dicen` precedido por `le`.
-    if (!SENTENCE_END_RE.test(p[j])) continue;
+    if (!SENTENCE_END_RE.test(p[j]) && !saludoSinRaya(p, i, m[0])) continue;
     // Anti-falso-positivo 1c: después de los suspensivos, la minúscula dice
     // que el enunciado sigue (DPD puntos suspensivos §1): `solo… decía.` es
     // una oración, no un inciso. Después de `?`/`!` no vale: `—¿Nervioso?
@@ -196,10 +218,12 @@ const ruleDashOrphan: Rule = (p) => {
     // historia, viajera.`
     if (IMPERATIVE_OBJECTS.has(nextWord)) continue;
     if (PLURAL_POSSESSIVES.has(nextWord)) continue;
-    // Anti-falso-positivo 2c: `dicen` impersonal. El nombre propio del sujeto
-    // (`Dicen Ana y Luis`) se reconoce por la mayúscula.
+    // Anti-falso-positivo 2c: presente sin sujeto detrás. `dicen` impersonal
+    // («la gente dice») o el imperativo de tú (`—No sé. Pregunta a mamá.`);
+    // el inciso real lleva nombre propio (`Dicen Ana y Luis`) o un sujeto
+    // (`pregunta su hermana`).
     const nextIsProper = /^\p{Lu}/u.test(nextWordMatch?.[1] ?? '');
-    if (m[0].toLowerCase() === 'dicen' && nextWord && !nextIsProper && !SUBJECT_STARTS.has(nextWord)) {
+    if (PRESENT_TAG_RE.test(m[0].toLowerCase()) && nextWord && !nextIsProper && !SUBJECT_STARTS.has(nextWord)) {
       continue;
     }
     // Anti-falso-positivo 3: el dicendi-inciso es típicamente corto
@@ -688,10 +712,31 @@ const ruleUnclosedAside: Rule = (p) => {
   ];
 };
 
+// Un párrafo que abre con comilla y no la cierra (o cierra de más): el
+// converter no lo toca y, sin aviso, el diálogo queda entre comillas para
+// siempre. Vieja República trae 5 en 12.669 párrafos.
+const ruleQuoteUnclosed: Rule = (p) => {
+  if (p.includes(EM_DASH) || !/^\s*["“«]/.test(p)) return [];
+  const abren = (p.match(/[“«]/g) ?? []).length;
+  const cierran = (p.match(/[”»]/g) ?? []).length;
+  const rectas = (p.match(/"/g) ?? []).length;
+  if (abren === cierran && rectas % 2 === 0) return [];
+  return [{
+    offset: 0,
+    length: 1,
+    ruleId: 'quote-unclosed',
+    help: { entry: 'comillas', section: '2a' },
+    severity: 'warning',
+    message: 'Comillas sin cerrar (o cerradas de más): el párrafo no se puede convertir a raya hasta que cada apertura tenga su cierre.',
+    shortMessage: 'Comillas sin cerrar',
+  }];
+};
+
 const RULES: readonly Rule[] = [
   ruleDashShort,
   ruleDashOrphan,
   ruleDashQuoteMix,
+  ruleQuoteUnclosed,
   ruleParagraphCollapsed,
   ruleSpaceAfterOpen,
   ruleSpaceBeforeVerb,

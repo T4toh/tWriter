@@ -88,25 +88,26 @@ console.log('convertFragmentHtml');
   );
 }
 {
-  // El markup de apertura corre la comilla de la posición 0 y el ancla ^(\s*)"
-  // de D1 no dispara. Nada que convertir → null, y el caller avisa.
+  // El markup de apertura corría la comilla de la posición 0 y el ancla de D1
+  // no disparaba; hoy el converter trabaja sobre el texto sin tags y los
+  // vuelve a poner.
   const out = convertFragmentHtml('<em>"Vení"</em>, dijo ella.');
-  check('diálogo que arranca con <em> → null (D1 no puede anclar)', out === null, out);
+  check('diálogo que arranca con <em> → convierte y la cursiva queda', out === '—<em>Vení</em> —dijo ella.', out);
 }
 {
-  // El que motivó el finding: sin el guard de normalización, `convert()`
-  // devolvía el mismo párrafo con “” degradadas a "" y sin raya, y la
-  // transacción lo escribía.
   const out = convertFragmentHtml('<em>“Vení”</em>, dijo ella.');
-  check(
-    'idem con comillas tipográficas → null (no degrada “” a "")',
-    out === null,
-    out,
-  );
+  check('idem con comillas tipográficas', out === '—<em>Vení</em> —dijo ella.', out);
 }
 {
   const out = convertFragmentHtml('<strong>"Vení"</strong>, dijo ella.');
-  check('diálogo que arranca con <strong> → null', out === null, out);
+  check('diálogo que arranca con <strong>', out === '—<strong>Vení</strong> —dijo ella.', out);
+}
+{
+  // El que motivó el guard de normalización: sin él, `convert()` devolvía el
+  // mismo párrafo con “” degradadas a "" y sin raya, y la transacción lo
+  // escribía. Un párrafo donde ninguna regla muerde tiene que dar null.
+  const out = convertFragmentHtml('La palabra “fin” dice mucho.');
+  check('sin diálogo → null (no degrada “” a "")', out === null, out);
 }
 
 rmSync(outDir, { recursive: true, force: true });

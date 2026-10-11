@@ -19,11 +19,12 @@ import { normalizeQuotesForCompare } from '../dialogos/validator';
  * El segundo guard es el mismo que usa `pushPendingConversion` en el validador:
  * `convert()` normaliza «» “” ‘’ a comillas rectas ANTES de aplicar las reglas,
  * así que un párrafo donde ninguna regla mordió igual sale distinto del input.
- * Pasa siempre que el markup inline arranca antes del diálogo
- * (`<em>“Vení”</em>, dijo ella.`): el ancla `^(\s*)"` de D1 no ve la comilla
- * porque el tag la corrió de la posición 0. Sin el guard, el caller reemplazaba
- * el párrafo por una versión con las comillas tipográficas degradadas a rectas
- * y sin convertir a raya — peor que no hacer nada.
+ * Pasaba siempre que el markup inline arrancaba antes del diálogo
+ * (`<em>“Vení”</em>, dijo ella.`) hasta que el converter aprendió a trabajar
+ * sobre el texto sin tags; hoy queda para cualquier párrafo donde ninguna
+ * regla muerde. Sin el guard, el caller reemplazaba el párrafo por una versión
+ * con las comillas tipográficas degradadas a rectas y sin convertir a raya —
+ * peor que no hacer nada.
  */
 export function convertFragmentHtml(html: string): string | null {
   const out = convert(html).text;

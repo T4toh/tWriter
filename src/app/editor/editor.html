@@ -136,9 +136,9 @@
         type="button"
         class="tb-btn tb-text"
         (click)="openRaya()"
-        title="Aplicar reglas de raya de diálogos al capítulo entero (preview con diff)"
+        title="Convertir los diálogos de TODO el capítulo a raya (comillas → raya). Abre un diff para revisar antes de aplicar"
       >
-        Raya
+        Aplicar raya
       </button>
       @if (canCheckRaya()) {
         <button
@@ -146,9 +146,9 @@
           class="tb-btn tb-text"
           [class.active]="rayaAuto()"
           (click)="toggleAutoRaya()"
-          title="Validador inline: marca violaciones de raya y mayúsculas rancias mientras escribís"
+          title="Marcar mientras escribís los errores de raya y las mayúsculas rancias de este capítulo (no cambia nada solo)"
         >
-          <span class="raya-auto-label">Raya</span>
+          Raya
         </button>
       }
     }

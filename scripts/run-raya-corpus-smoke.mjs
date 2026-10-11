@@ -207,7 +207,7 @@ const C = [
   [6, 'Le dijo «te quiero» y ella dijo «yo también».', null, 'comillas'],
   // 7. HTML del editor
   [7, '<p>"Hola", dijo <em>Juan</em>.</p><p>"¿Venís?", preguntó Ana.</p>', '<p>—Hola —dijo <em>Juan</em>.</p><p>—¿Venís? —preguntó Ana.</p>', 'html'],
-  [7, '<p><em>"Vení"</em>, dijo ella.</p>', '<p><em>—Vení</em> —dijo ella.</p>', 'html (em)'],
+  [7, '<p><em>"Vení"</em>, dijo ella.</p>', '<p>—<em>Vení</em> —dijo ella.</p>', 'html (em)'],
   [7, '<p>"Tom &amp; Jerry", dijo&nbsp;Ana.</p>', '<p>—Tom &amp; Jerry —dijo&nbsp;Ana.</p>', 'html (&amp; &nbsp;)'],
   [7, '<p>"Hola",&nbsp;dijo Ana.</p>', '<p>—Hola —dijo Ana.</p>', 'html (&nbsp; antes del verbo)'],
   [7, '<p>--Hola, Roberto. --sus manos temblaban.</p>', '<p>—Hola, Roberto. —Sus manos temblaban.</p>', 'html 2.3d'],
@@ -281,13 +281,31 @@ const C = [
   // Inciso sin raya de apertura: falta la que separa el parlamento del
   // narrador. Se marca y no se arregla en bloque.
   [10, '—Hola dijo Juan.', { marca: 'dash-orphan' }, '2.3a'],
+  [10, "—No sé. Pregunta a mamá.", null, "imperativo, no inciso"],
+  // Vieja República (borradores reales del autor, 2026-10-10).
+  [5, '“Tiene que ser un talento natural, maestro.” Pensó en voz alta Thirin.', '—Tiene que ser un talento natural, maestro —pensó en voz alta Thirin.', '2.3c (pensó en voz alta)'],
+  [5, '“¿Dónde está Lyrian?” Pensó al aire Shin.', '—¿Dónde está Lyrian? —pensó al aire Shin.', '2.3c (pensó al aire)'],
+  [9, '“¿Y si no vuelve?”, pensó Ana.', null, 'pensamiento (DPD comillas 2b)'],
+  [5, '“Duermen.” Terminó la frase ofuscada. “No es tan cierto como dices.”', '—Duermen —terminó la frase ofuscada—. No es tan cierto como dices.', '2.3c (terminó)'],
+  [5, '“Parece cierto.” Opinó al aire Deto.', '—Parece cierto —opinó al aire Deto.', '2.3c (opinó)'],
+  [5, '“¿Por qué no?” Repreguntó divertida Kalarirah.', '—¿Por qué no? —repreguntó divertida Kalarirah.', '2.3c (repreguntó)'],
+  [10, '“Nada que lamentar.” Dijo con seriedad Ihsahan. “Pregunta.”', '—Nada que lamentar —dijo con seriedad Ihsahan—. Pregunta.', 'imperativo tras —.'],
+  [10, '—Nada que lamentar —dijo con seriedad Ihsahan—. Pregunta, Satele.', null, 'imperativo tras —.'],
+  [5, '“Parece que es cierto…” Dijo asombrada Shakka. “Ya no sé en quien confiar…” Agregó mientras miraba a Ihsahan. “No tiene presencia como decían…”', '—Parece que es cierto… —dijo asombrada Shakka—. Ya no sé en quien confiar… —agregó mientras miraba a Ihsahan—. No tiene presencia como decían…', '2.3b (tres parlamentos)'],
+  [10, '“Eso es todo, espero que tus herramientas no estén asustadas.', { marca: 'quote-unclosed' }, 'comillas sin cerrar'],
+  [10, '“¿Shin aprendió eso?” Preguntó sorprendida Alara.”', { marca: 'quote-unclosed' }, 'comilla de cierre de más'],
+  [5, '“Es peculiar.” Agregó mientras lo hacía flotar. “Está sincronizado contigo.” Dijo al aire. “Nunca lo vi.”', '—Es peculiar —agregó mientras lo hacía flotar—. Está sincronizado contigo —dijo al aire—. Nunca lo vi.', '2.3b (cuatro parlamentos)'],
+  [5, '“Shin…” Dijo nerviosa. “Necesito decirte algo…” Agregó mirando. “Mis disculpas han sido sinceras.” Agregó apretando las mangas. “Nunca quise decir eso.”', '—Shin… —dijo nerviosa—. Necesito decirte algo… —agregó mirando—. Mis disculpas han sido sinceras —agregó apretando las mangas—. Nunca quise decir eso.', '2.3b (cadena de D3)'],
+  [5, '“Soy un estúpido.” Agregó mirando a su maestro. “Mi sangre está hirviendo.” Sus ojos brillaron. “Solo me queda una cosa.”', '—Soy un estúpido —agregó mirando a su maestro—. Mi sangre está hirviendo. —Sus ojos brillaron—. Solo me queda una cosa.', '2.3b + 2.3d (cadena de D4)'],
+  [10, '—Sí… Terminó salvándome más que nada.', null, 'verbo ambiguo como contenido'],
+  [10, '—Cierra la boca. —Ladró la muchacha.', '—Cierra la boca —ladró la muchacha.', '2.3c (ladró)'],
+  [10, '“Me dijo «vete» y me fui”, dijo.', '—Me dijo «vete» y me fui —dijo.', 'cita interna balanceada'],
+  [10, "—¿Venís? pregunta ella.", { marca: "dash-orphan" }, "2.3c presente"],
+  [10, "\"Est\u00e1 bien\", dijo, \"lo har\u00e9\".", "—Está bien —dijo—, lo haré.", "2.3c (sin relativa, coma)"],
+  [7, "<p>\"Hola\", dijo <em>Juan</em>. \"Chau.\"</p>", "<p>—Hola —dijo <em>Juan</em>—. Chau.</p>", "html (em en el inciso)"],
 ];
 
-const PENDIENTES = new Set([
-  "\"Esto que hiciste\", gritó, \"es una locura\".",
-  "<p><em>\"Vení\"</em>, dijo ella.</p>",
-  "—Hola dijo Juan.",
-]);
+const PENDIENTES = new Set([]);
 
 const letters = (s) => (s.replace(/<[^>]+>|&[a-z]+;/g, ' ').match(/\p{L}/gu) ?? []).join('').toLowerCase();
 const ellipses = (s) => (s.match(/\.\.\.|…/g) ?? []).length;

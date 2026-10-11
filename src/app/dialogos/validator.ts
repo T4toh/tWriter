@@ -43,6 +43,7 @@ function categoryFor(ruleId: string): RayaCategory {
     case 'dash-orphan':
     case 'dash-quote-mix':
     case 'paragraph-collapsed':
+    case 'quote-unclosed':
       return 'structure';
     case 'verb-capitalized':
     case 'period-before-verb':
