@@ -65,6 +65,11 @@ wait-timeout = "0.2"
 objc2 = "0.6"
 objc2-foundation = "0.3"
 
+# Aviso de suspensión vía logind (power.rs). Ya venía como transitiva de
+# keyring (sync-secret-service), así que no suma libdbus al build de Linux.
+[target.'cfg(target_os = "linux")'.dependencies]
+dbus = "0.9"
+
 [dev-dependencies]
 tempfile = "3"
 

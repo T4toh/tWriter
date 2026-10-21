@@ -19,6 +19,7 @@ mod import_notes;
 mod import_wizard;
 mod macos_text;
 mod notes;
+mod power;
 mod reorder;
 mod replace;
 mod saga_config;
@@ -110,6 +111,7 @@ pub fn run() {
             macos_text::apply_to_webviews(app.handle());
             let handle = app.handle().clone();
             debug_bridge::set_app_handle(handle.clone());
+            power::watch(handle.clone());
             tracing::info!(target: "boot", "tWriter listo");
             // Auto-init search index si hay root configurado. Best-effort.
             match settings::get_settings(handle.clone()) {
@@ -145,6 +147,7 @@ pub fn run() {
             git_ensure_twriter_ignored,
             git_ensure_dict_union_merge,
             git_fetch,
+            power::power_sleep_ready,
             detect_storage_backend,
             import_chapter,
             open_terminal,

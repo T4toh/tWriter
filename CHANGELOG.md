@@ -12,6 +12,7 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ### Fixed
 
+- Closing the laptop lid (or suspending the PC) with the editor open now uploads pending changes before the machine sleeps, and syncs again on wake. Before, the last edits could stay behind on the sleeping machine and clash later with what was written on the other PC.
 - Dialogue conversion now handles paragraphs whose opening quote sits inside inline markup (`<em>"Vení"</em>, dijo ella.`), typical of imported `.docx`; the markup is kept in place.
 - `"Esto que hiciste", gritó, "es una locura"` converts without the English comma after the aside (DPD raya 2.3e).
 - The missing-dash check now flags `—Hola dijo Juan.` and no longer flags an imperative inside the speech (`—No sé. Pregunta a mamá.`).

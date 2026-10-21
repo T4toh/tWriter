@@ -1,4 +1,6 @@
 import { Component, ViewChild, computed, effect, HostListener, inject, signal } from '@angular/core';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ChapterService } from './core/chapter-service';
 import { CursorRestoreService } from './core/cursor-restore-service';
@@ -224,6 +226,7 @@ export class App {
     void this.bootstrap();
     void this.bindCloseFlush();
     void this.bindFocusSync();
+    void this.bindPowerSync();
     effect(() => {
       const e = this.chapter.panes[0].error() ?? this.chapter.panes[1].error();
       if (e && e !== this.lastChapterErr) this.debug.error('chapter', e);
@@ -481,6 +484,46 @@ export class App {
             });
           }, this.BLUR_DEBOUNCE_MS);
         }
+      });
+    } catch {
+      // En SSR / no-Tauri (tests), el listener no se setea.
+    }
+  }
+
+  /** Avisos de suspensión del sistema (`power.rs`).
+   *  - Antes de dormir: flush + sync, y recién ahí `power_sleep_ready` para
+   *    que Rust suelte la suspensión (o vence el margen del sistema). Si ya
+   *    había un sync en vuelo —el del blur, típico al cerrar la tapa— se
+   *    espera a que termine, porque `syncNow` con otro en vuelo es no-op y
+   *    la máquina se dormiría a mitad del push.
+   *  - Al despertar: sync, por si el push de antes de dormir no llegó. */
+  private async bindPowerSync(): Promise<void> {
+    try {
+      await listen<number>('power-will-sleep', async ({ payload: id }) => {
+        if (this.blurDebounceTimer) {
+          clearTimeout(this.blurDebounceTimer);
+          this.blurDebounceTimer = null;
+        }
+        try {
+          await this.settings.flushPending();
+          if (this.storage.backend() === 'git') {
+            while (this.git.syncing()) await new Promise((r) => setTimeout(r, 100));
+            await this.git.flushAndSync();
+          } else {
+            await this.chapter.flushAllDirty();
+            await this.note.flushAllDirty();
+          }
+        } catch (err) {
+          console.debug('sync antes de suspender falló', err);
+        } finally {
+          await invoke('power_sleep_ready', { id }).catch(() => undefined);
+        }
+      });
+      await listen('power-did-wake', () => {
+        if (this.storage.backend() !== 'git' || this.git.syncing()) return;
+        void this.git.flushAndSync().catch((err) => {
+          console.debug('sync al despertar falló', err);
+        });
       });
     } catch {
       // En SSR / no-Tauri (tests), el listener no se setea.

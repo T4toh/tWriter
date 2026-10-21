@@ -23,14 +23,15 @@ pub fn set_app_handle(handle: AppHandle) {
 }
 
 pub fn init_tracing() {
-    // `boot=info` explícito: los logs con `target: "boot"` (arranque nativo,
-    // p.ej. `macos_text.rs`) usan un target literal, no el módulo
+    // `boot=info` y `power=info` explícitos: los logs con `target: "boot"`
+    // (arranque nativo, p.ej. `macos_text.rs`) y `target: "power"` (avisos de
+    // suspensión, `power.rs`) usan un target literal, no el módulo
     // `twriter_lib::...`, así que la directiva `twriter_lib=info` no los
     // alcanza y quedan atrás del default `warn,error` (silenciados salvo que
     // sean un error). Son pocos y todos pensados para verse sin `RUST_LOG`
     // custom, así que se suman a la lista en vez de subir el default global.
     let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("twriter_lib=info,boot=info,warn,error"));
+        .unwrap_or_else(|_| EnvFilter::new("twriter_lib=info,boot=info,power=info,warn,error"));
 
     let _ = tracing_subscriber::registry()
         .with(filter)

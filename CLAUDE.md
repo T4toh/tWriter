@@ -28,6 +28,7 @@ src/app/                     src-tauri/src/
                                storage.rs detección git/cloud/local
                                secrets.rs apiKey al keyring del OS
                                tesauro.rs sinónimos MyThes es+en
+                               power.rs   sync antes de suspender
 ```
 
 **Detección de storage backend** (`storage.rs`): al elegir/cargar root,

@@ -314,6 +314,16 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
 
 ## Deuda transversal
 
+- **Conflicto de sync visible, sin git a mano.** `power.rs` sube los cambios
+  antes de suspender, pero si en ese momento no hay red el commit queda en la
+  PC dormida y, si mientras tanto se escribió el mismo capítulo en la otra, al
+  despertar el rebase choca igual (pasó el 2026-10-21 con *Trabajo Sucio 5*).
+  Hoy la app aborta, muestra «Conflicto…» y la salida es la terminal. Falta
+  una pantalla que muestre, por párrafo, qué quedó en esta PC sin subir y qué
+  trae el remoto, y deje elegir. **Nunca fusionar solo**: texto que aparece
+  sin haberlo visto en la sesión es peor que el conflicto. Los `.html` son de
+  una sola línea, así que el diff tiene que ser por bloque (`</p>`, `</h1>`,
+  `<hr/>`, `</blockquote>`), no el de git.
 - **`shared/select.ts` lee un campo plano bajo OnPush** (quedó de la
   migración a OnPush, cerrada el 2026-09-14 — detalle en `git log -p TODO.md`).
   `disabledByForm` se muta en `setDisabledState` (Forms API) y `isDisabled()`
