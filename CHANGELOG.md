@@ -10,6 +10,8 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-10-21
+
 ### Fixed
 
 - Closing the laptop lid (or suspending the PC) with the editor open now uploads pending changes before the machine sleeps, and syncs again on wake. Before, the last edits could stay behind on the sleeping machine and clash later with what was written on the other PC.
@@ -566,7 +568,8 @@ _Sin cambios visibles registrados._
 
 _Sin cambios visibles registrados._
 
-[unreleased]: https://github.com/T4toh/tWriter/compare/v0.26.0...HEAD
+[unreleased]: https://github.com/T4toh/tWriter/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/T4toh/tWriter/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/T4toh/tWriter/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/T4toh/tWriter/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/T4toh/tWriter/compare/v0.23.0...v0.24.0
