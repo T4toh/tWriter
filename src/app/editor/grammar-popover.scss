@@ -5,44 +5,8 @@
   max-width: 320px;
 }
 
-/* El id de la regla, visible para poder desactivarla o reportarla upstream.
-   Mismo tratamiento que `.raya-pop-rule`; sin extraer a `popover-shell` porque
-   ahí vive solo la caja y esto es el segundo caso, no el tercero. */
-.grammar-pop-head {
-  flex-wrap: wrap;
-  margin-bottom: 4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.grammar-pop-rule {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--fg-muted);
-  user-select: text;
-}
-
-.msg {
-  font-weight: 500;
-  margin-bottom: 6px;
-  color: var(--fg);
-}
-
-/* Chips de sugerencia: la escala vive en `popover-shell.scss`. */
-.grammar-pop-chips {
-  margin-bottom: 6px;
-}
-
-.no-reps {
-  font-style: italic;
-  color: var(--fg-muted);
-  margin-bottom: 6px;
-}
-
+/* Atribución a LanguageTool, como ícono del título. */
 .lt-attrib {
-  /* Primer item del footer: empuja los botones a la derecha. */
-  margin-right: auto;
   display: inline-flex;
   align-items: center;
   opacity: 0.65;
@@ -53,6 +17,6 @@
 }
 
 .lt-attrib img {
-  height: 14px;
+  height: 13px;
   width: auto;
 }

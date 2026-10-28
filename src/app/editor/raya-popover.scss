@@ -24,41 +24,13 @@
   border-left: 3px solid #c89020;
 }
 
-.raya-pop-head {
-  flex-wrap: wrap;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 4px;
-  gap: 6px;
-}
-
-.raya-pop-tag {
-  font-weight: 600;
-  color: var(--fg);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.raya-pop-rule {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--fg-muted);
-}
-
-.raya-pop-msg {
-  color: var(--fg);
-  margin-bottom: 6px;
-}
-
 /* El par ✗/✓ en una grilla de dos columnas: el signo y el ejemplo. Los
    ejemplos van en la fuente del cuerpo, que es como se van a leer en el libro. */
 .raya-pop-ej {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 2px 6px;
-  margin-bottom: 6px;
+  margin-top: 6px;
   font-family: var(--font-body);
   font-size: 12px;
   line-height: 1.45;
@@ -72,29 +44,4 @@
 .raya-pop-ej-si {
   color: var(--ok);
   font-weight: 700;
-}
-
-.raya-pop-fuente {
-  font-size: 11px;
-  color: var(--fg-muted);
-  margin-bottom: 4px;
-
-  a {
-    color: var(--fg-muted);
-  }
-}
-
-.raya-pop-link {
-  border: none;
-  background: transparent;
-  padding: 0;
-  color: var(--fg-muted);
-  font: inherit;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.raya-pop-link:hover,
-.raya-pop-fuente a:hover {
-  color: var(--fg);
 }
