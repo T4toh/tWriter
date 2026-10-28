@@ -368,6 +368,22 @@ para no volver a abrirlos ni rehacer la medición. Lo que sigue pendiente vive e
   Lo que sigue son las mediciones, que valen igual si algún día LT publica un
   bundle armado.
 
+  **Corrección (2026-10-28): Maven y el build de LT no hacen falta.** Es cierto
+  que LT dejó de publicar zips después de 6.6, pero hay dos fuentes con LT ya
+  compilado:
+  - **Maven Central**: `org.languagetool:languagetool-server`, `language-es` y
+    `language-en` están en 6.8 (publicados 2026-05-05). Se bajan los jars con
+    sus dependencias, sin compilar nada de LT.
+  - **La imagen `erikvl87/languagetool`**: trae LT armado en `/LanguageTool`
+    (`languagetool-server.jar` + `libs/`, 400 MB, OpenJDK 17). Un
+    `docker create` + `docker cp` lo saca entero.
+
+  Los jars son bytecode, así que **son los mismos para los cuatro targets**: lo
+  único por target es el JRE, que se arma con `jlink` o sale listo de
+  Adoptium/Temurin. El descarte sigue en pie (el autor: instalar el runtime de
+  containers es fácil, y mantener un pipeline de CI por target sigue siendo un
+  costo), pero si se reabre, el argumento "hay que buildear LT" ya no vale.
+
   El relevamiento
   original listaba como alternativas offline `zspell` / Harper / LLM y **nunca
   consideró bundlear LT mismo**, que es la opción que cumple mejor el criterio
