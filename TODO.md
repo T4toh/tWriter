@@ -14,32 +14,11 @@ huela a "esto ya lo miramos", buscar ahí primero.
 
 ## Gramática, ortografía y tesauro
 
-- **Probar en el Arch la recreación del container de LT** (#209). En la Mac,
-  con Apple `container`, ya se probó: detecta la imagen vieja, recrea el
-  container en 6.8 y queda con 3072 MB. Falta el camino de Docker/Podman, que
-  lee la imagen con `inspect --format {{.Config.Image}}`: tocar «Actualizar
-  LanguageTool» con un container creado desde `latest` y ver que lo recree.
-
-- **Bajar LanguageTool desde la app, sin containers** (implementado en la rama
-  `feat/lt-descargado`; falta la prueba del autor en las cuatro plataformas,
-  con la lista de «Verificación → Manual del autor» del spec). Diseño aprobado en
-  `docs/superpowers/specs/2026-10-28-lt-descargado-design.md`: jars de Maven
-  Central + JRE Temurin, fijados por sha256 en `src-tauri/lt-lock.json`, y un
-  workflow semanal que abre PR con la versión nueva. Lo automático (tests Rust,
-  e2e que baja e instala, smoke del lock) pasa en Mac arm64 y Linux x64; falta
-  la app de verdad en Mac arm64, el Arch, una Mac Intel y Windows (ojo con la
-  ventana de consola).
-
-- **Sacar Docker de `grammar.rs` después de probar el LT embebido** (decisión
-  del autor, 2026-10-28). Hoy conviven **a propósito**: si el embebido queda a
-  medias o con errores en alguna plataforma, el container sigue andando. Recién
-  cuando el autor lo haya probado en las cuatro plataformas, un PR aparte borra
-  las ~700 líneas de detección multi-runtime, pull, start y remedies, el bloque
-  de Docker del modal y la segunda rama de `resolve_base`, y el embebido puede
-  volver a arrancar desde el puerto 8081.
-  En el mismo PR: sacar «Alternativa: LanguageTool en un container» y el paso 5
-  del setup del README, y borrar `scripts/start-languagetool.sh` y
-  `stop-languagetool.sh`.
+- **Probar el LT embebido en el Arch.** El autor lo probó en la Mac (arm64),
+  una Mac Intel y Windows el 2026-10-28, y con eso se sacó Docker. Falta el
+  Arch: «Bajar LanguageTool», un capítulo en es y otro en en, cerrar y ver que
+  no quede `java` vivo, y que el aviso del container viejo aparezca si ese
+  equipo todavía tiene el de Docker en 8081.
 
 - **Menores del LT embebido que quedaron de la revisión de #213** (ninguno
   rompe el uso normal; agarrarlos si aparece el síntoma):

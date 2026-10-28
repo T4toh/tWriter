@@ -245,13 +245,14 @@ El scaffold inicial usa nombres `app.component.*` — refactorizar a convencione
   (`lt_embebido.rs`): jars de LT de Maven Central + un JRE de Temurin, fijados
   por sha256 en `src-tauri/lt-lock.json`, que se compila adentro con
   `include_str!` y es el ancla de confianza. Va a `app_local_data_dir/languagetool/`
-  y escucha desde el puerto 8082. El lock lo arma `scripts/armar-lt-lock.mjs`
+  y escucha desde el puerto 8081. El lock lo arma `scripts/armar-lt-lock.mjs`
   (necesita Maven, solo en la máquina que lo corre) y lo mantiene al día
   `.github/workflows/lt-al-dia.yml`, que abre un PR por semana si hay versión
-  nueva con 7 días o más. **Convive con Docker a propósito** hasta que el autor
-  lo pruebe en las cuatro plataformas: si el embebido no corre, «Local» cae al
-  container de siempre en `localhost:8081`. Ese código se borra en un PR aparte
-  (ver TODO.md).
+  nueva con 7 días o más. **Ya no hay Docker** (se sacó en 0.28: ~1.800 líneas
+  de detección de runtimes, daemons y remedios). Si un LanguageTool ajeno
+  contesta en 8081 —el container de una versión vieja, que con `--restart`
+  vuelve en cada boot—, el panel lo avisa con los comandos para borrarlo; el
+  embebido toma el siguiente puerto libre.
 - **epubcheck**: NO bundleado (es un jar y necesita JVM). Se detecta el
   binario instalado —`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`, con
   fallback al PATH, igual que `pandoc_bin`— y cada export se valida con él

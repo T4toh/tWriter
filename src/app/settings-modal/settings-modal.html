@@ -265,22 +265,22 @@
                     [attr.value]="embebidoProgreso()?.hechos ?? null"
                     [attr.max]="embebidoProgreso()?.total ?? null"
                   ></progress>
-                  <div class="docker-status">{{ embebidoMessage() }}</div>
+                  <div class="lt-estado">{{ embebidoMessage() }}</div>
                 } @else if (!e.lt_instalado || !e.jre_instalado) {
                   <p class="lt-embebido-texto">
-                    LanguageTool corre dentro de tWriter, sin Docker. Baja una vez ~{{ e.mb_a_bajar }} MB
+                    LanguageTool corre dentro de tWriter. Baja una vez ~{{ e.mb_a_bajar }} MB
                     (LanguageTool {{ e.lt_lock }} + Java {{ e.jre_lock }}) y queda en tu compu.
                   </p>
                   <button type="button" class="btn btn-primary" (click)="installEmbebido()">
                     Bajar LanguageTool
                   </button>
                 } @else {
-                  <div class="docker-status" [class.ok]="e.corriendo">
+                  <div class="lt-estado" [class.ok]="e.corriendo">
                     LanguageTool {{ e.lt_instalado }} · Java {{ e.jre_instalado }} ·
                     {{ e.corriendo ? 'listo' : 'detenido' }}
                   </div>
                   @if (e.error) {
-                    <div class="docker-status err">{{ e.error }}</div>
+                    <div class="lt-estado err">{{ e.error }}</div>
                   }
                   <div class="lt-embebido-acciones">
                     @if (e.mb_a_bajar > 0) {
@@ -316,230 +316,27 @@
                   </div>
                 }
                 @if (embebidoError(); as err) {
-                  <div class="docker-status err">{{ err }}</div>
+                  <div class="lt-estado err">{{ err }}</div>
                   @if (!e.lt_instalado || !e.jre_instalado || e.mb_a_bajar > 0) {
                     <button type="button" class="btn btn-secondary btn-sm" (click)="installEmbebido()">
                       Reintentar
                     </button>
                   }
                 }
+                @if (e.container_viejo) {
+                  <div class="lt-container-viejo">
+                    <p class="lt-estado err">
+                      Hay otro LanguageTool en el puerto 8081: el container de una versión anterior de
+                      tWriter. Ya no hace falta y ocupa ~2 GB de RAM. Se borra con uno de estos, según
+                      con qué lo hayas levantado (Docker, Podman o Apple container):
+                    </p>
+                    <app-copy-command command="docker rm -f twriter-languagetool" />
+                    <app-copy-command command="podman rm -f twriter-languagetool" />
+                    <app-copy-command command="container delete -f twriter-languagetool" />
+                  </div>
+                }
               }
             </section>
-
-            <details class="gs-details">
-              <summary>Alternativa: correrlo con Docker</summary>
-              <div class="gs-why">
-                Si ya tenés Docker, Podman o Apple container, podés usar la
-                <a href="https://hub.docker.com/r/erikvl87/languagetool" target="_blank" rel="noopener">
-                  imagen mantenida erikvl87/languagetool
-                </a>
-                en vez del LanguageTool que baja tWriter. Mientras tWriter tenga el suyo corriendo, usa
-                ese.
-              </div>
-
-              <details class="gs-details">
-                <summary>Requisitos del sistema</summary>
-                <ul class="gs-reqs">
-                  <li>
-                    <strong>Docker Engine</strong> instalado y corriendo
-                    (<a href="https://docs.docker.com/get-docker/" target="_blank" rel="noopener">docker.com/get-docker</a>).
-                  </li>
-                  <li>
-                    <strong>Linux:</strong> usuario en el grupo <code>docker</code>
-                    (<code>sudo usermod -aG docker $USER</code> + relogin), si no los comandos piden sudo y tWriter no los puede ejecutar.
-                  </li>
-                  <li>
-                    <strong>macOS / Windows:</strong> Docker Desktop abierto.
-                  </li>
-                  <li>
-                    ~2GB RAM disponibles. La primera vez baja ~300MB y tarda ~30s en cargar modelos.
-                  </li>
-                </ul>
-              </details>
-
-              <details class="gs-details">
-                <summary>Qué pasa cuando levantamos el container</summary>
-                <ol class="gs-steps-explained">
-                  <li>
-                    <strong>Chequeo Docker:</strong>
-                    <code>docker --version</code> + <code>docker info</code> para confirmar
-                    que el daemon responde.
-                  </li>
-                  <li>
-                    <strong>Pull de la imagen:</strong> <code>docker pull erikvl87/languagetool:6.8</code>
-                    (la primera vez y cada vez que tWriter sube de versión de LanguageTool).
-                  </li>
-                  <li>
-                    <strong>Run del container:</strong>
-                    <code>docker run -d --name twriter-languagetool -p 127.0.0.1:8081:8010 -e Java_Xmx=2g …</code>
-                    → escucha en localhost:8081, restart automático.
-                  </li>
-                  <li>
-                    <strong>Carga de modelos:</strong> esperamos a que el API responda en
-                    <code>/v2/languages</code> (~30s, una sola vez por arranque).
-                  </li>
-                </ol>
-                <p class="gs-muted-note">
-                  Fuentes:
-                  <a href="https://languagetool.org/" target="_blank" rel="noopener">languagetool.org</a>
-                  ·
-                  <a href="https://github.com/languagetool-org/languagetool" target="_blank" rel="noopener">repo oficial</a>
-                  ·
-                  <a href="https://github.com/Erikvl87/docker-languagetool" target="_blank" rel="noopener">imagen Docker que usamos</a>.
-                </p>
-              </details>
-
-              @if (dockerStatus(); as ds) {
-                <div class="docker-panel">
-                  @if (!ds.docker_installed) {
-                    <div class="docker-status err">
-                      {{ ds.remedy?.message ?? 'No se detectó ningún runtime de containers (Docker, Podman o Apple container).' }}
-                    </div>
-                    <ul class="install-options">
-                      @for (opt of ds.install_options; track opt.label) {
-                        <li>
-                          <a [href]="opt.url" target="_blank" rel="noopener">{{ opt.label }}</a>
-                          @if (opt.command; as cmd) {
-                            <app-copy-command [command]="cmd" />
-                          }
-                        </li>
-                      }
-                    </ul>
-                  } @else if (!ds.daemon_running) {
-                    <!-- El daemon no responde: sin él el CLI no puede ni listar
-                         containers, así que container_running/exists no dicen nada. -->
-                    <div class="docker-status warn">
-                      {{ ds.remedy?.message ?? 'El daemon del runtime no responde.' }}
-                    </div>
-                    @if (ds.runtime_choices.length > 0) {
-                      <!-- Varios runtimes instalados y ninguno respondiendo:
-                           adivinar acá es el bug — arrancar el equivocado baja
-                           ~300MB y crea un container paralelo. Pregunta y
-                           recuerda la respuesta. -->
-                      <div class="runtime-choices">
-                        @for (choice of ds.runtime_choices; track choice.key) {
-                          <button
-                            type="button"
-                            class="btn btn-secondary docker-btn"
-                            [disabled]="dockerBusy() !== null"
-                            (click)="startDocker(choice.key)"
-                          >
-                            Usar {{ choice.label }}
-                          </button>
-                        }
-                      </div>
-                    } @else if (ds.remedy; as rem) {
-                      @if (rem.command; as cmd) {
-                        <app-copy-command [command]="cmd" />
-                      }
-                      @if (rem.can_run) {
-                        <button
-                          type="button"
-                          class="btn btn-primary docker-btn"
-                          [disabled]="dockerBusy() !== null"
-                          (click)="startDocker()"
-                        >
-                          {{ dockerBusy() === 'starting' ? 'Levantando…' : 'Levantar LanguageTool' }}
-                        </button>
-                      } @else {
-                        <!-- No podemos arrancarlo solos (ej. Docker en Linux
-                             necesita sudo): el usuario corre el comando de arriba
-                             en su propia terminal y vuelve. El status solo se
-                             refresca al abrir el panel o después de start/stop,
-                             así que sin este botón queda diciendo "caído" hasta
-                             que el usuario cierra y reabre la ventana. No es un
-                             botón de arranque, no viola el constraint de
-                             `can_run: false`. -->
-                        <button
-                          type="button"
-                          class="btn btn-secondary docker-btn"
-                          [disabled]="dockerBusy() !== null"
-                          (click)="refreshDockerStatus()"
-                        >
-                          Volver a chequear
-                        </button>
-                      }
-                    }
-                  } @else if (ds.container_running && ds.api_responding) {
-                    <div class="docker-status ok">
-                      <svg lucideCircle [size]="10"></svg>
-                      LanguageTool corriendo en localhost:8081{{ ds.runtime ? ' (vía ' + ds.runtime + ')' : '' }}
-                    </div>
-                    @if (ds.container_outdated) {
-                      <div class="docker-status warn">
-                        Hay una versión nueva de LanguageTool. Actualizar baja la imagen y recrea el container.
-                      </div>
-                      <button
-                        type="button"
-                        class="btn btn-primary docker-btn"
-                        [disabled]="dockerBusy() !== null"
-                        (click)="startDocker()"
-                      >
-                        {{ dockerBusy() === 'starting' ? 'Actualizando…' : 'Actualizar LanguageTool' }}
-                      </button>
-                    }
-                    <button
-                      type="button"
-                      class="btn btn-secondary docker-btn"
-                      [disabled]="dockerBusy() !== null"
-                      (click)="stopDocker()"
-                    >
-                      {{ dockerBusy() === 'stopping' ? 'Deteniendo…' : 'Detener LanguageTool' }}
-                    </button>
-                  } @else if (ds.container_running) {
-                    <div class="docker-status warn">
-                      Container corriendo pero el API todavía no responde (cargando modelos).
-                    </div>
-                  } @else {
-                    <div class="docker-status">
-                      Container detenido{{ ds.container_exists ? ' (existe pero apagado)' : ' (no existe todavía)' }}.
-                    </div>
-                    <button
-                      type="button"
-                      class="btn btn-primary docker-btn"
-                      [disabled]="dockerBusy() !== null"
-                      (click)="startDocker()"
-                    >
-                      {{ dockerBusy() === 'starting' ? 'Levantando…' : 'Levantar LanguageTool' }}
-                    </button>
-                  }
-
-                  @if (dockerBusy() === 'starting' || dockerPhase() === 'error') {
-                    <ol class="docker-stepper" [attr.data-phase]="dockerPhase()">
-                      <li [class.active]="dockerPhase() === 'checking'"
-                          [class.done]="phaseDone('checking')">
-                        <span class="step-icon">①</span>
-                        <span class="step-label">Chequeando runtime</span>
-                      </li>
-                      <li [class.active]="dockerPhase() === 'daemon'"
-                          [class.done]="phaseDone('daemon')">
-                        <span class="step-icon">②</span>
-                        <span class="step-label">Arrancando el runtime</span>
-                      </li>
-                      <li [class.active]="dockerPhase() === 'pulling'"
-                          [class.done]="phaseDone('pulling')">
-                        <span class="step-icon">③</span>
-                        <span class="step-label">Bajando imagen (~300MB)</span>
-                      </li>
-                      <li [class.active]="dockerPhase() === 'starting'"
-                          [class.done]="phaseDone('starting')">
-                        <span class="step-icon">④</span>
-                        <span class="step-label">Creando container</span>
-                      </li>
-                      <li [class.active]="dockerPhase() === 'loading'"
-                          [class.done]="phaseDone('loading')">
-                        <span class="step-icon">⑤</span>
-                        <span class="step-label">Cargando modelos (~30s)</span>
-                      </li>
-                    </ol>
-                  }
-
-                  @if (dockerMessage(); as msg) {
-                    <div class="docker-msg" [class.err]="dockerPhase() === 'error'">{{ msg }}</div>
-                  }
-                </div>
-              }
-            </details>
           }
         </div>
       </label>

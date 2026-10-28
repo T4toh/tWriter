@@ -175,49 +175,7 @@
   }
 }
 
-.gs-reqs {
-  margin: 4px 0 0;
-  padding-left: 1.2em;
-  font-size: 11px;
-  color: var(--fg-muted);
-  line-height: 1.5;
-
-  li {
-    margin-bottom: 2px;
-  }
-
-  strong {
-    color: var(--fg);
-    font-weight: 600;
-  }
-
-  a {
-    color: var(--accent);
-    text-decoration: underline;
-  }
-
-  code {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    background: var(--border);
-    padding: 1px 4px;
-    border-radius: 3px;
-    color: var(--fg);
-  }
-}
-
-.docker-panel {
-  margin-top: 8px;
-  padding: 8px 10px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.docker-status {
+.lt-estado {
   font-size: 12px;
   color: var(--fg-muted);
 
@@ -237,28 +195,6 @@
   a {
     color: var(--accent);
     text-decoration: underline;
-  }
-}
-
-.docker-btn {
-  align-self: flex-start;
-  font-size: 12px;
-  padding: 4px 12px;
-}
-
-.docker-msg {
-  font-size: 11px;
-  color: var(--fg-muted);
-  font-family: var(--font-mono);
-  background: var(--bg-soft);
-  padding: 4px 6px;
-  border-radius: 3px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-
-  &.err {
-    color: var(--err);
-    border-left: 3px solid var(--err);
   }
 }
 
@@ -282,75 +218,6 @@
     color: var(--accent);
     text-decoration: underline;
     flex: none;
-  }
-}
-
-.gs-why {
-  margin: 8px 0 6px;
-  padding: 8px 10px;
-  background: var(--bg-soft);
-  border-left: 3px solid var(--accent);
-  border-radius: 3px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--fg);
-
-  strong {
-    color: var(--fg);
-  }
-
-  a {
-    color: var(--accent);
-    text-decoration: underline;
-  }
-}
-
-.gs-details {
-  margin: 4px 0;
-  font-size: 12px;
-  color: var(--fg-muted);
-
-  summary {
-    cursor: pointer;
-    padding: 4px 0;
-    color: var(--fg);
-    font-weight: 500;
-    user-select: none;
-
-    &:hover {
-      color: var(--accent);
-    }
-  }
-
-  &[open] summary {
-    margin-bottom: 4px;
-  }
-}
-
-.gs-steps-explained {
-  margin: 4px 0 6px;
-  padding-left: 1.4em;
-  font-size: 12px;
-  color: var(--fg-muted);
-  line-height: 1.55;
-
-  li {
-    margin-bottom: 6px;
-  }
-
-  strong {
-    color: var(--fg);
-    font-weight: 600;
-  }
-
-  code {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    background: var(--border);
-    padding: 1px 4px;
-    border-radius: 3px;
-    color: var(--fg);
-    word-break: break-all;
   }
 }
 
@@ -465,68 +332,6 @@
   &:hover {
     color: var(--err);
     border-color: var(--err);
-  }
-}
-
-.docker-stepper {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-
-  li {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 6px;
-    border-radius: 3px;
-    font-size: 11px;
-    color: var(--fg-muted);
-    background: var(--bg-soft);
-    border-left: 3px solid transparent;
-    transition: all 0.2s ease;
-  }
-
-  li.done {
-    color: var(--fg);
-    border-left-color: var(--ok);
-
-    .step-icon {
-      color: var(--ok);
-    }
-  }
-
-  li.active {
-    color: var(--fg);
-    border-left-color: var(--accent);
-    background: var(--bg);
-    font-weight: 500;
-
-    .step-icon {
-      color: var(--accent);
-      animation: spin-icon 1.4s linear infinite;
-    }
-  }
-
-  &[data-phase='error'] li.active {
-    border-left-color: var(--err);
-
-    .step-icon {
-      color: var(--err);
-      animation: none;
-    }
-  }
-
-  .step-icon {
-    font-size: 14px;
-    width: 16px;
-    text-align: center;
-  }
-
-  .step-label {
-    flex: 1;
   }
 }
 
@@ -662,4 +467,15 @@
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 6px;
+}
+
+.lt-container-viejo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+
+  p {
+    margin: 0;
+  }
 }

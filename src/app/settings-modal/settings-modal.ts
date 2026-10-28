@@ -19,9 +19,9 @@ import {
   LucideX,
 } from '@lucide/angular';
 import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from '@tauri-apps/api/event';
 import { DebugService } from '../core/debug-service';
-import { GrammarService, LtDockerStatus, LtEmbebidoStatus, SecretStatus } from '../core/grammar-service';
+import { GrammarService, LtEmbebidoStatus, SecretStatus } from '../core/grammar-service';
 import { APP_FONT_LABEL, AppFontSlot } from '../core/app-fonts';
 import {
   APP_THEME_LABEL,
@@ -73,20 +73,6 @@ const INSTALAR_EPUBCHECK: readonly OpcionInstalar[] = [
   },
 ];
 
-export type DockerPhase =
-  | 'checking'
-  | 'daemon'
-  | 'pulling'
-  | 'starting'
-  | 'loading'
-  | 'ready'
-  | 'error';
-
-interface LtProgressEvent {
-  phase: DockerPhase;
-  message: string;
-}
-
 /** Secciones colapsables del modal. `show()` recibe cuál abrir: el effect que
  *  reacciona a LanguageTool caído pide `gramatica`, porque si el bloque
  *  arrancara colapsado el remedio quedaría escondido detrás de un click. */
@@ -129,11 +115,6 @@ export class SettingsModal {
   protected readonly testing = signal<boolean>(false);
   protected readonly testResult = signal<'ok' | 'fail' | null>(null);
   protected readonly saving = signal<boolean>(false);
-  protected readonly dockerStatus = signal<LtDockerStatus | null>(null);
-  protected readonly dockerBusy = signal<'starting' | 'stopping' | null>(null);
-  protected readonly dockerMessage = signal<string | null>(null);
-  protected readonly dockerPhase = signal<DockerPhase | null>(null);
-  private unlistenProgress: UnlistenFn | null = null;
   protected readonly embebido = signal<LtEmbebidoStatus | null>(null);
   protected readonly embebidoBusy = signal<'installing' | 'restarting' | 'deleting' | null>(null);
   protected readonly embebidoMessage = signal<string | null>(null);
@@ -159,13 +140,8 @@ export class SettingsModal {
         this.excFraseRepetida.set(exc.fraseRepetida);
         this.excAnafora.set(exc.anafora);
         this.testResult.set(null);
-        this.dockerMessage.set(null);
-        this.dockerPhase.set(null);
-        void this.refreshDockerStatus();
         this.embebidoError.set(null);
         void this.refreshEmbebido();
-      } else {
-        this.detachProgressListener();
       }
     });
   }
@@ -185,50 +161,6 @@ export class SettingsModal {
 
   protected undoKeyDeletion(): void {
     this.clearKeyOnSave.set(false);
-  }
-
-  protected async refreshDockerStatus(): Promise<void> {
-    try {
-      const s = await this.grammar.dockerStatus();
-      this.dockerStatus.set(s);
-    } catch {
-      this.dockerStatus.set(null);
-    }
-  }
-
-  protected async startDocker(runtime?: string): Promise<void> {
-    this.dockerBusy.set('starting');
-    this.dockerPhase.set('checking');
-    this.dockerMessage.set('Buscando un runtime de containers…');
-    await this.attachProgressListener();
-    try {
-      const msg = await this.grammar.dockerStart(runtime);
-      this.dockerPhase.set('ready');
-      this.dockerMessage.set(msg);
-    } catch (e) {
-      this.dockerPhase.set('error');
-      this.dockerMessage.set(String(e));
-    } finally {
-      this.dockerBusy.set(null);
-      this.detachProgressListener();
-      await this.refreshDockerStatus();
-      await this.grammar.ping();
-    }
-  }
-
-  private async attachProgressListener(): Promise<void> {
-    this.detachProgressListener();
-    this.unlistenProgress = await listen<LtProgressEvent>('languagetool-progress', (ev) => {
-      this.dockerPhase.set(ev.payload.phase);
-      this.dockerMessage.set(ev.payload.message);
-    });
-  }
-
-  private detachProgressListener(): void {
-    if (this.unlistenProgress) {
-      this.unlistenProgress();
-      this.unlistenProgress = null;
-    }
   }
 
   protected async refreshEmbebido(): Promise<void> {
@@ -278,21 +210,6 @@ export class SettingsModal {
     } finally {
       this.embebidoBusy.set(null);
       await this.refreshEmbebido();
-    }
-  }
-
-  protected async stopDocker(): Promise<void> {
-    this.dockerBusy.set('stopping');
-    this.dockerMessage.set(null);
-    try {
-      await this.grammar.dockerStop();
-      this.dockerMessage.set('Detenido.');
-    } catch (e) {
-      this.dockerMessage.set(String(e));
-    } finally {
-      this.dockerBusy.set(null);
-      await this.refreshDockerStatus();
-      await this.grammar.ping();
     }
   }
 
@@ -443,14 +360,6 @@ export class SettingsModal {
   protected onModeChange(value: string): void {
     this.mode.set(value as GrammarMode);
     this.testResult.set(null);
-  }
-
-  /** Devuelve true si la fase `p` ya pasó (la actual está más adelante en el flujo). */
-  protected phaseDone(p: DockerPhase): boolean {
-    const order: DockerPhase[] = ['checking', 'daemon', 'pulling', 'starting', 'loading', 'ready'];
-    const cur = this.dockerPhase();
-    if (!cur || cur === 'error') return false;
-    return order.indexOf(cur) > order.indexOf(p);
   }
 
   protected async test(): Promise<void> {

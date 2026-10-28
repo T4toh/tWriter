@@ -61,8 +61,7 @@ use git::{
     git_pull_rebase, git_push, git_status,
 };
 use grammar::{
-    check_grammar, check_grammar_available, languagetool_docker_start, languagetool_docker_status,
-    languagetool_docker_stop, languagetool_version,
+    check_grammar, check_grammar_available, languagetool_version,
 };
 use image::read_image;
 use import::{delete_chapter_file, delete_directory, import_chapter};
@@ -190,10 +189,7 @@ pub fn run() {
             check_grammar,
             check_grammar_available,
             list_chapters_for_audit,
-            languagetool_docker_status,
-            languagetool_docker_start,
             languagetool_version,
-            languagetool_docker_stop,
             is_directory_excluded,
             set_directory_excluded,
             scan_import_source,
