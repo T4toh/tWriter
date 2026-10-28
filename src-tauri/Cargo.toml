@@ -32,6 +32,12 @@ serde_json = "1"
 # openssl, x86_64-apple-darwin cross-compila desde el runner ARM sin pkg-config.
 git2 = { version = "0.21", default-features = false }
 zip = { version = "8", default-features = false, features = ["deflate"] }
+# LT embebido (lt_embebido.rs): verificar lo que se baja y desempaquetar el JRE
+# de Temurin, que en Mac/Linux viene en .tar.gz. Las tres ya estaban en el árbol
+# (tauri-codegen, tauri-plugin-updater, png) en estas mismas versiones.
+sha2 = "0.10.9"
+tar = "0.4.46"
+flate2 = "1.1.9"
 uuid = { version = "1", features = ["v4"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json", "form"] }
 # El proveedor de cripto de rustls para reqwest: `ring`, el mismo que usa
