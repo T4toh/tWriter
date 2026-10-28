@@ -399,10 +399,17 @@
   margin-left: auto;
 }
 
+// Pegado a la campana: el `margin-left: auto` que la empuja a la derecha pasa
+// al badge, si no el espacio libre queda entre los dos.
 .lt-version {
+  margin-left: auto;
   font-size: 11px;
   color: var(--fg-muted);
   white-space: nowrap;
+
+  + app-notificaciones-bell {
+    margin-left: 8px;
+  }
 }
 
 .cursor-pos {
