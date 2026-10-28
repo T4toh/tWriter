@@ -330,15 +330,6 @@
   letter-spacing: 0.05em;
 }
 
-/* Desplegables y botones con ícono: el contenido va en fila. */
-.tb-btn.tb-menu {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  width: auto;
-  padding: 0 8px;
-}
-
 .font-family-picker {
   display: inline-block;
   width: 180px;

@@ -46,9 +46,7 @@ import { parseFragmentHtml, serializeRange } from './raya-apply';
 import {
   EDITOR_FONT_LABEL,
   EDITOR_FONT_PRESETS,
-  EditorWidth,
   PARAGRAPH_SPACING_EM,
-  ParagraphSpacing,
   SettingsService,
   isEditorFontPreset,
   resolveEditorFontStack,
@@ -65,6 +63,7 @@ import { SkipParagraph, validateRaya } from '../dialogos/validator';
 import { detectMayusculasRancias } from '../dictionary/mayusculas-rancias';
 import { Landing } from '../landing/landing';
 import { Spinner } from '../shared/spinner';
+import { vistaMenu } from '../shared/vista-menu';
 import {
   ContextMenuService,
   CtxMenuEntry,
@@ -1163,39 +1162,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.ctxMenu.openBelow(event, entries);
   }
 
-  private static readonly SPACING_OPTIONS: ReadonlyArray<{ value: ParagraphSpacing; label: string }> = [
-    { value: 'tight', label: 'Apretado' },
-    { value: 'normal', label: 'Normal' },
-    { value: 'loose', label: 'Amplio' },
-  ];
-
-  private static readonly WIDTH_OPTIONS: ReadonlyArray<{ value: EditorWidth; label: string }> = [
-    { value: 'narrow', label: 'Página' },
-    { value: 'wide', label: 'Ancho' },
-    { value: 'full', label: 'Todo el ancho' },
-  ];
-
   protected openViewMenu(event: MouseEvent): void {
-    const spacing = this.paragraphSpacing();
-    const width = this.width();
-    this.ctxMenu.openBelow(event, [
-      { kind: 'header', label: 'Solo en pantalla, no cambia el libro' },
-      { kind: 'separator' },
-      { kind: 'header', label: 'Espacio entre párrafos' },
-      ...Editor.SPACING_OPTIONS.map((o) => ({
-        label: o.label,
-        icon: o.value === spacing ? LucideCheck : undefined,
-        onClick: () => this.settings.setParagraphSpacing(o.value),
-      })),
-      { kind: 'separator' },
-      { kind: 'header', label: 'Ancho del texto' },
-      ...Editor.WIDTH_OPTIONS.map((o) => ({
-        label: o.label,
-        icon: o.value === width ? LucideCheck : undefined,
-        onClick: () => this.settings.setEditorWidth(o.value),
-      })),
-    ]);
+    this.ctxMenu.openBelow(event, vistaMenu(this.settings));
   }
+
 
   protected fontBump(delta: number): void {
     this.settings.bumpFontSize(delta);
