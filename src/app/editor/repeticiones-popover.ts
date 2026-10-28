@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import { Repeticion, RespuestaTesauro } from '../core/types';
 import { AnchorBox, Placement, placePopover } from './popover-position';
+import { ReviewNav } from './review-nav';
 
 /**
  * Popover de una repetición cercana. Dice DÓNDE está la repetición y, con los
@@ -22,6 +23,7 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
 @Component({
   selector: 'app-repeticiones-popover',
   standalone: true,
+  imports: [ReviewNav],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (anchor()) {
@@ -38,6 +40,9 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
           <span class="rep-pop-tag">{{ repeticion() ? 'Repetición' : 'Sinónimos' }}</span>
           @if (repeticion(); as r) {
             <span class="rep-pop-count">{{ r.apariciones }} veces acá cerca</span>
+          }
+          @if (review(); as rv) {
+            <app-review-nav [review]="rv" (next)="next.emit()" (end)="endReview.emit()" />
           }
         </div>
         @if (repeticion(); as r) {
@@ -107,6 +112,10 @@ export class RepeticionesPopover {
   goToPrevious = output<void>();
   dismiss = output<void>();
   reemplazar = output<string>();
+  /** «3 de 12» del recorrido de «Revisar»; `null` fuera de él. */
+  review = input<{ n: number; total: number } | null>(null);
+  next = output<void>();
+  endReview = output<void>();
 
   /** Las categorías vienen del dato y la UI es en español. El inglés las trae
    *  como `noun`/`verb`/…; el español, en ~810 acepciones, con las

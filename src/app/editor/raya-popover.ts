@@ -13,10 +13,12 @@ import {
 import { RayaHelp, RayaViolation } from '../core/types';
 import { RayaChuletaService } from '../core/raya-chuleta-service';
 import { AnchorBox, Placement, placePopover } from './popover-position';
+import { ReviewNav } from './review-nav';
 
 @Component({
   selector: 'app-raya-popover',
   standalone: true,
+  imports: [ReviewNav],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (violation(); as v) {
@@ -36,6 +38,9 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
         <div class="raya-pop-head">
           <span class="raya-pop-tag">{{ tagLabel() }}</span>
           <span class="raya-pop-rule">{{ v.ruleId }}</span>
+          @if (review(); as r) {
+            <app-review-nav [review]="r" (next)="next.emit()" (end)="endReview.emit()" />
+          }
         </div>
         <div class="raya-pop-msg">{{ v.message }}</div>
         @if (v.help; as h) {
@@ -90,6 +95,10 @@ export class RayaPopover {
   apply = output<void>();
   applyParagraph = output<void>();
   dismiss = output<void>();
+  /** «3 de 12» del recorrido de «Revisar»; `null` fuera de él. */
+  review = input<{ n: number; total: number } | null>(null);
+  next = output<void>();
+  endReview = output<void>();
   protected readonly chuleta = inject(RayaChuletaService);
 
   protected dpdUrl(h: RayaHelp): string {

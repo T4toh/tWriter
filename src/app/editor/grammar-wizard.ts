@@ -1,7 +1,8 @@
 /**
- * Recorrido de los matches de LanguageTool uno por uno («Revisar» del toolbar).
+ * Recorrido de las marcas del capítulo una por una («Revisar» del toolbar):
+ * LanguageTool, raya y repeticiones, mezcladas en orden de lectura.
  *
- * Sin DOM a propósito: entra la lista de matches ya posicionados en el doc,
+ * Sin DOM a propósito: entra la lista de marcas ya posicionadas en el doc,
  * sale cuál toca. El editor se encarga de seleccionar, scrollear y abrir el
  * popover. Los tests viven en `scripts/run-grammar-wizard-smoke.mjs`.
  */
@@ -10,6 +11,11 @@ interface ReviewMatch {
   id: string;
   from: number;
   to: number;
+}
+
+/** Una marca del recorrido, del tipo que sea: el editor abre su popover. */
+export interface ReviewItem extends ReviewMatch {
+  kind: 'grammar' | 'raya' | 'rep';
 }
 
 /** Orden de lectura: por `from`, y a igual inicio el más corto primero. */

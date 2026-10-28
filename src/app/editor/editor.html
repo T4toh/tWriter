@@ -109,11 +109,9 @@
         type="button"
         class="tb-btn tb-text tb-menu"
         [class.active]="reviewing()"
-        [disabled]="!canCheckGrammar() || grammarChecking()"
+        [disabled]="!canReview() || grammarChecking()"
         (click)="startReview($event)"
-        [title]="canCheckGrammar()
-          ? 'Chequear el capítulo con LanguageTool y recorrer los errores uno por uno'
-          : 'LanguageTool no responde: revisá su configuración desde el ícono del pie'"
+        title="Chequear el capítulo y recorrer uno por uno los errores de ortografía, gramática, raya y repeticiones"
       >
         <svg lucideSpellCheck [size]="13"></svg>
         Revisar
@@ -405,6 +403,9 @@
     (apply)="applyRayaFix()"
     (applyParagraph)="applyRayaParagraph()"
     (dismiss)="dismissRaya()"
+    [review]="reviewNav()"
+    (next)="skipReview()"
+    (endReview)="closeReview()"
   />
 }
 
@@ -417,5 +418,8 @@
     (goToPrevious)="goToPreviousRepeticion()"
     (dismiss)="dismissRepeticion()"
     (reemplazar)="reemplazarRepeticion($event)"
+    [review]="reviewNav()"
+    (next)="skipReview()"
+    (endReview)="closeReview()"
   />
 }

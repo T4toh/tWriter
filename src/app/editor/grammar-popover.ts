@@ -11,10 +11,12 @@ import {
 } from '@angular/core';
 import { GrammarMatch } from '../core/types';
 import { AnchorBox, Placement, placePopover } from './popover-position';
+import { ReviewNav } from './review-nav';
 
 @Component({
   selector: 'app-grammar-popover',
   standalone: true,
+  imports: [ReviewNav],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (match(); as m) {
@@ -30,21 +32,7 @@ import { AnchorBox, Placement, placePopover } from './popover-position';
         <div class="grammar-pop-head">
           <span class="grammar-pop-rule">{{ m.ruleId }}</span>
           @if (review(); as r) {
-            <span class="grammar-pop-nav">
-              <span class="grammar-pop-count">{{ r.n }} de {{ r.total }}</span>
-              <button type="button" class="btn btn-sm btn-secondary" (click)="next.emit()">
-                Siguiente ›
-              </button>
-              <button
-                type="button"
-                class="btn btn-sm btn-secondary"
-                (click)="endReview.emit()"
-                title="Terminar la revisión"
-                aria-label="Terminar la revisión"
-              >
-                ✕
-              </button>
-            </span>
+            <app-review-nav [review]="r" (next)="next.emit()" (end)="endReview.emit()" />
           }
         </div>
         <div class="msg">{{ m.message }}</div>
