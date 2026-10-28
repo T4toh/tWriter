@@ -82,7 +82,7 @@ import { Verso, aplicarVerso } from './verso-extension';
 import { AnchorBox } from './popover-position';
 import { buildEditorProps } from './editor-props';
 import { GrammarPopover } from './grammar-popover';
-import { nextReviewMatch, reviewPosition } from './grammar-wizard';
+import { nextReviewMatch, ReviewItem, reviewPosition } from './grammar-wizard';
 import {
   RayaExtension,
   RayaViolationPos,
@@ -226,10 +226,10 @@ export class Editor implements AfterViewInit, OnDestroy {
   protected readonly grammarError = this.grammar.lastError;
   protected readonly grammarMatches = signal<GrammarMatchPos[]>([]);
   protected readonly grammarPopover = signal<{ match: GrammarMatch; anchor: AnchorBox; from: number; to: number; dictSuggestions: string[] } | null>(null);
-  /** Recorrido de «Revisar»: los matches de LT uno por uno sobre el popover
-   *  de siempre. Mientras está prendido no corre ningún re-check automático:
-   *  traería de vuelta lo que el autor ya ignoró y pisaría la lista a mitad
-   *  del recorrido. */
+  /** Recorrido de «Revisar»: las marcas de LT, raya y repeticiones una por una,
+   *  cada una sobre su popover de siempre. Mientras está prendido no corre
+   *  ningún re-check automático: traería de vuelta lo que el autor ya ignoró y
+   *  pisaría la lista a mitad del recorrido. */
   protected readonly reviewing = signal<boolean>(false);
   /** Ids que el autor pasó con «Siguiente» sin resolver. */
   private reviewSkipped = new Set<string>();
@@ -240,10 +240,15 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  cuando el autor lo resuelve. */
   private reviewFrom = 0;
   protected readonly reviewNav = computed<{ n: number; total: number } | null>(() => {
-    const popover = this.grammarPopover();
-    if (!this.reviewing() || !popover) return null;
-    return reviewPosition(this.grammarMatches(), (popover.match as GrammarMatchPos).id);
+    if (!this.reviewing()) return null;
+    const actual = this.reviewActual();
+    return actual ? reviewPosition(this.reviewPendientes(), actual.id) : null;
   });
+  /** Hay algo que «Revisar» puede recorrer aunque LT no responda: raya y
+   *  repeticiones se chequean adentro de la app. */
+  protected readonly canReview = computed(
+    () => this.canCheckGrammar() || this.rayaAuto() || this.repAuto(),
+  );
   /** Palabra para la que está abierto el panel de formas derivadas, o null. */
   protected readonly formasPara = signal<string | null>(null);
   protected readonly idiomaFlexion = this.sagaCtx.idiomaFlexion;
@@ -1548,9 +1553,8 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.reviewNext(this.reviewFrom);
   }
 
-  /** Arranca (o termina, si ya estaba) el recorrido de «Revisar». Sin un check
-   *  previo —Auto apagado, capítulo recién abierto— no hay lista que recorrer,
-   *  así que primero se chequea. */
+  /** Arranca (o termina, si ya estaba) el recorrido de «Revisar». Chequea todo
+   *  antes de arrancar, así la lista es la del texto de ahora. */
   protected async startReview(event: MouseEvent): Promise<void> {
     // Sin esto el click sigue hasta `document` y `onDocumentClick` cierra el
     // popover que se acaba de abrir.
@@ -1559,12 +1563,14 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.closeReview();
       return;
     }
-    // Siempre fresco: era lo que hacía el botón LT de la toolbar, que se fue.
-    await this.checkGrammar(true);
-    // Sigue en null: LT falló y el error ya está en el footer.
-    if (!this.tiptap || this.lastCheckedPlain === null) return;
-    if (this.grammarMatches().length === 0) {
-      this.toast.info('LanguageTool no marca nada en este capítulo');
+    if (this.canCheckGrammar()) await this.checkGrammar(true);
+    if (!this.tiptap) return;
+    if (this.rayaAuto()) this.checkRaya(true);
+    if (this.repAuto()) this.checkRepeticiones(true);
+    if (this.reviewPendientes().length === 0) {
+      // LT falló y no hay nada más: el error ya está en el footer.
+      if (this.canCheckGrammar() && this.lastCheckedPlain === null) return;
+      this.toast.info('No hay nada para revisar en este capítulo');
       return;
     }
     this.reviewSkipped.clear();
@@ -1572,12 +1578,46 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.reviewNext(0);
   }
 
-  /** «Siguiente ›»: pasa el match sin resolverlo. */
+  /** «Siguiente ›»: pasa la marca sin resolverla. */
   protected skipReview(): void {
-    const popover = this.grammarPopover();
-    if (!popover) return;
-    this.reviewSkipped.add((popover.match as GrammarMatchPos).id);
-    this.reviewNext(popover.from);
+    const actual = this.reviewActual();
+    if (!actual) return;
+    this.reviewSkipped.add(actual.id);
+    this.reviewNext(actual.from);
+  }
+
+  /** La marca del popover abierto, sea del tipo que sea. */
+  private reviewActual(): { id: string; from: number } | null {
+    const g = this.grammarPopover();
+    if (g) return { id: (g.match as GrammarMatchPos).id, from: g.from };
+    const r = this.rayaPopover();
+    if (r) return { id: r.violation.id, from: r.violation.from };
+    const rep = this.repPopover()?.repeticion;
+    return rep ? { id: rep.id, from: rep.from } : null;
+  }
+
+  /** Lo que recorre «Revisar». LT entra siempre que haya chequeado (es el
+   *  chequeo a mano, también en modo público); raya y repeticiones, solo si
+   *  están prendidas en Configuración. De gramática se saltean los TYPOS que
+   *  «+ formas…» acaba de meter al diccionario: el effect de re-filtrado
+   *  todavía no los sacó. */
+  private reviewPendientes(): ReviewItem[] {
+    const doc = this.tiptap?.state.doc;
+    if (!doc) return [];
+    const items: ReviewItem[] = this.grammarMatches()
+      .filter(
+        (m) =>
+          m.category !== 'TYPOS' ||
+          !this.sagaCtx.isInDictionary(doc.textBetween(m.from, m.to, ' ').trim()),
+      )
+      .map((m) => ({ kind: 'grammar', id: m.id, from: m.from, to: m.to }));
+    if (this.rayaAuto()) {
+      items.push(...this.rayaViolations().map((v) => ({ kind: 'raya' as const, id: v.id, from: v.from, to: v.to })));
+    }
+    if (this.repAuto()) {
+      items.push(...this.repeticiones().map((r) => ({ kind: 'rep' as const, id: r.id, from: r.from, to: r.to })));
+    }
+    return items;
   }
 
   /** Paso del recorrido: selecciona el match que toca, lo trae a la vista y le
@@ -1585,14 +1625,7 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  popover lo llaman siempre. */
   private reviewNext(desde: number): void {
     if (!this.tiptap || !this.reviewing()) return;
-    const doc = this.tiptap.state.doc;
-    // «+ formas…» saca sus TYPOS de la lista recién cuando corre el effect de
-    // re-filtrado, y el paso siguiente no puede caer en uno de esos.
-    const pendientes = this.grammarMatches().filter(
-      (m) =>
-        m.category !== 'TYPOS' ||
-        !this.sagaCtx.isInDictionary(doc.textBetween(m.from, m.to, ' ').trim()),
-    );
+    const pendientes = this.reviewPendientes();
     const next = nextReviewMatch(pendientes, desde, this.reviewSkipped);
     if (!next) {
       const salteados = pendientes.filter((m) => this.reviewSkipped.has(m.id)).length;
@@ -1610,18 +1643,37 @@ export class Editor implements AfterViewInit, OnDestroy {
       .setTextSelection({ from: next.from, to: next.to })
       .scrollIntoView()
       .run();
-    this.abrirPopoverGramaticaEn(next);
+    this.reviewFrom = next.from;
+    switch (next.kind) {
+      case 'grammar': {
+        const m = this.grammarMatches().find((x) => x.id === next.id);
+        if (m) this.abrirPopoverGramaticaEn(m);
+        break;
+      }
+      case 'raya': {
+        const v = this.rayaViolations().find((x) => x.id === next.id);
+        if (v) this.abrirPopoverRayaEn(v);
+        break;
+      }
+      case 'rep': {
+        const r = this.repeticiones().find((x) => x.id === next.id);
+        if (r) this.abrirPopoverRepeticionEn(r);
+        break;
+      }
+    }
   }
 
-  /** Corte del recorrido por el autor (✕, Esc, click afuera). Recién acá vuelve
-   *  el re-check automático, que estuvo en pausa. */
+  /** Corte del recorrido por el autor (✕, Esc, click afuera). Recién acá vuelven
+   *  los re-checks automáticos, que estuvieron en pausa. */
   protected closeReview(): void {
     if (!this.reviewing()) return;
     this.endReview();
-    this.grammarPopover.set(null);
+    this.cerrarPopovers();
     if (this.grammar.autoEnabled() && this.canAutoGrammar() && this.canCheckGrammar()) {
       this.scheduleGrammarRecheck();
     }
+    if (this.rayaAuto()) this.scheduleRayaRecheck();
+    if (this.repAuto()) this.scheduleRepRecheck();
   }
 
   /** Apaga el recorrido sin tocar nada más: lo usan los caminos que ya cierran
@@ -1840,6 +1892,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   private scheduleRepRecheck(): void {
+    if (this.reviewing()) return;
     if (this.repDebounceHandle !== null) {
       clearTimeout(this.repDebounceHandle);
     }
@@ -1856,6 +1909,8 @@ export class Editor implements AfterViewInit, OnDestroy {
     const popover = this.repPopover();
     if (!popover || !this.tiptap) return;
     const r = popover.repeticion;
+    // Saltar a otra parte del texto es salir del recorrido.
+    this.closeReview();
     this.repPopover.set(null);
     this.repResultado.set(null);
     this.limpiarGrupo();
@@ -1882,6 +1937,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     }
     this.repPopover.set(null);
     this.repResultado.set(null);
+    this.reviewNext(this.reviewFrom);
   }
 
   /**
@@ -1985,16 +2041,21 @@ export class Editor implements AfterViewInit, OnDestroy {
         ? sinonimo.charAt(0).toUpperCase() + sinonimo.slice(1)
         : sinonimo;
     const { from, to } = popover;
-    this.tiptap
-      .chain()
-      .focus()
-      .command(({ tr, state, dispatch }) => {
-        if (!dispatch) return true;
-        const marks = this.marcasParaReemplazo(tr, from, to);
-        tr.replaceWith(from, to, state.schema.text(reemplazo, marks));
-        return true;
-      })
-      .run();
+    this.reviewApplying = true;
+    try {
+      this.tiptap
+        .chain()
+        .focus()
+        .command(({ tr, state, dispatch }) => {
+          if (!dispatch) return true;
+          const marks = this.marcasParaReemplazo(tr, from, to);
+          tr.replaceWith(from, to, state.schema.text(reemplazo, marks));
+          return true;
+        })
+        .run();
+    } finally {
+      this.reviewApplying = false;
+    }
     this.limpiarGrupo();
     this.repResultado.set(null);
     this.repPopover.set(null);
@@ -2003,6 +2064,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.applyRepeticionesDecorations(this.repeticiones());
     }
     if (this.repAuto()) this.scheduleRepRecheck();
+    this.reviewNext(this.reviewFrom);
   }
 
   protected applyRayaFix(): void {
@@ -2019,31 +2081,38 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (to > doc.content.size || doc.textBetween(from, to) !== v.fixText) {
       this.rayaPopover.set(null);
       this.checkRaya(true);
+      this.reviewNext(this.reviewFrom);
       return;
     }
     const replacement = v.autoFix.replacement;
-    this.tiptap
-      .chain()
-      .focus()
-      .command(({ tr, state, dispatch }) => {
-        if (!dispatch) return true;
-        // La herencia de marcas se hace explícita acá en vez de depender de lo
-        // que decida `insertContent` adentro — ver `marcasParaReemplazo` para
-        // el porqué de `marksAcross`.
-        const marks = this.marcasParaReemplazo(tr, from, to);
-        if (replacement.length === 0) {
-          // `schema.text('')` tira excepción: un borrado va por `delete`.
-          tr.delete(from, to);
-        } else {
-          tr.replaceWith(from, to, state.schema.text(replacement, marks));
-        }
-        return true;
-      })
-      .run();
+    this.reviewApplying = true;
+    try {
+      this.tiptap
+        .chain()
+        .focus()
+        .command(({ tr, state, dispatch }) => {
+          if (!dispatch) return true;
+          // La herencia de marcas se hace explícita acá en vez de depender de lo
+          // que decida `insertContent` adentro — ver `marcasParaReemplazo` para
+          // el porqué de `marksAcross`.
+          const marks = this.marcasParaReemplazo(tr, from, to);
+          if (replacement.length === 0) {
+            // `schema.text('')` tira excepción: un borrado va por `delete`.
+            tr.delete(from, to);
+          } else {
+            tr.replaceWith(from, to, state.schema.text(replacement, marks));
+          }
+          return true;
+        })
+        .run();
+    } finally {
+      this.reviewApplying = false;
+    }
     this.rayaPopover.set(null);
     this.rayaViolations.update((list) => list.filter((m) => m.id !== v.id));
     this.applyRayaDecorations(this.rayaViolations());
     if (this.rayaAuto()) this.scheduleRayaRecheck();
+    this.reviewNext(this.reviewFrom);
   }
 
   protected applyRayaParagraph(): void {
@@ -2066,23 +2135,39 @@ export class Editor implements AfterViewInit, OnDestroy {
         'Este párrafo no se puede convertir solo: ninguna regla de raya ' +
           'reconoce cómo está escrito el diálogo. Escribí la raya a mano.',
       );
+      // En el recorrido queda como salteada: sigue ahí, pero no se puede
+      // arreglar desde el popover.
+      this.reviewSkipped.add(v.id);
+      this.reviewNext(this.reviewFrom);
       return;
     }
-    this.tiptap
-      .chain()
-      .focus()
-      .insertContentAt(
-        { from: v.paragraphFrom, to: v.paragraphTo },
-        parseFragmentHtml(converted, schema),
-      )
-      .run();
+    this.reviewApplying = true;
+    try {
+      this.tiptap
+        .chain()
+        .focus()
+        .insertContentAt(
+          { from: v.paragraphFrom, to: v.paragraphTo },
+          parseFragmentHtml(converted, schema),
+        )
+        .run();
+    } finally {
+      this.reviewApplying = false;
+    }
     this.rayaPopover.set(null);
     this.rayaViolations.update((list) => list.filter((m) => m.id !== v.id));
     this.applyRayaDecorations(this.rayaViolations());
     if (this.rayaAuto()) this.scheduleRayaRecheck();
+    this.reviewNext(this.reviewFrom);
   }
 
+  /** «Ignorar» / «OK». Fuera del recorrido solo cierra (la marca vuelve al
+   *  próximo chequeo); adentro es lo mismo que «Siguiente ›». */
   protected dismissRaya(): void {
+    if (this.reviewing()) {
+      this.skipReview();
+      return;
+    }
     this.rayaPopover.set(null);
   }
 
@@ -2093,6 +2178,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   private scheduleRayaRecheck(): void {
+    if (this.reviewing()) return;
     if (this.rayaDebounceHandle !== null) {
       clearTimeout(this.rayaDebounceHandle);
     }

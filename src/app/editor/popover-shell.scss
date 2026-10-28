@@ -27,7 +27,13 @@
   font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.4;
-  overflow-y: auto;
+
+  /* Scroll vertical sí (popover recortado contra el borde de la ventana),
+     horizontal nunca: con `overflow-y: auto` el navegador pone el eje x en
+     `auto` también, y una cabecera que no entraba (id de regla + «3 de 102»
+     + botones, con fuente de UI monoespaciada) sacaba una barra. Lo que no
+     entra a lo ancho tiene que bajar de renglón, no scrollear. */
+  overflow: hidden auto;
   overscroll-behavior: contain;
 }
 

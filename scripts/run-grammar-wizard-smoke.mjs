@@ -72,6 +72,27 @@ console.log('reviewPosition');
   check('id que no está → null', reviewPosition(lista, 'zz') === null);
 }
 
+console.log('tipos mezclados (LT, raya, repeticiones)');
+{
+  // El editor junta las tres listas una atrás de la otra; el recorrido las
+  // intercala por posición, no por tipo.
+  const mezcla = [
+    { ...m('g1', 30), kind: 'grammar' },
+    { ...m('r1', 10), kind: 'raya' },
+    { ...m('p1', 20), kind: 'rep' },
+  ];
+  const orden = [];
+  const vistos = new Set();
+  for (let desde = 0, n = nextReviewMatch(mezcla, desde, vistos); n; n = nextReviewMatch(mezcla, desde, vistos)) {
+    orden.push(n.id);
+    vistos.add(n.id);
+    desde = n.from;
+  }
+  check('orden de lectura, sin agrupar por tipo', orden.join(',') === 'r1,p1,g1', orden);
+  const p = reviewPosition(mezcla, 'g1');
+  check('un solo contador para los tres', p?.n === 3 && p?.total === 3, p);
+}
+
 rmSync(outDir, { recursive: true, force: true });
 console.log(`\n${passed} ok, ${failed} fallaron`);
 process.exit(failed === 0 ? 0 : 1);
