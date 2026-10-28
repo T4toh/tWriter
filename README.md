@@ -189,7 +189,7 @@ Después abre normal. Es solo la primera vez.
 
 - Jerarquía Saga / Libro / Sección / Capítulo + Notas + carpetas `notas/` + carpetas libres en root.
 - Context menu: crear, mover, renombrar, importar, exportar EPUB, configurar libro, excluir del EPUB. Para notas: abrir, renombrar, borrar. Para carpetas libres: nueva nota, nueva carpeta, renombrar, borrar.
-- Right-click en área vacía del tree → "Crear saga / novela", "Nueva carpeta…" (carpeta libre), "Nueva nota…" (`.md` suelta).
+- Right-click en área vacía del tree → «Nueva saga…», «Nueva novela en <saga>…» si estás parado en una saga (el capítulo abierto o lo que navegás), «Nueva carpeta…» (carpeta libre) y «Nueva nota…» (`.md` suelta).
 - Reorder vía drag & drop (sagas, libros, secciones, capítulos, notas) + mover cross-parent (capítulo entre secciones, sección entre libros, libro entre sagas). «Subir» / «Bajar» del menú contextual siguen disponibles. Sagas/libros/secciones sin prefijo numérico se migran a `1..N` automáticamente en el primer DnD.
 - **Insertar parte intermedia**: right-click sobre una parte numerada
   (`<N>.html` dentro de una sección) → "Agregar parte nueva" inserta un

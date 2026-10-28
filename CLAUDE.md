@@ -110,6 +110,7 @@ node scripts/run-raya-corpus-smoke.mjs            # corpus de diálogos contra e
 node scripts/run-updater-json-smoke.mjs           # latest.json del updater: las 8 claves salen de las 4 firmas
 node scripts/run-grammar-wizard-smoke.mjs         # «Revisar»: orden, salteados y vuelta al principio del recorrido de LT
 node scripts/run-lt-lock-smoke.mjs                # LT embebido: elección de versión >7 días y ruta del java por target
+node scripts/run-saga-del-contexto-smoke.mjs      # en qué saga está parado el autor (menú del espacio vacío del árbol)
 node scripts/barrer-raya-novelas.mjs ~/novelas    # validador sobre los .html y converter sobre los .docx del repo de novelas: FP reales
 ```
 

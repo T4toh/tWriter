@@ -793,7 +793,7 @@ fn sum_child_words(children: &[TreeNode]) -> Option<u32> {
     }
 }
 
-fn classify_top_level(dir: &Path) -> NodeKind {
+pub(crate) fn classify_top_level(dir: &Path) -> NodeKind {
     if dir.join("saga.json").exists() {
         return NodeKind::Saga;
     }

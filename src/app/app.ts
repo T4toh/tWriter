@@ -821,14 +821,14 @@ export class App {
     const root = this.settings.root();
     if (!root) return;
     const name = await this.modal.prompt({
-      title: 'Nueva saga / novela',
+      title: 'Nueva saga',
       placeholder: 'Nombre',
       validate: (v) => (v.trim() ? null : 'Ingresá un nombre'),
     });
     if (!name?.trim()) return;
     // Numerada: el prefijo "N - " es lo que ordena el filesystem, que se
     // maneja también a mano por git. `displayName` lo esconde en el árbol.
-    await this.chapter.createDirectory(root, name.trim(), true);
+    await this.chapter.createSaga(root, name.trim());
   }
 }
 

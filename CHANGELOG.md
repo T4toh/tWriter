@@ -29,6 +29,8 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ### Fixed
 
+- «Nueva saga» (formerly «Crear saga / novela») creates a real saga. In an empty folder the new saga showed up as a plain folder that only offered to create notes, so there was no way to add a book without the demo generator.
+- Right-clicking the empty area of the tree offers «Nueva novela en <saga>…» when you are inside a saga. Before, its only option was «Crear saga / novela», which always created a new saga.
 - Headings in the note reader use the note's font instead of the interface font, so they no longer look like they belong to another document.
 - LanguageTool is only reachable from this computer; it used to be open to the local network.
 

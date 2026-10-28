@@ -222,6 +222,36 @@ fn create_dir_impl(parent: &str, name: &str, numbered: bool) -> Result<CreateRes
     })
 }
 
+/// Crea una saga en la raíz del repo: carpeta numerada ("N - Nombre") con su
+/// `saga.json`. Sin el `saga.json` el árbol clasifica la carpeta por su
+/// contenido (`fs::classify_top_level`), y una recién creada, vacía, salía como
+/// carpeta libre: el menú ofrecía notas en vez de libros.
+#[tauri::command]
+pub async fn create_saga(root: String, name: String) -> Result<CreateResult, String> {
+    tauri::async_runtime::spawn_blocking(move || create_saga_impl(&root, &name))
+        .await
+        .map_err(|e| format!("task: {}", e))?
+}
+
+fn create_saga_impl(root: &str, name: &str) -> Result<CreateResult, String> {
+    let creada = create_dir_impl(root, name, true)?;
+    let dir = PathBuf::from(&creada.path);
+    let cfg = SagaConfig {
+        nombre: name.trim().to_string(),
+        ..Default::default()
+    };
+    let escrito = serde_json::to_string_pretty(&cfg)
+        .map_err(|e| e.to_string())
+        .and_then(|json| fs::write(dir.join("saga.json"), json + "\n").map_err(|e| e.to_string()));
+    if let Err(e) = escrito {
+        // Sin saga.json la carpeta sería otra vez una carpeta libre: mejor no dejarla.
+        let _ = fs::remove_dir_all(&dir);
+        return Err(e);
+    }
+    tracing::info!(target: "create", path = %dir.display(), "saga creada");
+    Ok(creada)
+}
+
 /// Crea un libro dentro de `parent_dir` con nombre numerado ("N - Nombre"),
 /// inicializa `book.json` heredando `autor`/`idioma` de la saga padre (si existe)
 /// y autocompleta `serie` + `numero_en_serie` + defaults EPUB.
@@ -392,6 +422,21 @@ fn next_dir_num(parent: &std::path::Path) -> Result<u32, String> {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    /// Una saga recién creada en un repo vacío tiene que verse como saga, no
+    /// como carpeta libre: sin `saga.json` el árbol la clasificaba por su
+    /// contenido, y vacía era una carpeta de notas.
+    #[test]
+    fn create_saga_escribe_saga_json_y_el_arbol_la_ve_como_saga() {
+        let root = TempDir::new().unwrap();
+        let r = create_saga_impl(root.path().to_str().unwrap(), "Meridiano").unwrap();
+        let dir = PathBuf::from(&r.path);
+        assert_eq!(dir.file_name().unwrap(), "1 - Meridiano");
+        let cfg: SagaConfig =
+            serde_json::from_str(&fs::read_to_string(dir.join("saga.json")).unwrap()).unwrap();
+        assert_eq!(cfg.nombre, "Meridiano");
+        assert_eq!(crate::fs::classify_top_level(&dir), crate::fs::NodeKind::Saga);
+    }
 
     fn write_part(dir: &Path, n: u32, body: &str) {
         fs::write(dir.join(format!("{}.html", n)), body).unwrap();
