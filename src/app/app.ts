@@ -821,7 +821,7 @@ export class App {
     const root = this.settings.root();
     if (!root) return;
     const name = await this.modal.prompt({
-      title: 'Nueva saga / novela',
+      title: 'Nueva saga',
       placeholder: 'Nombre',
       validate: (v) => (v.trim() ? null : 'Ingresá un nombre'),
     });

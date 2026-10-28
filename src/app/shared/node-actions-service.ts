@@ -43,6 +43,7 @@ import { ModalService } from './modal-service';
 import { NoteFormService } from '../core/note-form-service';
 import { CtxMenuEntry } from './context-menu-service';
 import { notasDelLibro } from '../tree/notas-del-libro';
+import { sagaDelContexto } from '../tree/saga-del-contexto';
 
 /**
  * Acciones compartidas sobre nodos del árbol (saga / libro / sección / capítulo)
@@ -445,8 +446,25 @@ export class NodeActionsService {
   buildEmptyMenu(): CtxMenuEntry[] {
     const root = this.settings.root();
     if (!root) return [];
+    // Una novela vive adentro de una saga: si el autor está parado en una (el
+    // capítulo abierto o lo que navega), se ofrece crearla ahí. Antes la única
+    // entrada era «Crear saga / novela», que siempre creaba una saga nueva. No
+    // `contextoLibro()`: ese prefiere el último capítulo a lo que está mirando,
+    // y la novela iría a parar a la saga de ayer.
+    const saga = sagaDelContexto(
+      this.project.tree(),
+      this.chapter.active()?.path ?? this.nav.browsingPath(),
+    );
     return [
-      { label: 'Crear saga / novela', onClick: () => this.createSaga() },
+      { label: 'Nueva saga…', onClick: () => this.createSaga() },
+      ...(saga
+        ? [
+            {
+              label: `Nueva novela en ${sinPrefijoNumerico(saga.name)}…`,
+              onClick: () => this.createBook(saga),
+            },
+          ]
+        : []),
       { kind: 'separator' },
       {
         label: 'Nueva carpeta…',
@@ -568,7 +586,7 @@ export class NodeActionsService {
     const root = this.settings.root();
     if (!root) return;
     const name = await this.modal.prompt({
-      title: 'Nueva saga / novela',
+      title: 'Nueva saga',
       placeholder: 'Nombre',
       validate: (v) => (v.trim() ? null : 'Ingresá un nombre'),
     });
