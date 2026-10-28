@@ -9,15 +9,20 @@
 //! uno con un `.ok` que se escribe al final. Van separados para que un parche
 //! del JRE baje ~50 MB y no los ~142 de todo.
 
-use serde::Deserialize;
+use crate::grammar::emit_progress;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::Write;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::process::{Child, Stdio};
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
+use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Deserialize)]
 pub struct Archivo {
@@ -258,6 +263,343 @@ impl Bajada<'_> {
     }
 }
 
+/// Puerto del LT embebido que está corriendo; 0 = no corre. Static y no state
+/// de Tauri porque `grammar::resolve_base` es sync y no tiene `AppHandle`
+/// (mismo criterio que `PUBLIC_BUDGET`).
+pub(crate) static PUERTO: AtomicU16 = AtomicU16::new(0);
+
+/// `http://127.0.0.1:<puerto>` si el embebido está corriendo.
+pub fn base_embebida() -> Option<String> {
+    match PUERTO.load(Ordering::SeqCst) {
+        0 => None,
+        p => Some(format!("http://127.0.0.1:{p}")),
+    }
+}
+
+/// Los argumentos de `java`, cada uno su `OsString`: sin shell de por medio,
+/// una ruta con espacios o acentos (`Application Support`, `C:\Users\Ñandú`)
+/// llega entera.
+pub fn java_args(libs: &Path, puerto: u16) -> Vec<OsString> {
+    vec![
+        "-Xmx256m".into(),
+        "-cp".into(),
+        libs.join("*").into_os_string(),
+        "org.languagetool.server.HTTPServer".into(),
+        "--port".into(),
+        puerto.to_string().into(),
+    ]
+}
+
+fn escribir_pid(base: &Path, pid: u32, puerto: u16) -> std::io::Result<()> {
+    fs::write(base.join("lt.pid"), format!("{pid} {puerto}"))
+}
+
+fn leer_pid(base: &Path) -> Option<(u32, u16)> {
+    let s = fs::read_to_string(base.join("lt.pid")).ok()?;
+    let (pid, puerto) = s.trim().split_once(' ')?;
+    Some((pid.parse().ok()?, puerto.parse().ok()?))
+}
+
+/// El `java` de un JRE instalado. La raíz del archivo de Temurin cambia con
+/// cada versión (`jdk-21.0.12.1+1-jre/`), así que se busca el único
+/// subdirectorio y se le pega el resto de la ruta del lock (`bin/java`,
+/// `Contents/Home/bin/java`): un JRE viejo que sigue instalado no está en el
+/// lock con su nombre.
+fn ruta_java(dir_jre: &Path) -> Option<PathBuf> {
+    let resto: PathBuf = Path::new(&jre_del_target(lock())?.java).components().skip(1).collect();
+    let raiz = fs::read_dir(dir_jre).ok()?.flatten().find(|e| e.path().is_dir())?;
+    Some(raiz.path().join(resto))
+}
+
+static PROCESO: Mutex<Option<Child>> = Mutex::new(None);
+static ULTIMO_ERROR: Mutex<Option<String>> = Mutex::new(None);
+/// Ya se relanzó una vez después de una caída; no se vuelve a intentar solo
+/// hasta que el autor toque «Reiniciar».
+static RELANZADO: AtomicBool = AtomicBool::new(false);
+static INSTALANDO: AtomicBool = AtomicBool::new(false);
+/// Serializa los arranques: el del `setup` y el de `asegurar_corriendo` pueden
+/// llegar juntos al abrir la app.
+static ARRANQUE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+const PUERTO_DESDE: u16 = 8082;
+const ESPERA_ARRANQUE: Duration = Duration::from_secs(30);
+
+fn corriendo() -> bool {
+    let mut g = PROCESO.lock().unwrap_or_else(|e| e.into_inner());
+    match g.as_mut().map(|c| c.try_wait()) {
+        Some(Ok(None)) => true,
+        Some(_) => {
+            *g = None;
+            PUERTO.store(0, Ordering::SeqCst);
+            false
+        }
+        None => false,
+    }
+}
+
+async fn responde(puerto: u16) -> bool {
+    let Ok(client) = reqwest::Client::builder().timeout(Duration::from_millis(1500)).build() else {
+        return false;
+    };
+    matches!(
+        client.get(format!("http://127.0.0.1:{puerto}/v2/languages")).send().await,
+        Ok(r) if r.status().is_success()
+    )
+}
+
+/// Un `java` nuestro que quedó vivo de una sesión que crasheó: si el puerto que
+/// anotó sigue contestando como LanguageTool, se mata ese pid.
+async fn matar_huerfano(base: &Path) {
+    let Some((pid, puerto)) = leer_pid(base) else {
+        return;
+    };
+    if responde(puerto).await {
+        tracing::info!(target: "grammar", pid, puerto, "matando LT embebido huérfano");
+        #[cfg(unix)]
+        let _ = std::process::Command::new("kill").arg(pid.to_string()).status();
+        #[cfg(windows)]
+        let _ = {
+            use std::os::windows::process::CommandExt;
+            std::process::Command::new("taskkill")
+                .args(["/PID", &pid.to_string(), "/F"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .status()
+        };
+    }
+    let _ = fs::remove_file(base.join("lt.pid"));
+}
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Levanta LT con lo que haya instalado en `base` y espera a que conteste.
+pub async fn arrancar_en(base: &Path) -> Result<u16, String> {
+    let _turno = ARRANQUE.lock().await;
+    if corriendo() {
+        return Ok(PUERTO.load(Ordering::SeqCst));
+    }
+    let (Some(lt), Some(jre)) = (instalado(base, "lt"), instalado(base, "jre")) else {
+        return Err("LanguageTool no está instalado.".into());
+    };
+    matar_huerfano(base).await;
+    let java = ruta_java(&base.join(format!("jre-{jre}")))
+        .ok_or("No encuentro el java instalado. Borralo y bajalo de nuevo.")?;
+    let puerto = puerto_libre(PUERTO_DESDE).ok_or("No hay ningún puerto libre desde 8082.")?;
+    let log = base.join("lt.log");
+    let stderr = File::create(&log).map_err(|e| format!("No pude crear {}: {e}", log.display()))?;
+    let mut cmd = std::process::Command::new(&java);
+    cmd.args(java_args(&base.join(format!("lt-{lt}")).join("libs"), puerto))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(stderr);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let mut child = cmd.spawn().map_err(|e| format!("No pude lanzar java: {e}"))?;
+    let _ = escribir_pid(base, child.id(), puerto);
+
+    let inicio = std::time::Instant::now();
+    let listo = loop {
+        if responde(puerto).await {
+            break true;
+        }
+        if inicio.elapsed() > ESPERA_ARRANQUE || !matches!(child.try_wait(), Ok(None)) {
+            break false;
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    };
+    if !listo {
+        let _ = child.kill();
+        let _ = child.wait();
+        let _ = fs::remove_file(base.join("lt.pid"));
+        let ultima = fs::read_to_string(&log)
+            .ok()
+            .and_then(|s| s.lines().rev().find(|l| !l.trim().is_empty()).map(str::to_string))
+            .unwrap_or_else(|| "sin detalle".into());
+        let e = format!("LanguageTool no arrancó: {ultima}");
+        *ULTIMO_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = Some(e.clone());
+        return Err(e);
+    }
+    tracing::info!(target: "grammar", puerto, lt, jre, "LT embebido listo");
+    *PROCESO.lock().unwrap_or_else(|e| e.into_inner()) = Some(child);
+    *ULTIMO_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    PUERTO.store(puerto, Ordering::SeqCst);
+    Ok(puerto)
+}
+
+/// Mata el `java` embebido si hay uno. Va en `RunEvent::Exit`.
+pub fn detener() {
+    PUERTO.store(0, Ordering::SeqCst);
+    if let Some(mut c) = PROCESO.lock().unwrap_or_else(|e| e.into_inner()).take() {
+        let _ = c.kill();
+        let _ = c.wait();
+    }
+    if let Some(base) = BASE.get() {
+        let _ = fs::remove_file(base.join("lt.pid"));
+    }
+}
+
+/// `app_data_dir()/languagetool`, recordado para `detener()`, que corre al
+/// salir y no tiene `AppHandle` a mano.
+static BASE: OnceLock<PathBuf> = OnceLock::new();
+
+fn base_de(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Some(b) = BASE.get() {
+        return Ok(b.clone());
+    }
+    let b = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?
+        .join("languagetool");
+    Ok(BASE.get_or_init(|| b).clone())
+}
+
+/// Para el modo Local: si LT está instalado y se cayó (o nunca arrancó), lo
+/// levanta. Después de una caída relanza una sola vez.
+pub async fn asegurar_corriendo(app: &AppHandle) {
+    if corriendo() || INSTALANDO.load(Ordering::SeqCst) {
+        return;
+    }
+    let Ok(base) = base_de(app) else { return };
+    if instalado(&base, "lt").is_none() || instalado(&base, "jre").is_none() {
+        return;
+    }
+    if RELANZADO.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    if arrancar_en(&base).await.is_ok() {
+        RELANZADO.store(false, Ordering::SeqCst);
+    }
+}
+
+/// Al abrir la app, en segundo plano, si el modo es Local y está instalado.
+pub fn arrancar_al_abrir(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        asegurar_corriendo(&app).await;
+    });
+}
+
+fn limpiar_otras(base: &Path, prefijo: &str, conservar: &str) {
+    let Ok(entradas) = fs::read_dir(base) else { return };
+    for e in entradas.flatten() {
+        let nombre = e.file_name().to_string_lossy().into_owned();
+        if nombre.starts_with(&format!("{prefijo}-")) && nombre != format!("{prefijo}-{conservar}") {
+            let _ = fs::remove_dir_all(e.path());
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct LtEmbebidoStatus {
+    lt_instalado: Option<String>,
+    jre_instalado: Option<String>,
+    lt_lock: String,
+    jre_lock: String,
+    /// Lo que falta bajar según el lock; 0 si está al día.
+    mb_a_bajar: u64,
+    corriendo: bool,
+    puerto: Option<u16>,
+    /// Último error de arranque, con la última línea de stderr de java.
+    error: Option<String>,
+}
+
+#[tauri::command]
+pub async fn lt_embebido_status(app: AppHandle) -> LtEmbebidoStatus {
+    let base = base_de(&app).unwrap_or_default();
+    let lock = lock();
+    let lt_instalado = instalado(&base, "lt");
+    let jre_instalado = instalado(&base, "jre");
+    let mut bytes = 0;
+    if lt_instalado.as_deref() != Some(lock.lt.as_str()) {
+        bytes += lock.jars.iter().map(|j| j.size).sum::<u64>();
+    }
+    if jre_instalado.as_deref() != Some(lock.jre.as_str()) {
+        bytes += jre_del_target(lock).map_or(0, |j| j.size);
+    }
+    let corre = corriendo();
+    LtEmbebidoStatus {
+        lt_instalado,
+        jre_instalado,
+        lt_lock: lock.lt.clone(),
+        jre_lock: lock.jre.clone(),
+        mb_a_bajar: bytes.div_ceil(1 << 20),
+        corriendo: corre,
+        puerto: corre.then(|| PUERTO.load(Ordering::SeqCst)),
+        error: ULTIMO_ERROR.lock().unwrap_or_else(|e| e.into_inner()).clone(),
+    }
+}
+
+/// Baja lo que falte, arranca la versión nueva y recién entonces borra la
+/// vieja. Si la nueva no arranca, se borra la nueva y vuelve la vieja.
+#[tauri::command]
+pub async fn lt_embebido_instalar(app: AppHandle) -> Result<(), String> {
+    if INSTALANDO.swap(true, Ordering::SeqCst) {
+        return Err("Ya se está bajando LanguageTool.".into());
+    }
+    let r = instalar_y_arrancar(&app).await;
+    INSTALANDO.store(false, Ordering::SeqCst);
+    match &r {
+        Ok(()) => emit_progress(&app, "ready", "LanguageTool listo"),
+        Err(e) => emit_progress(&app, "error", e.clone()),
+    }
+    r
+}
+
+async fn instalar_y_arrancar(app: &AppHandle) -> Result<(), String> {
+    let base = base_de(app)?;
+    let lock = lock();
+    let antes = (instalado(&base, "lt"), instalado(&base, "jre"));
+    instalar(&base, &|fase, msg| emit_progress(app, fase, msg)).await?;
+    emit_progress(app, "starting", "Arrancando LanguageTool…");
+    detener();
+    RELANZADO.store(false, Ordering::SeqCst);
+    match arrancar_en(&base).await {
+        Ok(_) => {
+            limpiar_otras(&base, "lt", &lock.lt);
+            limpiar_otras(&base, "jre", &lock.jre);
+            Ok(())
+        }
+        Err(e) => {
+            // La nueva no arranca: se borra lo recién bajado y vuelve lo de antes.
+            if antes.0.as_deref() != Some(lock.lt.as_str()) && antes.0.is_some() {
+                let _ = fs::remove_dir_all(base.join(format!("lt-{}", lock.lt)));
+            }
+            if antes.1.as_deref() != Some(lock.jre.as_str()) && antes.1.is_some() {
+                let _ = fs::remove_dir_all(base.join(format!("jre-{}", lock.jre)));
+            }
+            if antes.0.is_some() && antes.1.is_some() {
+                let _ = arrancar_en(&base).await;
+            }
+            Err(e)
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn lt_embebido_reiniciar(app: AppHandle) -> Result<(), String> {
+    let base = base_de(&app)?;
+    detener();
+    RELANZADO.store(false, Ordering::SeqCst);
+    arrancar_en(&base).await.map(|_| ())
+}
+
+#[tauri::command]
+pub async fn lt_embebido_borrar(app: AppHandle) -> Result<(), String> {
+    if INSTALANDO.load(Ordering::SeqCst) {
+        return Err("Esperá a que termine la descarga.".into());
+    }
+    let base = base_de(&app)?;
+    detener();
+    *ULTIMO_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    match fs::remove_dir_all(&base) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("No pude borrar {}: {e}", base.display())),
+        _ => Ok(()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,5 +694,60 @@ mod tests {
         assert!(extraer(&archivo, &destino).is_err());
         assert!(!destino.exists());
         assert!(!dir.path().join("jre-21.tmp").exists());
+    }
+
+    #[test]
+    fn java_args_con_espacios_quedan_en_un_solo_arg() {
+        let args = java_args(Path::new("/a b/Ñandú/libs"), 8082);
+        let cp = Path::new("/a b/Ñandú/libs").join("*").into_os_string();
+        let esperado: Vec<OsString> = [
+            OsString::from("-Xmx256m"),
+            OsString::from("-cp"),
+            cp,
+            OsString::from("org.languagetool.server.HTTPServer"),
+            OsString::from("--port"),
+            OsString::from("8082"),
+        ]
+        .into();
+        assert_eq!(args, esperado);
+        assert!(!args.iter().any(|a| a == "--public"));
+    }
+
+    #[test]
+    fn pid_file_round_trip() {
+        let base = tempfile::tempdir().unwrap();
+        assert_eq!(leer_pid(base.path()), None);
+        escribir_pid(base.path(), 1234, 8083).unwrap();
+        assert_eq!(leer_pid(base.path()), Some((1234, 8083)));
+    }
+
+    /// Baja de verdad (~142 MB), arranca y chequea. A mano:
+    /// `cargo test --manifest-path src-tauri/Cargo.toml -- --ignored instala_y_chequea`
+    #[test]
+    #[ignore]
+    fn instala_y_chequea_de_verdad() {
+        crate::install_tls_provider();
+        let base = tempfile::tempdir().unwrap();
+        tauri::async_runtime::block_on(async {
+            instalar(base.path(), &|_, m| eprintln!("{m}")).await.unwrap();
+            let puerto = arrancar_en(base.path()).await.unwrap();
+            let r: serde_json::Value = reqwest::Client::new()
+                .post(format!("http://127.0.0.1:{puerto}/v2/check"))
+                .form(&[
+                    ("language", "es-AR"),
+                    ("text", "Ella fué a la casa y vió que el perro estaban dormido."),
+                ])
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            detener();
+            let reglas: Vec<&str> =
+                r["matches"].as_array().unwrap().iter().filter_map(|m| m["rule"]["id"].as_str()).collect();
+            assert!(reglas.contains(&"MONOSILABOS"), "{reglas:?}");
+            assert!(!corriendo());
+        });
     }
 }

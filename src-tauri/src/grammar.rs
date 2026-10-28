@@ -835,7 +835,8 @@ static PUBLIC_BUDGET: Mutex<PublicRateBudget> = Mutex::new(PublicRateBudget::new
 fn resolve_base(cfg: &GrammarConfig) -> Result<String, String> {
     match cfg.mode.as_str() {
         "public" => Ok(PUBLIC_BASE.to_string()),
-        "local" => Ok(LOCAL_BASE.to_string()),
+        // El embebido si corre; si no, el container de siempre en 8081.
+        "local" => Ok(crate::lt_embebido::base_embebida().unwrap_or_else(|| LOCAL_BASE.to_string())),
         "custom" => cfg
             .custom_url
             .as_deref()
@@ -870,7 +871,10 @@ fn category_of(rule_cat: &str) -> String {
 }
 
 #[tauri::command]
-pub async fn check_grammar_available(cfg: GrammarConfig) -> bool {
+pub async fn check_grammar_available(app: AppHandle, cfg: GrammarConfig) -> bool {
+    if cfg.mode == "local" {
+        crate::lt_embebido::asegurar_corriendo(&app).await;
+    }
     let base = match resolve_base(&cfg) {
         Ok(b) => b,
         Err(_) => return false,
@@ -1212,7 +1216,7 @@ struct LtProgress {
     message: String,
 }
 
-fn emit_progress(app: &AppHandle, phase: &'static str, message: impl Into<String>) {
+pub(crate) fn emit_progress(app: &AppHandle, phase: &'static str, message: impl Into<String>) {
     let msg: String = message.into();
     tracing::info!(target: "grammar", phase, msg = %msg, "languagetool progress");
     let _ = app.emit(
@@ -1666,6 +1670,21 @@ mod tests {
 
     fn utf16_len(s: &str) -> usize {
         s.chars().map(|c| c.len_utf16()).sum()
+    }
+
+    #[test]
+    fn resolve_base_local_usa_embebido_si_corre() {
+        use std::sync::atomic::Ordering;
+        let local: GrammarConfig = serde_json::from_str(r#"{"mode":"local"}"#).unwrap();
+        let custom: GrammarConfig =
+            serde_json::from_str(r#"{"mode":"custom","customUrl":"http://x"}"#).unwrap();
+        crate::lt_embebido::PUERTO.store(8083, Ordering::SeqCst);
+        let con_embebido = resolve_base(&local);
+        let custom_gana = resolve_base(&custom);
+        crate::lt_embebido::PUERTO.store(0, Ordering::SeqCst);
+        assert_eq!(con_embebido.unwrap(), "http://127.0.0.1:8083");
+        assert_eq!(custom_gana.unwrap(), "http://x");
+        assert_eq!(resolve_base(&local).unwrap(), LOCAL_BASE);
     }
 
     #[test]
