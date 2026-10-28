@@ -20,16 +20,20 @@ huela a "esto ya lo miramos", buscar ahí primero.
   lee la imagen con `inspect --format {{.Config.Image}}`: tocar «Actualizar
   LanguageTool» con un container creado desde `latest` y ver que lo recree.
 
-- **Bajar LanguageTool desde la app, sin containers** (lo prefiere el autor;
-  va en su propio PR y pide diseño antes de codear). La app baja un JRE de
-  Adoptium/Temurin y LT armado (jars de Maven Central, o lo que trae la imagen
-  `erikvl87/languagetool` en `/LanguageTool`), los dos con versión y checksum
-  fijos, y corre LT como proceso propio. Se maneja desde Configuración →
-  Gramática. No es el sidecar descartado: no se arma nada en CI ni viaja en el
-  bundle, así que el costo que lo mató no aplica. Antes de arrancar, leer
-  `docs/decisiones-cerradas.md` → «LT embebido como sidecar» (mediciones, la
-  corrección del 2026-10-28 y las tres trampas) y la rama
-  `archivo/lt-sidecar-NO-MERGEAR`.
+- **Bajar LanguageTool desde la app, sin containers** (en curso, rama
+  `feat/lt-descargado`). Diseño aprobado en
+  `docs/superpowers/specs/2026-10-28-lt-descargado-design.md`: jars de Maven
+  Central + JRE Temurin, fijados por sha256 en `src-tauri/lt-lock.json`, y un
+  workflow semanal que abre PR con la versión nueva. Probado en Mac arm64 y
+  Linux x64; falta que el autor lo pruebe en el Arch, una Mac Intel y Windows.
+
+- **Sacar Docker de `grammar.rs` después de probar el LT embebido** (decisión
+  del autor, 2026-10-28). Hoy conviven **a propósito**: si el embebido queda a
+  medias o con errores en alguna plataforma, el container sigue andando. Recién
+  cuando el autor lo haya probado en las cuatro plataformas, un PR aparte borra
+  las ~700 líneas de detección multi-runtime, pull, start y remedies, el bloque
+  de Docker del modal y la segunda rama de `resolve_base`, y el embebido puede
+  volver a arrancar desde el puerto 8081.
 
 - **Moverse con las flechas por los globitos de revisión** (quedó afuera de
   #212). Mientras el globito está abierto el foco lo tiene el editor, y las
@@ -394,6 +398,14 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   próxima tanda de dependencias, no antes.
 
 ## Documentación
+
+- [ ] **El README está desactualizado** (el autor, 2026-10-28: "está
+  viejardo, incluso antes de esto"). Su último cambio es del 2026-10-02 y desde
+  entonces entraron, como mínimo, la barra del editor (#210), «Revisar» (#211),
+  los globitos de revisión (#212) y la recreación del container de LT (#209).
+  Antes de reorganizarlo (item siguiente) conviene ponerlo al día contra el
+  código, y cuando se mergee el LT embebido reescribir la parte de instalación
+  de LanguageTool, que hoy pide Docker.
 
 - [ ] **Wiki o sitio de docs; el README quedó demasiado grande** (pedido del
   autor el 2026-09-14). Hoy `README.md` tiene ~1.070 líneas y mezcla cuatro
