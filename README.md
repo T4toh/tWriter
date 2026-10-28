@@ -53,7 +53,7 @@ Las novelas viven en un repo privado aparte (HTML + JSON). Esta app es solo el e
       - [2. Node.js + pnpm](#2-nodejs--pnpm)
       - [3. System libs (Tauri 2 + WebKit)](#3-system-libs-tauri-2--webkit)
       - [4. Pandoc (importer .docx/.odt)](#4-pandoc-importer-docxodt)
-      - [5. Docker (opcional, para LanguageTool local)](#5-docker-opcional-para-languagetool-local)
+      - [5. Runtime de containers (opcional, para LanguageTool local)](#5-runtime-de-containers-opcional-para-languagetool-local)
       - [6. Clonar e instalar](#6-clonar-e-instalar)
     - [Comandos](#comandos)
     - [Distribución](#distribución)
@@ -98,7 +98,7 @@ wget https://github.com/T4toh/tWriter/releases/latest/download/twriter_*_amd64.d
 sudo apt install ./twriter_*_amd64.deb
 ```
 
-Sin auto-update — recheckear releases manualmente.
+Auto-update Tauri-native, igual que en Windows y macOS: la app chequea `releases/latest/download/latest.json` (que trae la clave `linux-x86_64-deb`) y muestra el banner in-app cuando hay versión nueva. Aceptarlo descarga e instala el `.deb` nuevo.
 
 ### Windows
 
@@ -144,7 +144,7 @@ podman machine init && podman machine start
 ```
 
 Con cualquiera corriendo, la app baja la imagen y levanta LanguageTool sola desde
-el modal de gramática. Si usás **Docker** y antes tuviste Docker Desktop (y lo
+Configuración → Gramática. Si usás **Docker** y antes tuviste Docker Desktop (y lo
 desinstalaste), borrá la línea `"credsStore": "desktop"` de `~/.docker/config.json`
 — si no, `docker pull` falla con `docker-credential-desktop ... not found`. Sin
 ningún runtime, la app igual anda usando el API público de LT por default.
@@ -163,15 +163,17 @@ ningún runtime, la app igual anda usando el API público de LT por default.
 
 - TipTap con HTML subset: `<p>`, `<i>`, `<em>`, `<strong>`, `<u>`, `<hr>`, `<h1>`, `<blockquote>`.
 - Autosave debounced 1.5s.
-- Toolbar: undo/redo, B/I/U, alineación, salto de escena, raya, gramática, font size, familia tipográfica, espaciado de párrafos, ancho hoja.
+- Toolbar: undo/redo, B/I/U, un solo menú de alineación (muestra la actual), **Insertar** (salto de escena, bloque de verso), **Revisar** (ver abajo), **Herramientas** (convertir diálogos a raya, pasar comillas a tipográficas), A−/A+, familia tipográfica y **Vista** (espacio entre párrafos y ancho del texto — solo cambia la pantalla, no el libro).
+- **Revisar el capítulo** (`editor/grammar-wizard.ts` + `review-nav.ts`): chequea el capítulo de nuevo y recorre en una sola pasada, en orden de lectura, los errores de LanguageTool, las marcas de raya y las repeticiones, con un solo contador («3 de 12 · Siguiente ›») en el popover de cada uno. Pasa al siguiente después de corregir, ignorar o agregar al diccionario; mientras dura, el chequeo automático espera. Anda aunque LanguageTool no responda (recorre raya y repeticiones) y solo incluye los chequeos prendidos en Configuración. `scripts/run-grammar-wizard-smoke.mjs` cubre el orden, los salteados y la vuelta al principio.
 - Menú contextual propio.
 - **Layout flat**: el editor renderea párrafos sin `text-indent` y con `text-align: left` para que escribir no "salte" word-spacing por línea ni se vean indents que confunden. El EPUB exportado mantiene `text-indent: 1.5em` + `text-align: justify` desde `.chapter-content p` en `src-tauri/resources/epub_style.css` — formato editorial al exportar, layout cómodo al escribir.
 - **Selector de fuente del editor**: dropdown estilo LibreOffice/Word con búsqueda. Cuatro grupos: **Recientes** (top 5, persistido en `settings.json::editorFontRecents`), **Del tema** (body / heading / editorial del tema resuelto del capítulo activo — saga + libro override), **Presets** (`Serif / Sans / Mono / Sistema`, los 4 stacks hardcodeados originales), **Pool del repo** (familias deduplicadas de `<root>/fonts/`) y **Sistema (N)** (todas las familias instaladas en el OS, listadas via crate `fontdb` 0.23 en `src-tauri/src/system_fonts.rs::list_system_fonts`, cache lazy `Mutex<Option<Vec>>` + `refresh_system_fonts` para re-scan). Cada ítem renderea su nombre en su propia tipografía (FontFace API on-hover via `SystemFontsService::loadFace`, idempotente). Valor persistido en `settings.json::editorFontFamily` como `string` libre (los 4 keywords presets siguen siendo válidos). CSS var `--editor-font-family` sobre `.ProseMirror` aplica el stack resuelto vía `resolveEditorFontStack()` (preset → stack hardcoded, sino familia + fallback serif). **Fallback + badge**: si la familia guardada no existe en OS ni pool ni presets (típico al sincronizar settings entre PCs), el editor cae a serif default y el footer muestra badge `⚠ <nombre>` con tooltip explicativo; el valor en settings no se sobrescribe (al volver a la otra PC vuelve a aplicarse). Para el `<app-select>` se sumaron `groups` y `itemTemplate` manteniendo compat con el shape `options` plano.
 - **Gap cursor desactivado**: `StarterKit.configure({ gapcursor: false })` para evitar el marker vertical huérfano que aparecía en zonas vacías del editor (entre hr/h1/párrafos, click fuera del texto).
 - **Sin `<br>` en los capítulos** (`no-hard-break-extension.ts`): el subset HTML no tiene salto de línea blando, así que `NoHardBreak` convierte todo `hardBreak` en corte de párrafo apenas entra al doc — venga de Shift+Enter, de un pegado, de `setContent` o del Enter que ProseMirror le cede a WebKitGTK justo después de cerrar una composición del IME (con fcitx5 cada acento cierra una). Sin esto, un párrafo "pegado" con `<br>` sale sin sangría en el EPUB porque `text-indent` solo toma la primera línea. `scripts/run-hardbreak-smoke.mjs` cubre la mitad pura; `scripts/migrar-br-a-parrafos.mjs` limpia un repo de novelas ya afectado.
-- **Bloque de verso** (`blockquote`): para canciones, poemas e inscripciones — no para citas en prosa. Botón en la toolbar y en el menú contextual, un `<p>` por verso y un párrafo vacío para separar estrofas. En el EPUB sale centrado y en itálica (y la itálica del texto no se invierte). `scripts/run-verso-smoke.mjs` cubre el toggle (lift + wrap + join).
+- **Bloque de verso** (`blockquote`): para canciones, poemas e inscripciones — no para citas en prosa. Desde **Insertar** de la toolbar (`Mod+Shift+B`) y desde el menú contextual, un `<p>` por verso y un párrafo vacío para separar estrofas. En el EPUB sale centrado y en itálica (y la itálica del texto no se invierte). `scripts/run-verso-smoke.mjs` cubre el toggle (lift + wrap + join).
 - Modo focus (F11 / Esc): oculta tree, deja toolbar y footer.
-- Indicador de idioma en footer (badge color) + toggle ES/EN.
+- Badge de variante regional en el footer (`es-AR` / `es-ES` / `en-US` / `en-GB`, con color por idioma): el click abre el selector, y elegir una de otro idioma cambia también el idioma del capítulo.
+- **Ícono de LanguageTool en el footer**, al lado de la campana: muestra la versión de LT en uso, late mientras chequea, se apaga en gris cuando LT no responde, y el click abre su configuración.
 - Diálogos custom (prompt/confirm/alert) coherentes con el resto de los modales — sin headers feos de WebKit.
 - `<app-select>` Angular standalone reemplaza los `<select>` nativos en todos los modales (no más widget del DE distinto por distro). Typeahead automático cuando hay >10 opciones.
 - File pickers nativos vía `rfd` 0.15 con feature `xdg-portal` — en KDE/Wayland abre el portal del sistema en vez del diálogo GTK 3 foreign del plugin-dialog.
@@ -185,12 +187,12 @@ ningún runtime, la app igual anda usando el API público de LT por default.
 - **Popovers bien ubicados**: `popover-position.ts` con flip arriba/abajo, clamp de X, `maxHeight` + scroll interno cuando no entra, medición real del popover (`afterRenderEffect` + `visibility:hidden`), recálculo en `resize` y cierre cuando el ancla se escapa del viewport (los flotantes son `position: fixed` anclados a coordenadas de viewport, así que scrollear los dejaba flotando sobre texto ajeno).
 - **Scrolloff del caret** (`feat/caret-scrolloff`): ProseMirror ya scrollea al tipear, pero con `scrollMargin` 5px sobre el *padding box* el caret quedaba pegado al borde inferior. `caret-scrolloff.ts` calcula insets de 2 líneas desde el `line-height` computado y las tres superficies tipeables los pasan por la `buildEditorProps()` compartida de `editor-props.ts`.
 - **Scroll-lock real en modales**: con un modal abierto la rueda sobre el backdrop ya no scrollea lo de atrás (editor / tree / landing); los panes con diff propio (Raya / Comillas) scrollean su contenido vía `grid-template-rows: minmax(0,1fr)` + `min-height:0` + `overscroll-behavior: contain`.
-- **Volver a la raíz**: botón 🏠 primero en la fila de acciones del panel izquierdo + `Cmd/Ctrl+Shift+H` (el modo focus esconde el panel). Flushea, cierra capítulo y nota y vuelve al landing — antes había que bajar a una saga para poder subir por el breadcrumb.
+- **Volver a la raíz**: botón «Ir al inicio» (la casita), primero en la fila de acciones del panel izquierdo + `Cmd/Ctrl+Shift+H` (el modo focus esconde el panel). Flushea, cierra capítulo y nota y vuelve al landing — antes había que bajar a una saga para poder subir por el breadcrumb.
 
 ### Notas (Markdown)
 
 - Editor separado para `.md` con TipTap + `tiptap-markdown` (no toca el flow de capítulos HTML).
-- Toolbar: B/I/S/code inline + H1/H2/H3 + listas bullet/numerada + blockquote + code block + hr. Sin raya, LT ni idioma.
+- Toolbar: B/I/S/code inline + H1/H2/H3 + listas bullet/numerada + blockquote + code block + hr + A−/A+ + el mismo menú **Vista** del editor de capítulos (espacio entre párrafos y ancho). Sin raya, LT ni idioma.
 - Convivencia con capítulos: un pane muestra una sola cosa a la vez (capítulo o nota); con split view se puede tener capítulo + nota lado a lado. El icono y footer marcan claramente "Nota".
 - `.md` aparecen en cualquier ubicación del árbol (root, carpeta libre, saga, libro, sección); las carpetas `<saga>/notas/` y `<book>/notas/` se renderizan como 📒 expandibles. Carpetas libres en root (sin saga.json/book.json) se renderizan como 📁.
 - Creación libre en root: click derecho en el área vacía del tree → "Nueva carpeta…" o "Nueva nota…" arman estructura paralela al TOC para worldbuilding/research. Click derecho sobre una carpeta 📁 permite anidar recursivo.
@@ -241,31 +243,31 @@ ningún runtime, la app igual anda usando el API público de LT por default.
   - `-trampa duendes` → excluye `trampa`.
   - `kind:note duendes`, `kind:chapter duendes` → filtra por tipo.
     El botón `?` del header lista la sintaxis en tooltip.
-- **Scope persistido** (selector debajo del input): `Todo el repo / Saga actual / Libro actual / Solo capítulos / Solo notas`. `Saga actual` y `Libro actual` se resuelven contra el capítulo abierto en el pane principal (la app walkea ancestros saga/book del path activo). Si no hay cap activo, el scope cae a `Todo el repo` y aparece un hint sutil `⚠ sin cap activo`. La elección persiste en `settings.json::searchScope`.
+- **Scope persistido** (selector debajo del input): `Todo el repo / Saga actual / Libro actual / Solo capítulos / Solo notas / Archivo actual`. `Saga actual` y `Libro actual` se resuelven contra el capítulo abierto en el pane principal (la app walkea ancestros saga/book del path activo). `Archivo actual` busca en el capítulo o nota abierto, sobre lo que tiene el editor en ese momento (sin pasar por el índice, cambios sin guardar incluidos). Sin contexto aparece un hint sutil `sin archivo activo`: `Saga actual` y `Libro actual` caen a `Todo el repo`, y `Archivo actual` no devuelve nada. La elección persiste en `settings.json::searchScope`.
 - **Dos modos, porque las necesidades chocaban** (`≈` en la barra, persistido en `settings.searchFuzzy`):
   - **Exacto (default)**: índice v4 con tokenizer fiel — `SimpleTokenizer + RemoveLongFilter(40) + LowerCaser`, sin fold de acentos y **sin drop de stopwords**, más QueryParser literal accent-sensitive. Encontrás el texto tal cual, que es lo que sirve para corregir frases anotadas en la Kindle: `mansion` no trae `mansión`.
   - **Fuzzy (opt-in)**: builder fuzzy/OR con Levenshtein escalado por longitud (≤3 chars exacto, 4–7 distancia 1, ≥8 distancia 2 — tantivy 0.22 solo cachea autómatas hasta 2), tolera typos y acentos para nombres inventados (`kellai` → `Kallai`).
   El flag `fold` viaja por todo el highlight (panel, editor, notas, md-reader): exacto accent-sensitive, fuzzy plega acentos. `foldAccents` (TS) espeja `fold_accents` (Rust) length-preserving para mantener alineados los offsets DOM/PM.
 - **Field boost `title × 2.5`** (`parser.set_field_boost`): un match en título ranquea sobre el body.
 - **El match viaja con offset**: cada `SearchHit` trae la posición real de la ocurrencia y `matchedTerms` con la palabra **del documento** que matcheó (`resolve_matched_words`), así el snippet centra en ella y el click salta a *ese* hit — no al primer token de la query, que era lo que hacía el jump inútil cuando un capítulo tenía varias apariciones.
-- **Modo debug BM25** (toggle 🐞 en header, persistido en `settings.json::searchDebug`): muestra `BM25 X.XX` debajo del título de cada hit para diagnosticar el ranking. Off por default.
+- **Modo debug BM25** (toggle con el ícono del bicho en el header, persistido en `settings.json::searchDebug`): muestra `BM25 X.XX` debajo del título de cada hit para diagnosticar el ranking. Off por default.
 - **Forma exacta gana** (mayúsculas + `¡¿?!`): el tokenizer de tantivy stripea puntuación y lowercaseа, así que `¡Duendes!` indexa como `duendes`. Para que `¡Duendes!` priorice el grito específico y no el primer `duendes` lowercase de cualquier párrafo, agregamos tres capas: (1) **snippet centra en el literal** si aparece en el doc; (2) **boost de ranking ×2** sobre docs cuyo contenido contiene la forma rica (substring case-insensitive); (3) **jump-to-term** salta al primer match literal del raw query antes de fallback a tokens. Query sin formas ricas (`duendes` solo) sigue ranqueando puro BM25.
 - **La puntuación filtra, no solo ranquea**: `—dijo` devuelve **solo** los capítulos que tienen la raya pegada al verbo, no todos los que tienen un `dijo` suelto (que con el boost de arriba igual venían, abajo en la lista). El caso real es cazar los dicendi vacíos de los primeros borradores: `—dijo`, `—preguntó`, `—respondió` uno por uno. Si ningún capítulo tiene el literal, vuelven los hits por palabra con el aviso «tal cual no está» (`matchLevel: noLiteral`), porque adentro del editor no se va a resaltar nada. Solo dispara con puntuación, no con mayúsculas: `Kellai` en fuzzy no está literal en ningún lado y es un hit válido. Y el salto desde el resultado usa el literal en vez de `matchedTerms` cuando hay puntuación, o caía en el primer `dijo` pelado del capítulo.
 - **Reindex incremental on-save**: cada `write_note` / `write_chapter` / `create_*` actualiza el índice de ese archivo. Render fresco en la próxima query, sin reindex manual.
-- **Reindex full** al boot si hay root configurado (async, no bloquea startup). Botón ↻ en el header del panel relanza un reindex completo si hace falta.
+- **Reindex full** al boot si hay root configurado (async, no bloquea startup). El botón «Reindexar todo el repo» (flechas en círculo) del header del panel relanza un reindex completo si hace falta.
 - Resultados rankeados por relevancia (BM25), con snippet centrado en el primer match y highlight `<mark>` de los términos.
 - Click en un resultado: capítulo → abre en el editor central; nota → reader derecho (Shift+click la abre en el notes-editor central); carpeta → expande el árbol y navega.
 - **Jump-to-term**: al clickear un hit, el editor/reader hace scroll automático al primer match dentro del contenido y selecciona el término (selección nativa del browser). Cualquier movimiento del cursor la limpia. Funciona en chapter editor, notes editor y markdown reader vía DOM `TreeWalker` (sin depender de TipTap commands).
 - HTML strip simple para indexar capítulos (tags `<p>`, `<em>`, `<strong>`, etc. se desnudan a texto plano). El render del snippet sigue siendo texto + highlight, sin re-renderizar HTML.
 - Mutex con image-viewer / font-preview / markdown-reader: el panel de búsqueda usa el mismo slot derecho y cierra a los otros tres cuando se abre.
 
-- **Reemplazar en lote** (toggle `⇄` del header del panel): reusa el selector de scope de la búsqueda (capítulo / libro / saga / todo el repo) y agrega "reemplazar por" con toggles `Aa` (mayúsculas) y `ab` (palabra completa); `≈` queda deshabilitado en este modo con el motivo al lado — un match aproximado cambiaría palabras que nadie pidió. El preview (`replace_preview`, debounce 250 ms) lee del **disco**, no del índice, así que es inmune a un índice desactualizado; se agrupa por capítulo con checkbox tri-estado por grupo y por ocurrencia. `replace_apply` snapshotea los originales antes de escribir.
+- **Reemplazar en lote** (toggle «Reemplazar en lote» del header del panel): reusa el selector de scope de la búsqueda (capítulo / libro / saga / todo el repo) y agrega "reemplazar por" con toggles `Aa` (mayúsculas) y `ab` (palabra completa); `≈` queda deshabilitado en este modo con el motivo al lado — un match aproximado cambiaría palabras que nadie pidió. El preview (`replace_preview`, debounce 250 ms) lee del **disco**, no del índice, así que es inmune a un índice desactualizado; se agrupa por capítulo con checkbox tri-estado por grupo y por ocurrencia. `replace_apply` snapshotea los originales antes de escribir.
   La pieza no obvia es el **mapeo plain ↔ HTML por runs** (`src-tauri/src/replace.rs`): se busca sobre el texto plano (lo que el autor ve) y se escribe sobre el HTML, y los offsets no coinciden — el plain se construye junto con una lista de runs que se corresponden byte a byte con el HTML.
 
 ### Conversor a raya
 
 - Port TS de reglas D1–D5 desde [`dialogos_a_esp`](https://github.com/T4toh/dialogos_a_esp) — **el repo Python está deprecado**; arrastraba bugs (`\b` ASCII-only no matchea acentos, colapso de párrafos, D3/D5 incompletos) que se arreglaron del lado TS. Las reglas vivas viven acá; el Python queda solo como referencia histórica.
-- Botón "Raya" en toolbar (solo cuando `idioma === 'es'`).
+- **Herramientas → Convertir diálogos a raya…** en la toolbar (solo cuando `idioma === 'es'`).
 - Preview side-by-side antes de aplicar.
 - **Procesamiento per-paragraph**: el converter detecta el HTML del editor y
   corre las reglas independiente por cada `<p>…</p>` y por cada chunk separado
@@ -290,7 +292,7 @@ Contraparte en inglés del conversor a rayas, para novelas importadas que quedar
 
 - `quotes/educate.ts` (`educateQuotes`) convierte `"` → `“ ”` (open/close contextual) y `'` → `‘ ’` (cita) o `’` (apóstrofe, posesivo, elisiones `'em` / `'90s`).
 - **Tag-aware**: tokeniza tags vs. texto y educa solo el texto, así `class="scene-break"` y demás atributos quedan intactos (un `.replace` global rompía el HTML).
-- Botón "Comillas" por capítulo (gate `idioma === 'en'`) con modal diff que reusa los estilos del de raya, y acción masiva "Arreglar comillas" en el menú de saga/libro/sección (`quotes-fix-service.ts`: confirm con conteo, escribe solo los que cambian, refresca árbol + git status). Cero Rust nuevo, cero deps npm.
+- **Herramientas → Pasar comillas a tipográficas…** por capítulo (gate `idioma === 'en'`) con modal diff que reusa los estilos del de raya, y acción masiva "Arreglar comillas" en el menú de saga/libro/sección (`quotes-fix-service.ts`: confirm con conteo, escribe solo los que cambian, refresca árbol + git status). Cero Rust nuevo, cero deps npm.
 
 ### Validador de raya (inline + batch)
 
@@ -305,19 +307,26 @@ colapsados, mezcla raya/comilla, etc.). Ground truth: [DPD raya](https://www.rae
    cada párrafo; si el output difiere del input (más allá de la normalización
    trivial de comillas tipográficas), emite violación con `autoFix` =
    replacement del converter.
-2. **Reglas dedicadas** (texto ya convertido pero roto): 8 patrones regex
+2. **Reglas dedicadas** (texto ya convertido pero roto): 15 reglas
    independientes para casos que el converter no toca por estar "ya con raya":
 
-   | ruleId                | qué detecta                                                                                                             | severidad | auto-fix             |
-   | --------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------- | -------------------- |
-   | `dash-short`          | `-`, `--` o `–` (en-dash) al inicio del diálogo en vez de `—` (em-dash)                                                 | error     | sí (reemplazo a `—`) |
-   | `dash-orphan`         | apertura `—texto` sin raya de cierre cuando hay verbo dicendi después en el mismo párrafo, indicando inciso mal cerrado | warning   | no                   |
-   | `dash-quote-mix`      | mismo párrafo con `—` y `"` (señal de parseo parcial)                                                                   | error     | no                   |
-   | `paragraph-collapsed` | ≥3 transiciones `[.?!…]\s+—` + ≥3 verbos dicendi → varios turns de diálogo aplastados en un solo `<p>`                  | error     | no                   |
-   | `space-after-open`    | `— Texto` (espacio sobrante después de raya inicial)                                                                    | warning   | sí (borra espacio)   |
-   | `space-before-verb`   | `—Texto—dijo` (sin espacio antes de raya del verbo)                                                                     | warning   | sí (inserta espacio) |
-   | `verb-capitalized`    | `—Dijo` post-inciso (DPD pide minúscula tras la raya del verbo)                                                         | warning   | sí (minúscula)       |
-   | `period-before-verb`  | `—Texto. —dijo` cuando D2 debería haber absorbido el punto                                                              | warning   | sí (borra punto)     |
+   | ruleId                | qué detecta                                                                                                                                | severidad | auto-fix              |
+   | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------- | --------------------- |
+   | `dash-short`          | `-`, `--` o `–` (en-dash) al inicio del diálogo en vez de `—` (em-dash)                                                                    | error     | sí (reemplazo a `—`)  |
+   | `dash-orphan`         | apertura `—texto` sin raya de cierre cuando hay verbo dicendi después en el mismo párrafo, indicando inciso mal cerrado                    | warning   | no                    |
+   | `dash-quote-mix`      | mismo párrafo con `—` y `"` (señal de parseo parcial)                                                                                      | error     | no                    |
+   | `paragraph-collapsed` | ≥3 transiciones `[.?!…]\s+—` + ≥3 verbos dicendi → varios turns de diálogo aplastados en un solo `<p>`                                     | error     | no                    |
+   | `space-after-open`    | `— Texto` (espacio sobrante después de raya inicial)                                                                                       | warning   | sí (borra espacio)    |
+   | `space-before-verb`   | `—Texto—dijo` (sin espacio antes de raya del verbo)                                                                                        | warning   | sí (inserta espacio)  |
+   | `verb-capitalized`    | `—Dijo` post-inciso (DPD pide minúscula tras la raya del verbo)                                                                            | warning   | sí (minúscula)        |
+   | `period-before-verb`  | `—Texto. —dijo` cuando D2 debería haber absorbido el punto                                                                                 | warning   | sí (borra punto)      |
+   | `quote-unclosed`      | párrafo que abre con comilla y no la cierra (o cierra de más): el converter no lo puede pasar a raya                                       | warning   | no                    |
+   | `double-period`       | dos puntos seguidos, o cuatro o más (los suspensivos son tres y solo tres, sin punto después)                                              | warning   | no                    |
+   | `closing-dash`        | raya de cierre del inciso mal puesta: sobra al final del párrafo, la puntuación quedó antes (`,—` en vez de `—,`) o sobra/falta un espacio | warning   | sí (algunos de a uno) |
+   | `opening-dash`        | raya que abre el inciso separada del comentario o pegada a lo anterior (`—No sé— dijo`)                                                    | warning   | sí (mueve el espacio) |
+   | `inciso-case`         | caja del comentario del narrador sin verbo de habla: minúscula a mitad del enunciado, mayúscula tras uno completo                          | warning   | sí                    |
+   | `double-space`        | espacio doble entre palabras o signos                                                                                                      | warning   | sí (deja uno)         |
+   | `unclosed-aside`      | inciso entre rayas en la narración (no diálogo) sin la raya de cierre                                                                      | warning   | no                    |
 
 **Heurísticas anti-falso-positivo**:
 
@@ -342,12 +351,19 @@ al oro, Adi.` no flagea (mid-content), `Dicen que una mansión está encantada`
 
 - Squiggle por categoría: char (rojo sólido), pending-conversion (naranja
   wavy), structure (rojo punteado), typo (amarillo wavy).
-- Auto-check on chapter open + debounce 1.5s después de cada save. Toggle
-  `✓Raya` en toolbar persistido en `settings.json::rayaAutoDisabled` (hasta 2026-09-30 `rayaAutoDisabled`, que se sigue leyendo). Solo
+- Auto-check on chapter open + debounce 1.5s después de cada save. Se apaga
+  desde Configuración → General → «Revisión mientras escribís» → «Diálogos
+  con raya», persistido en `settings.json::rayaAutoDisabled` (hasta
+  2026-09-30 la clave era `raeAutoDisabled`, que se sigue leyendo). Solo
   cuando `idioma == 'es'`.
-- Popover por severidad: char/typo → "Aplicar" (auto-fix directo). pending
-  → "Aplicar raya al párrafo" (replacement con autoFix del converter).
-  structure → solo "OK" (flag + tooltip, edit manual).
+- Popover: con auto-fix, «Corregir»; en pending, «Aplicar raya al párrafo»
+  (replacement con autoFix del converter). Al lado, «Ignorar», o
+  «Entendido» cuando no hay arreglo (structure: flag + edit manual).
+- **Cada marca enseña su regla**: el popover trae un par ✗/✓ (casi siempre
+  el ejemplo del propio DPD) y, en «Más opciones…», el link a la sección del
+  DPD que la respalda, «Ver todas las reglas de raya» y el `ruleId`. Esa
+  chuleta (`docs/raya.md`, cómo se escribe un diálogo con raya según el DPD)
+  se abre también desde el panel «Revisar raya».
 
 **Batch audit** (`RayaAuditService` + `RayaAuditPanel`):
 
@@ -368,8 +384,9 @@ al oro, Adi.` no flagea (mid-content), `Dicen que una mansión está encantada`
   sin `!`/`?` pegado ni guion; un grito entero `¡NO ME TOQUES!` no se marca).
   También corren **inline en el editor** (mismo decorador que la raya, punteado
   teal, en es y en) y el popover aplica la sugerencia con un click. Nunca en
-  bulk: el modal «Revisar libro» no las incluye y el panel solo lista y
-  salta ("nunca nada automático" es que cada arreglo sea decisión del autor).
+  bulk: el modal de revisión por libro solo las cuenta en «A corregir a
+  mano» y el panel solo lista y salta ("nunca nada automático" es que cada
+  arreglo sea decisión del autor).
   El header de la saga en la biblioteca tiene botones para las tres
   auditorías (raya, repeticiones, gramática), al lado de Diccionario y
   Configurar. Medido sobre el corpus del autor
@@ -383,7 +400,7 @@ al oro, Adi.` no flagea (mid-content), `Dicen que una mansión está encantada`
 - Click en una violación → navega al capítulo + `requestHighlight` del
   término para que el editor scrollee al match.
 
-**Corpus contra el DPD** (`scripts/run-raya-corpus-smoke.mjs`): 176
+**Corpus contra el DPD** (`scripts/run-raya-corpus-smoke.mjs`): 236
 diálogos de borrador (sustitutos de raya, espaciado, caja del inciso,
 puntuación, comillas, falsos positivos, HTML) con el esperado según la
 sección del DPD. Nunca se pierden letras ni suspensivos y `convert()` es
@@ -401,9 +418,9 @@ viejo, validador los detecta correctamente con `paragraph-collapsed`.
 
 ### Gramática + ortografía (LanguageTool)
 
-- 3 modos: público (`api.languagetool.org`), local (Docker), custom URL (self-hosted o LT Premium). Ver [Configuración avanzada → LanguageTool](#languagetool-3-backends) para detalles de cada uno.
+- 3 modos: público (`api.languagetool.org`), local (container: Docker, Podman o Apple `container`), custom URL (self-hosted o LT Premium). Ver [Configuración avanzada → LanguageTool](#languagetool-3-backends) para detalles de cada uno.
 - Underlines diferenciados: orto (rojo sólido), gramática (rojo wavy), estilo (amarillo wavy).
-- Popover con sugerencias clickeables + atribución LT.
+- Popover con un título por categoría (Ortografía, Concordancia, Puntuación…) en vez del código de la regla, sugerencias clickeables y atribución LT. Acciones: «Agregar al diccionario» (en ortografía) e «Ignorar»; en «Más opciones…», «Agregar con sus formas…», «No marcar más esta regla» y el `ruleId`.
 - Rate-limit client-side (18 req/min, 70KB/min) + chunking >20KB transparente.
 - **Offsets UTF-16 alineados + tolerancia a caídas de LT**: `split_chunks`
   (`grammar.rs`) lleva un cursor UTF-16 paralelo al byte cursor — los
@@ -415,12 +432,12 @@ viejo, validador los detecta correctamente con `paragraph-collapsed`.
   de marcas se desacopla del flip de availability — solo limpia ante toggle
   explícito del usuario, no por una caída momentánea. Tests `grammar::tests`
   (5) cubren em-dash + acento + boundary panic.
-- Auto-check auto-on en modo local/custom tras ping ok. Toggle persistido (`settings.json::grammarAutoDisabled`). Público queda off por ToS.
+- Auto-check auto-on en modo local/custom tras ping ok. Se apaga desde Configuración → General → «Revisión mientras escribís» → «Ortografía y gramática» (`settings.json::grammarAutoDisabled`). Público queda off por ToS: ahí se usa «Revisar» de la toolbar.
 - **Modo exigente (`picky`)**: toggle en Configuración → Gramática, off por default, persistido como `grammarPicky`. Activa las reglas de texto formal de LT (`TOO_LONG_SENTENCE`, redundancias) — medido, solo suma matches en inglés; el ruleset ES de LT no cambia con `picky`, y el texto del toggle lo avisa. Cambiar el nivel o la variante regional fuerza un recheck aunque el texto no haya cambiado.
 - Variantes regionales (es-AR, es-ES, en-US, en-GB…) globales + override per-saga (`saga.json::variante_es`/`variante_en`). Click en badge del footer abre dropdown.
-- **Falsos positivos: nombrarlos y matarlos** (`saga.json::reglas_lt_desactivadas`). "Ignorar" solo saca el match de la lista en memoria y vuelve en el próximo chequeo, así que el popover ahora muestra el **`ruleId`** —el dato ya viajaba entero desde `grammar.rs` hasta `GrammarMatch`, solo no se renderizaba— y suma **"Nunca más esta regla"**, que lo persiste junto con la oración que lo disparó. Esa lista *es* el registro de FP: con el id se reporta upstream, con el ejemplo se decide si conviene. Los ids se mandan como `disabledRules` en `/v2/check`, que el request no usaba nunca. Alcance **por saga** y no global: `saga.json` ya es donde vive la variante regional, así que la desactivación viaja por git con el repo de novelas en vez de quedarse en el `settings.json` de una máquina. Se reactivan desde el modal de config de saga, al lado de las variantes. Y como es una acción destructiva de un solo click, el toast que la confirma trae **"Deshacer"** (10 s) y un detalle con el camino exacto de vuelta; lo mismo el botón de al lado, "+ diccionario", que antes no avisaba nada. El toast con acción no se cierra al clickearlo: cerrarlo sería perder el deshacer. Ojo con la granularidad: `/v2/check` desactiva la regla **entera**, no la subregla (el id que devuelve la API es `AGREEMENT_POSTPONED_ADJ`, sin el `[3]` que se ve en los reportes).
-- Diccionario per-saga: "+ diccionario" en popover de TYPOS filtra matches. **Re-filtrado reactivo**: `SagaContextService.dictionary()` es un signal — un effect en `editor.ts` lo observa y re-filtra los `grammarMatches` actuales sin pegarle de nuevo a LT. Cubre el race típico (el saga.json carga async después del primer `checkGrammar`, así que palabras del mundo aparecían marcadas hasta cerrar/reabrir el cap) y el agregar palabra desde el popover (limpia el squiggle on the spot).
-- **Vista dedicada del diccionario** (botón 📖 en saga-header de landing + item "Editar diccionario…" en context menu de saga): modal con contador, búsqueda live, lista alfabética (Intl.Collator), agregar con validación en vivo, borrar con confirm inline, banner opt-in "Limpiar" cuando detecta entradas problemáticas (puntuación al borde, duplicados case-insensitive, solo dígitos, fuera de los límites 2–64). El validador (`dictionary/word-validator.ts`) sanea los bordes (`.`, `,`, `…`, comillas, paréntesis…) y se aplica también en el path "+ diccionario" del popover para que no se cuelen entradas con punto al final. Persiste por acción (cada add/remove escribe el archivo). El storage es un `<saga>/diccionario.txt` (una palabra por línea) — ver [sync del diccionario](#sync-del-diccionario-entre-pcs) abajo para el detalle de cómo se fusiona entre PCs.
+- **Falsos positivos: nombrarlos y matarlos** (`saga.json::reglas_lt_desactivadas`). "Ignorar" solo saca el match de la lista en memoria y vuelve en el próximo chequeo, así que el popover ahora muestra el **`ruleId`** —el dato ya viajaba entero desde `grammar.rs` hasta `GrammarMatch`, solo no se renderizaba— y suma **«No marcar más esta regla»** (en «Más opciones…»), que lo persiste junto con la oración que lo disparó. Esa lista *es* el registro de FP: con el id se reporta upstream, con el ejemplo se decide si conviene. Los ids se mandan como `disabledRules` en `/v2/check`, que el request no usaba nunca. Alcance **por saga** y no global: `saga.json` ya es donde vive la variante regional, así que la desactivación viaja por git con el repo de novelas en vez de quedarse en el `settings.json` de una máquina. Se reactivan desde el modal de config de saga, al lado de las variantes. Y como es una acción destructiva de un solo click, el toast que la confirma trae **"Deshacer"** (10 s) y un detalle con el camino exacto de vuelta; lo mismo «Agregar al diccionario», que antes no avisaba nada. El toast con acción no se cierra al clickearlo: cerrarlo sería perder el deshacer. Ojo con la granularidad: `/v2/check` desactiva la regla **entera**, no la subregla (el id que devuelve la API es `AGREEMENT_POSTPONED_ADJ`, sin el `[3]` que se ve en los reportes).
+- Diccionario per-saga: «Agregar al diccionario» en el popover de ortografía filtra matches. **Re-filtrado reactivo**: `SagaContextService.dictionary()` es un signal — un effect en `editor.ts` lo observa y re-filtra los `grammarMatches` actuales sin pegarle de nuevo a LT. Cubre el race típico (el saga.json carga async después del primer `checkGrammar`, así que palabras del mundo aparecían marcadas hasta cerrar/reabrir el cap) y el agregar palabra desde el popover (limpia el squiggle on the spot).
+- **Vista dedicada del diccionario** (botón «Diccionario» en el header de la saga en la biblioteca + item "Editar diccionario…" en context menu de saga): modal con contador, búsqueda live, lista alfabética (Intl.Collator), agregar con validación en vivo, borrar con confirm inline, banner opt-in "Limpiar" cuando detecta entradas problemáticas (puntuación al borde, duplicados case-insensitive, solo dígitos, fuera de los límites 2–64). El validador (`dictionary/word-validator.ts`) sanea los bordes (`.`, `,`, `…`, comillas, paréntesis…) y se aplica también en el path «Agregar al diccionario» del popover para que no se cuelen entradas con punto al final. Persiste por acción (cada add/remove escribe el archivo). El storage es un `<saga>/diccionario.txt` (una palabra por línea) — ver [sync del diccionario](#sync-del-diccionario-entre-pcs) abajo para el detalle de cómo se fusiona entre PCs.
 - **Formas derivadas al agregar una palabra** (`dictionary/derived-forms.ts` + `derived-forms-panel`): agregar `teletransportar` tenía que silenciar también `teletransportó`, `teletransportaba`, `teletransportándose`. Dos mecanismos con una regla que los divide — **el generador nunca escribe un plural**: los plurales y los enclíticos se **pelan al filtrar** (`-s`/`-es`/`-ces` en español, `-s` en inglés) y los verbos (15 formas) y el género de los adjetivos se **generan al archivo** con preview tildable. Medido sobre las 439 entradas reales: 39 de 42 familias eran singular/plural, futuro/condicional/subjuntivo tienen 0 apariciones en tres novelas (de ahí 15 formas y no ~60), y en inglés no hay nada que conjugar. Los irregulares no se modelan — se destilda la forma que no existe antes de escribir. El flujo arranca en el popover porque el infinitivo casi nunca está cargado: se infiere el lema hacia atrás (`inferLemma`) desde la forma que marcó LT. Seguridad del pelador sobre el texto completo: 3 palabras nuevas silenciadas sobre 25.444 únicas, las tres plurales legítimos.
 - **Términos compuestos** (`dictionary/compound-terms.ts`): `Kun Lian` (un reino), `Tres Torres` (un vino) o `Amalut de las Arenas` se guardaban bien y no servían para nada, porque todos los consumidores eran de a una palabra. Ahora las entradas de varias palabras se separan al cargar y se matchean **como frase sobre el texto plano**, devolviendo los **rangos** cubiertos; los consumidores que ya trabajan con offsets sobre el plano (filtro de LT, detector de repeticiones) descartan lo que caiga adentro. El filtro es por **contención**, no por igualdad: LT marca `las Arenas` con `AGREEMENT_DET_NOUN`, un span más corto que la entrada. Y adentro de un nombre propio del mundo no se filtran solo los typos: la restricción a `category === 'TYPOS'` se levanta para los rangos compuestos.
 - **UX Docker explicativa**: stepper visual con fases `checking → pulling → starting → loading → ready` durante el arranque + bloque "Por qué Docker" con links a docker.com, languagetool.org, el repo oficial de LT y la imagen `erikvl87/languagetool` que usamos. Eventos `languagetool-progress` emitidos desde Rust con `tauri::Emitter`.
@@ -457,7 +474,7 @@ Sinónimos en el popover de repetición como chips clickeables — LT no tiene n
 
 ### Revisión por libro
 
-Botón en la tarjeta del libro → modal que escanea el libro entero al abrirse (escanear es lectura; «Escanear» queda para re-escanear) con los cuatro detectores (rayas, comillas tipográficas, arreglos de raya, repeticiones), muestra qué encontró cada uno y aplica los tildados. **Una acción por tipo**, no una lista unificada de hallazgos. El panel lateral "Revisar raya" y las entradas del menú contextual quedan como estaban.
+Botón en la tarjeta del libro → modal que escanea el libro entero al abrirse (escanear es lectura; «Escanear» queda para re-escanear) con los cuatro detectores (rayas, comillas tipográficas, arreglos de raya, repeticiones), muestra qué encontró cada uno y aplica los tildados. Dos filas más son solo reporte: **A corregir a mano** (avisos de raya sin arreglo automático y mayúsculas rancias, con «ver» al panel de raya) y **Gramática** (abajo). **Una acción por tipo**, no una lista unificada de hallazgos. El panel lateral "Revisar raya" y las entradas del menú contextual quedan como estaban.
 
 - **Bulk auto-fix sin comerse el markup**: los offsets de `validateRaya` son sobre texto plano y el archivo es HTML. `dialogos/plano-con-mapa.ts` construye el plano **y** el índice HTML de cada carácter en la misma pasada (incluido el doble-decode de entidades de `htmlToPlain`, que se replica a propósito porque es el comportamiento que vieron todas las violaciones calculadas hasta hoy). `dialogos/aplicar-fixes.ts` aplica en orden descendente y **saltea** todo fix cuyo rango HTML contenga un tag: antes de comerse un `</em>` en veinte capítulos, no lo aplica y lo reporta.
 - **Repeticiones va sin checkbox** — no son auto-fixables: se reescriben a mano. Pero la lista no se queda en un número: cada ocurrencia lleva `path` + offset, muestra el snippet con contexto (±40 caracteres, la forma del `raya-audit-panel`) y el click abre el capítulo **con el popover de sinónimos ya abierto** sobre la aparición, que es lo único que sirve para arreglarla. La identificación no puede ser por offset (el del plano no coincide con el del editor por los `<hr>`): es por palabra normalizada + cercanía al bloque que resaltó el ancla, vía un `pendingPopover` que espera a que el chequeo pinte las decoraciones. La lista agrupa por capítulo y colapsa.
@@ -485,10 +502,10 @@ Botón en la tarjeta del libro → modal que escanea el libro entero al abrirse 
   cola. Post-apply, si `idioma=es`, aparece el botón **"Aplicar raya a
   partes"** que corre el converter D1–D5 sobre cada parte recién
   creada y reescribe los HTML modificados (toast con el conteo).
-- Wizard de importación de saga/novela (📥 en header): trae carpeta externa al repo con detección heurística de estructura, decisión per-carpeta sobre conversión, metadata de saga + libros (nombre / autor / idioma / imprenta), normalización de tapas y extras, progress bar con eventos. La presentación EPUB (template, dropcap, prefijo y numeración de capítulos) **no** se pregunta acá — vive en el tema (`theme.json` + `saga.json::theme.overrides` / `book.json::theme.overrides`) y se edita desde el theme editor. `SagaConfig`/`BookConfig` mantienen los 6 campos legacy como `Option<…>` y `theme.rs::resolve_theme` los lee de root para repos viejos (backcompat read-side intacta).
+- Wizard de importación de saga/novela (botón «Asistente» del header, el de la flecha de descarga): trae carpeta externa al repo con detección heurística de estructura, decisión per-carpeta sobre conversión, metadata de saga + libros (nombre / autor / idioma / imprenta), normalización de tapas y extras, progress bar con eventos. La presentación EPUB (template, dropcap, prefijo y numeración de capítulos) **no** se pregunta acá — vive en el tema (`theme.json` + `saga.json::theme.overrides` / `book.json::theme.overrides`) y se edita desde el theme editor. `SagaConfig`/`BookConfig` mantienen los 6 campos legacy como `Option<…>` y `theme.rs::resolve_theme` los lee de root para repos viejos (backcompat read-side intacta).
 - **Captura de extras con estructura**: subcarpetas sin `.docx`/`.odt` (ej. `versiones viejas/`) y subcarpetas dentro de secciones (`convertidos/`, `original/`, `Revisiones/`) se importan como extras preservando subpath, no se vuelven fake sections ni se pierden silenciosamente. Skip-list del importer separado del walker del tree (`fs.rs::SKIP_DIRS`) — el tree oculta `convertidos/` para no llenar la navegación; el importer lo agarra igual y lo guarda como backup. Wizard expone cada extra (incluyendo subpath) con su target path completo en el step "estructura".
 - **Toggle "Centralizar extras en `<saga>/extras/`"** (default ON, visible en step `saga-config`): redirige todos los extras (book + section + subpath) a la carpeta `extras/` de la saga preservando estructura `<book>/<section>/<subpath>/<file>`. El TOC de cada libro queda limpio (solo caps + book.json + cover). OFF mantiene comportamiento legacy con extras adentro de cada libro/sección.
-- **Generar demo** (mismo wizard 📥, tercer tipo): crea una saga de ejemplo con
+- **Generar demo** (mismo wizard, tercer tipo): crea una saga de ejemplo con
   1 libro, 5 capítulos × 3 partes (15 archivos `.html`) con prosa fantasy
   hardcoded en ES o EN. Incluye diálogos con raya, `<em>`, `<strong>`,
   `<hr class="scene-break"/>` y un `<blockquote>` para cubrir el subset HTML
@@ -499,7 +516,7 @@ Botón en la tarjeta del libro → modal que escanea el libro entero al abrirse 
 
 #### Notas externas
 
-Botón 📝 en el header del tree abre un wizard separado para traer notas markdown de fuentes externas, preservando la jerarquía de carpetas.
+El botón «Importar notas (Joplin)» del header del tree abre un wizard separado para traer notas markdown de fuentes externas, preservando la jerarquía de carpetas.
 
 - **Joplin (Markdown export)**: en Joplin `File → Export all → MD - Markdown`. Apuntá el wizard a la carpeta exportada, elegí destino dentro del repo (default = nombre del folder source) y opciones:
   - **Saltar notas vacías**: omite `.md` con 0 bytes o contenido sólo whitespace.
@@ -564,6 +581,7 @@ Botón 📝 en el header del tree abre un wizard separado para traer notas markd
 - CSS subset estilo Reedsy embebido.
 - Templates 6×9" / 5×8" / A5 inyectados como `@page`.
 - Cover image, dedicatoria, copyright, TOC navegable.
+- **Sección «Promoción» en la configuración del libro**: tagline, blurb, sinopsis, palabras clave y géneros, guardados en el `book.json` (blurb y sinopsis con sus saltos de párrafo); los créditos (tapa, corrección, traducción) van en «Publicación». Las palabras clave y los géneros están para copiarlos al panel de la tienda al publicar.
 - **Textos de promoción en el EPUB**: el blurb va a `<dc:description>` (la ficha que muestran Calibre, Kobo o Apple Books) y, con `blurb_en_epub`, como página «Sinopsis» entre la tapa y la portada interior — la contratapa del ebook en español. Los créditos salen en la página de copyright, uno por `<p>`. Palabras clave y géneros no van al EPUB: las tiendas no leen `<dc:subject>`, se cargan en su panel.
 - Página "Sobre el autor" generada al final: título, epígrafe opcional en itálica, bio, y una **firma** al pie (foto chica, nombre, QR + web en una línea). La foto va abajo a propósito: leída al terminar la novela, la página cierra como una carta. Auto-detect de `author.*`/`autor.*` desde disco.
 - **Back matter completo** (spec en `docs/superpowers/specs/2026-09-01-back-matter-epub-design.md`):
@@ -605,6 +623,7 @@ Botón 📝 en el header del tree abre un wizard separado para traer notas markd
 - Detección automática de bold/italic via sufijos en filename (`-Regular`, `-Bold`, `-Italic`, `-BoldItalic`, case-insensitive).
 - **Italic/bold sintetizados desde la regular**: por default no se embeben faces italic/bold separadas — sólo la regular. El reader EPUB aplica `font-style: italic` / `font-weight: bold` al renderizar `<em>`/`<strong>`. Tres tunings opcionales en el tema cuando el default no alcanza: `italic_oblique_deg` (ángulo del oblique sintético, ej. `14`), `italic_weight` (peso 100-900 para italic), `bold_weight` (peso 100-900 para bold). Cascade: si `italic_weight` está vacío y `bold_weight` set, italic hereda el peso bold (caso clásico donde la italic se confunde con la regular — subís bold y la italic también queda diferenciada). Combo `<strong><em>` siempre usa `bold_weight` vía regla `strong em, em strong, ...` para ser bold sin importar anidamiento.
 - **Tema editorial**: `editorial_body_font` + `editorial_heading_font` aíslan tipografía de páginas no-autor (title page, copyright, dedicatoria, TOC, sobre el autor) de la prosa.
+- **Ornamento del salto de escena**: `scene_break` elige cómo sale el `<hr class="scene-break"/>` en el EPUB — `* * *` (default), `***`, `• • •`, `❦`, `~` o en blanco. Se elige en el theme editor (tab Capítulos) y también como override por saga o por libro. El editor sigue mostrando `* * *`; el cambio se ve en el EPUB.
 - **Posición del título de capítulo**: `chapter_title_position` (`top`/`center`/`bottom`) con fallback `@media amzn-kf8` para que Kindle también centre.
 - **Preview de fuente en panel derecho**: click en una fuente del pool abre el viewer (FontFace API): hero `Aa Bb Cc` a 96px + alfabeto + signos ES + escala 14/20/32/48 + párrafo Lorem ipsum. Mutex con el image viewer (un panel a la vez). Esc o × cierra.
 - **Theme editor con tabs y preview live**: modal de altura fija con tabs `Tipografía / Capítulos / Editoriales / Página / Fuentes`. Controles agrupados en `ctrl-group` cards (Identidad, Cuerpo, Títulos, Italic sintético, Bold sintético, Prefijo y título, Inicio del cuerpo, Partes, etc.). Preview live por tab a la derecha: cuerpo con inline italic/bold/bold+italic, página standalone de capítulo (mock con aspect-ratio según template + posición `top/center/bottom`), páginas editoriales (TOC + dedicatoria + título), mock EPUB. Selector de fuente unificado con el editor toolbar (`<app-select>` + itemTemplate que renderea cada nombre en su tipografía, FontFace lazy on-hover). Pool de fuentes con virtual scroll (cdk) y FontFace eager-load. Scroll-lock real al body mientras está abierto.
@@ -628,16 +647,16 @@ Los avisos duran 4 segundos y se van solos, así que hay una **campana al filo d
 
 Las entradas **las borra el autor**, con la × de cada una o con "Limpiar todo"; no se vencen. El tope de 200 es una red contra una sesión larga, no una política de limpieza. El historial vive solo en memoria: se vacía al cerrar la app.
 
-Lo que el toast tenga, la entrada lo conserva: si tenía detalle se abre igual desde acá, y si tenía una acción —el **Deshacer** de "Nunca más esta regla" o de "+ diccionario"— **sigue disponible después de que el toast murió**, que es justamente el caso que la motivó. Correr la acción desde el historial la consume y borra la entrada.
+Lo que el toast tenga, la entrada lo conserva: si tenía detalle se abre igual desde acá, y si tenía una acción —el **Deshacer** de «No marcar más esta regla» o de «Agregar al diccionario»— **sigue disponible después de que el toast murió**, que es justamente el caso que la motivó. Correr la acción desde el historial la consume y borra la entrada.
 
 La parte pura (orden más-nueva-primero + recorte por tope) vive en `notificaciones/historial.ts` con su runner, `scripts/run-historial-smoke.mjs`.
 
 ### Configuración
 
-- El engranaje abre `settings-modal/` con bloques colapsables (`<details>` nativo): **General** (incluye el toggle del panel de debug, que antes vivía en el header), **Apariencia** y **Gramática** (variantes regionales, nivel de chequeo, repeticiones). Antes era un modal que solo configuraba LanguageTool.
+- El engranaje abre `settings-modal/` con bloques colapsables (`<details>` nativo): **General** (el toggle del panel de debug, que antes vivía en el header, y «Revisión mientras escribís»: un switch para ortografía y gramática, otro para diálogos con raya y otro para palabras repetidas, que reemplazan a los toggles que había en la toolbar), **Apariencia** y **Gramática** (variantes regionales, nivel de chequeo, repeticiones). Antes era un modal que solo configuraba LanguageTool.
 - `show()` recibe qué bloque desplegar: el effect que abre el modal cuando LT se cae pide `gramatica`, así el remedio no queda detrás de un click. El estado colapsado no se persiste, por lo mismo.
 - **General → epubcheck**: estado del validador (instalado / instalado pero sin JVM / ausente, distinguidos por la salida real del binario) y las tres formas de instalarlo con la de esta máquina primera —`brew install epubcheck`, `sudo pacman -S epubcheck`, descarga del release para Windows y el resto— en chips copiables. Con epubcheck ya instalado el bloque queda colapsado como "Instalarlo en otra máquina". Rust solo aporta la plataforma para el orden: adivinar el gestor de paquetes de un Linux cualquiera sigue prohibido.
-- **Acerca de** (botón en el header): versión de la app y las licencias de todas las dependencias (npm + crates), generadas en el build por `scripts/generar-licencias.mjs` a `licencias.json`, agrupadas por licencia y colapsables por paquete.
+- **Acerca de** (botón en el header): versión de la app, una pestaña **Novedades** con la sección del `CHANGELOG.md` de la última versión (y las anteriores), y otra con las licencias de todas las dependencias (npm + crates), generadas en el build por `scripts/generar-licencias.mjs` a `licencias.json`, agrupadas por licencia y colapsables por paquete.
 
 ### Debug / observabilidad
 
@@ -647,7 +666,7 @@ La parte pura (orden más-nueva-primero + recorte por tope) vive en `notificacio
 - Services frontend instrumentados: `ChapterService`, `UpdaterService`, `GrammarService`, `ThemesService`, `ProjectService`, `ImportWizardService`. App component captura `chapter/project/git.error()` vía effects.
 - **Filtros**: 3 toggles de nivel (info/warn/error) + input de búsqueda por source.
 - **Copiar**: botón en header serializa entradas filtradas a clipboard como texto plano (útil para bug reports).
-- **Snapshot**: botón 📸 dumpea el estado actual (settings, project tree counts, capítulo activo, git status, grammar mode) como entrada `[snapshot]` con JSON pretty.
+- **Snapshot**: el botón de la cámara («Snapshot del estado actual») dumpea el estado actual (settings, project tree counts, capítulo activo, git status, grammar mode) como entrada `[snapshot]` con JSON pretty.
 - **Persistencia sessionStorage**: log + visible + filtros sobreviven F5 (no entre sesiones).
 - Max 200 entries (drop oldest).
 
@@ -659,7 +678,7 @@ tWriter auto-detecta cómo está versionada/sincronizada la carpeta raíz y adap
 - **Cloud** (path bajo `Dropbox/`, `pCloud/`, `Nextcloud/`, `OneDrive/`, `Google Drive/`, `iCloud Drive/`, `Syncthing/`, `MEGA/`): badge con el nombre del servicio. La app solo escribe archivos — el cliente del servicio sincroniza.
 - **Local**: badge `💾 Local`. Cero versionado, cero sync — el usuario respalda por su cuenta.
 
-Cuando no es git, los controles ⇅/⤓ no aparecen y un botón `❓` al lado del badge abre un modal con la receta paso a paso para hacer `git init` + push a GitHub. Al cerrar el modal, la app re-chequea el folder, así que si corriste `git init` en una terminal aparte, el badge cambia a Git solo, sin reabrir la carpeta.
+Cuando no es git, los controles ⇅/⤓ no aparecen y un botón «Cómo usar git con esta carpeta» (el signo de pregunta) al lado del badge abre un modal con la receta paso a paso para hacer `git init` + push a GitHub. Su botón **«Abrir en terminal»** abre la terminal del sistema ya parada en la carpeta de la novela, para correr los comandos sin copiar el `cd`. Al cerrar el modal, la app re-chequea el folder, así que si corriste `git init` en una terminal aparte, el badge cambia a Git solo, sin reabrir la carpeta.
 
 Si la carpeta es git _y_ además está adentro de Dropbox (caso "Dropbox como segundo sync"), gana git — los controles versionados son los que mostramos. Dropbox queda como redundancia invisible.
 
@@ -671,6 +690,7 @@ ni saber qué es `git pull --rebase`.
 - `git2` crate (libgit2) para status + commit. Push/pull delegan al binario `git` del sistema (más estable para SSH/agent que libssh2).
 - SSH agent + fallback a `~/.ssh/id_ed25519/id_rsa/id_ecdsa`.
 - **Sync por eventos, no por poll**: al recuperar el foco de la ventana → `fetch` silencioso + refresh de status; al perderlo → `flushAndSync` con debounce de 30 s y cooldown de 2 min entre pushes; al cerrar → `flushAndSync` con timeout de 10 s y modal "¿Cerrar igual?" si falla. Listeners de `online`/`offline` pausan y reanudan. El poll de status de 30 s que había antes se eliminó; quedan un refresh suave de status cada 60 s (detecta commits hechos desde una terminal) y un auto-commit cada 5 min como red de seguridad para sesiones largas sin transiciones de foco.
+- **Sync antes de suspender** (`power.rs`): al cerrar la tapa o suspender la PC con el editor abierto, la app guarda y sube los cambios pendientes antes de que la máquina se duerma, y vuelve a sincronizar al despertar. Cada sistema avisa distinto y da un margen distinto (macOS hasta 30 s, Linux el `InhibitDelayMaxSec` de logind, Windows ~2 s sin esperar); sin esto, lo último escrito quedaba en la máquina dormida y chocaba después con lo que se escribía en la otra PC.
 - Cuando el status detecta `behind > 0` corre auto-pull en background. La decisión `ff-only` vs `rebase --autostash` mira tanto `ahead > 0` como `has_changes`: si hay working tree dirty (típico cuando el editor está abierto sobre un cap que también cambió remoto), pull plano abortaría — vamos directo a `--rebase --autostash` para sobrevivir el race sin que el usuario tenga que cerrar la app.
 - **Auto-upstream on pull**: si la rama local no tiene upstream seteado (caso típico: clonaste desde otra PC con `git clone` pero la branch nunca pusheó), `git pull` plano falla con `"There is no tracking information for the current branch"`. `git_pull_impl` / `git_pull_rebase_impl` detectan esto vía `git rev-parse --abbrev-ref @{u}`, ejecutan el pull pasando `origin <branch>` explícito, y al éxito setean el upstream con `git branch --set-upstream-to=origin/<branch>`. Los próximos pulls usan el camino vanilla. Tests `pull_sets_upstream_when_missing` + `pull_rebase_sets_upstream_when_missing` cubren ambos paths.
 - **Push auto-rebase**: si el remoto avanzó desde otra PC, `git push` falla con non-FF; el backend corre `git pull --rebase --autostash` y reintenta el push una vez. Si el rebase choca, lo aborta y la UI muestra "Conflicto entre esta PC y el remoto. Abrí el panel 🐛 para detalle." (sin terminal jargon).
@@ -739,28 +759,40 @@ Para uso intensivo y privacidad total. La app maneja los 3 runtimes de
 containers comunes y **autodetecta** el que tengas instalado y con daemon vivo
 (prioridad: el que ya tenga el container de LT levantado → Docker → Podman →
 Apple `container`). Absorbe las diferencias de CLI entre ellos (Apple no soporta
-`--restart` y usa `ls --format json` en vez de Go templates; el mapeo de puerto
-`-p 8081:8010` a `localhost` funciona en los tres). Podés levantarlo desde el
-modal de gramática (⚙ del header → "Local (Docker)" → "Levantar LanguageTool") —
-el status muestra vía qué runtime corre —, o por CLI:
+`--restart`, usa `ls --format json` en vez de Go templates y limita cada
+container a 1 GB, así que ahí va con `-m 3G` para que la JVM no muera por
+memoria). El puerto se publica solo en loopback (`-p 127.0.0.1:8081:8010`):
+LanguageTool lo usa tWriter, no la red local. Podés levantarlo desde
+Configuración → Gramática → "Local (Docker)" → "Levantar LanguageTool" — el
+status muestra vía qué runtime corre —, o por CLI:
 
 ```bash
 ./scripts/start-languagetool.sh   # primera vez tarda ~30s en cargar modelos
 ./scripts/stop-languagetool.sh
 ```
 
-Los scripts asumen **Docker**; con Podman o Apple `container` hay que levantarlo
-desde el modal de gramática, que es el que conoce los tres runtimes.
+Los scripts asumen **Docker** y crean el mismo container que la app (misma
+imagen fija, solo en `127.0.0.1`); con Podman o Apple `container` hay que
+levantarlo desde Configuración → Gramática, que es la que conoce los tres
+runtimes.
+
+**Actualizar LanguageTool**: la imagen va con versión fija. Cuando tWriter trae
+una versión nueva de LT, Configuración → Gramática muestra «Actualizar
+LanguageTool», que baja la imagen nueva y recrea el container (y «Levantar»
+hace lo mismo). Antes cada PC se quedaba para siempre con la versión que bajó
+la primera vez.
 
 Detalles bajo el hood:
 
 - Imagen [erikvl87/languagetool](https://hub.docker.com/r/erikvl87/languagetool)
-  ([repo](https://github.com/Erikvl87/docker-languagetool)) — Java 17 + LT
-  - hunspell, expone `:8010` que mapeamos a `localhost:8081`.
+  ([repo](https://github.com/Erikvl87/docker-languagetool)) con tag fijo
+  (`erikvl87/languagetool:6.8`, la constante `LT_IMAGE` de `grammar.rs`) —
+  Java 17 + LT + hunspell, expone `:8010` que mapeamos a `127.0.0.1:8081`.
 - ~2GB RAM en runtime, ~300MB de imagen on disk. Hunspell incluido cubre
   ES/EN — no necesitás diccionario aparte.
-- Auto-check on-by-default cuando el ping responde. Toggle persiste en
-  `settings.json::grammarAutoDisabled`.
+- Auto-check on-by-default cuando el ping responde. Se apaga desde
+  Configuración → General → «Revisión mientras escribís» → «Ortografía y
+  gramática» (`settings.json::grammarAutoDisabled`).
 - El backend Rust emite eventos `languagetool-progress` con fases
   `checking → pulling → starting → loading → ready`; el modal muestra
   un stepper en vivo.
@@ -805,10 +837,13 @@ glosarios, tapas alternativas) y notas (research / worldbuilding).
 ```
 <root>/
   README.md                        # opcional, visible en GitHub, oculto en la app
+  autor.json                       # opcional, perfil del autor (bio, foto, web, QR) para «Sobre el autor»
+  fonts/                           # pool global de fuentes (.ttf/.otf/.woff/.woff2) de todos los temas
   themes/                          # opcional, temas reutilizables
     <id>/
-      theme.json                   # { body_font, body_size, heading_font, heading_size, line_height, page_margin }
-      fonts/                       # .ttf/.otf/.woff/.woff2
+      theme.json                   # { body_font, body_size, heading_font, heading_size, line_height, page_margin, scene_break, … }
+      fonts/                       # legacy: «Consolidar» las mueve a <root>/fonts/
+  .twriter/                        # local, gitignored: índice de búsqueda + stats.json (palabras, última edición)
   <carpeta-libre>/                 # opcional, kind: folder — notas y subcarpetas sueltas
     <cualquier-archivo>.md         # notas markdown
     <subcarpeta>/                  # recursivo
@@ -818,6 +853,7 @@ glosarios, tapas alternativas) y notas (research / worldbuilding).
     cover.{jpg,png,jpeg,webp}      # opcional, tapa de la serie
     extras/                        # opcional, mapas/glosarios saga-level
       <cualquier-archivo>
+    diccionario.txt                # diccionario de la saga, una palabra por línea
     fonts/                         # opcional, override de fuentes per-saga
     notas/                         # opcional, notas saga-level (📒)
     <libro>/
@@ -828,6 +864,7 @@ glosarios, tapas alternativas) y notas (research / worldbuilding).
         <cualquier-archivo>
       fonts/                       # opcional, override de fuentes per-libro
       notas/                       # opcional, notas book-level
+      Exportados/                  # los EPUB exportados (el último de cada variante)
       <n>.html + <n>.meta.json     # capítulos
       <sección>?/<n>.html          # capítulos en secciones
 ```
@@ -850,9 +887,12 @@ Reglas:
   No participan del TOC ni del EPUB.
 - Para libros standalone (sin saga padre), el layout del libro es idéntico —
   `<book>/cover.*`, `<book>/extras/`, `<book>/fonts/`, etc.
-- `themes/` vive solo en la raíz del repo. Cada tema es autocontenido (su
-  propio `theme.json` + carpeta `fonts/`). Sagas y libros referencian un tema
-  por id en `saga.json::theme.base` / `book.json::theme.base`.
+- `themes/` vive solo en la raíz del repo. Cada tema es un `theme.json`; las
+  fuentes van al pool global `<root>/fonts/` y el tema las referencia por
+  nombre de familia. Una carpeta `themes/<id>/fonts/` es legacy: se sigue
+  leyendo como último recurso y «Consolidar» (header de Fuentes) la vacía al
+  pool. Sagas y libros referencian un tema por id en `saga.json::theme.base` /
+  `book.json::theme.base`.
 
 ### Setup local
 
@@ -941,13 +981,13 @@ En **Arch / CachyOS** (system libs con secciones ELF `.relr.dyn`) el `strip` que
 NO_STRIP=true pnpm tauri build
 ```
 
-CI (Ubuntu 22.04) no necesita este flag — system libs ahí son ELF clásico.
+CI (Ubuntu 24.04) no necesita este flag — system libs ahí son ELF clásico.
 
 ### Distribución
 
 - CI: `.github/workflows/release.yml`. Trigger: `git push --tags v*.*.*`. Linux job buildea `.deb`, Windows job buildea `.exe` (NSIS; `tauri.conf.json::bundle.targets` no incluye `msi`), macOS job (`macos-14`) buildea `.dmg` para `aarch64` y `x86_64`. Todo firmado ed25519 para el updater.
 - **Linux Arch / CachyOS**: `twriter-bin` en el AUR, publicado desde `packaging/aur/publish.sh`. `test.sh` prueba el PKGBUILD local contra el `.deb` del release.
-- **Linux Debian / Ubuntu**: descargar `.deb`, `sudo apt install ./twriter_*.deb`. Sin auto-update.
+- **Linux Debian / Ubuntu**: descargar `.deb`, `sudo apt install ./twriter_*.deb`. Después se actualiza solo, como Windows y macOS.
 - **Windows** y **macOS**: `.exe` / `.dmg` del release. Auto-update Tauri-native vía banner in-app contra `releases/latest/download/latest.json`.
 
 #### Cortar release
