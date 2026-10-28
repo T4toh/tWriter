@@ -1,0 +1,104 @@
+# Mantiene al día el LanguageTool que baja tWriter (src-tauri/lt-lock.json).
+#
+# Una vez por semana regenera la lista con la última versión de LT y del JRE
+# que tenga 7 días o más. Si cambió algo, prueba que arranque y marque de
+# verdad (scripts/smoke-lt-lock.mjs) y abre un PR con el lock nuevo y su línea
+# de CHANGELOG. Nunca mergea ni publica: la versión nueva llega a los usuarios
+# con el próximo release de tWriter.
+#
+# Necesita "Allow GitHub Actions to create and approve pull requests" prendido
+# en Settings → Actions → General. Los PRs abiertos con GITHUB_TOKEN no
+# disparan otros workflows, así que el resultado del smoke se postea como
+# commit status (`lt-al-dia/smoke`).
+name: LanguageTool al día
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+
+concurrency: lt-al-dia
+
+jobs:
+  lt-al-dia:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      # Maven y un JDK vienen en la imagen de ubuntu-24.04.
+      - name: Regenerar la lista
+        id: lock
+        shell: bash
+        run: |
+          node scripts/armar-lt-lock.mjs --lt latest --changelog
+          if git diff --quiet src-tauri/lt-lock.json; then
+            echo "Sin cambios."
+            echo "cambio=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "cambio=si" >> "$GITHUB_OUTPUT"
+          echo "lt=$(node -p "require('./src-tauri/lt-lock.json').lt")" >> "$GITHUB_OUTPUT"
+          echo "jre=$(node -p "require('./src-tauri/lt-lock.json').jre")" >> "$GITHUB_OUTPUT"
+
+      - name: Probar que arranca y marca
+        id: smoke
+        if: steps.lock.outputs.cambio == 'si'
+        continue-on-error: true
+        shell: bash
+        run: node scripts/smoke-lt-lock.mjs 2>&1 | tee "$RUNNER_TEMP/smoke.log"
+
+      - name: Abrir el PR
+        if: steps.lock.outputs.cambio == 'si'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LT: ${{ steps.lock.outputs.lt }}
+          JRE: ${{ steps.lock.outputs.jre }}
+          SMOKE: ${{ steps.smoke.outcome }}
+        run: |
+          rama="bot/lt-${LT}-jre-${JRE}"
+          if git ls-remote --exit-code --heads origin "$rama" > /dev/null; then
+            echo "La rama $rama ya existe: el PR anterior sigue abierto."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$rama"
+          git add src-tauri/lt-lock.json scripts/lt/pom.xml CHANGELOG.md
+          git commit -m "chore(lt): LanguageTool ${LT}, Java ${JRE}"
+          git push origin "$rama"
+
+          if [ "$SMOKE" = "success" ]; then
+            estado=success
+            resumen="Arranca y marca en es-AR y en-US (Linux x64)."
+          else
+            estado=failure
+            resumen="**El smoke falló: no mergear hasta ver qué cambió.**"
+          fi
+          {
+            echo "Lista regenerada por \`.github/workflows/lt-al-dia.yml\`: LanguageTool ${LT}, Java ${JRE}."
+            echo
+            echo "$resumen"
+            echo
+            echo '```'
+            tail -n 30 "$RUNNER_TEMP/smoke.log"
+            echo '```'
+            echo
+            echo "Mac y Windows no se prueban acá: el autor los prueba antes del release."
+          } > "$RUNNER_TEMP/body.md"
+          gh pr create --base main --head "$rama" \
+            --title "chore(lt): LanguageTool ${LT}, Java ${JRE}" \
+            --body-file "$RUNNER_TEMP/body.md"
+          gh api "repos/${{ github.repository }}/statuses/$(git rev-parse HEAD)" \
+            -f state="$estado" -f context=lt-al-dia/smoke \
+            -f description="Smoke de LanguageTool en Linux x64: $estado"

@@ -20,16 +20,48 @@ huela a "esto ya lo miramos", buscar ahí primero.
   lee la imagen con `inspect --format {{.Config.Image}}`: tocar «Actualizar
   LanguageTool» con un container creado desde `latest` y ver que lo recree.
 
-- **Bajar LanguageTool desde la app, sin containers** (lo prefiere el autor;
-  va en su propio PR y pide diseño antes de codear). La app baja un JRE de
-  Adoptium/Temurin y LT armado (jars de Maven Central, o lo que trae la imagen
-  `erikvl87/languagetool` en `/LanguageTool`), los dos con versión y checksum
-  fijos, y corre LT como proceso propio. Se maneja desde Configuración →
-  Gramática. No es el sidecar descartado: no se arma nada en CI ni viaja en el
-  bundle, así que el costo que lo mató no aplica. Antes de arrancar, leer
-  `docs/decisiones-cerradas.md` → «LT embebido como sidecar» (mediciones, la
-  corrección del 2026-10-28 y las tres trampas) y la rama
-  `archivo/lt-sidecar-NO-MERGEAR`.
+- **Bajar LanguageTool desde la app, sin containers** (implementado en la rama
+  `feat/lt-descargado`; falta la prueba del autor en las cuatro plataformas,
+  con la lista de «Verificación → Manual del autor» del spec). Diseño aprobado en
+  `docs/superpowers/specs/2026-10-28-lt-descargado-design.md`: jars de Maven
+  Central + JRE Temurin, fijados por sha256 en `src-tauri/lt-lock.json`, y un
+  workflow semanal que abre PR con la versión nueva. Lo automático (tests Rust,
+  e2e que baja e instala, smoke del lock) pasa en Mac arm64 y Linux x64; falta
+  la app de verdad en Mac arm64, el Arch, una Mac Intel y Windows (ojo con la
+  ventana de consola).
+
+- **Sacar Docker de `grammar.rs` después de probar el LT embebido** (decisión
+  del autor, 2026-10-28). Hoy conviven **a propósito**: si el embebido queda a
+  medias o con errores en alguna plataforma, el container sigue andando. Recién
+  cuando el autor lo haya probado en las cuatro plataformas, un PR aparte borra
+  las ~700 líneas de detección multi-runtime, pull, start y remedies, el bloque
+  de Docker del modal y la segunda rama de `resolve_base`, y el embebido puede
+  volver a arrancar desde el puerto 8081.
+
+- **Menores del LT embebido que quedaron de la revisión de #213** (ninguno
+  rompe el uso normal; agarrarlos si aparece el síntoma):
+  - «Reiniciar», «Borrar» o «Actualizar» justo mientras corre el arranque
+    automático: `detener()` no espera al arranque en vuelo (`ARRANQUE`), así que
+    ese arranque puede terminar después y dejar corriendo la versión vieja. El
+    arreglo es un reiniciar que pare y arranque con `ARRANQUE` tomado.
+  - El huérfano se detecta por "el puerto anotado contesta como LT", no por el
+    pid: con dos tWriter abiertos (no hay plugin de instancia única) uno mata el
+    `java` del otro. Y un huérfano que no contesta en 1,5 s pierde su `lt.pid`
+    y ya no se lo encuentra.
+  - El arranque mira `responde()` antes que `try_wait()`: si otro LT ganó el
+    puerto, un `java` nuestro muerto se da por listo (se corrige solo en el
+    próximo `corriendo()`).
+  - El sha256 de ~142 MB y la extracción del JRE corren en un worker async (irían
+    con `spawn_blocking`), y `responde()` arma un `reqwest::Client` por poll.
+  - Restos en disco: el `.tar.gz` del JRE si se cierra a mitad y el lock cambia
+    de JRE; si LT se instala y el JRE falla, quedan el LT nuevo y el viejo.
+  - Al pasar de Local a Público el `java` sigue vivo hasta cerrar la app (~400 MB).
+  - Usuario de Windows con nombre fuera de la code page ANSI (cirílico, CJK): sin
+    verificar. Si falla, el arreglo es `current_dir(libs)` + `-cp *`.
+  - `lt-al-dia.yml`: si `gh pr create` falla después del push, la rama queda y
+    las corridas siguientes creen que el PR sigue abierto (chequear con
+    `gh pr list --head` en vez de la rama). Los PRs del bot que se superponen se
+    pisan en el lock y el CHANGELOG.
 
 - **Moverse con las flechas por los globitos de revisión** (quedó afuera de
   #212). Mientras el globito está abierto el foco lo tiene el editor, y las
@@ -394,6 +426,13 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   próxima tanda de dependencias, no antes.
 
 ## Documentación
+
+- [ ] **README: la parte de LanguageTool después de mergear #213.** #214 lo
+  puso al día con `main` (sin reorganizar), pero no documenta el LT que baja la
+  app porque todavía no estaba en `main`. Al mergear #213: reescribir
+  instalación y «Configuración avanzada → LanguageTool» para que Local sea el
+  embebido y Docker la alternativa; y cuando salga Docker (item de arriba),
+  sacar Docker del README y los scripts `start/stop-languagetool.sh`.
 
 - [ ] **Wiki o sitio de docs; el README quedó demasiado grande** (pedido del
   autor el 2026-09-14). Hoy `README.md` tiene ~1.070 líneas y mezcla cuatro

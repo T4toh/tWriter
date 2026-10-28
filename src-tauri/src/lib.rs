@@ -14,6 +14,7 @@ mod fs;
 mod git;
 mod grammar;
 mod image;
+mod lt_embebido;
 mod import;
 mod import_notes;
 mod import_wizard;
@@ -116,6 +117,9 @@ pub fn run() {
             // Auto-init search index si hay root configurado. Best-effort.
             match settings::get_settings(handle.clone()) {
                 Ok(cfg) => {
+                    if cfg.grammar_mode.as_deref() == Some("local") {
+                        lt_embebido::arrancar_al_abrir(handle.clone());
+                    }
                     if let Some(root) = cfg.root {
                         search::spawn_reindex(handle.clone(), std::path::PathBuf::from(root));
                     }
@@ -238,7 +242,17 @@ pub fn run() {
             lt_api_key_status,
             lt_api_key_save,
             tesauro_lookup,
+            lt_embebido::lt_embebido_status,
+            lt_embebido::lt_embebido_instalar,
+            lt_embebido::lt_embebido_reiniciar,
+            lt_embebido::lt_embebido_borrar,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_, ev| {
+            // Que no quede un `java` vivo después de cerrar.
+            if let tauri::RunEvent::Exit = ev {
+                lt_embebido::detener();
+            }
+        });
 }

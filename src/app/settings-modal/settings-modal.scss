@@ -638,3 +638,28 @@
     margin-top: 6px;
   }
 }
+
+.lt-embebido {
+  margin: 8px 0;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+
+  progress {
+    width: 100%;
+  }
+}
+
+.lt-embebido-texto {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.lt-embebido-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}

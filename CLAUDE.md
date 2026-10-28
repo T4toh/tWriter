@@ -26,6 +26,7 @@ src/app/                     src-tauri/src/
   notificaciones/ campana      pandoc.rs  sidecar import .docx/.odt
   core/      services          epubcheck.rs valida el EPUB exportado
                                storage.rs detección git/cloud/local
+                               lt_embebido.rs LT bajado y corrido por la app
                                secrets.rs apiKey al keyring del OS
                                tesauro.rs sinónimos MyThes es+en
                                power.rs   sync antes de suspender
@@ -108,6 +109,7 @@ node scripts/run-changelog-smoke.mjs              # CHANGELOG.md: Keep a Changel
 node scripts/run-raya-corpus-smoke.mjs            # corpus de diálogos contra el DPD (con lista de pendientes)
 node scripts/run-updater-json-smoke.mjs           # latest.json del updater: las 8 claves salen de las 4 firmas
 node scripts/run-grammar-wizard-smoke.mjs         # «Revisar»: orden, salteados y vuelta al principio del recorrido de LT
+node scripts/run-lt-lock-smoke.mjs                # LT embebido: elección de versión >7 días y ruta del java por target
 node scripts/barrer-raya-novelas.mjs ~/novelas    # validador sobre los .html y converter sobre los .docx del repo de novelas: FP reales
 ```
 
@@ -238,7 +240,18 @@ El scaffold inicial usa nombres `app.component.*` — refactorizar a convencione
   usuario lo instala (`brew install pandoc`, u `optdepends` en el AUR) y la
   importación de `.docx`/`.odt` se habilita si está. Mismo patrón que
   epubcheck.
-- **LanguageTool**: NO sidecar. Corre como Docker container del usuario (`localhost:8081`). La feature de gramática se habilita solo si se detecta el endpoint.
+- **LanguageTool**: NO sidecar ni bundleado. En modo Local la app lo **baja**
+  (botón en Configuración → Gramática) y lo corre como proceso propio
+  (`lt_embebido.rs`): jars de LT de Maven Central + un JRE de Temurin, fijados
+  por sha256 en `src-tauri/lt-lock.json`, que se compila adentro con
+  `include_str!` y es el ancla de confianza. Va a `app_local_data_dir/languagetool/`
+  y escucha desde el puerto 8082. El lock lo arma `scripts/armar-lt-lock.mjs`
+  (necesita Maven, solo en la máquina que lo corre) y lo mantiene al día
+  `.github/workflows/lt-al-dia.yml`, que abre un PR por semana si hay versión
+  nueva con 7 días o más. **Convive con Docker a propósito** hasta que el autor
+  lo pruebe en las cuatro plataformas: si el embebido no corre, «Local» cae al
+  container de siempre en `localhost:8081`. Ese código se borra en un PR aparte
+  (ver TODO.md).
 - **epubcheck**: NO bundleado (es un jar y necesita JVM). Se detecta el
   binario instalado —`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`, con
   fallback al PATH, igual que `pandoc_bin`— y cada export se valida con él
