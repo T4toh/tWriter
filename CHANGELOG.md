@@ -10,6 +10,8 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-10-28
+
 ### Added
 
 - Grammar checking no longer needs Docker: tWriter can download LanguageTool (about 142 MB, once) and run it on its own from Settings → Grammar.
@@ -592,7 +594,8 @@ _Sin cambios visibles registrados._
 
 _Sin cambios visibles registrados._
 
-[unreleased]: https://github.com/T4toh/tWriter/compare/v0.27.0...HEAD
+[unreleased]: https://github.com/T4toh/tWriter/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/T4toh/tWriter/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/T4toh/tWriter/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/T4toh/tWriter/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/T4toh/tWriter/compare/v0.24.0...v0.25.0
