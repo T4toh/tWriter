@@ -10,6 +10,10 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+### Added
+
+- The editor footer shows the LanguageTool version in use (e.g. «LT 6.8»), next to the notifications bell.
+
 ### Fixed
 
 - LanguageTool now updates when tWriter ships a newer version: Settings shows «Actualizar LanguageTool» and «Levantar» recreates the container with the new image. Before, each PC stayed forever on the version it first downloaded.

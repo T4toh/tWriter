@@ -399,6 +399,12 @@
   margin-left: auto;
 }
 
+.lt-version {
+  font-size: 11px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
 .cursor-pos {
   font-family: var(--font-mono);
   font-size: 11px;

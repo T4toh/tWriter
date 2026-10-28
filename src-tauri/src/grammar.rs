@@ -886,6 +886,42 @@ pub async fn check_grammar_available(cfg: GrammarConfig) -> bool {
     matches!(client.get(&url).send().await, Ok(r) if r.status().is_success())
 }
 
+/// Versión del LT configurado, para el pie del editor. LT no tiene endpoint de
+/// versión: sale de `software.version` de un `/v2/check` mínimo. En modo
+/// público no se pide: gastaría del presupuesto de requests.
+#[tauri::command]
+pub async fn languagetool_version(cfg: GrammarConfig) -> Option<String> {
+    if cfg.mode == "public" {
+        return None;
+    }
+    let base = resolve_base(&cfg).ok()?;
+    let client = reqwest::Client::builder()
+        .timeout(PING_TIMEOUT)
+        .build()
+        .ok()?;
+    let resp = client
+        .post(format!("{}/v2/check", base))
+        .form(&[("text", "a"), ("language", "en-US")])
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let parsed: LtVersionResponse = resp.json().await.ok()?;
+    Some(parsed.software.version)
+}
+
+#[derive(Deserialize)]
+struct LtVersionResponse {
+    software: LtSoftware,
+}
+
+#[derive(Deserialize)]
+struct LtSoftware {
+    version: String,
+}
+
 #[tauri::command]
 pub async fn check_grammar(
     app: AppHandle,

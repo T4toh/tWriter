@@ -438,6 +438,9 @@
        siguen ahí aunque no haya nada abierto. Solo en el panel primario, si no
        en split saldrían dos campanas para un único historial. -->
   @if (paneId() === 0) {
+    @if (grammar.version(); as v) {
+      <span class="lt-version" [title]="'LanguageTool ' + v + ' (modo ' + grammar.mode() + ')'">LT {{ v }}</span>
+    }
     <app-notificaciones-bell />
   }
 </footer>
