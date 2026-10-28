@@ -11,27 +11,6 @@
   border-left: 3px solid #8257e6;
 }
 
-.rep-pop-head {
-  flex-wrap: wrap;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-.rep-pop-tag {
-  font-weight: 600;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.rep-pop-count {
-  font-size: 10px;
-  color: var(--fg-muted);
-}
-
 .rep-pop-word {
   font-family: var(--font-body);
   font-style: italic;

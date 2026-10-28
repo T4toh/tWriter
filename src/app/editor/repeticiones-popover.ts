@@ -36,23 +36,21 @@ import { ReviewNav } from './review-nav';
         [style.max-height.px]="clippedMaxHeight()"
         (click)="$event.stopPropagation()"
       >
-        <div class="rep-pop-head">
-          <span class="rep-pop-tag">{{ repeticion() ? 'Repetición' : 'Sinónimos' }}</span>
-          @if (repeticion(); as r) {
-            <span class="rep-pop-count">{{ r.apariciones }} veces acá cerca</span>
-          }
+        <div class="pop-head">
+          <span class="pop-title">{{ repeticion() ? 'Repetición' : 'Sinónimos' }}</span>
           @if (review(); as rv) {
             <app-review-nav [review]="rv" (next)="next.emit()" (end)="endReview.emit()" />
           }
         </div>
         @if (repeticion(); as r) {
-          <div class="rep-pop-msg">
+          <div class="pop-sub">
             <span class="rep-pop-word">{{ palabra() }}</span>
             ya apareció {{ r.distancia }}
-            {{ r.distancia === 1 ? 'palabra' : 'palabras' }} más arriba.
+            {{ r.distancia === 1 ? 'palabra' : 'palabras' }} más arriba
+            ({{ r.apariciones }} veces acá cerca).
           </div>
         } @else {
-          <div class="rep-pop-msg"><span class="rep-pop-word">{{ palabra() }}</span></div>
+          <div class="pop-sub"><span class="rep-pop-word">{{ palabra() }}</span></div>
         }
         @if (resultado(); as r) {
           @if (!r.disponible) {
@@ -82,16 +80,20 @@ import { ReviewNav } from './review-nav';
         } @else {
           <div class="rep-pop-sin">Buscando sinónimos…</div>
         }
-        <footer class="pop-footer">
+        <ul class="pop-list">
           @if (repeticion()) {
-            <button type="button" class="btn btn-sm btn-secondary" (click)="goToPrevious.emit()">
-              Ir a la anterior
-            </button>
+            <li>
+              <button type="button" class="pop-item" (click)="goToPrevious.emit()">
+                Ir a la anterior
+              </button>
+            </li>
           }
-          <button type="button" class="btn btn-sm btn-secondary" (click)="dismiss.emit()">
-            {{ repeticion() ? 'Ignorar' : 'Cerrar' }}
-          </button>
-        </footer>
+          <li>
+            <button type="button" class="pop-item" (click)="dismiss.emit()">
+              {{ repeticion() ? 'Ignorar' : 'Cerrar' }}
+            </button>
+          </li>
+        </ul>
       </div>
     }
   `,

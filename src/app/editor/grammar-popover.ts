@@ -5,11 +5,13 @@ import {
   afterRenderEffect,
   computed,
   input,
+  linkedSignal,
   output,
   signal,
   viewChild,
 } from '@angular/core';
 import { GrammarMatch } from '../core/types';
+import { tituloCategoria } from './lt-categorias';
 import { AnchorBox, Placement, placePopover } from './popover-position';
 import { ReviewNav } from './review-nav';
 
@@ -29,70 +31,82 @@ import { ReviewNav } from './review-nav';
         [style.max-height.px]="clippedMaxHeight()"
         (click)="$event.stopPropagation()"
       >
-        <div class="grammar-pop-head">
-          <span class="grammar-pop-rule">{{ m.ruleId }}</span>
-          @if (review(); as r) {
-            <app-review-nav [review]="r" (next)="next.emit()" (end)="endReview.emit()" />
-          }
-        </div>
-        <div class="msg">{{ m.message }}</div>
-        @if (hasAnySuggestion()) {
-          <ul class="pop-chips grammar-pop-chips">
-            @for (r of dictSuggestions(); track r) {
-              <li>
-                <button type="button" class="pop-chip" (click)="apply.emit(r)">
-                  {{ r }}<span class="pop-chip-tag">tu diccionario</span>
-                </button>
-              </li>
-            }
-            @for (r of suggestions(); track r) {
-              <li>
-                <button type="button" class="pop-chip" (click)="apply.emit(r)">{{ r }}</button>
-              </li>
-            }
-          </ul>
-        } @else {
-          <div class="no-reps">Sin sugerencias automáticas</div>
-        }
-        <footer class="pop-footer">
+        <div class="pop-head">
           <a
             class="lt-attrib"
             href="https://languagetool.org"
             target="_blank"
+            rel="noopener"
             title="Powered by LanguageTool"
           >
             <img src="assets/LT.svg" alt="LanguageTool" />
           </a>
+          <span class="pop-title">{{ titulo() }}</span>
+          @if (review(); as r) {
+            <app-review-nav [review]="r" (next)="next.emit()" (end)="endReview.emit()" />
+          }
+        </div>
+        <!-- En ortografía la explicación de LT no dice nada que el título no diga. -->
+        @if (m.category !== 'TYPOS') {
+          <div class="pop-sub">{{ m.message }}</div>
+        }
+        <ul class="pop-list">
+          @for (r of dictSuggestions(); track r) {
+            <li>
+              <button type="button" class="pop-item pop-item--sugerencia" (click)="apply.emit(r)">
+                {{ r }}<span class="pop-item-nota">tu diccionario</span>
+              </button>
+            </li>
+          }
+          @for (r of suggestions(); track r) {
+            <li>
+              <button type="button" class="pop-item pop-item--sugerencia" (click)="apply.emit(r)">
+                {{ r }}
+              </button>
+            </li>
+          }
+          @if (!hasAnySuggestion()) {
+            <li class="pop-vacio">Sin sugerencias</li>
+          }
+        </ul>
+        <ul class="pop-list">
           @if (canAddToDict()) {
-            <button
-              type="button"
-              class="btn btn-sm btn-secondary"
-              (click)="addToDict.emit()"
-              title="Agregar al diccionario de esta novela"
-            >
-              + diccionario
-            </button>
+            <li>
+              <button
+                type="button"
+                class="pop-item"
+                (click)="addToDict.emit()"
+                title="Agregar al diccionario de esta novela"
+              >
+                Agregar al diccionario
+              </button>
+            </li>
           }
-          @if (canAddToDict() && canDeriveForms()) {
-            <button
-              type="button"
-              class="btn btn-sm btn-secondary"
-              (click)="addToDictWithForms.emit()"
-              title="Agregar la palabra y sus formas derivadas"
-            >
-              + formas…
-            </button>
+          <li>
+            <button type="button" class="pop-item" (click)="dismiss.emit()">Ignorar</button>
+          </li>
+          @if (!masOpciones()) {
+            <li>
+              <button type="button" class="pop-item pop-item--tenue" (click)="masOpciones.set(true)">
+                Más opciones…
+              </button>
+            </li>
+          } @else {
+            @if (canAddToDict() && canDeriveForms()) {
+              <li>
+                <button type="button" class="pop-item" (click)="addToDictWithForms.emit()">
+                  Agregar con sus formas…
+                </button>
+              </li>
+            }
+            <li>
+              <button type="button" class="pop-item pop-item--peligro" (click)="disableRule.emit()">
+                No marcar más esta regla<span class="pop-item-nota">en toda la novela</span>
+              </button>
+            </li>
+            <li class="pop-nota">Regla {{ m.ruleId }}</li>
           }
-          <button
-            type="button"
-            class="btn btn-sm btn-danger"
-            (click)="disableRule.emit()"
-            [title]="'Desactivar la regla ' + m.ruleId + ' en toda esta novela'"
-          >
-            Nunca más esta regla
-          </button>
-          <button type="button" class="btn btn-sm btn-secondary" (click)="dismiss.emit()">Ignorar</button>
-        </footer>
+        </ul>
       </div>
     }
   `,
@@ -112,8 +126,12 @@ export class GrammarPopover {
   review = input<{ n: number; total: number } | null>(null);
   next = output<void>();
   endReview = output<void>();
+  titulo = computed(() => tituloCategoria(this.match()?.category ?? ''));
+  /** Lo raro (formas derivadas, desactivar la regla) se despliega a pedido, y
+   *  se vuelve a plegar con cada match nuevo del recorrido. */
+  protected readonly masOpciones = linkedSignal({ source: this.match, computation: () => false });
   suggestions = computed(() => {
-    const room = Math.max(0, 5 - this.dictSuggestions().length);
+    const room = Math.max(0, 3 - this.dictSuggestions().length);
     return (this.match()?.replacements ?? []).slice(0, room);
   });
   hasAnySuggestion = computed(() => this.dictSuggestions().length > 0 || this.suggestions().length > 0);
@@ -143,6 +161,8 @@ export class GrammarPopover {
     // que sumar esas señales de contenido a las que lee este efecto.
     afterRenderEffect(() => {
       const anchor = this.anchor();
+      // Desplegar «Más opciones…» cambia el alto sin cambiar el ancla.
+      this.masOpciones();
       const el = this.root()?.nativeElement;
       if (!anchor || !el) {
         this.placed.set(null);

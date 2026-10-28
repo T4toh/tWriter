@@ -6,6 +6,7 @@ import {
   computed,
   inject,
   input,
+  linkedSignal,
   output,
   signal,
   viewChild,
@@ -35,14 +36,13 @@ import { ReviewNav } from './review-nav';
         [style.max-height.px]="clippedMaxHeight()"
         (click)="$event.stopPropagation()"
       >
-        <div class="raya-pop-head">
-          <span class="raya-pop-tag">{{ tagLabel() }}</span>
-          <span class="raya-pop-rule">{{ v.ruleId }}</span>
+        <div class="pop-head">
+          <span class="pop-title">{{ tagLabel() }}</span>
           @if (review(); as r) {
             <app-review-nav [review]="r" (next)="next.emit()" (end)="endReview.emit()" />
           }
         </div>
-        <div class="raya-pop-msg">{{ v.message }}</div>
+        <div class="pop-sub">{{ v.message }}</div>
         @if (v.help; as h) {
           @if (h.wrong && h.right) {
             <div class="raya-pop-ej">
@@ -52,38 +52,58 @@ import { ReviewNav } from './review-nav';
               <span>{{ h.right }}</span>
             </div>
           }
-          <div class="raya-pop-fuente">
-            <a [href]="dpdUrl(h)" target="_blank" rel="noopener">DPD {{ h.entry }} {{ h.section }}</a>
-            ·
-            <button type="button" class="raya-pop-link" (click)="chuleta.show(); dismiss.emit()">
-              Ver todas las reglas
-            </button>
-          </div>
         }
-        <footer class="pop-footer">
-          @if (canAutoFix()) {
-            <button type="button" class="btn btn-sm btn-primary" (click)="apply.emit()">
-              Aplicar
-            </button>
-          }
-          @if (canApplyParagraph()) {
-            <button
-              type="button"
-              class="btn btn-sm btn-primary"
-              (click)="applyParagraph.emit()"
-              title="Aplicar reglas de raya al párrafo entero (preview)"
-            >
-              Aplicar raya al párrafo
-            </button>
-          }
-          <button type="button" class="btn btn-sm btn-secondary" (click)="dismiss.emit()">
-            @if (canAutoFix() || canApplyParagraph()) {
-              Ignorar
-            } @else {
-              OK
+        @if (canAutoFix() || canApplyParagraph()) {
+          <ul class="pop-list">
+            @if (canAutoFix()) {
+              <li>
+                <button type="button" class="pop-item pop-item--sugerencia" (click)="apply.emit()">
+                  Corregir
+                </button>
+              </li>
             }
-          </button>
-        </footer>
+            @if (canApplyParagraph()) {
+              <li>
+                <button
+                  type="button"
+                  class="pop-item pop-item--sugerencia"
+                  (click)="applyParagraph.emit()"
+                  title="Pasar a raya los diálogos de todo el párrafo"
+                >
+                  Aplicar raya al párrafo
+                </button>
+              </li>
+            }
+          </ul>
+        }
+        <ul class="pop-list">
+          <li>
+            <button type="button" class="pop-item" (click)="dismiss.emit()">
+              {{ canAutoFix() || canApplyParagraph() ? 'Ignorar' : 'Entendido' }}
+            </button>
+          </li>
+          @if (!masOpciones()) {
+            <li>
+              <button type="button" class="pop-item pop-item--tenue" (click)="masOpciones.set(true)">
+                Más opciones…
+              </button>
+            </li>
+          } @else {
+            @if (v.help; as h) {
+              <li>
+                <a class="pop-item" [href]="dpdUrl(h)" target="_blank" rel="noopener">
+                  Ver la norma en el DPD<span class="pop-item-nota">{{ h.entry }} {{ h.section }}</span>
+                </a>
+              </li>
+            }
+            <li>
+              <button type="button" class="pop-item" (click)="chuleta.show(); dismiss.emit()">
+                Ver todas las reglas de raya
+              </button>
+            </li>
+            <li class="pop-nota">Regla {{ v.ruleId }}</li>
+          }
+        </ul>
       </div>
     }
   `,
@@ -100,6 +120,8 @@ export class RayaPopover {
   next = output<void>();
   endReview = output<void>();
   protected readonly chuleta = inject(RayaChuletaService);
+  /** El DPD y la guía se despliegan a pedido; se pliegan con cada marca nueva. */
+  protected readonly masOpciones = linkedSignal({ source: this.violation, computation: () => false });
 
   protected dpdUrl(h: RayaHelp): string {
     return `https://www.rae.es/dpd/${encodeURIComponent(h.entry)}`;
@@ -155,6 +177,8 @@ export class RayaPopover {
     // efecto.
     afterRenderEffect(() => {
       const anchor = this.anchor();
+      // Desplegar «Más opciones…» cambia el alto sin cambiar el ancla.
+      this.masOpciones();
       const el = this.root()?.nativeElement;
       if (!anchor || !el) {
         this.placed.set(null);

@@ -43,15 +43,99 @@
   visibility: hidden;
 }
 
-/* Los botones de los tres popovers son el `.btn` global (`styles.scss`) con
- * `btn-sm`, mismo criterio de variantes que los modales: `btn-primary` aplica,
- * `btn-secondary` acompaña o cierra («Ignorar», siempre al final),
- * `btn-danger` lo que no se deshace con un click («Nunca más esta regla»).
- * Acá queda solo lo propio del popover: los chips de sugerencia y el footer.
+/* Molde de los tres popovers, el de Word y LibreOffice: un título corto, una
+ * línea gris que explica, y abajo las sugerencias y las acciones como
+ * renglones de una lista. Había siete botones sueltos, el id de la regla como
+ * título y una oración entera para decir «ortografía».
  *
- * `.pop-chip`: una sugerencia que reemplaza la palabra (LT, tesauro). Estaba
- * dos veces con forma distinta, rectángulo en LT y píldora en el tesauro.
+ * `.pop-chip`: los sinónimos del tesauro, que siguen como chips agrupados por
+ * acepción: en renglones, una palabra con muchas acepciones daba un popover
+ * larguísimo.
  */
+.pop-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.pop-title {
+  font-weight: 600;
+}
+
+.pop-sub {
+  margin-top: 2px;
+  color: var(--fg-muted);
+}
+
+.pop-list {
+  list-style: none;
+  margin: 6px -4px 0;
+  padding: 4px 0 0;
+  border-top: 1px solid var(--border);
+}
+
+.pop-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.pop-item:hover,
+.pop-item:focus-visible {
+  outline: none;
+  background: var(--bg-soft);
+}
+
+/* Una sugerencia: reemplaza el texto marcado. */
+.pop-item--sugerencia {
+  font-weight: 600;
+}
+
+.pop-item--tenue {
+  color: var(--fg-muted);
+}
+
+/* Lo que no se deshace con un click («No marcar más esta regla»). */
+.pop-item--peligro {
+  color: var(--err);
+}
+
+/* A la derecha del renglón: de dónde sale la sugerencia, o un aclarado. */
+.pop-item-nota {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--fg-muted);
+}
+
+.pop-vacio,
+.pop-nota {
+  padding: 4px 6px;
+  color: var(--fg-muted);
+}
+
+.pop-vacio {
+  font-style: italic;
+}
+
+/* El id de la regla, para reportarla upstream: seleccionable. */
+.pop-nota {
+  font-size: 11px;
+  user-select: text;
+}
+
 .pop-chips {
   list-style: none;
   margin: 0;
@@ -83,25 +167,4 @@
   border-color: var(--accent);
   background: var(--accent);
   color: var(--bg);
-}
-
-/* Etiqueta adentro del chip («tu diccionario»): de dónde sale la sugerencia. */
-.pop-chip-tag {
-  margin-left: 6px;
-  font-size: 0.75em;
-  opacity: 0.75;
-  border: 1px solid currentcolor;
-  border-radius: 999px;
-  padding: 0 0.4em;
-}
-
-.pop-footer {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  justify-content: flex-end;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border);
 }

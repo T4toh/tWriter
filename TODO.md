@@ -14,28 +14,29 @@ huela a "esto ya lo miramos", buscar ahí primero.
 
 ## Gramática, ortografía y tesauro
 
-- **La imagen de LT nunca se actualiza** (relevado el 2026-10-28).
-  `languagetool_docker_start` solo hace pull cuando el container **no existe**;
-  si ya existe, lo arranca con la imagen que tenga, para siempre. `LT_IMAGE` es
-  `erikvl87/languagetool:latest`, así que cada PC queda con el `latest` del día
-  en que creó el container. Hoy no hay nada nuevo (local y Docker Hub coinciden
-  en 6.8, `sha256:ef8fa12c…`, publicada el 2026-06-15), pero la próxima versión
-  no le va a llegar a nadie.
-  Arreglo propuesto: fijar el tag (`erikvl87/languagetool:6.8`) y, al arrancar,
-  comparar la imagen con la que se creó el container (`docker inspect` /
-  `container inspect`). Si difiere: `rm` + `pull` + `run_lt()`. Subir de versión
-  pasa a ser cambiar la constante, llega con el updater de tWriter a todas las
-  PCs, y el autor elige cuándo (regla de 7 días de supply-chain, y probar antes
-  los patches de `docs/lt-patches/`). Descartado: que la app consulte Docker Hub
-  y se actualice sola — más código, depende de la API de Hub y del formato de
-  digest de cada runtime, y mete versiones de LT sin probar.
-  De paso, dos cosas de `run_args()`:
-  - **Apple `container` mata a la JVM**: se pasa `Java_Xmx=2g` pero sin `-m`, y
-    Apple `container` limita a 1 GB por default. Si LT pasa de 1 GB, OOM.
-    Docker/Podman no tienen límite propio. Sumar `-m 2G` para Apple (o bajar
-    `Xmx`).
-  - **El puerto queda abierto a la LAN**: `-p 8081:8010` publica en `0.0.0.0`.
-    Si solo lo usa tWriter, va `127.0.0.1:8081:8010`.
+- **Probar en el Arch la recreación del container de LT** (#209). En la Mac,
+  con Apple `container`, ya se probó: detecta la imagen vieja, recrea el
+  container en 6.8 y queda con 3072 MB. Falta el camino de Docker/Podman, que
+  lee la imagen con `inspect --format {{.Config.Image}}`: tocar «Actualizar
+  LanguageTool» con un container creado desde `latest` y ver que lo recree.
+
+- **Bajar LanguageTool desde la app, sin containers** (lo prefiere el autor;
+  va en su propio PR y pide diseño antes de codear). La app baja un JRE de
+  Adoptium/Temurin y LT armado (jars de Maven Central, o lo que trae la imagen
+  `erikvl87/languagetool` en `/LanguageTool`), los dos con versión y checksum
+  fijos, y corre LT como proceso propio. Se maneja desde Configuración →
+  Gramática. No es el sidecar descartado: no se arma nada en CI ni viaja en el
+  bundle, así que el costo que lo mató no aplica. Antes de arrancar, leer
+  `docs/decisiones-cerradas.md` → «LT embebido como sidecar» (mediciones, la
+  corrección del 2026-10-28 y las tres trampas) y la rama
+  `archivo/lt-sidecar-NO-MERGEAR`.
+
+- **Moverse con las flechas por los globitos de revisión** (quedó afuera de
+  #212). Mientras el globito está abierto el foco lo tiene el editor, y las
+  flechas mueven el cursor del texto. Para recorrer sugerencias y acciones con
+  ↑/↓ + Enter hay que capturar esas teclas solo con el globito abierto y sin
+  romper la escritura: o un keymap de ProseMirror que mire si hay popover, o
+  pasarle el foco al globito y devolverlo al cerrar.
 
 - **Dashboard de estilo por novela** (idea del autor, no para ahora). Lo que hoy
   se ve capítulo por capítulo — repeticiones, violaciones RAE, matches de
