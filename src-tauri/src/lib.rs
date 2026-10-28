@@ -14,6 +14,7 @@ mod fs;
 mod git;
 mod grammar;
 mod image;
+mod lt_embebido;
 mod import;
 mod import_notes;
 mod import_wizard;
