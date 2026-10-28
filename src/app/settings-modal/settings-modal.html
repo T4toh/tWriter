@@ -23,6 +23,63 @@
           </div>
         </label>
 
+        <!-- Se aplican al toque, como el panel de debug: son preferencias de uso,
+             no parte del formulario de LanguageTool que confirma «Guardar». -->
+        <div class="gs-section-divider">Revisión mientras escribís</div>
+
+        <label class="gs-option">
+          <input
+            type="checkbox"
+            [checked]="!settings.grammarAutoDisabled()"
+            [disabled]="!grammar.canAutoCheck()"
+            (change)="settings.setGrammarAutoDisabled(!settings.grammarAutoDisabled())"
+          />
+          <div class="gs-option-text">
+            <strong>Ortografía y gramática</strong>
+            <span class="muted">
+              @if (grammar.canAutoCheck()) {
+                Subraya los errores que encuentra LanguageTool a medida que escribís.
+              } @else {
+                No disponible en modo público: el servicio gratuito limita los
+                pedidos por minuto. Usá «Revisar» de la barra, o pasá a modo local
+                en Gramática.
+              }
+            </span>
+          </div>
+        </label>
+
+        <label class="gs-option">
+          <input
+            type="checkbox"
+            [checked]="!settings.rayaAutoDisabled()"
+            (change)="settings.setRayaAutoDisabled(!settings.rayaAutoDisabled())"
+          />
+          <div class="gs-option-text">
+            <strong>Diálogos con raya</strong>
+            <span class="muted">
+              Marca los diálogos mal puntuados según la norma de la RAE y las
+              mayúsculas que quedaron mal (<em>LLOra</em>). Solo en capítulos en
+              español. No cambia nada solo: para convertir un capítulo entero
+              está «Herramientas → Convertir diálogos a raya».
+            </span>
+          </div>
+        </label>
+
+        <label class="gs-option">
+          <input
+            type="checkbox"
+            [checked]="!settings.repeticionesAutoDisabled()"
+            (change)="settings.setRepeticionesAutoDisabled(!settings.repeticionesAutoDisabled())"
+          />
+          <div class="gs-option-text">
+            <strong>Palabras repetidas</strong>
+            <span class="muted">
+              Marca la misma palabra repetida a poca distancia. Las excepciones
+              se eligen en Gramática → Repeticiones cercanas.
+            </span>
+          </div>
+        </label>
+
         @if (epubcheck(); as ec) {
           <div class="gs-option-text epubcheck-row">
             <strong>Validación del EPUB</strong>
@@ -607,9 +664,9 @@
       <p class="gs-muted-note">
         Detector local: marca palabras de contenido que se repiten a poca
         distancia, algo que LanguageTool no ve en ningún idioma. No usa LT ni
-        manda texto a ninguna parte. Se prende y apaga desde el botón
-        <strong>Repeticiones</strong> de la barra del editor; acá se elige qué
-        formas de repetición <em>deliberada</em> se filtran.
+        manda texto a ninguna parte. Se prende y apaga en General →
+        <strong>Revisión mientras escribís</strong>; acá se elige qué formas de
+        repetición <em>deliberada</em> se filtran.
       </p>
 
       <label class="gs-option">

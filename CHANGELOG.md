@@ -12,6 +12,8 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ### Changed
 
+- The editor toolbar says what each control does. Alignment is one button showing the current one; «Insertar» holds the scene break and the verse block; «Revisar» walks through the spelling and grammar errors; «Herramientas» holds the whole-chapter conversions (dialogue to em dash, straight to curly quotes); «Vista» sets paragraph spacing and text width, and says it only changes the screen, not the book.
+- Marking errors while you type (spelling and grammar, dialogue punctuation, repeated words) is always on and is turned off from Settings → General → «Revisión mientras escribís», instead of the «AUTO», «Raya» and «Repeticiones» toolbar toggles.
 - The LanguageTool icon moved from the toolbar to the editor footer, next to the notifications bell, and shows the version in use. It pulses while checking, greys out when LanguageTool doesn't respond, and opens its settings. «Revisar» now always checks the chapter again before walking through the errors, which is what the old toolbar icon did.
 
 ### Fixed

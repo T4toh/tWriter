@@ -116,8 +116,8 @@ export class GrammarService {
   readonly canAutoCheck = computed(() => this.mode() === 'local' || this.mode() === 'custom');
   /**
    * Auto-check activo. Se prende solo cuando LT responde (available) y el
-   * modo lo permite (local/custom). El usuario solo lo "destraba" desde el
-   * toggle (que persiste `grammarAutoDisabled`).
+   * modo lo permite (local/custom). El usuario lo apaga desde Configuración →
+   * General → «Revisión mientras escribís» (persiste `grammarAutoDisabled`).
    */
   readonly autoEnabled = computed(
     () => this.available() && this.canAutoCheck() && !this.settings.grammarAutoDisabled(),
@@ -203,10 +203,6 @@ export class GrammarService {
     } finally {
       this.checking.set(false);
     }
-  }
-
-  toggleAuto(): void {
-    void this.settings.setGrammarAutoDisabled(!this.settings.grammarAutoDisabled());
   }
 
   async setMode(

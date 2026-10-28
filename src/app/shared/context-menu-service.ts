@@ -19,7 +19,13 @@ export interface CtxMenuSeparator {
   kind: 'separator';
 }
 
-export type CtxMenuEntry = CtxMenuItem | CtxMenuSeparator;
+/** Rótulo no clickeable que encabeza un grupo de items. */
+export interface CtxMenuHeader {
+  kind: 'header';
+  label: string;
+}
+
+export type CtxMenuEntry = CtxMenuItem | CtxMenuSeparator | CtxMenuHeader;
 
 export interface CtxMenuState {
   x: number;
@@ -38,16 +44,19 @@ export class ContextMenuService {
   open(event: MouseEvent, entries: CtxMenuEntry[]): void {
     event.preventDefault();
     event.stopPropagation();
-    const items = entries.filter(
-      (e) => e.kind === 'separator' || !(e as CtxMenuItem).disabled || true,
-    );
-    const hasItem = items.some((e) => e.kind !== 'separator');
-    if (!hasItem) return;
-    this.current.set({
-      x: event.clientX,
-      y: event.clientY,
-      entries: items,
-    });
+    this.show(event.clientX, event.clientY, entries);
+  }
+
+  /** Desplegable de un botón: el menú abre pegado abajo del botón, no donde cayó el click. */
+  openBelow(event: MouseEvent, entries: CtxMenuEntry[]): void {
+    event.stopPropagation();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    this.show(rect.left, rect.bottom + 2, entries);
+  }
+
+  private show(x: number, y: number, entries: CtxMenuEntry[]): void {
+    if (!entries.some((e) => !e.kind || e.kind === 'item')) return;
+    this.current.set({ x, y, entries });
   }
 
   /**

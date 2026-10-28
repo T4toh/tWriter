@@ -417,11 +417,14 @@ export class SettingsService {
     return slot === 'ui' ? this.appFontUi : this.appFontMono;
   }
 
+  setParagraphSpacing(spacing: ParagraphSpacing): void {
+    this.editorParagraphSpacing.set(spacing);
+    void this.persist();
+  }
+
   cycleParagraphSpacing(): void {
     const order: ParagraphSpacing[] = ['tight', 'normal', 'loose'];
-    const next = order[(order.indexOf(this.editorParagraphSpacing()) + 1) % order.length];
-    this.editorParagraphSpacing.set(next);
-    void this.persist();
+    this.setParagraphSpacing(order[(order.indexOf(this.editorParagraphSpacing()) + 1) % order.length]);
   }
 
   async setGrammarMode(
