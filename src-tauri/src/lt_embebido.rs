@@ -385,6 +385,12 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// Cualquier falla queda en `ULTIMO_ERROR` para que el panel diga por qué no
 /// corre, también cuando el arranque fue el automático al abrir la app.
 pub async fn arrancar_en(base: &Path) -> Result<u16, String> {
+    let _turno = ARRANQUE.lock().await;
+    arrancar_con_turno(base).await
+}
+
+/// `arrancar_en` para quien ya tiene `ARRANQUE` tomado.
+async fn arrancar_con_turno(base: &Path) -> Result<u16, String> {
     let r = arrancar_sin_registrar(base).await;
     if let Err(e) = &r {
         *ULTIMO_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = Some(e.clone());
@@ -393,7 +399,6 @@ pub async fn arrancar_en(base: &Path) -> Result<u16, String> {
 }
 
 async fn arrancar_sin_registrar(base: &Path) -> Result<u16, String> {
-    let _turno = ARRANQUE.lock().await;
     if corriendo() {
         return Ok(PUERTO.load(Ordering::SeqCst));
     }
@@ -498,17 +503,29 @@ fn base_de(app: &AppHandle) -> Result<PathBuf, String> {
 /// Para el modo Local: si LT está instalado y se cayó (o nunca arrancó), lo
 /// levanta. Después de una caída relanza una sola vez.
 pub async fn asegurar_corriendo(app: &AppHandle) {
-    if corriendo() || INSTALANDO.load(Ordering::SeqCst) {
+    if INSTALANDO.load(Ordering::SeqCst) {
         return;
     }
     let Ok(base) = base_de(app) else { return };
-    if instalado(&base, "lt").is_none() || instalado(&base, "jre").is_none() {
+    asegurar_en(&base).await;
+}
+
+async fn asegurar_en(base: &Path) {
+    // El turno abarca mirar y arrancar: al abrir la app el arranque automático
+    // y el primer ping del front llegan juntos, y el segundo tiene que esperar
+    // al primero en vez de seguir de largo con LT todavía sin puerto (el pie
+    // quedaba en gris hasta el ping de recuperación, 30 s después).
+    let _turno = ARRANQUE.lock().await;
+    if corriendo() {
+        return;
+    }
+    if instalado(base, "lt").is_none() || instalado(base, "jre").is_none() {
         return;
     }
     if RELANZADO.swap(true, Ordering::SeqCst) {
         return;
     }
-    if arrancar_en(&base).await.is_ok() {
+    if arrancar_con_turno(base).await.is_ok() {
         RELANZADO.store(false, Ordering::SeqCst);
     }
 }
@@ -823,7 +840,16 @@ mod tests {
         let base = tempfile::tempdir().unwrap();
         tauri::async_runtime::block_on(async {
             instalar(base.path(), &|_, m| eprintln!("{m}")).await.unwrap();
-            let puerto = arrancar_en(base.path()).await.unwrap();
+            // Al abrir la app el arranque automático y el primer ping del front
+            // llegan juntos: el segundo tiene que esperar al primero, no seguir
+            // de largo con LT todavía sin puerto.
+            let dir = base.path().to_path_buf();
+            let primero = tauri::async_runtime::spawn(async move { asegurar_en(&dir).await });
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            asegurar_en(base.path()).await;
+            assert!(base_embebida().is_some(), "el segundo volvió antes de que LT arrancara");
+            primero.await.unwrap();
+            let puerto = PUERTO.load(Ordering::SeqCst);
             // El primer pedido después de arrancar es el de la versión del pie,
             // con 1,5 s de timeout: tiene que encontrar a LT ya en caliente.
             let inicio = std::time::Instant::now();
