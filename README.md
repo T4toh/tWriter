@@ -755,9 +755,17 @@ archivo verificado contra el sha256 que trae la propia app
   Lo que ya está instalado sigue andando aunque no actualices.
 - **«Borrar»** libera el espacio; se vuelve a bajar con el mismo botón.
 - **Si venís de una versión anterior** que corría LanguageTool en un container
-  de Docker, Podman o Apple `container`: ya no hace falta y, con su
-  `--restart`, vuelve en cada arranque de la compu. El panel lo detecta (otro
-  LanguageTool contestando en `8081`) y da el comando para borrarlo.
+  de Docker, Podman o Apple `container`: ya no hace falta. Con su `--restart`
+  vuelve en cada arranque de la compu (~2 GB de RAM), y la imagen ocupa otros
+  ~450 MB en disco. Si está corriendo, el panel lo detecta (otro LanguageTool
+  contestando en `8081`) y da el comando; si está parado, la app no lo ve. Para
+  borrar el container y la imagen, el que corresponda:
+
+  ```bash
+  docker rm -f twriter-languagetool; docker rmi $(docker images -q erikvl87/languagetool)
+  podman rm -f twriter-languagetool; podman rmi $(podman images -q erikvl87/languagetool)
+  container delete -f twriter-languagetool; container image rm erikvl87/languagetool:6.8 erikvl87/languagetool:latest
+  ```
 - Auto-check on-by-default cuando el ping responde. Se apaga desde
   Configuración → General → «Revisión mientras escribís» → «Ortografía y
   gramática» (`settings.json::grammarAutoDisabled`).

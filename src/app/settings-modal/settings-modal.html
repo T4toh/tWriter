@@ -327,12 +327,13 @@
                   <div class="lt-container-viejo">
                     <p class="lt-estado err">
                       Hay otro LanguageTool en el puerto 8081: el container de una versión anterior de
-                      tWriter. Ya no hace falta y ocupa ~2 GB de RAM. Se borra con uno de estos, según
-                      con qué lo hayas levantado (Docker, Podman o Apple container):
+                      tWriter. Ya no hace falta: ocupa ~2 GB de RAM mientras corre, y su imagen otros
+                      ~450 MB en disco. Esto borra las dos cosas, según con qué lo hayas levantado
+                      (Docker, Podman o Apple container):
                     </p>
-                    <app-copy-command command="docker rm -f twriter-languagetool" />
-                    <app-copy-command command="podman rm -f twriter-languagetool" />
-                    <app-copy-command command="container delete -f twriter-languagetool" />
+                    <app-copy-command [command]="borrarContainerViejo.docker" />
+                    <app-copy-command [command]="borrarContainerViejo.podman" />
+                    <app-copy-command [command]="borrarContainerViejo.apple" />
                   </div>
                 }
               }

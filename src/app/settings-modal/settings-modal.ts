@@ -73,6 +73,17 @@ const INSTALAR_EPUBCHECK: readonly OpcionInstalar[] = [
   },
 ];
 
+/** Borran el container de LanguageTool de las versiones con Docker y su
+ *  imagen (~450 MB). `;` y no `&&`: si el container ya no está, la imagen
+ *  igual se borra. Los mismos comandos están en el README para quien lo
+ *  tenga parado, que la app no puede ver. */
+const BORRAR_CONTAINER_VIEJO = {
+  docker: 'docker rm -f twriter-languagetool; docker rmi $(docker images -q erikvl87/languagetool)',
+  podman: 'podman rm -f twriter-languagetool; podman rmi $(podman images -q erikvl87/languagetool)',
+  apple:
+    'container delete -f twriter-languagetool; container image rm erikvl87/languagetool:6.8 erikvl87/languagetool:latest',
+};
+
 /** Secciones colapsables del modal. `show()` recibe cuál abrir: el effect que
  *  reacciona a LanguageTool caído pide `gramatica`, porque si el bloque
  *  arrancara colapsado el remedio quedaría escondido detrás de un click. */
@@ -115,6 +126,7 @@ export class SettingsModal {
   protected readonly testing = signal<boolean>(false);
   protected readonly testResult = signal<'ok' | 'fail' | null>(null);
   protected readonly saving = signal<boolean>(false);
+  protected readonly borrarContainerViejo = BORRAR_CONTAINER_VIEJO;
   protected readonly embebido = signal<LtEmbebidoStatus | null>(null);
   protected readonly embebidoBusy = signal<'installing' | 'restarting' | 'deleting' | null>(null);
   protected readonly embebidoMessage = signal<string | null>(null);

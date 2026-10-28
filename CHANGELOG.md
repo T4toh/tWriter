@@ -25,7 +25,7 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ### Removed
 
-- tWriter no longer starts LanguageTool in Docker, Podman or Apple `container`: it downloads and runs its own. If the old container is still running, Settings → Grammar says so and gives the command to remove it, since it keeps using about 2 GB of RAM.
+- tWriter no longer starts LanguageTool in Docker, Podman or Apple `container`: it downloads and runs its own. If the old container is still running, Settings → Grammar says so and gives the command to remove it and its image, which keep using about 2 GB of RAM and 450 MB of disk. The README has the same commands for a stopped container.
 
 ### Fixed
 
