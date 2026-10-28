@@ -541,6 +541,34 @@ async fn asegurar_en(base: &Path) {
     }
 }
 
+/// Por qué «Local» no tiene a quién pegarle, dicho para el autor: es lo que
+/// ve en el pie cuando falla un chequeo.
+fn motivo(instalando: bool, instalado: bool, error: Option<String>) -> String {
+    if instalando {
+        "LanguageTool se está bajando; cuando termine, el chequeo vuelve solo.".into()
+    } else if !instalado {
+        "LanguageTool no está instalado: bajalo desde Configuración → Gramática → «Local».".into()
+    } else {
+        error.unwrap_or_else(|| {
+            "LanguageTool no arrancó: probá «Reiniciar» en Configuración → Gramática.".into()
+        })
+    }
+}
+
+/// La base del LT embebido para un pedido en modo Local: espera el arranque
+/// si está en curso (el chequeo del capítulo sale apenas abre la app, antes
+/// de que LT termine de arrancar) y, si no hay, dice por qué y qué hacer.
+pub async fn base_local(app: &AppHandle) -> Result<String, String> {
+    asegurar_corriendo(app).await;
+    if let Some(b) = base_embebida() {
+        return Ok(b);
+    }
+    let base = base_de(app)?;
+    let instalado = instalado(&base, "lt").is_some() && instalado(&base, "jre").is_some();
+    let error = ULTIMO_ERROR.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    Err(motivo(INSTALANDO.load(Ordering::SeqCst), instalado, error))
+}
+
 /// Al abrir la app, en segundo plano, si el modo es Local y está instalado.
 pub fn arrancar_al_abrir(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
@@ -922,5 +950,17 @@ mod tests {
             assert!(!otro_lt(viejo, viejo).await, "el que contesta es el nuestro");
             assert!(!otro_lt(0, libre).await, "nadie contesta");
         });
+    }
+
+    #[test]
+    fn motivo_dice_que_hacer_segun_el_estado() {
+        let m = motivo(true, false, None);
+        assert!(m.contains("bajando"), "{m}");
+        let m = motivo(false, false, None);
+        assert!(m.contains("no está instalado") && m.contains("Configuración → Gramática"), "{m}");
+        let m = motivo(false, true, Some("LanguageTool no arrancó: sin memoria".into()));
+        assert_eq!(m, "LanguageTool no arrancó: sin memoria");
+        let m = motivo(false, true, None);
+        assert!(m.contains("Reiniciar"), "{m}");
     }
 }

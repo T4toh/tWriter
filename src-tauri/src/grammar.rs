@@ -147,6 +147,15 @@ impl PublicRateBudget {
 
 static PUBLIC_BUDGET: Mutex<PublicRateBudget> = Mutex::new(PublicRateBudget::new());
 
+/// La base para un pedido. En modo Local espera al embebido si está
+/// arrancando; los demás modos no dependen de nada que arranque.
+async fn base_para(app: &AppHandle, cfg: &GrammarConfig) -> Result<String, String> {
+    if cfg.mode == "local" {
+        return crate::lt_embebido::base_local(app).await;
+    }
+    resolve_base(cfg)
+}
+
 fn resolve_base(cfg: &GrammarConfig) -> Result<String, String> {
     match cfg.mode.as_str() {
         "public" => Ok(PUBLIC_BASE.to_string()),
@@ -187,10 +196,7 @@ fn category_of(rule_cat: &str) -> String {
 
 #[tauri::command]
 pub async fn check_grammar_available(app: AppHandle, cfg: GrammarConfig) -> bool {
-    if cfg.mode == "local" {
-        crate::lt_embebido::asegurar_corriendo(&app).await;
-    }
-    let base = match resolve_base(&cfg) {
+    let base = match base_para(&app, &cfg).await {
         Ok(b) => b,
         Err(_) => return false,
     };
@@ -209,11 +215,11 @@ pub async fn check_grammar_available(app: AppHandle, cfg: GrammarConfig) -> bool
 /// versión: sale de `software.version` de un `/v2/check` mínimo. En modo
 /// público no se pide: gastaría del presupuesto de requests.
 #[tauri::command]
-pub async fn languagetool_version(cfg: GrammarConfig) -> Option<String> {
+pub async fn languagetool_version(app: AppHandle, cfg: GrammarConfig) -> Option<String> {
     if cfg.mode == "public" {
         return None;
     }
-    let base = resolve_base(&cfg).ok()?;
+    let base = base_para(&app, &cfg).await.ok()?;
     let client = reqwest::Client::builder()
         .timeout(PING_TIMEOUT)
         .build()
@@ -248,7 +254,7 @@ pub async fn check_grammar(
     lang: String,
     cfg: GrammarConfig,
 ) -> Result<Vec<GrammarMatch>, String> {
-    let base = resolve_base(&cfg)?;
+    let base = base_para(&app, &cfg).await?;
     let lang_code = map_lang(&lang, &cfg);
     let chunks = split_chunks(&text);
     if chunks.len() > 1 {
