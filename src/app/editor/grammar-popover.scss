@@ -9,6 +9,7 @@
    Mismo tratamiento que `.raya-pop-rule`; sin extraer a `popover-shell` porque
    ahí vive solo la caja y esto es el segundo caso, no el tercero. */
 .grammar-pop-head {
+  flex-wrap: wrap;
   margin-bottom: 4px;
   display: flex;
   align-items: center;
