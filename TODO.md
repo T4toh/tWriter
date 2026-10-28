@@ -14,6 +14,29 @@ huela a "esto ya lo miramos", buscar ahí primero.
 
 ## Gramática, ortografía y tesauro
 
+- **La imagen de LT nunca se actualiza** (relevado el 2026-10-28).
+  `languagetool_docker_start` solo hace pull cuando el container **no existe**;
+  si ya existe, lo arranca con la imagen que tenga, para siempre. `LT_IMAGE` es
+  `erikvl87/languagetool:latest`, así que cada PC queda con el `latest` del día
+  en que creó el container. Hoy no hay nada nuevo (local y Docker Hub coinciden
+  en 6.8, `sha256:ef8fa12c…`, publicada el 2026-06-15), pero la próxima versión
+  no le va a llegar a nadie.
+  Arreglo propuesto: fijar el tag (`erikvl87/languagetool:6.8`) y, al arrancar,
+  comparar la imagen con la que se creó el container (`docker inspect` /
+  `container inspect`). Si difiere: `rm` + `pull` + `run_lt()`. Subir de versión
+  pasa a ser cambiar la constante, llega con el updater de tWriter a todas las
+  PCs, y el autor elige cuándo (regla de 7 días de supply-chain, y probar antes
+  los patches de `docs/lt-patches/`). Descartado: que la app consulte Docker Hub
+  y se actualice sola — más código, depende de la API de Hub y del formato de
+  digest de cada runtime, y mete versiones de LT sin probar.
+  De paso, dos cosas de `run_args()`:
+  - **Apple `container` mata a la JVM**: se pasa `Java_Xmx=2g` pero sin `-m`, y
+    Apple `container` limita a 1 GB por default. Si LT pasa de 1 GB, OOM.
+    Docker/Podman no tienen límite propio. Sumar `-m 2G` para Apple (o bajar
+    `Xmx`).
+  - **El puerto queda abierto a la LAN**: `-p 8081:8010` publica en `0.0.0.0`.
+    Si solo lo usa tWriter, va `127.0.0.1:8081:8010`.
+
 - **Dashboard de estilo por novela** (idea del autor, no para ahora). Lo que hoy
   se ve capítulo por capítulo — repeticiones, violaciones RAE, matches de
   gramática, palabras por capítulo — agregado a nivel libro o saga: densidades,
