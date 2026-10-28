@@ -10,6 +10,10 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+### Added
+
+- Grammar checking no longer needs Docker: tWriter can download LanguageTool (about 142 MB, once) and run it on its own from Settings → Grammar. Docker stays available as an alternative.
+
 ### Changed
 
 - The editor toolbar says what each control does. Alignment is one button showing the current one; «Insertar» holds the scene break and the verse block; «Revisar» walks through every mark in the chapter, one by one; «Herramientas» holds the whole-chapter conversions (dialogue to em dash, straight to curly quotes); «Vista» sets paragraph spacing and text width, and says it only changes the screen, not the book.

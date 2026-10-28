@@ -384,6 +384,23 @@ para no volver a abrirlos ni rehacer la medición. Lo que sigue pendiente vive e
   containers es fácil, y mantener un pipeline de CI por target sigue siendo un
   costo), pero si se reabre, el argumento "hay que buildear LT" ya no vale.
 
+  **Se reabrió el mismo día y quedó implementado** (spec
+  `docs/superpowers/specs/2026-10-28-lt-descargado-design.md`): la app baja
+  los jars de Maven Central y el JRE de Temurin, sin CI por target. Lo que
+  midió el spike, para no rehacerlo:
+  - `languagetool-server` arrastra `language-all` (los 30 idiomas, 251 MB):
+    hay que excluirlo y pedir `language-es` y `language-en` aparte.
+  - **Trampa nueva**: `CommonWordsDetector` tiene hardcodeados `es`, `ca` y `pt`
+    en su inicializador estático; sin `language-ca` y `language-pt` el server no
+    arranca (`'ca' is not a language code known to LanguageTool`). Cuestan
+    17 MB.
+  - Las **tres trampas del recorte** de abajo **no aplican** con este método:
+    no se poda nada a mano, solo se elige qué jars bajar.
+  - 130 jars, 96 MB; JRE Temurin 21 de ~40–50 MB comprimido por target. Listo
+    en 0,36 s, ~400 MB de RSS con `-Xmx256m`, y **las mismas 151 marcas con
+    los mismos offsets** que el container 6.8 sobre ~3.500 palabras, en Mac
+    arm64 y Linux x64.
+
   El relevamiento
   original listaba como alternativas offline `zspell` / Harper / LLM y **nunca
   consideró bundlear LT mismo**, que es la opción que cumple mejor el criterio

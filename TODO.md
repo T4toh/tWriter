@@ -20,12 +20,15 @@ huela a "esto ya lo miramos", buscar ahí primero.
   lee la imagen con `inspect --format {{.Config.Image}}`: tocar «Actualizar
   LanguageTool» con un container creado desde `latest` y ver que lo recree.
 
-- **Bajar LanguageTool desde la app, sin containers** (en curso, rama
-  `feat/lt-descargado`). Diseño aprobado en
+- **Bajar LanguageTool desde la app, sin containers** (implementado en la rama
+  `feat/lt-descargado`; falta la prueba del autor en las cuatro plataformas,
+  con la lista de «Verificación → Manual del autor» del spec). Diseño aprobado en
   `docs/superpowers/specs/2026-10-28-lt-descargado-design.md`: jars de Maven
   Central + JRE Temurin, fijados por sha256 en `src-tauri/lt-lock.json`, y un
-  workflow semanal que abre PR con la versión nueva. Probado en Mac arm64 y
-  Linux x64; falta que el autor lo pruebe en el Arch, una Mac Intel y Windows.
+  workflow semanal que abre PR con la versión nueva. Lo automático (tests Rust,
+  e2e que baja e instala, smoke del lock) pasa en Mac arm64 y Linux x64; falta
+  la app de verdad en Mac arm64, el Arch, una Mac Intel y Windows (ojo con la
+  ventana de consola).
 
 - **Sacar Docker de `grammar.rs` después de probar el LT embebido** (decisión
   del autor, 2026-10-28). Hoy conviven **a propósito**: si el embebido queda a

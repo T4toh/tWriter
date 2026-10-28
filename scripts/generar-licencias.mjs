@@ -7,7 +7,8 @@
 // Cuatro fuentes, ninguna herramienta nueva:
 //   1. `LICENSE` y `package.json` del repo — la app y su versión.
 //   2. `src-tauri/resources/tesauro/` — los dos textos que SÍ estamos obligados
-//      a reproducir (la LGPL 2.1 del tesauro español y la licencia de WordNet).
+//      a reproducir (la LGPL 2.1 del tesauro español y la licencia de WordNet),
+//      y los avisos de LanguageTool y Temurin que la app baja (`lt-lock.json`).
 //   3. Las dependencias directas de `package.json`, con el `license` y el texto
 //      que trae cada paquete en `node_modules`.
 //   4. Las dependencias directas de `src-tauri/Cargo.toml`, con el `license` que
@@ -46,6 +47,7 @@ const app = {
 
 // ── 2. Los datos de terceros que shipeamos ───────────────────────────────────
 const tesauro = join(repo, 'src-tauri', 'resources', 'tesauro');
+const ltLock = JSON.parse(leer(join(repo, 'src-tauri', 'lt-lock.json')));
 const fuentes = join(repo, 'src', 'assets', 'fonts');
 const datos = [
   {
@@ -90,6 +92,26 @@ const datos = [
       'Google Fonts, sin modificar.',
     licencia: 'OFL-1.1',
     texto: leer(join(fuentes, 'OFL-robotomono.txt')).trim(),
+  },
+  // No viajan en el instalador: la app los baja al activar LanguageTool en
+  // Configuración → Gramática (lt_embebido.rs). El aviso va igual.
+  {
+    nombre: `LanguageTool ${ltLock.lt}`,
+    descripcion:
+      'Corrector de gramática y ortografía. tWriter lo baja de Maven Central cuando lo ' +
+      'activás y lo corre como un proceso aparte, sin modificarlo. Código fuente: ' +
+      'https://github.com/languagetool-org/languagetool',
+    licencia: 'LGPL-2.1-or-later',
+    texto: leer(join(tesauro, 'COPYING-LGPL-2.1.txt')).trim(),
+  },
+  {
+    nombre: `Eclipse Temurin ${ltLock.jre} (JRE)`,
+    descripcion:
+      'Java para correr LanguageTool. tWriter lo baja de Adoptium cuando activás ' +
+      'LanguageTool, sin modificarlo. Código fuente: https://github.com/adoptium/jdk21u',
+    licencia: 'GPL-2.0 WITH Classpath-exception-2.0',
+    // Copiado sin cambios de `legal/java.base/LICENSE` del propio JRE.
+    texto: leer(join(repo, 'scripts', 'lt', 'LICENSE-temurin-gplv2-ce.txt')).trim(),
   },
 ];
 
