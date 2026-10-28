@@ -242,12 +242,12 @@
                   que el daemon responde.
                 </li>
                 <li>
-                  <strong>Pull de la imagen:</strong> <code>docker pull erikvl87/languagetool:latest</code>
-                  (solo la primera vez — después queda cacheada local).
+                  <strong>Pull de la imagen:</strong> <code>docker pull erikvl87/languagetool:6.8</code>
+                  (la primera vez y cada vez que tWriter sube de versión de LanguageTool).
                 </li>
                 <li>
                   <strong>Run del container:</strong>
-                  <code>docker run -d --name twriter-languagetool -p 8081:8010 -e Java_Xmx=2g …</code>
+                  <code>docker run -d --name twriter-languagetool -p 127.0.0.1:8081:8010 -e Java_Xmx=2g …</code>
                   → escucha en localhost:8081, restart automático.
                 </li>
                 <li>
@@ -341,6 +341,19 @@
                     <svg lucideCircle [size]="10"></svg>
                     LanguageTool corriendo en localhost:8081{{ ds.runtime ? ' (vía ' + ds.runtime + ')' : '' }}
                   </div>
+                  @if (ds.container_outdated) {
+                    <div class="docker-status warn">
+                      Hay una versión nueva de LanguageTool. Actualizar baja la imagen y recrea el container.
+                    </div>
+                    <button
+                      type="button"
+                      class="btn btn-primary docker-btn"
+                      [disabled]="dockerBusy() !== null"
+                      (click)="startDocker()"
+                    >
+                      {{ dockerBusy() === 'starting' ? 'Actualizando…' : 'Actualizar LanguageTool' }}
+                    </button>
+                  }
                   <button
                     type="button"
                     class="btn btn-secondary docker-btn"

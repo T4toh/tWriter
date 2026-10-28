@@ -178,30 +178,9 @@
       </button>
     }
 
-    @if (grammarApplies()) {
+    @if (canCheckGrammar()) {
       <span class="sep"></span>
-      @if (canCheckGrammar()) {
-        <button
-          type="button"
-          class="tb-btn lt-btn"
-          [class.checking]="grammarChecking()"
-          (click)="checkGrammar(true)"
-          [disabled]="grammarChecking()"
-          title="Revisar gramática y ortografía (LanguageTool)"
-        >
-          <img src="assets/LT.svg" alt="LT" />
-        </button>
-      } @else {
-        <button
-          type="button"
-          class="tb-btn lt-btn lt-down"
-          (click)="openGrammarConfig()"
-          title="LanguageTool no responde — abrir la configuración"
-        >
-          <img src="assets/LT.svg" alt="LT" />
-        </button>
-      }
-      @if (canCheckGrammar() && canAutoGrammar()) {
+      @if (canAutoGrammar()) {
         <button
           type="button"
           class="tb-btn tb-text"
@@ -212,18 +191,16 @@
           AUTO
         </button>
       }
-      @if (canCheckGrammar()) {
-        <button
-          type="button"
-          class="tb-btn tb-text"
-          [class.active]="reviewing()"
-          [disabled]="grammarChecking()"
-          (click)="startReview($event)"
-          title="Recorrer los errores de LanguageTool del capítulo uno por uno"
-        >
-          REVISAR
-        </button>
-      }
+      <button
+        type="button"
+        class="tb-btn tb-text"
+        [class.active]="reviewing()"
+        [disabled]="grammarChecking()"
+        (click)="startReview($event)"
+        title="Chequear el capítulo con LanguageTool y recorrer los errores uno por uno"
+      >
+        REVISAR
+      </button>
     }
 
     <span class="spacer"></span>
@@ -437,6 +414,25 @@
   <!-- Fuera del `@if` del capítulo activo: los avisos que el autor se perdió
        siguen ahí aunque no haya nada abierto. Solo en el panel primario, si no
        en split saldrían dos campanas para un único historial. -->
+  <!-- Estado de LanguageTool: late mientras chequea, se apaga si no responde,
+       y siempre abre la configuración. -->
+  @if (grammarApplies()) {
+    <button
+      type="button"
+      class="indicator indicator-btn lt-status"
+      [class.checking]="grammarChecking()"
+      [class.lt-down]="!grammar.available()"
+      [title]="grammar.available()
+        ? 'LanguageTool ' + (grammar.version() ?? '') + ' (modo ' + grammar.mode() + ') — abrir la configuración'
+        : 'LanguageTool no responde — abrir la configuración'"
+      (click)="openGrammarConfig()"
+    >
+      <img src="assets/LT.svg" alt="LanguageTool" />
+      @if (grammar.version(); as v) {
+        {{ v }}
+      }
+    </button>
+  }
   @if (paneId() === 0) {
     <app-notificaciones-bell />
   }

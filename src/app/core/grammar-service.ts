@@ -57,6 +57,8 @@ export interface LtDockerStatus {
   daemon_running: boolean;
   container_running: boolean;
   container_exists: boolean;
+  /** El container se creó con otra imagen: hay versión nueva de LT. «Levantar» lo recrea. */
+  container_outdated: boolean;
   api_responding: boolean;
   /** Remedio accionable cuando falta el runtime o el daemon no responde. */
   remedy: Remedy | null;
@@ -95,6 +97,8 @@ export class GrammarService {
   }
 
   readonly available = signal<boolean>(false);
+  /** Versión del LT en uso (pie del editor). `null` si no responde o en modo público. */
+  readonly version = signal<string | null>(null);
   readonly checking = signal<boolean>(false);
   readonly lastError = signal<string | null>(null);
   /**
@@ -143,12 +147,24 @@ export class GrammarService {
       const ok = await invoke<boolean>('check_grammar_available', { cfg: this.buildCfg() });
       this.available.set(ok);
       if (ok) this.avisoAbierto = false;
+      if (!ok) this.version.set(null);
+      else if (this.version() === null) void this.loadVersion();
       if (!ok) this.debug.warn('grammar', `ping LanguageTool falló (modo ${this.mode()})`);
       return ok;
     } catch (e) {
       this.available.set(false);
       this.debug.error('grammar', `ping LanguageTool excepción (modo ${this.mode()})`, String(e));
       return false;
+    }
+  }
+
+  private async loadVersion(): Promise<void> {
+    try {
+      this.version.set(
+        await invoke<string | null>('languagetool_version', { cfg: this.buildCfg() }),
+      );
+    } catch {
+      this.version.set(null);
     }
   }
 
@@ -199,6 +215,7 @@ export class GrammarService {
     ltUsername?: string | null,
   ): Promise<void> {
     await this.settings.setGrammarMode(mode, customUrl ?? null, ltUsername ?? null);
+    this.version.set(null);
     const authNote = ltUsername ? ` (auth: ${ltUsername})` : '';
     this.debug.info(
       'grammar',
@@ -228,6 +245,9 @@ export class GrammarService {
         runtime: runtime ?? null,
       });
       this.debug.info('grammar', `LanguageTool Docker arrancado`, msg);
+      // Puede haberse recreado con otra imagen: la versión cacheada ya no vale.
+      this.version.set(null);
+      void this.ping();
       return msg;
     } catch (e) {
       this.debug.error('grammar', `falló arrancar Docker LanguageTool`, String(e));

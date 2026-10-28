@@ -10,6 +10,16 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+### Changed
+
+- The LanguageTool icon moved from the toolbar to the editor footer, next to the notifications bell, and shows the version in use. It pulses while checking, greys out when LanguageTool doesn't respond, and opens its settings. «Revisar» now always checks the chapter again before walking through the errors, which is what the old toolbar icon did.
+
+### Fixed
+
+- LanguageTool now updates when tWriter ships a newer version: Settings shows «Actualizar LanguageTool» and «Levantar» recreates the container with the new image. Before, each PC stayed forever on the version it first downloaded.
+- With Apple `container`, LanguageTool no longer gets killed for running out of memory (the container was capped at 1 GB while Java asked for 2 GB).
+- LanguageTool is only reachable from this computer; it used to be open to the local network.
+
 ## [0.27.0] - 2026-10-21
 
 ### Fixed
