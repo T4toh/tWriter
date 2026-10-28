@@ -327,7 +327,7 @@ static INSTALANDO: AtomicBool = AtomicBool::new(false);
 /// llegar juntos al abrir la app.
 static ARRANQUE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-const PUERTO_DESDE: u16 = 8082;
+const PUERTO_DESDE: u16 = 8081;
 /// Medido 0,4 s en frío, pero la primera vez el antivirus de Windows puede
 /// escanear el JRE entero; y si vence en una actualización, se borra lo recién
 /// bajado. Mismo margen que el smoke de CI.
@@ -355,6 +355,16 @@ async fn responde(puerto: u16) -> bool {
         Ok(r) if r.status().is_success()
     )
 }
+
+/// Otro LanguageTool contestando en `puerto` que no es el nuestro: el
+/// container de una versión anterior de tWriter, que con `--restart` vuelve en
+/// cada arranque de la compu y la app ya no sabe manejar.
+async fn otro_lt(propio: u16, puerto: u16) -> bool {
+    propio != puerto && responde(puerto).await
+}
+
+/// Donde corría el container de LanguageTool de versiones anteriores.
+const PUERTO_CONTAINER_VIEJO: u16 = 8081;
 
 /// Un `java` nuestro que quedó vivo de una sesión que crasheó: si el puerto que
 /// anotó sigue contestando como LanguageTool, se mata ese pid.
@@ -408,7 +418,8 @@ async fn arrancar_sin_registrar(base: &Path) -> Result<u16, String> {
     matar_huerfano(base).await;
     let java = ruta_java(&base.join(format!("jre-{jre}")))
         .ok_or("No encuentro el java instalado. Borralo y bajalo de nuevo.")?;
-    let puerto = puerto_libre(PUERTO_DESDE).ok_or("No hay ningún puerto libre desde 8082.")?;
+    let puerto = puerto_libre(PUERTO_DESDE)
+        .ok_or_else(|| format!("No hay ningún puerto libre desde {PUERTO_DESDE}."))?;
     let log = base.join("lt.log");
     let stderr = File::create(&log).map_err(|e| format!("No pude crear {}: {e}", log.display()))?;
     let mut cmd = std::process::Command::new(&java);
@@ -530,6 +541,34 @@ async fn asegurar_en(base: &Path) {
     }
 }
 
+/// Por qué «Local» no tiene a quién pegarle, dicho para el autor: es lo que
+/// ve en el pie cuando falla un chequeo.
+fn motivo(instalando: bool, instalado: bool, error: Option<String>) -> String {
+    if instalando {
+        "LanguageTool se está bajando; cuando termine, el chequeo vuelve solo.".into()
+    } else if !instalado {
+        "LanguageTool no está instalado: bajalo desde Configuración → Gramática → «Local».".into()
+    } else {
+        error.unwrap_or_else(|| {
+            "LanguageTool no arrancó: probá «Reiniciar» en Configuración → Gramática.".into()
+        })
+    }
+}
+
+/// La base del LT embebido para un pedido en modo Local: espera el arranque
+/// si está en curso (el chequeo del capítulo sale apenas abre la app, antes
+/// de que LT termine de arrancar) y, si no hay, dice por qué y qué hacer.
+pub async fn base_local(app: &AppHandle) -> Result<String, String> {
+    asegurar_corriendo(app).await;
+    if let Some(b) = base_embebida() {
+        return Ok(b);
+    }
+    let base = base_de(app)?;
+    let instalado = instalado(&base, "lt").is_some() && instalado(&base, "jre").is_some();
+    let error = ULTIMO_ERROR.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    Err(motivo(INSTALANDO.load(Ordering::SeqCst), instalado, error))
+}
+
 /// Al abrir la app, en segundo plano, si el modo es Local y está instalado.
 pub fn arrancar_al_abrir(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
@@ -559,6 +598,8 @@ pub struct LtEmbebidoStatus {
     puerto: Option<u16>,
     /// Último error de arranque, con la última línea de stderr de java.
     error: Option<String>,
+    /// Otro LanguageTool en 8081: el container de una versión anterior.
+    container_viejo: bool,
 }
 
 #[tauri::command]
@@ -575,6 +616,8 @@ pub async fn lt_embebido_status(app: AppHandle) -> LtEmbebidoStatus {
         bytes += jre_del_target(lock).map_or(0, |j| j.size);
     }
     let corre = corriendo();
+    let propio = if corre { PUERTO.load(Ordering::SeqCst) } else { 0 };
+    let container_viejo = otro_lt(propio, PUERTO_CONTAINER_VIEJO).await;
     LtEmbebidoStatus {
         lt_instalado,
         jre_instalado,
@@ -584,6 +627,7 @@ pub async fn lt_embebido_status(app: AppHandle) -> LtEmbebidoStatus {
         corriendo: corre,
         puerto: corre.then(|| PUERTO.load(Ordering::SeqCst)),
         error: ULTIMO_ERROR.lock().unwrap_or_else(|e| e.into_inner()).clone(),
+        container_viejo,
     }
 }
 
@@ -879,5 +923,44 @@ mod tests {
             assert!(primero < Duration::from_millis(500), "primer chequeo en frío: {primero:?}");
             assert!(!corriendo());
         });
+    }
+
+    /// Un servidor mínimo que contesta 200 a cualquier pedido, como haría LT
+    /// en `/v2/languages`.
+    fn lt_falso() -> u16 {
+        let server = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let puerto = server.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for mut c in server.incoming().flatten() {
+                let mut pedido = [0u8; 1024];
+                let _ = std::io::Read::read(&mut c, &mut pedido);
+                let _ = c.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n[]");
+            }
+        });
+        puerto
+    }
+
+    #[test]
+    fn otro_lt_detecta_el_container_viejo() {
+        crate::install_tls_provider();
+        let viejo = lt_falso();
+        let libre = puerto_libre(viejo + 1).unwrap();
+        tauri::async_runtime::block_on(async {
+            assert!(otro_lt(0, viejo).await, "LT ajeno contestando y nosotros sin correr");
+            assert!(!otro_lt(viejo, viejo).await, "el que contesta es el nuestro");
+            assert!(!otro_lt(0, libre).await, "nadie contesta");
+        });
+    }
+
+    #[test]
+    fn motivo_dice_que_hacer_segun_el_estado() {
+        let m = motivo(true, false, None);
+        assert!(m.contains("bajando"), "{m}");
+        let m = motivo(false, false, None);
+        assert!(m.contains("no está instalado") && m.contains("Configuración → Gramática"), "{m}");
+        let m = motivo(false, true, Some("LanguageTool no arrancó: sin memoria".into()));
+        assert_eq!(m, "LanguageTool no arrancó: sin memoria");
+        let m = motivo(false, true, None);
+        assert!(m.contains("Reiniciar"), "{m}");
     }
 }

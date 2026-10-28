@@ -20,57 +20,6 @@ interface GrammarCfg {
   disabledRules: string[];
 }
 
-/** Qué pasó y con qué se arregla. Espeja `Remedy` de `grammar.rs`. */
-export interface Remedy {
-  /** Qué pasó, en prosa, sin el comando embebido. */
-  message: string;
-  /** Comando exacto para copiar, o null si no hay uno (ej. abrir Docker Desktop). */
-  command: string | null;
-  /** La app puede ejecutarlo sola. Decide botón primario vs solo chip copiable. */
-  can_run: boolean;
-}
-
-/** Una forma de instalar un runtime. `command` solo viene en macOS (Homebrew). */
-export interface InstallOption {
-  label: string;
-  command: string | null;
-  url: string;
-}
-
-/** Runtime candidato cuando la app no puede saber cuál usa LanguageTool. */
-export interface RuntimeChoice {
-  /** Clave estable que vuelve como parámetro de dockerStart. */
-  key: string;
-  label: string;
-}
-
-export interface LtDockerStatus {
-  /** Hay al menos un runtime de containers instalado (Docker/Podman/Apple). */
-  docker_installed: boolean;
-  /** Nombre legible del runtime detectado (ej. "Apple container"), o null. */
-  runtime: string | null;
-  /**
-   * ¿Responde el daemon del runtime? Cuando es false, `container_running` y
-   * `container_exists` NO significan nada: el CLI no puede listar containers
-   * sin daemon.
-   */
-  daemon_running: boolean;
-  container_running: boolean;
-  container_exists: boolean;
-  /** El container se creó con otra imagen: hay versión nueva de LT. «Levantar» lo recrea. */
-  container_outdated: boolean;
-  api_responding: boolean;
-  /** Remedio accionable cuando falta el runtime o el daemon no responde. */
-  remedy: Remedy | null;
-  /** Cómo instalar un runtime. Solo viene con contenido si no hay ninguno. */
-  install_options: InstallOption[];
-  /**
-   * Candidatos entre los que elegir. No vacío SOLO cuando hay más de un runtime
-   * instalado, ninguno respondiendo y nada recordado.
-   */
-  runtime_choices: RuntimeChoice[];
-}
-
 /** Estado del LanguageTool que baja y corre tWriter (`lt_embebido.rs`). */
 export interface LtEmbebidoStatus {
   lt_instalado: string | null;
@@ -84,6 +33,8 @@ export interface LtEmbebidoStatus {
   puerto: number | null;
   /** Último error de arranque, con la última línea de stderr de java. */
   error: string | null;
+  /** Otro LanguageTool en 8081: el container de una versión anterior de tWriter. */
+  container_viejo: boolean;
 }
 
 export type SecretBackend = 'keyring' | 'plain' | 'none';
@@ -246,26 +197,6 @@ export class GrammarService {
     return invoke<SecretStatus>('lt_api_key_save', { value });
   }
 
-  async dockerStatus(): Promise<LtDockerStatus> {
-    return invoke<LtDockerStatus>('languagetool_docker_status');
-  }
-
-  async dockerStart(runtime?: string): Promise<string> {
-    try {
-      const msg = await invoke<string>('languagetool_docker_start', {
-        runtime: runtime ?? null,
-      });
-      this.debug.info('grammar', `LanguageTool Docker arrancado`, msg);
-      // Puede haberse recreado con otra imagen: la versión cacheada ya no vale.
-      this.version.set(null);
-      void this.ping();
-      return msg;
-    } catch (e) {
-      this.debug.error('grammar', `falló arrancar Docker LanguageTool`, String(e));
-      throw e;
-    }
-  }
-
   async embebidoStatus(): Promise<LtEmbebidoStatus> {
     return invoke<LtEmbebidoStatus>('lt_embebido_status');
   }
@@ -293,16 +224,6 @@ export class GrammarService {
       // Puede haber cambiado de versión o de puerto: la versión cacheada ya no vale.
       this.version.set(null);
       void this.ping();
-    }
-  }
-
-  async dockerStop(): Promise<void> {
-    try {
-      await invoke('languagetool_docker_stop');
-      this.debug.info('grammar', `LanguageTool Docker detenido`);
-    } catch (e) {
-      this.debug.error('grammar', `falló detener Docker LanguageTool`, String(e));
-      throw e;
     }
   }
 }

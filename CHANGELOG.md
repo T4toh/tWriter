@@ -12,7 +12,7 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ### Added
 
-- Grammar checking no longer needs Docker: tWriter can download LanguageTool (about 142 MB, once) and run it on its own from Settings → Grammar. Docker stays available as an alternative.
+- Grammar checking no longer needs Docker: tWriter can download LanguageTool (about 142 MB, once) and run it on its own from Settings → Grammar.
 
 ### Changed
 
@@ -23,11 +23,13 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 - The notes editor uses the same «Vista» menu instead of the width icon that cycled through options.
 - The LanguageTool icon moved from the toolbar to the editor footer, next to the notifications bell, and shows the version in use. It pulses while checking, greys out when LanguageTool doesn't respond, and opens its settings. «Revisar» now always checks the chapter again before walking through the errors, which is what the old toolbar icon did.
 
+### Removed
+
+- tWriter no longer starts LanguageTool in Docker, Podman or Apple `container`: it downloads and runs its own. If the old container is still running, Settings → Grammar says so and gives the command to remove it and its image, which keep using about 2 GB of RAM and 450 MB of disk. The README has the same commands for a stopped container.
+
 ### Fixed
 
 - Headings in the note reader use the note's font instead of the interface font, so they no longer look like they belong to another document.
-- LanguageTool now updates when tWriter ships a newer version: Settings shows «Actualizar LanguageTool» and «Levantar» recreates the container with the new image. Before, each PC stayed forever on the version it first downloaded.
-- With Apple `container`, LanguageTool no longer gets killed for running out of memory (the container was capped at 1 GB while Java asked for 2 GB).
 - LanguageTool is only reachable from this computer; it used to be open to the local network.
 
 ## [0.27.0] - 2026-10-21
