@@ -38,6 +38,31 @@ huela a "esto ya lo miramos", buscar ahí primero.
   de Docker del modal y la segunda rama de `resolve_base`, y el embebido puede
   volver a arrancar desde el puerto 8081.
 
+- **Menores del LT embebido que quedaron de la revisión de #213** (ninguno
+  rompe el uso normal; agarrarlos si aparece el síntoma):
+  - «Reiniciar», «Borrar» o «Actualizar» justo mientras corre el arranque
+    automático: `detener()` no espera al arranque en vuelo (`ARRANQUE`), así que
+    ese arranque puede terminar después y dejar corriendo la versión vieja. El
+    arreglo es un reiniciar que pare y arranque con `ARRANQUE` tomado.
+  - El huérfano se detecta por "el puerto anotado contesta como LT", no por el
+    pid: con dos tWriter abiertos (no hay plugin de instancia única) uno mata el
+    `java` del otro. Y un huérfano que no contesta en 1,5 s pierde su `lt.pid`
+    y ya no se lo encuentra.
+  - El arranque mira `responde()` antes que `try_wait()`: si otro LT ganó el
+    puerto, un `java` nuestro muerto se da por listo (se corrige solo en el
+    próximo `corriendo()`).
+  - El sha256 de ~142 MB y la extracción del JRE corren en un worker async (irían
+    con `spawn_blocking`), y `responde()` arma un `reqwest::Client` por poll.
+  - Restos en disco: el `.tar.gz` del JRE si se cierra a mitad y el lock cambia
+    de JRE; si LT se instala y el JRE falla, quedan el LT nuevo y el viejo.
+  - Al pasar de Local a Público el `java` sigue vivo hasta cerrar la app (~400 MB).
+  - Usuario de Windows con nombre fuera de la code page ANSI (cirílico, CJK): sin
+    verificar. Si falla, el arreglo es `current_dir(libs)` + `-cp *`.
+  - `lt-al-dia.yml`: si `gh pr create` falla después del push, la rama queda y
+    las corridas siguientes creen que el PR sigue abierto (chequear con
+    `gh pr list --head` en vez de la rama). Los PRs del bot que se superponen se
+    pisan en el lock y el CHANGELOG.
+
 - **Moverse con las flechas por los globitos de revisión** (quedó afuera de
   #212). Mientras el globito está abierto el foco lo tiene el editor, y las
   flechas mueven el cursor del texto. Para recorrer sugerencias y acciones con
@@ -402,13 +427,12 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
 
 ## Documentación
 
-- [ ] **El README está desactualizado** (el autor, 2026-10-28: "está
-  viejardo, incluso antes de esto"). Su último cambio es del 2026-10-02 y desde
-  entonces entraron, como mínimo, la barra del editor (#210), «Revisar» (#211),
-  los globitos de revisión (#212) y la recreación del container de LT (#209).
-  Antes de reorganizarlo (item siguiente) conviene ponerlo al día contra el
-  código, y cuando se mergee el LT embebido reescribir la parte de instalación
-  de LanguageTool, que hoy pide Docker.
+- [ ] **README: la parte de LanguageTool después de mergear #213.** #214 lo
+  puso al día con `main` (sin reorganizar), pero no documenta el LT que baja la
+  app porque todavía no estaba en `main`. Al mergear #213: reescribir
+  instalación y «Configuración avanzada → LanguageTool» para que Local sea el
+  embebido y Docker la alternativa; y cuando salga Docker (item de arriba),
+  sacar Docker del README y los scripts `start/stop-languagetool.sh`.
 
 - [ ] **Wiki o sitio de docs; el README quedó demasiado grande** (pedido del
   autor el 2026-09-14). Hoy `README.md` tiene ~1.070 líneas y mezcla cuatro

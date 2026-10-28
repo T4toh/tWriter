@@ -439,11 +439,30 @@ async fn arrancar_sin_registrar(base: &Path) -> Result<u16, String> {
             .unwrap_or_else(|| "sin detalle".into());
         return Err(format!("LanguageTool no arrancó: {ultima}"));
     }
+    calentar(puerto).await;
     tracing::info!(target: "grammar", puerto, lt, jre, "LT embebido listo");
     *PROCESO.lock().unwrap_or_else(|e| e.into_inner()) = Some(child);
     *ULTIMO_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
     PUERTO.store(puerto, Ordering::SeqCst);
     Ok(puerto)
+}
+
+/// Un chequeo corto en cada idioma antes de dar a LT por listo: el primero
+/// carga las reglas (~1,4 s medido) y, si le toca al pedido de la versión del
+/// pie, que tiene 1,5 s de timeout, el pie queda vacío. Con el container no
+/// pasaba porque ya llevaba horas corriendo. Si falla no importa: es solo
+/// para que el primer pedido de verdad no pague la carga.
+async fn calentar(puerto: u16) {
+    let Ok(client) = reqwest::Client::builder().timeout(Duration::from_secs(15)).build() else {
+        return;
+    };
+    for language in ["es", "en-US"] {
+        let _ = client
+            .post(format!("http://127.0.0.1:{puerto}/v2/check"))
+            .form(&[("language", language), ("text", "a")])
+            .send()
+            .await;
+    }
 }
 
 /// Mata el `java` embebido si hay uno. Va en `RunEvent::Exit`.
@@ -805,6 +824,16 @@ mod tests {
         tauri::async_runtime::block_on(async {
             instalar(base.path(), &|_, m| eprintln!("{m}")).await.unwrap();
             let puerto = arrancar_en(base.path()).await.unwrap();
+            // El primer pedido después de arrancar es el de la versión del pie,
+            // con 1,5 s de timeout: tiene que encontrar a LT ya en caliente.
+            let inicio = std::time::Instant::now();
+            reqwest::Client::new()
+                .post(format!("http://127.0.0.1:{puerto}/v2/check"))
+                .form(&[("language", "en-US"), ("text", "a")])
+                .send()
+                .await
+                .unwrap();
+            let primero = inicio.elapsed();
             let r: serde_json::Value = reqwest::Client::new()
                 .post(format!("http://127.0.0.1:{puerto}/v2/check"))
                 .form(&[
@@ -821,6 +850,7 @@ mod tests {
             let reglas: Vec<&str> =
                 r["matches"].as_array().unwrap().iter().filter_map(|m| m["rule"]["id"].as_str()).collect();
             assert!(reglas.contains(&"MONOSILABOS"), "{reglas:?}");
+            assert!(primero < Duration::from_millis(500), "primer chequeo en frío: {primero:?}");
             assert!(!corriendo());
         });
     }
