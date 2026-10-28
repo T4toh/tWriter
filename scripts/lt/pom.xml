@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Cierre de dependencias del LanguageTool que baja tWriter. No se buildea nada:
+  `scripts/armar-lt-lock.mjs` le pide a Maven la lista de jars y la escribe,
+  con sus sha256, en `src-tauri/lt-lock.json`.
+
+  - `languagetool-server` arrastra `language-all`, que trae los 30 idiomas
+    (251 MB). Se excluye y se piden solo los que hacen falta.
+  - `language-ca` y `language-pt` NO sobran: `CommonWordsDetector` tiene
+    hardcodeados es, ca y pt en su inicializador estático, y sin ellos el
+    server no arranca ("'ca' is not a language code known to LanguageTool").
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>twriter</groupId>
+  <artifactId>languagetool-embebido</artifactId>
+  <version>1</version>
+  <properties>
+    <lt.version>6.8</lt.version>
+  </properties>
+  <dependencies>
+    <dependency>
+      <groupId>org.languagetool</groupId>
+      <artifactId>languagetool-server</artifactId>
+      <version>${lt.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.languagetool</groupId>
+          <artifactId>language-all</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency><groupId>org.languagetool</groupId><artifactId>language-es</artifactId><version>${lt.version}</version></dependency>
+    <dependency><groupId>org.languagetool</groupId><artifactId>language-en</artifactId><version>${lt.version}</version></dependency>
+    <dependency><groupId>org.languagetool</groupId><artifactId>language-ca</artifactId><version>${lt.version}</version></dependency>
+    <dependency><groupId>org.languagetool</groupId><artifactId>language-pt</artifactId><version>${lt.version}</version></dependency>
+  </dependencies>
+</project>
