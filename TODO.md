@@ -37,6 +37,9 @@ huela a "esto ya lo miramos", buscar ahí primero.
   las ~700 líneas de detección multi-runtime, pull, start y remedies, el bloque
   de Docker del modal y la segunda rama de `resolve_base`, y el embebido puede
   volver a arrancar desde el puerto 8081.
+  En el mismo PR: sacar «Alternativa: LanguageTool en un container» y el paso 5
+  del setup del README, y borrar `scripts/start-languagetool.sh` y
+  `stop-languagetool.sh`.
 
 - **Menores del LT embebido que quedaron de la revisión de #213** (ninguno
   rompe el uso normal; agarrarlos si aparece el síntoma):
@@ -426,13 +429,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   próxima tanda de dependencias, no antes.
 
 ## Documentación
-
-- [ ] **README: la parte de LanguageTool después de mergear #213.** #214 lo
-  puso al día con `main` (sin reorganizar), pero no documenta el LT que baja la
-  app porque todavía no estaba en `main`. Al mergear #213: reescribir
-  instalación y «Configuración avanzada → LanguageTool» para que Local sea el
-  embebido y Docker la alternativa; y cuando salga Docker (item de arriba),
-  sacar Docker del README y los scripts `start/stop-languagetool.sh`.
 
 - [ ] **Wiki o sitio de docs; el README quedó demasiado grande** (pedido del
   autor el 2026-09-14). Hoy `README.md` tiene ~1.070 líneas y mezcla cuatro

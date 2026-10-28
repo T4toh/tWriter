@@ -44,7 +44,8 @@ Las novelas viven en un repo privado aparte (HTML + JSON). Esta app es solo el e
   - [Configuración avanzada](#configuración-avanzada)
     - [LanguageTool (3 backends)](#languagetool-3-backends)
       - [API público (default)](#api-público-default)
-      - [Local (Docker / Podman / Apple container)](#local-docker--podman--apple-container)
+      - [Local (LanguageTool que baja tWriter)](#local-languagetool-que-baja-twriter)
+      - [Alternativa: LanguageTool en un container](#alternativa-languagetool-en-un-container)
       - [URL custom — self-hosted o LT Premium](#url-custom--self-hosted-o-lt-premium)
   - [Para desarrollar](#para-desarrollar)
     - [Layout de archivos del repo de novelas](#layout-de-archivos-del-repo-de-novelas)
@@ -53,7 +54,7 @@ Las novelas viven en un repo privado aparte (HTML + JSON). Esta app es solo el e
       - [2. Node.js + pnpm](#2-nodejs--pnpm)
       - [3. System libs (Tauri 2 + WebKit)](#3-system-libs-tauri-2--webkit)
       - [4. Pandoc (importer .docx/.odt)](#4-pandoc-importer-docxodt)
-      - [5. Runtime de containers (opcional, para LanguageTool local)](#5-runtime-de-containers-opcional-para-languagetool-local)
+      - [5. Runtime de containers (opcional, solo para LanguageTool en un container)](#5-runtime-de-containers-opcional-solo-para-languagetool-en-un-container)
       - [6. Clonar e instalar](#6-clonar-e-instalar)
     - [Comandos](#comandos)
     - [Distribución](#distribución)
@@ -126,35 +127,18 @@ Después abre normal. Es solo la primera vez.
 
 > Ambos `.dmg` se compilan en CI sobre runner Apple Silicon (`macos-14`); el `x64` se cross-compila a `x86_64-apple-darwin`. Auto-update Tauri-native vía `latest.json` (incluye `darwin-aarch64` + `darwin-x86_64`).
 
-**LanguageTool en macOS**: la gramática local corre en un container, y la app
-maneja cualquiera de los 3 runtimes comunes (autodetecta el que tengas). Elegí uno:
-
-```bash
-# Opción A — Apple container (nativo, sin VM que administres)
-brew install container
-container system start
-
-# Opción B — colima (Docker, liviano, sin la GUI de Docker Desktop)
-brew install colima docker
-colima start                 # brew services start colima para auto-boot
-
-# Opción C — Podman
-brew install podman
-podman machine init && podman machine start
-```
-
-Con cualquiera corriendo, la app baja la imagen y levanta LanguageTool sola desde
-Configuración → Gramática. Si usás **Docker** y antes tuviste Docker Desktop (y lo
-desinstalaste), borrá la línea `"credsStore": "desktop"` de `~/.docker/config.json`
-— si no, `docker pull` falla con `docker-credential-desktop ... not found`. Sin
-ningún runtime, la app igual anda usando el API público de LT por default.
+**LanguageTool en macOS**: no hay que instalar nada. Configuración → Gramática
+→ «Local» → «Bajar LanguageTool» baja LanguageTool y el Java que necesita
+(~142 MB, una sola vez) y la app lo corre sola. Si preferís correrlo en un
+container, ver [Alternativa: LanguageTool en un
+container](#alternativa-languagetool-en-un-container).
 
 **Pandoc** (importar `.docx`/`.odt`): `brew install pandoc`.
 
 ### Dependencias opcionales
 
 - **Pandoc** (para importar `.docx`/`.odt`): `sudo pacman -S pandoc` / `sudo apt install pandoc` / [pandoc.org](https://pandoc.org/installing.html) en Windows. Sin Pandoc, el importer queda inhabilitado pero el resto de la app funciona.
-- **Runtime de containers** (para LanguageTool local): Docker, Podman o Apple `container` — la app autodetecta el que esté instalado y con daemon vivo. Ver [LanguageTool](#languagetool-3-backends). Sin ninguno, la app usa el API público de LT por default.
+- **Runtime de containers**: **no hace falta** para LanguageTool local, que la app baja y corre sola (ver [Local](#local-languagetool-que-baja-twriter)). Sirve solo si preferís LT en un container: Docker, Podman o Apple `container`, que la app autodetecta. Sin LT local, la app usa el API público de LT por default.
 - **epubcheck** (validar el EPUB exportado): `brew install epubcheck` / `sudo pacman -S epubcheck` / [release de epubcheck](https://github.com/w3c/epubcheck/releases) en Windows (dejar el `.bat` en el PATH). Necesita Java 11+. Sin epubcheck el EPUB sale igual, sin veredicto; Configuración → General muestra el estado y cómo instalarlo en esta máquina.
 
 ## Features
@@ -418,7 +402,7 @@ viejo, validador los detecta correctamente con `paragraph-collapsed`.
 
 ### Gramática + ortografía (LanguageTool)
 
-- 3 modos: público (`api.languagetool.org`), local (container: Docker, Podman o Apple `container`), custom URL (self-hosted o LT Premium). Ver [Configuración avanzada → LanguageTool](#languagetool-3-backends) para detalles de cada uno.
+- 3 modos: público (`api.languagetool.org`), local (LanguageTool que baja y corre tWriter, o un container de Docker, Podman o Apple `container`), custom URL (self-hosted o LT Premium). Ver [Configuración avanzada → LanguageTool](#languagetool-3-backends) para detalles de cada uno.
 - Underlines diferenciados: orto (rojo sólido), gramática (rojo wavy), estilo (amarillo wavy).
 - Popover con un título por categoría (Ortografía, Concordancia, Puntuación…) en vez del código de la regla, sugerencias clickeables y atribución LT. Acciones: «Agregar al diccionario» (en ortografía) e «Ignorar»; en «Más opciones…», «Agregar con sus formas…», «No marcar más esta regla» y el `ruleId`.
 - Rate-limit client-side (18 req/min, 70KB/min) + chunking >20KB transparente.
@@ -440,7 +424,7 @@ viejo, validador los detecta correctamente con `paragraph-collapsed`.
 - **Vista dedicada del diccionario** (botón «Diccionario» en el header de la saga en la biblioteca + item "Editar diccionario…" en context menu de saga): modal con contador, búsqueda live, lista alfabética (Intl.Collator), agregar con validación en vivo, borrar con confirm inline, banner opt-in "Limpiar" cuando detecta entradas problemáticas (puntuación al borde, duplicados case-insensitive, solo dígitos, fuera de los límites 2–64). El validador (`dictionary/word-validator.ts`) sanea los bordes (`.`, `,`, `…`, comillas, paréntesis…) y se aplica también en el path «Agregar al diccionario» del popover para que no se cuelen entradas con punto al final. Persiste por acción (cada add/remove escribe el archivo). El storage es un `<saga>/diccionario.txt` (una palabra por línea) — ver [sync del diccionario](#sync-del-diccionario-entre-pcs) abajo para el detalle de cómo se fusiona entre PCs.
 - **Formas derivadas al agregar una palabra** (`dictionary/derived-forms.ts` + `derived-forms-panel`): agregar `teletransportar` tenía que silenciar también `teletransportó`, `teletransportaba`, `teletransportándose`. Dos mecanismos con una regla que los divide — **el generador nunca escribe un plural**: los plurales y los enclíticos se **pelan al filtrar** (`-s`/`-es`/`-ces` en español, `-s` en inglés) y los verbos (15 formas) y el género de los adjetivos se **generan al archivo** con preview tildable. Medido sobre las 439 entradas reales: 39 de 42 familias eran singular/plural, futuro/condicional/subjuntivo tienen 0 apariciones en tres novelas (de ahí 15 formas y no ~60), y en inglés no hay nada que conjugar. Los irregulares no se modelan — se destilda la forma que no existe antes de escribir. El flujo arranca en el popover porque el infinitivo casi nunca está cargado: se infiere el lema hacia atrás (`inferLemma`) desde la forma que marcó LT. Seguridad del pelador sobre el texto completo: 3 palabras nuevas silenciadas sobre 25.444 únicas, las tres plurales legítimos.
 - **Términos compuestos** (`dictionary/compound-terms.ts`): `Kun Lian` (un reino), `Tres Torres` (un vino) o `Amalut de las Arenas` se guardaban bien y no servían para nada, porque todos los consumidores eran de a una palabra. Ahora las entradas de varias palabras se separan al cargar y se matchean **como frase sobre el texto plano**, devolviendo los **rangos** cubiertos; los consumidores que ya trabajan con offsets sobre el plano (filtro de LT, detector de repeticiones) descartan lo que caiga adentro. El filtro es por **contención**, no por igualdad: LT marca `las Arenas` con `AGREEMENT_DET_NOUN`, un span más corto que la entrada. Y adentro de un nombre propio del mundo no se filtran solo los typos: la restricción a `category === 'TYPOS'` se levanta para los rangos compuestos.
-- **UX Docker explicativa**: stepper visual con fases `checking → pulling → starting → loading → ready` durante el arranque + bloque "Por qué Docker" con links a docker.com, languagetool.org, el repo oficial de LT y la imagen `erikvl87/languagetool` que usamos. Eventos `languagetool-progress` emitidos desde Rust con `tauri::Emitter`.
+- **Bajar LanguageTool desde la app** (`src-tauri/src/lt_embebido.rs`): barra de progreso en MB, versión de LT y de Java instaladas, «Reiniciar» y «Borrar», y un aviso con botón cuando tWriter trae una versión nueva. Para el container, el stepper `checking → pulling → starting → loading → ready` de siempre, plegado como alternativa. Los dos emiten `languagetool-progress` desde Rust con `tauri::Emitter`.
 - **LT Premium / self-hosted con auth**: en modo Custom URL podés pegar tu username + apiKey. El apiKey va al **keyring del OS** (libsecret/Keychain/Credential Manager) vía el módulo `secrets`. Ver [Configuración avanzada → LanguageTool](#languagetool-3-backends) para el detalle del keyring.
 
 **Batch audit** (`GrammarAuditService` + `GrammarAuditPanel`, `core/grammar-audit-service.ts` + `grammar-audit/`):
@@ -753,18 +737,72 @@ HTTP (`/v2/check`); cambia dónde corre y cómo se autentica.
 - Solo chequeo on-demand (sin auto-recheck mientras escribís — el ToS lo prohíbe).
 - Banner naranja avisa la primera vez que activás la feature en una sesión.
 
-#### Local (Docker / Podman / Apple container)
+#### Local (LanguageTool que baja tWriter)
 
-Para uso intensivo y privacidad total. La app maneja los 3 runtimes de
-containers comunes y **autodetecta** el que tengas instalado y con daemon vivo
-(prioridad: el que ya tenga el container de LT levantado → Docker → Podman →
-Apple `container`). Absorbe las diferencias de CLI entre ellos (Apple no soporta
-`--restart`, usa `ls --format json` en vez de Go templates y limita cada
-container a 1 GB, así que ahí va con `-m 3G` para que la JVM no muera por
-memoria). El puerto se publica solo en loopback (`-p 127.0.0.1:8081:8010`):
-LanguageTool lo usa tWriter, no la red local. Podés levantarlo desde
-Configuración → Gramática → "Local (Docker)" → "Levantar LanguageTool" — el
-status muestra vía qué runtime corre —, o por CLI:
+Para uso intensivo y privacidad total, sin instalar nada. Configuración →
+Gramática → «Local» → «Bajar LanguageTool» baja una vez ~142 MB: los jars de
+LanguageTool desde Maven Central y un Java (Temurin 21) para tu sistema, cada
+archivo verificado contra el sha256 que trae la propia app
+(`src-tauri/lt-lock.json`). Quedan en la carpeta de datos local de la app
+(`languagetool/`), no en el instalador.
+
+- **Arranca solo** al abrir tWriter si el modo es Local, en segundo plano, en
+  el primer puerto libre desde `8082` y solo en `127.0.0.1`. Se apaga al cerrar
+  la app; si quedó un LanguageTool colgado de un cierre forzado, lo limpia al
+  volver a abrir. Si se cae, lo relanza una vez; el panel dice por qué no
+  arrancó y tiene «Reiniciar».
+- **~400 MB de RAM**, contra ~2 GB del container.
+- **Actualizar**: cada versión de tWriter trae su versión de LanguageTool y de
+  Java. Si cambió, el panel ofrece «Actualizar LanguageTool a X» (o «Actualizar
+  Java (parche de seguridad)», que baja solo Java). Nunca se actualiza solo: las
+  reglas cambian entre versiones y conviene saber a qué atribuir una marca nueva.
+  Lo que ya está instalado sigue andando aunque no actualices.
+- **«Borrar»** libera el espacio; se vuelve a bajar con el mismo botón.
+- Si además hay un container en `8081`, Local usa el que baja tWriter mientras
+  esté corriendo, y el container si no.
+
+Detalles bajo el hood: la lista de jars y de Java la arma
+`scripts/armar-lt-lock.mjs` (necesita Maven, solo en la máquina que la corre) y
+la mantiene al día `.github/workflows/lt-al-dia.yml`: una vez por semana busca
+una versión nueva de LT o de Java con 7 días o más, prueba que arranque y marque
+(`scripts/smoke-lt-lock.mjs`) y abre un PR. Mediciones y trampas en
+[docs/decisiones-cerradas.md](docs/decisiones-cerradas.md) → «LT embebido».
+
+#### Alternativa: LanguageTool en un container
+
+Si ya tenés un runtime de containers, podés usar la imagen
+`erikvl87/languagetool` en vez del LanguageTool que baja tWriter. Está plegado
+en Configuración → Gramática → «Local» → «Alternativa: correrlo con Docker» →
+«Levantar LanguageTool», y el status muestra vía qué runtime corre. La app
+maneja los 3 runtimes de containers comunes y **autodetecta** el que tengas
+instalado y con daemon vivo (prioridad: el que ya tenga el container de LT
+levantado → Docker → Podman → Apple `container`). Absorbe las diferencias de
+CLI entre ellos (Apple no soporta `--restart`, usa `ls --format json` en vez de
+Go templates y limita cada container a 1 GB, así que ahí va con `-m 3G` para que
+la JVM no muera por memoria). El puerto se publica solo en loopback
+(`-p 127.0.0.1:8081:8010`): LanguageTool lo usa tWriter, no la red local.
+
+En macOS, cualquiera de estos tres:
+
+```bash
+# Apple container (nativo, sin VM que administres)
+brew install container
+container system start
+
+# colima (Docker, liviano, sin la GUI de Docker Desktop)
+brew install colima docker
+colima start                 # brew services start colima para auto-boot
+
+# Podman
+brew install podman
+podman machine init && podman machine start
+```
+
+Si usás **Docker** y antes tuviste Docker Desktop (y lo desinstalaste), borrá la
+línea `"credsStore": "desktop"` de `~/.docker/config.json` — si no, `docker
+pull` falla con `docker-credential-desktop ... not found`.
+
+Por CLI:
 
 ```bash
 ./scripts/start-languagetool.sh   # primera vez tarda ~30s en cargar modelos
@@ -934,9 +972,11 @@ sudo pacman -S --needed \
 sudo pacman -S pandoc
 ```
 
-#### 5. Runtime de containers (opcional, para LanguageTool local)
+#### 5. Runtime de containers (opcional, solo para LanguageTool en un container)
 
-Cualquiera de los tres sirve — la app autodetecta el que tengas. En Linux, Docker:
+Para LanguageTool local no hace falta: «Bajar LanguageTool» en Configuración →
+Gramática alcanza. Si preferís el container, cualquiera de los tres sirve — la
+app autodetecta el que tengas. En Linux, Docker:
 
 ```bash
 sudo pacman -S docker
@@ -944,7 +984,7 @@ sudo systemctl start docker        # arrancar on-demand, no enable
 sudo usermod -aG docker $USER     # logout/login para que tome efecto
 ```
 
-En macOS, ver [Instalación → macOS](#macos) (Apple `container`, colima o Podman).
+En macOS, ver [Alternativa: LanguageTool en un container](#alternativa-languagetool-en-un-container) (Apple `container`, colima o Podman).
 
 Sin ningún runtime la app igual anda — usa el API público de LanguageTool por default.
 
@@ -986,6 +1026,8 @@ CI (Ubuntu 24.04) no necesita este flag — system libs ahí son ELF clásico.
 ### Distribución
 
 - CI: `.github/workflows/release.yml`. Trigger: `git push --tags v*.*.*`. Linux job buildea `.deb`, Windows job buildea `.exe` (NSIS; `tauri.conf.json::bundle.targets` no incluye `msi`), macOS job (`macos-14`) buildea `.dmg` para `aarch64` y `x86_64`. Todo firmado ed25519 para el updater.
+- **Build de prueba**: `.github/workflows/build-prueba.yml`. Ponerle a un PR la etiqueta «build de prueba» arma el instalador de Windows (`.exe`) y el de Mac Intel (`.dmg`) como artifacts del run, sin release ni tag, y los rehace con cada push mientras la tenga.
+- **LanguageTool al día**: `.github/workflows/lt-al-dia.yml`, los lunes o a mano. Regenera `src-tauri/lt-lock.json`, prueba que LT arranque y marque, y abre un PR; nunca mergea solo.
 - **Linux Arch / CachyOS**: `twriter-bin` en el AUR, publicado desde `packaging/aur/publish.sh`. `test.sh` prueba el PKGBUILD local contra el `.deb` del release.
 - **Linux Debian / Ubuntu**: descargar `.deb`, `sudo apt install ./twriter_*.deb`. Después se actualiza solo, como Windows y macOS.
 - **Windows** y **macOS**: `.exe` / `.dmg` del release. Auto-update Tauri-native vía banner in-app contra `releases/latest/download/latest.json`.
