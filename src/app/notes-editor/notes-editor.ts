@@ -16,14 +16,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
 import { Markdown } from 'tiptap-markdown';
 import { NotificacionesBell } from '../notificaciones/notificaciones-bell';
-import {
-  LucideDynamicIcon,
-  LucideFilePen,
-  LucideRectangleHorizontal,
-  LucideRectangleVertical,
-  LucideSquare,
-  type LucideIcon,
-} from '@lucide/angular';
+import { LucideChevronDown, LucideFilePen } from '@lucide/angular';
 import { PaneId } from '../core/chapter-service';
 import { CursorRestoreService } from '../core/cursor-restore-service';
 import { NoteService } from '../core/note-service';
@@ -43,6 +36,7 @@ import {
   resolveEditorFontStack,
   SettingsService,
 } from '../core/settings-service';
+import { vistaMenu } from '../shared/vista-menu';
 import { atajo } from '../shared/atajo';
 import {
   ContextMenuService,
@@ -85,7 +79,7 @@ const EMPTY_STATE: ToolbarState = {
 
 @Component({
   selector: 'app-notes-editor',
-  imports: [LucideDynamicIcon, LucideFilePen, NotificacionesBell],
+  imports: [LucideChevronDown, LucideFilePen, NotificacionesBell],
   templateUrl: './notes-editor.html',
   styleUrl: './notes-editor.scss',
 })
@@ -120,26 +114,6 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
   protected readonly paragraphSpacingEm = computed(
     () => PARAGRAPH_SPACING_EM[this.paragraphSpacing()],
   );
-  protected readonly widthLabel = computed(() => {
-    switch (this.width()) {
-      case 'narrow':
-        return 'página';
-      case 'wide':
-        return 'ancho';
-      case 'full':
-        return 'lleno';
-    }
-  });
-  protected readonly widthIcon = computed<LucideIcon>(() => {
-    switch (this.width()) {
-      case 'narrow':
-        return LucideRectangleVertical;
-      case 'wide':
-        return LucideRectangleHorizontal;
-      case 'full':
-        return LucideSquare;
-    }
-  });
 
   private viewReady = signal(false);
   private tiptap: TipTapEditor | null = null;
@@ -347,11 +321,8 @@ export class NotesEditor implements AfterViewInit, OnDestroy {
   protected selectAll(): void {
     this.tiptap?.chain().focus().selectAll().run();
   }
-  protected cycleWidth(): void {
-    this.settings.cycleEditorWidth();
-  }
-  protected cycleParagraphSpacing(): void {
-    this.settings.cycleParagraphSpacing();
+  protected openViewMenu(event: MouseEvent): void {
+    this.ctxMenu.openBelow(event, vistaMenu(this.settings));
   }
   protected fontBump(delta: number): void {
     this.settings.bumpFontSize(delta);

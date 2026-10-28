@@ -16,6 +16,8 @@
     @for (entry of s.entries; track $index) {
       @if (isSeparator(entry)) {
         <div class="ctx-sep"></div>
+      } @else if (entry.kind === 'header') {
+        <div class="ctx-header">{{ entry.label }}</div>
       } @else {
         @let item = asItem(entry);
         <button

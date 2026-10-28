@@ -363,12 +363,6 @@ export class SettingsService {
     await this.persist();
   }
 
-  cycleEditorWidth(): void {
-    const order: EditorWidth[] = ['narrow', 'wide', 'full'];
-    const next = order[(order.indexOf(this.editorWidth()) + 1) % order.length];
-    void this.setEditorWidth(next);
-  }
-
   bumpFontSize(delta: number): void {
     const next = clampFont(this.editorFontSize() + delta);
     if (next === this.editorFontSize()) return;
@@ -417,10 +411,8 @@ export class SettingsService {
     return slot === 'ui' ? this.appFontUi : this.appFontMono;
   }
 
-  cycleParagraphSpacing(): void {
-    const order: ParagraphSpacing[] = ['tight', 'normal', 'loose'];
-    const next = order[(order.indexOf(this.editorParagraphSpacing()) + 1) % order.length];
-    this.editorParagraphSpacing.set(next);
+  setParagraphSpacing(spacing: ParagraphSpacing): void {
+    this.editorParagraphSpacing.set(spacing);
     void this.persist();
   }
 

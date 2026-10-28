@@ -12,10 +12,14 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ### Changed
 
+- The editor toolbar says what each control does. Alignment is one button showing the current one; «Insertar» holds the scene break and the verse block; «Revisar» walks through the spelling and grammar errors; «Herramientas» holds the whole-chapter conversions (dialogue to em dash, straight to curly quotes); «Vista» sets paragraph spacing and text width, and says it only changes the screen, not the book.
+- Marking errors while you type (spelling and grammar, dialogue punctuation, repeated words) is always on and is turned off from Settings → General → «Revisión mientras escribís», instead of the «AUTO», «Raya» and «Repeticiones» toolbar toggles.
+- The notes editor uses the same «Vista» menu instead of the width icon that cycled through options.
 - The LanguageTool icon moved from the toolbar to the editor footer, next to the notifications bell, and shows the version in use. It pulses while checking, greys out when LanguageTool doesn't respond, and opens its settings. «Revisar» now always checks the chapter again before walking through the errors, which is what the old toolbar icon did.
 
 ### Fixed
 
+- Headings in the note reader use the note's font instead of the interface font, so they no longer look like they belong to another document.
 - LanguageTool now updates when tWriter ships a newer version: Settings shows «Actualizar LanguageTool» and «Levantar» recreates the container with the new image. Before, each PC stayed forever on the version it first downloaded.
 - With Apple `container`, LanguageTool no longer gets killed for running out of memory (the container was capped at 1 GB while Java asked for 2 GB).
 - LanguageTool is only reachable from this computer; it used to be open to the local network.

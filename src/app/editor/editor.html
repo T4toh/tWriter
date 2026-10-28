@@ -59,147 +59,75 @@
 
     <button
       type="button"
-      class="tb-btn"
-      [class.active]="state().alignLeft"
-      (click)="setAlign('left')"
-      title="Alinear izquierda ({{ atajo('L', true) }})"
+      class="tb-btn tb-menu"
+      (click)="openAlignMenu($event)"
+      title="Alineación del párrafo"
     >
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-        <line x1="2" y1="3" x2="12" y2="3"/>
-        <line x1="2" y1="6" x2="8" y2="6"/>
-        <line x1="2" y1="9" x2="11" y2="9"/>
-        <line x1="2" y1="12" x2="7" y2="12"/>
-      </svg>
-    </button>
-    <button
-      type="button"
-      class="tb-btn"
-      [class.active]="state().alignCenter"
-      (click)="setAlign('center')"
-      title="Centrar ({{ atajo('E', true) }})"
-    >
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-        <line x1="2" y1="3" x2="12" y2="3"/>
-        <line x1="4" y1="6" x2="10" y2="6"/>
-        <line x1="3" y1="9" x2="11" y2="9"/>
-        <line x1="5" y1="12" x2="9" y2="12"/>
-      </svg>
-    </button>
-    <button
-      type="button"
-      class="tb-btn"
-      [class.active]="state().alignRight"
-      (click)="setAlign('right')"
-      title="Alinear derecha ({{ atajo('R', true) }})"
-    >
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-        <line x1="2" y1="3" x2="12" y2="3"/>
-        <line x1="6" y1="6" x2="12" y2="6"/>
-        <line x1="3" y1="9" x2="12" y2="9"/>
-        <line x1="7" y1="12" x2="12" y2="12"/>
-      </svg>
+      @if (state().alignCenter) {
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <line x1="2" y1="3" x2="12" y2="3"/>
+            <line x1="4" y1="6" x2="10" y2="6"/>
+            <line x1="3" y1="9" x2="11" y2="9"/>
+            <line x1="5" y1="12" x2="9" y2="12"/>
+          </svg>
+      } @else if (state().alignRight) {
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <line x1="2" y1="3" x2="12" y2="3"/>
+            <line x1="6" y1="6" x2="12" y2="6"/>
+            <line x1="3" y1="9" x2="12" y2="9"/>
+            <line x1="7" y1="12" x2="12" y2="12"/>
+          </svg>
+      } @else {
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <line x1="2" y1="3" x2="12" y2="3"/>
+            <line x1="2" y1="6" x2="8" y2="6"/>
+            <line x1="2" y1="9" x2="11" y2="9"/>
+            <line x1="2" y1="12" x2="7" y2="12"/>
+          </svg>
+      }
+      <svg lucideChevronDown [size]="10"></svg>
     </button>
 
     <span class="sep"></span>
 
     <button
       type="button"
-      class="tb-btn"
+      class="tb-btn tb-text tb-menu"
       [class.active]="state().verso"
-      (click)="toggleVerso()"
-      title="Bloque de verso — canción o poema ({{ atajo('B', true) }})"
+      (click)="openInsertMenu($event)"
+      title="Insertar un salto de escena o un bloque de verso"
     >
-      <!-- Comillas de cita más dos renglones cortos centrados: es el bloque de
-           verso, no un blockquote de blog. -->
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-        <path d="M3 3.2c-1 0-1.6.7-1.6 1.6S2 6.4 3 6.4c.5 0 .8-.1 1-.3 0 1-.5 1.7-1.4 2.2"/>
-        <path d="M7 3.2c-1 0-1.6.7-1.6 1.6S6 6.4 7 6.4c.5 0 .8-.1 1-.3 0 1-.5 1.7-1.4 2.2"/>
-        <line x1="4" y1="10.6" x2="10" y2="10.6"/>
-        <line x1="5.5" y1="12.8" x2="8.5" y2="12.8"/>
-      </svg>
+      Insertar
+      <svg lucideChevronDown [size]="10"></svg>
     </button>
 
-    <span class="sep"></span>
-
-    <button
-      type="button"
-      class="tb-btn"
-      (click)="insertSceneBreak()"
-      title="Salto de escena"
-    >
-      <span class="ico">* * *</span>
-    </button>
-
-    @if (canApplyRaya()) {
+    @if (grammarApplies() || canApplyRaya() || canApplyQuotes()) {
       <span class="sep"></span>
-      <button
-        type="button"
-        class="tb-btn tb-text"
-        (click)="openRaya()"
-        title="Convertir los diálogos de TODO el capítulo a raya (comillas → raya). Abre un diff para revisar antes de aplicar"
-      >
-        Aplicar raya
-      </button>
-      @if (canCheckRaya()) {
-        <button
-          type="button"
-          class="tb-btn tb-text"
-          [class.active]="rayaAuto()"
-          (click)="toggleAutoRaya()"
-          title="Marcar mientras escribís los errores de raya y las mayúsculas rancias de este capítulo (no cambia nada solo)"
-        >
-          Raya
-        </button>
-      }
     }
-
-    @if (canCheckRepeticiones()) {
-      <span class="sep"></span>
+    @if (grammarApplies()) {
       <button
         type="button"
-        class="tb-btn tb-text"
-        [class.active]="repAuto()"
-        (click)="toggleAutoRepeticiones()"
-        title="Repeticiones cercanas: marca la misma palabra repetida a poca distancia. Click en una marca resalta las otras"
-      >
-        Repeticiones
-      </button>
-    }
-
-    @if (canApplyQuotes()) {
-      <span class="sep"></span>
-      <button
-        type="button"
-        class="tb-btn tb-text"
-        (click)="openQuotes()"
-        title="Convertir comillas rectas a tipográficas (“ ” ‘ ’) en el capítulo entero (preview con diff)"
-      >
-        Comillas
-      </button>
-    }
-
-    @if (canCheckGrammar()) {
-      <span class="sep"></span>
-      @if (canAutoGrammar()) {
-        <button
-          type="button"
-          class="tb-btn tb-text"
-          [class.active]="autoGrammar()"
-          (click)="toggleAutoGrammar()"
-          title="Revisión automática mientras escribís (solo modo local)"
-        >
-          AUTO
-        </button>
-      }
-      <button
-        type="button"
-        class="tb-btn tb-text"
+        class="tb-btn tb-text tb-menu"
         [class.active]="reviewing()"
-        [disabled]="grammarChecking()"
+        [disabled]="!canCheckGrammar() || grammarChecking()"
         (click)="startReview($event)"
-        title="Chequear el capítulo con LanguageTool y recorrer los errores uno por uno"
+        [title]="canCheckGrammar()
+          ? 'Chequear el capítulo con LanguageTool y recorrer los errores uno por uno'
+          : 'LanguageTool no responde: revisá su configuración desde el ícono del pie'"
       >
-        REVISAR
+        <svg lucideSpellCheck [size]="13"></svg>
+        Revisar
+      </button>
+    }
+    @if (canApplyRaya() || canApplyQuotes()) {
+      <button
+        type="button"
+        class="tb-btn tb-text tb-menu"
+        (click)="openToolsMenu($event)"
+        title="Conversiones del capítulo entero. Cada una muestra los cambios antes de aplicarlos"
+      >
+        Herramientas
+        <svg lucideChevronDown [size]="10"></svg>
       </button>
     }
 
@@ -245,20 +173,12 @@
 
     <button
       type="button"
-      class="tb-btn spacing-toggle"
-      (click)="cycleParagraphSpacing()"
-      [title]="'Espaciado entre párrafos: ' + paragraphSpacingLabel()"
+      class="tb-btn tb-text tb-menu"
+      (click)="openViewMenu($event)"
+      title="Espacio entre párrafos y ancho del texto. Solo cambia la pantalla, no el libro"
     >
-      <svg class="ico" [attr.data-spacing]="paragraphSpacing()" [lucideIcon]="paragraphSpacingIcon()" [size]="14"></svg>
-    </button>
-
-    <button
-      type="button"
-      class="tb-btn width-toggle"
-      (click)="cycleWidth()"
-      [title]="'Ancho: ' + widthLabel()"
-    >
-      <svg class="ico" [lucideIcon]="widthIcon()" [size]="14"></svg>
+      Vista
+      <svg lucideChevronDown [size]="10"></svg>
     </button>
   </div>
 }

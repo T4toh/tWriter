@@ -105,8 +105,8 @@ export type SeccionSettings = 'general' | 'apariencia' | 'gramatica';
   styleUrl: './settings-modal.scss',
 })
 export class SettingsModal {
-  private grammar = inject(GrammarService);
-  private settings = inject(SettingsService);
+  protected grammar = inject(GrammarService);
+  protected settings = inject(SettingsService);
   protected debug = inject(DebugService);
 
   protected readonly open = signal<boolean>(false);

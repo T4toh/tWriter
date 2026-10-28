@@ -15,14 +15,9 @@ import {
 import { FormsModule } from '@angular/forms';
 import {
   LucideCheck,
+  LucideChevronDown,
   LucideCircleAlert,
-  LucideDynamicIcon,
-  LucideMenu,
-  LucideRectangleHorizontal,
-  LucideRectangleVertical,
-  LucideSquare,
-  LucideTextAlignJustify,
-  type LucideIcon,
+  LucideSpellCheck,
 } from '@lucide/angular';
 import { invoke } from '@tauri-apps/api/core';
 import { Editor as TipTapEditor } from '@tiptap/core';
@@ -68,6 +63,7 @@ import { SkipParagraph, validateRaya } from '../dialogos/validator';
 import { detectMayusculasRancias } from '../dictionary/mayusculas-rancias';
 import { Landing } from '../landing/landing';
 import { Spinner } from '../shared/spinner';
+import { vistaMenu } from '../shared/vista-menu';
 import {
   ContextMenuService,
   CtxMenuEntry,
@@ -152,7 +148,8 @@ interface ObjetivoTesauro {
   selector: 'app-editor',
   imports: [
     Landing, GrammarPopover, RayaPopover, RepeticionesPopover, Select, FormsModule,
-    LucideCircleAlert, LucideDynamicIcon, Spinner, DerivedFormsPanel,
+    LucideChevronDown, LucideCircleAlert, LucideSpellCheck, Spinner,
+    DerivedFormsPanel,
     NotificacionesBell,
   ],
   templateUrl: './editor.html',
@@ -300,7 +297,6 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.grammarUsed() &&
     !this.grammarBannerDismissed(),
   );
-  protected readonly autoGrammar = this.grammar.autoEnabled;
   protected readonly canAutoGrammar = this.grammar.canAutoCheck;
   protected readonly width = this.settings.editorWidth;
   protected readonly fontSize = this.settings.editorFontSize;
@@ -443,34 +439,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   });
   protected readonly paragraphSpacing = this.settings.editorParagraphSpacing;
   protected readonly paragraphSpacingEm = computed(() => PARAGRAPH_SPACING_EM[this.paragraphSpacing()]);
-  protected readonly widthLabel = computed(() => {
-    switch (this.width()) {
-      case 'narrow': return 'página';
-      case 'wide': return 'ancho';
-      case 'full': return 'lleno';
-    }
-  });
-  protected readonly widthIcon = computed<LucideIcon>(() => {
-    switch (this.width()) {
-      case 'narrow': return LucideRectangleVertical;
-      case 'wide': return LucideRectangleHorizontal;
-      case 'full': return LucideSquare;
-    }
-  });
-  protected readonly paragraphSpacingLabel = computed(() => {
-    switch (this.paragraphSpacing()) {
-      case 'tight': return 'apretado';
-      case 'normal': return 'normal';
-      case 'loose': return 'amplio';
-    }
-  });
-  protected readonly paragraphSpacingIcon = computed<LucideIcon>(() => {
-    switch (this.paragraphSpacing()) {
-      case 'tight': return LucideTextAlignJustify;
-      case 'normal': return LucideTextAlignJustify;
-      case 'loose': return LucideMenu;
-    }
-  });
 
   private viewReady = signal(false);
   private tiptap: TipTapEditor | null = null;
@@ -1150,13 +1118,54 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.tiptap?.chain().focus().selectAll().run();
   }
 
-  protected cycleWidth(): void {
-    this.settings.cycleEditorWidth();
+  // Desplegables de la barra. Salen del menú contextual compartido; el ✓ marca
+  // la opción actual, igual que el selector de variante.
+
+  protected openAlignMenu(event: MouseEvent): void {
+    const s = this.state();
+    const actual = s.alignCenter ? 'center' : s.alignRight ? 'right' : 'left';
+    const opciones = [
+      { align: 'left', label: 'Izquierda', tecla: 'L' },
+      { align: 'center', label: 'Centrado', tecla: 'E' },
+      { align: 'right', label: 'Derecha', tecla: 'R' },
+    ] as const;
+    this.ctxMenu.openBelow(
+      event,
+      opciones.map((o) => ({
+        label: o.label,
+        kbd: atajo(o.tecla, true),
+        icon: o.align === actual ? LucideCheck : undefined,
+        onClick: () => this.setAlign(o.align),
+      })),
+    );
   }
 
-  protected cycleParagraphSpacing(): void {
-    this.settings.cycleParagraphSpacing();
+  protected openInsertMenu(event: MouseEvent): void {
+    this.ctxMenu.openBelow(event, [
+      { label: 'Salto de escena', onClick: () => this.insertSceneBreak() },
+      {
+        label: this.state().verso ? 'Quitar bloque de verso' : 'Bloque de verso (canción, poema)',
+        kbd: atajo('B', true),
+        onClick: () => this.toggleVerso(),
+      },
+    ]);
   }
+
+  protected openToolsMenu(event: MouseEvent): void {
+    const entries: CtxMenuEntry[] = [];
+    if (this.canApplyRaya()) {
+      entries.push({ label: 'Convertir diálogos a raya…', onClick: () => this.openRaya() });
+    }
+    if (this.canApplyQuotes()) {
+      entries.push({ label: 'Pasar comillas a tipográficas…', onClick: () => this.openQuotes() });
+    }
+    this.ctxMenu.openBelow(event, entries);
+  }
+
+  protected openViewMenu(event: MouseEvent): void {
+    this.ctxMenu.openBelow(event, vistaMenu(this.settings));
+  }
+
 
   protected fontBump(delta: number): void {
     this.settings.bumpFontSize(delta);
@@ -1350,12 +1359,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** El error de gramática del footer es accionable: abre el modal de config. */
   protected openGrammarConfig(): void {
     this.grammar.pedirConfig();
-  }
-
-  protected toggleAutoGrammar(): void {
-    this.grammar.toggleAuto();
-    // El effect en el constructor reacciona al cambio de `autoEnabled` y
-    // dispara checkGrammar() o limpia las marcas según corresponda.
   }
 
   protected dismissPrivacyBanner(): void {
@@ -1690,10 +1693,6 @@ export class Editor implements AfterViewInit, OnDestroy {
     }, 2000);
   }
 
-  protected toggleAutoRaya(): void {
-    void this.settings.setRayaAutoDisabled(!this.settings.rayaAutoDisabled());
-  }
-
   protected checkRaya(force = false): void {
     if (!this.tiptap || !this.canCheckRaya()) return;
     const { plain, ranges } = extractPlainText(this.tiptap.state.doc);
@@ -1747,10 +1746,6 @@ export class Editor implements AfterViewInit, OnDestroy {
         ? candidatas[0]
         : candidatas.find((v) => v.offset >= desde && v.offset < hasta) ?? candidatas[0];
     this.abrirPopoverRayaEn(objetivo);
-  }
-
-  protected toggleAutoRepeticiones(): void {
-    void this.settings.setRepeticionesAutoDisabled(!this.settings.repeticionesAutoDisabled());
   }
 
   /**
