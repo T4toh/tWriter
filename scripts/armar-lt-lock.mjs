@@ -12,8 +12,9 @@
 // Regla de supply chain: no elige ninguna versión de LT ni de JRE publicada
 // hace menos de 7 días. Si la última es más nueva, toma la anterior.
 //
-// Uso: node scripts/armar-lt-lock.mjs [--lt <versión>|--lt latest]
-//   Sin --lt usa la versión que ya tiene el pom.
+// Uso: node scripts/armar-lt-lock.mjs [--lt <versión>|--lt latest] [--changelog]
+//   Sin --lt usa la versión que ya tiene el pom. Con --changelog, si cambió la
+//   versión de LT o del JRE, suma la línea en [Unreleased] de CHANGELOG.md.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -45,6 +46,38 @@ export function rutaJava(releaseName, target) {
   if (target.includes('apple-darwin')) return `${raiz}/Contents/Home/bin/java`;
   if (target.includes('windows')) return `${raiz}/bin/java.exe`;
   return `${raiz}/bin/java`;
+}
+
+/** La línea de CHANGELOG para un cambio de lock, o null si no cambió ninguna versión. */
+export function lineaDeChangelog(viejo, nuevo) {
+  if (viejo.lt !== nuevo.lt) {
+    const java = viejo.jre !== nuevo.jre ? `, with Java runtime ${nuevo.jre}` : '';
+    return { tipo: 'Changed', linea: `LanguageTool updated to ${nuevo.lt}${java}.` };
+  }
+  if (viejo.jre !== nuevo.jre) {
+    return { tipo: 'Security', linea: `Java runtime for LanguageTool updated to ${nuevo.jre}.` };
+  }
+  return null;
+}
+
+const TIPOS = ['Added', 'Changed', 'Deprecated', 'Removed', 'Fixed', 'Security'];
+
+/** Suma `- linea` bajo `### tipo` de `[Unreleased]`, creando el encabezado en su orden si falta. */
+export function sumarAlChangelog(md, tipo, linea) {
+  const ini = md.indexOf('## [Unreleased]');
+  const fin = md.indexOf('\n## [', ini + 1);
+  const corte = fin === -1 ? md.length : fin + 1;
+  const seccion = md.slice(ini, corte);
+  const encabezado = `### ${tipo}\n\n`;
+  let nueva;
+  if (seccion.includes(encabezado)) {
+    nueva = seccion.replace(encabezado, `${encabezado}- ${linea}\n`);
+  } else {
+    const siguiente = TIPOS.slice(TIPOS.indexOf(tipo) + 1).map((t) => seccion.indexOf(`### ${t}\n`)).find((i) => i !== -1);
+    const bloque = `${encabezado}- ${linea}\n\n`;
+    nueva = siguiente === undefined ? seccion.trimEnd() + '\n\n' + bloque : seccion.slice(0, siguiente) + bloque + seccion.slice(siguiente);
+  }
+  return md.slice(0, ini) + nueva + md.slice(corte);
 }
 
 async function pedir(url, como = 'text') {
@@ -146,7 +179,14 @@ async function main() {
   const jre = await jres(hoy);
 
   const lock = { lt, jre: jre.version, jars, jres: jre.entradas };
-  writeFileSync(join(repo, 'src-tauri', 'lt-lock.json'), JSON.stringify(lock, null, 2) + '\n');
+  const lockPath = join(repo, 'src-tauri', 'lt-lock.json');
+  const viejo = JSON.parse(readFileSync(lockPath, 'utf8'));
+  writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n');
+  const cambio = lineaDeChangelog(viejo, lock);
+  if (process.argv.includes('--changelog') && cambio) {
+    const changelog = join(repo, 'CHANGELOG.md');
+    writeFileSync(changelog, sumarAlChangelog(readFileSync(changelog, 'utf8'), cambio.tipo, cambio.linea));
+  }
   const mb = (n) => (n / 1048576).toFixed(0);
   console.log(`LT ${lt}: ${jars.length} jars, ${mb(jars.reduce((s, j) => s + j.size, 0))} MB · JRE ${jre.version}`);
 }
