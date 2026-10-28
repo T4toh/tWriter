@@ -77,20 +77,18 @@ pub fn jre_del_target(lock: &Lock) -> Option<&Jre> {
 }
 
 /// La versión instalada de `prefijo` (`"lt"` o `"jre"`): el directorio
-/// `<prefijo>-<versión>` que tiene `.ok`. Los que no lo tienen son restos de
-/// una descarga cortada y se borran. Si hay más de uno con `.ok` (una
-/// actualización a medio limpiar), gana el más reciente.
+/// `<prefijo>-<versión>` que tiene `.ok`. No borra nada: el panel lo consulta
+/// cada vez que se abre, también mientras se baja. Si hay más de uno con `.ok`
+/// (una actualización a medio limpiar), gana el más reciente.
 pub fn instalado(base: &Path, prefijo: &str) -> Option<String> {
     let cabeza = format!("{prefijo}-");
     let mut mejor: Option<(std::time::SystemTime, String)> = None;
-    for entrada in std::fs::read_dir(base).ok()?.flatten() {
+    for entrada in fs::read_dir(base).ok()?.flatten() {
         let nombre = entrada.file_name().to_string_lossy().into_owned();
         let Some(version) = nombre.strip_prefix(&cabeza) else {
             continue;
         };
-        let ok = entrada.path().join(".ok");
-        let Ok(meta) = std::fs::metadata(&ok) else {
-            let _ = std::fs::remove_dir_all(entrada.path());
+        let Ok(meta) = fs::metadata(entrada.path().join(".ok")) else {
             continue;
         };
         let cuando = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
@@ -99,6 +97,19 @@ pub fn instalado(base: &Path, prefijo: &str) -> Option<String> {
         }
     }
     mejor.map(|(_, v)| v)
+}
+
+/// Borra los `lt-*`/`jre-*` sin `.ok`: restos de una descarga cortada. Solo
+/// desde `instalar`, que es el único que escribe ahí.
+pub fn limpiar_incompletos(base: &Path) {
+    let Ok(entradas) = fs::read_dir(base) else { return };
+    for e in entradas.flatten() {
+        let nombre = e.file_name().to_string_lossy().into_owned();
+        let nuestro = nombre.starts_with("lt-") || nombre.starts_with("jre-");
+        if nuestro && e.path().is_dir() && !e.path().join(".ok").exists() {
+            let _ = fs::remove_dir_all(e.path());
+        }
+    }
 }
 
 /// El primer puerto libre en localhost desde `desde`.
@@ -124,37 +135,28 @@ pub fn verificar_sha256(path: &Path, esperado: &str) -> Result<(), String> {
 }
 
 /// Desempaqueta `.tar.gz` o `.zip` (por la extensión de `archivo`) en
-/// `destino`. Extrae a un temporal y renombra al final: si falla, `destino` no
-/// existe.
+/// `destino`. Si falla, `destino` no queda. Sin temporal ni rename: en
+/// Windows el antivirus escanea lo recién escrito y un rename de directorio
+/// falla con acceso denegado; lo que dice "instalado" es el `.ok`.
 pub fn extraer(archivo: &Path, destino: &Path) -> Result<(), String> {
-    let tmp = con_sufijo(destino, ".tmp");
-    let _ = fs::remove_dir_all(&tmp);
     let hecho = (|| -> Result<(), String> {
         let f = File::open(archivo).map_err(|e| e.to_string())?;
         if archivo.extension().is_some_and(|e| e == "zip") {
             zip::ZipArchive::new(f)
-                .and_then(|mut z| z.extract(&tmp))
-                .map_err(|e| e.to_string())?;
+                .and_then(|mut z| z.extract(destino))
+                .map_err(|e| e.to_string())
         } else {
             let mut tar = tar::Archive::new(flate2::read::GzDecoder::new(f));
             tar.set_preserve_permissions(true);
-            tar.unpack(&tmp).map_err(|e| e.to_string())?;
+            tar.unpack(destino).map_err(|e| e.to_string())
         }
-        fs::rename(&tmp, destino).map_err(|e| e.to_string())
     })();
     if let Err(e) = hecho {
-        let _ = fs::remove_dir_all(&tmp);
+        let _ = fs::remove_dir_all(destino);
         let nombre = archivo.file_name().unwrap_or_default().to_string_lossy();
         return Err(format!("No pude desempaquetar {nombre}: {e}. Probá bajarlo de nuevo."));
     }
     Ok(())
-}
-
-/// `lt-6.8` → `lt-6.8.tmp`. No `with_extension`: pisaría el `.8`.
-fn con_sufijo(p: &Path, sufijo: &str) -> PathBuf {
-    let mut s = p.as_os_str().to_owned();
-    s.push(sufijo);
-    PathBuf::from(s)
 }
 
 /// Baja lo que falte o difiera del lock a `base`. LT y el JRE se instalan por
@@ -169,6 +171,7 @@ pub async fn instalar(
     let jre = jre_del_target(lock)
         .ok_or_else(|| format!("No hay Java para {} en la lista de tWriter.", target_actual()))?;
     fs::create_dir_all(base).map_err(|e| format!("No pude crear {}: {e}", base.display()))?;
+    limpiar_incompletos(base);
     let falta_lt = instalado(base, "lt").as_deref() != Some(lock.lt.as_str());
     let falta_jre = instalado(base, "jre").as_deref() != Some(lock.jre.as_str());
     let total = if falta_lt { lock.jars.iter().map(|j| j.size).sum() } else { 0 }
@@ -177,21 +180,17 @@ pub async fn instalar(
 
     if falta_lt {
         let dir = base.join(format!("lt-{}", lock.lt));
-        let tmp = con_sufijo(&dir, ".tmp");
-        let _ = fs::remove_dir_all(&tmp);
         let r = async {
-            fs::create_dir_all(tmp.join("libs")).map_err(|e| e.to_string())?;
+            fs::create_dir_all(dir.join("libs")).map_err(|e| e.to_string())?;
             for jar in &lock.jars {
-                let destino = tmp.join("libs").join(&jar.file);
+                let destino = dir.join("libs").join(&jar.file);
                 bajada.bajar(&jar.url, &destino).await?;
                 verificar_sha256(&destino, &jar.sha256)?;
             }
-            fs::rename(&tmp, &dir).map_err(|e| e.to_string())?;
             fs::write(dir.join(".ok"), "").map_err(|e| e.to_string())
         }
         .await;
         if let Err(e) = r {
-            let _ = fs::remove_dir_all(&tmp);
             let _ = fs::remove_dir_all(&dir);
             return Err(e);
         }
@@ -227,9 +226,16 @@ pub async fn instalar(
 }
 
 fn cliente() -> Result<reqwest::Client, String> {
-    // Sin timeout total: son ~142 MB y una conexión lenta no es un error.
+    cliente_con(Duration::from_secs(30))
+}
+
+/// Sin timeout total: son ~142 MB y una conexión lenta no es un error. Sí uno
+/// de lectura, para que un servidor que se cuelga sin cortar no deje la
+/// descarga (y `INSTALANDO`) trabada para siempre.
+fn cliente_con(lectura: Duration) -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(15))
+        .read_timeout(lectura)
         .build()
         .map_err(|e| e.to_string())
 }
@@ -322,7 +328,10 @@ static INSTALANDO: AtomicBool = AtomicBool::new(false);
 static ARRANQUE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 const PUERTO_DESDE: u16 = 8082;
-const ESPERA_ARRANQUE: Duration = Duration::from_secs(30);
+/// Medido 0,4 s en frío, pero la primera vez el antivirus de Windows puede
+/// escanear el JRE entero; y si vence en una actualización, se borra lo recién
+/// bajado. Mismo margen que el smoke de CI.
+const ESPERA_ARRANQUE: Duration = Duration::from_secs(60);
 
 fn corriendo() -> bool {
     let mut g = PROCESO.lock().unwrap_or_else(|e| e.into_inner());
@@ -373,7 +382,17 @@ async fn matar_huerfano(base: &Path) {
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Levanta LT con lo que haya instalado en `base` y espera a que conteste.
+/// Cualquier falla queda en `ULTIMO_ERROR` para que el panel diga por qué no
+/// corre, también cuando el arranque fue el automático al abrir la app.
 pub async fn arrancar_en(base: &Path) -> Result<u16, String> {
+    let r = arrancar_sin_registrar(base).await;
+    if let Err(e) = &r {
+        *ULTIMO_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = Some(e.clone());
+    }
+    r
+}
+
+async fn arrancar_sin_registrar(base: &Path) -> Result<u16, String> {
     let _turno = ARRANQUE.lock().await;
     if corriendo() {
         return Ok(PUERTO.load(Ordering::SeqCst));
@@ -418,9 +437,7 @@ pub async fn arrancar_en(base: &Path) -> Result<u16, String> {
             .ok()
             .and_then(|s| s.lines().rev().find(|l| !l.trim().is_empty()).map(str::to_string))
             .unwrap_or_else(|| "sin detalle".into());
-        let e = format!("LanguageTool no arrancó: {ultima}");
-        *ULTIMO_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = Some(e.clone());
-        return Err(e);
+        return Err(format!("LanguageTool no arrancó: {ultima}"));
     }
     tracing::info!(target: "grammar", puerto, lt, jre, "LT embebido listo");
     *PROCESO.lock().unwrap_or_else(|e| e.into_inner()) = Some(child);
@@ -451,8 +468,10 @@ fn base_de(app: &AppHandle) -> Result<PathBuf, String> {
     }
     let b = app
         .path()
-        .app_data_dir()
-        .map_err(|e| format!("app_data_dir: {e}"))?
+        // Local y no Roaming: en Windows son ~300 MB de binarios que no tienen
+        // que viajar con el perfil. En Mac y Linux es el mismo directorio.
+        .app_local_data_dir()
+        .map_err(|e| format!("app_local_data_dir: {e}"))?
         .join("languagetool");
     Ok(BASE.get_or_init(|| b).clone())
 }
@@ -621,14 +640,70 @@ mod tests {
         assert_eq!(instalado(base.path(), "jre"), None);
     }
 
+    /// El panel pide el estado cada vez que se abre Configuración, también
+    /// mientras se baja: no puede borrar lo que se está escribiendo.
     #[test]
-    fn instalado_borra_directorios_sin_ok() {
+    fn instalado_no_borra_lo_que_se_esta_bajando() {
         let base = tempfile::tempdir().unwrap();
         fs::create_dir_all(base.path().join("lt-6.9/libs")).unwrap();
         fs::create_dir_all(base.path().join("lt-6.8")).unwrap();
         fs::write(base.path().join("lt-6.8/.ok"), "").unwrap();
         assert_eq!(instalado(base.path(), "lt").as_deref(), Some("6.8"));
+        assert!(base.path().join("lt-6.9/libs").exists());
+    }
+
+    #[test]
+    fn limpiar_incompletos_borra_lo_que_no_tiene_ok() {
+        let base = tempfile::tempdir().unwrap();
+        fs::create_dir_all(base.path().join("lt-6.9/libs")).unwrap();
+        fs::create_dir_all(base.path().join("jre-21.1")).unwrap();
+        fs::create_dir_all(base.path().join("lt-6.8")).unwrap();
+        fs::write(base.path().join("lt-6.8/.ok"), "").unwrap();
+        limpiar_incompletos(base.path());
         assert!(!base.path().join("lt-6.9").exists());
+        assert!(!base.path().join("jre-21.1").exists());
+        assert!(base.path().join("lt-6.8/.ok").exists());
+    }
+
+    #[test]
+    fn arrancar_sin_java_deja_el_error_visible() {
+        let base = tempfile::tempdir().unwrap();
+        for d in ["lt-1", "jre-1"] {
+            fs::create_dir_all(base.path().join(d)).unwrap();
+            fs::write(base.path().join(d).join(".ok"), "").unwrap();
+        }
+        let err = tauri::async_runtime::block_on(arrancar_en(base.path())).unwrap_err();
+        let visible = ULTIMO_ERROR.lock().unwrap().clone();
+        assert_eq!(visible.as_deref(), Some(err.as_str()));
+    }
+
+    /// Un servidor que manda los encabezados y se cuelga no puede dejar la
+    /// descarga (y `INSTALANDO`) trabada para siempre.
+    #[test]
+    fn bajada_que_se_cuelga_falla() {
+        crate::install_tls_provider();
+        let server = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let puerto = server.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            if let Ok((mut c, _)) = server.accept() {
+                let mut pedido = [0u8; 1024];
+                let _ = std::io::Read::read(&mut c, &mut pedido);
+                let _ = c.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\nabc");
+                std::thread::sleep(Duration::from_secs(5));
+            }
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let mut b = Bajada {
+            client: cliente_con(Duration::from_millis(300)).unwrap(),
+            hechos: 0,
+            total: 1000,
+            avisado: 0,
+            progreso: &|_, _| {},
+        };
+        let inicio = std::time::Instant::now();
+        let r = tauri::async_runtime::block_on(b.bajar(&format!("http://127.0.0.1:{puerto}/x"), &dir.path().join("x")));
+        assert!(r.is_err());
+        assert!(inicio.elapsed() < Duration::from_secs(4), "{:?}", inicio.elapsed());
     }
 
     #[test]
@@ -693,7 +768,6 @@ mod tests {
         let destino = dir.path().join("jre-21");
         assert!(extraer(&archivo, &destino).is_err());
         assert!(!destino.exists());
-        assert!(!dir.path().join("jre-21.tmp").exists());
     }
 
     #[test]

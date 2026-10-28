@@ -244,7 +244,7 @@ El scaffold inicial usa nombres `app.component.*` — refactorizar a convencione
   (botón en Configuración → Gramática) y lo corre como proceso propio
   (`lt_embebido.rs`): jars de LT de Maven Central + un JRE de Temurin, fijados
   por sha256 en `src-tauri/lt-lock.json`, que se compila adentro con
-  `include_str!` y es el ancla de confianza. Va a `app_data_dir/languagetool/`
+  `include_str!` y es el ancla de confianza. Va a `app_local_data_dir/languagetool/`
   y escucha desde el puerto 8082. El lock lo arma `scripts/armar-lt-lock.mjs`
   (necesita Maven, solo en la máquina que lo corre) y lo mantiene al día
   `.github/workflows/lt-al-dia.yml`, que abre un PR por semana si hay versión

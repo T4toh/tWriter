@@ -163,8 +163,8 @@ sin un token aparte.
 
 ### 4. Descarga e instalación (Rust)
 
-- Destino: **LT y JRE en directorios separados**, `app_data_dir()/languagetool/lt-<versión>/`
-  (los jars) y `app_data_dir()/languagetool/jre-<versión>/`, cada uno con un
+- Destino: **LT y JRE en directorios separados**, `app_local_data_dir()/languagetool/lt-<versión>/`
+  (los jars) y `app_local_data_dir()/languagetool/jre-<versión>/`, cada uno con un
   marcador `.ok` que se escribe **al final**. Directorio con `.ok` = instalado.
   Sin `.ok` = basura de un intento anterior, se borra. Separados para que un
   parche del JRE baje ~50 MB y no los 142. *(Decisión mía.)*
