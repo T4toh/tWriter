@@ -1,15 +1,25 @@
 #!/usr/bin/env bash
-# Levanta LanguageTool local en localhost:8081 vía Docker.
+# Levanta LanguageTool local en localhost:8081 vía Docker, con el mismo
+# container que crea la app (src-tauri/src/grammar.rs: LT_IMAGE + run_args).
 # Requisitos: docker.
 set -euo pipefail
 
 NAME="twriter-languagetool"
-IMAGE="erikvl87/languagetool:latest"
+IMAGE="erikvl87/languagetool:6.8"   # = LT_IMAGE de grammar.rs
 PORT=8081
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "Error: docker no está instalado." >&2
   exit 1
+fi
+
+# Un container con otra imagen (el `:latest` de versiones viejas de este
+# script, que además publicaba el puerto a toda la LAN) se recrea, igual que
+# «Actualizar LanguageTool» en la app.
+if docker ps -a --format '{{.Names}}' | grep -q "^${NAME}$" \
+  && [ "$(docker inspect -f '{{.Config.Image}}' "${NAME}")" != "${IMAGE}" ]; then
+  echo "Container con otra imagen, recreándolo con ${IMAGE}…"
+  docker rm -f "${NAME}" >/dev/null
 fi
 
 if docker ps --format '{{.Names}}' | grep -q "^${NAME}$"; then
@@ -27,7 +37,7 @@ else
   docker run -d \
     --name "${NAME}" \
     --restart unless-stopped \
-    -p "${PORT}:8010" \
+    -p "127.0.0.1:${PORT}:8010" \
     -e Java_Xms=512m \
     -e Java_Xmx=2g \
     "${IMAGE}" >/dev/null
