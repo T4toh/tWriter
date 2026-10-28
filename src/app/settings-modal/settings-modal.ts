@@ -21,7 +21,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { DebugService } from '../core/debug-service';
-import { GrammarService, LtDockerStatus, SecretStatus } from '../core/grammar-service';
+import { GrammarService, LtDockerStatus, LtEmbebidoStatus, SecretStatus } from '../core/grammar-service';
 import { APP_FONT_LABEL, AppFontSlot } from '../core/app-fonts';
 import {
   APP_THEME_LABEL,
@@ -134,6 +134,12 @@ export class SettingsModal {
   protected readonly dockerMessage = signal<string | null>(null);
   protected readonly dockerPhase = signal<DockerPhase | null>(null);
   private unlistenProgress: UnlistenFn | null = null;
+  protected readonly embebido = signal<LtEmbebidoStatus | null>(null);
+  protected readonly embebidoBusy = signal<'installing' | 'restarting' | 'deleting' | null>(null);
+  protected readonly embebidoMessage = signal<string | null>(null);
+  /** MB bajados / totales, leídos del mensaje de la fase `downloading`. */
+  protected readonly embebidoProgreso = signal<{ hechos: number; total: number } | null>(null);
+  protected readonly embebidoError = signal<string | null>(null);
 
   constructor() {
     effect(() => {
@@ -156,6 +162,8 @@ export class SettingsModal {
         this.dockerMessage.set(null);
         this.dockerPhase.set(null);
         void this.refreshDockerStatus();
+        this.embebidoError.set(null);
+        void this.refreshEmbebido();
       } else {
         this.detachProgressListener();
       }
@@ -220,6 +228,56 @@ export class SettingsModal {
     if (this.unlistenProgress) {
       this.unlistenProgress();
       this.unlistenProgress = null;
+    }
+  }
+
+  protected async refreshEmbebido(): Promise<void> {
+    try {
+      this.embebido.set(await this.grammar.embebidoStatus());
+    } catch {
+      this.embebido.set(null);
+    }
+  }
+
+  protected async installEmbebido(): Promise<void> {
+    this.embebidoBusy.set('installing');
+    this.embebidoError.set(null);
+    this.embebidoProgreso.set(null);
+    this.embebidoMessage.set('Empezando la descarga…');
+    const unlisten = await listen<{ phase: string; message: string }>('languagetool-progress', (ev) => {
+      this.embebidoMessage.set(ev.payload.message);
+      const mb = /(\d+) \/ (\d+) MB/.exec(ev.payload.message);
+      if (mb) this.embebidoProgreso.set({ hechos: +mb[1], total: +mb[2] });
+    });
+    try {
+      await this.grammar.embebidoInstalar();
+    } catch (e) {
+      this.embebidoError.set(String(e));
+    } finally {
+      unlisten();
+      this.embebidoBusy.set(null);
+      await this.refreshEmbebido();
+    }
+  }
+
+  protected async restartEmbebido(): Promise<void> {
+    await this.embebidoAccion('restarting', () => this.grammar.embebidoReiniciar());
+  }
+
+  protected async deleteEmbebido(): Promise<void> {
+    await this.embebidoAccion('deleting', () => this.grammar.embebidoBorrar());
+  }
+
+  private async embebidoAccion(busy: 'restarting' | 'deleting', accion: () => Promise<void>): Promise<void> {
+    this.embebidoBusy.set(busy);
+    this.embebidoError.set(null);
+    try {
+      await accion();
+    } catch (e) {
+      this.embebidoError.set(String(e));
+    } finally {
+      this.embebidoBusy.set(null);
+      await this.refreshEmbebido();
     }
   }
 

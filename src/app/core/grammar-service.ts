@@ -71,6 +71,21 @@ export interface LtDockerStatus {
   runtime_choices: RuntimeChoice[];
 }
 
+/** Estado del LanguageTool que baja y corre tWriter (`lt_embebido.rs`). */
+export interface LtEmbebidoStatus {
+  lt_instalado: string | null;
+  jre_instalado: string | null;
+  /** Versiones que trae esta versión de tWriter (`lt-lock.json`). */
+  lt_lock: string;
+  jre_lock: string;
+  /** Lo que falta bajar para quedar al día con el lock; 0 si está al día. */
+  mb_a_bajar: number;
+  corriendo: boolean;
+  puerto: number | null;
+  /** Último error de arranque, con la última línea de stderr de java. */
+  error: string | null;
+}
+
 export type SecretBackend = 'keyring' | 'plain' | 'none';
 
 export interface SecretStatus {
@@ -248,6 +263,36 @@ export class GrammarService {
     } catch (e) {
       this.debug.error('grammar', `falló arrancar Docker LanguageTool`, String(e));
       throw e;
+    }
+  }
+
+  async embebidoStatus(): Promise<LtEmbebidoStatus> {
+    return invoke<LtEmbebidoStatus>('lt_embebido_status');
+  }
+
+  async embebidoInstalar(): Promise<void> {
+    await this.embebidoAccion('lt_embebido_instalar', 'bajado y arrancado');
+  }
+
+  async embebidoReiniciar(): Promise<void> {
+    await this.embebidoAccion('lt_embebido_reiniciar', 'reiniciado');
+  }
+
+  async embebidoBorrar(): Promise<void> {
+    await this.embebidoAccion('lt_embebido_borrar', 'borrado');
+  }
+
+  private async embebidoAccion(cmd: string, hecho: string): Promise<void> {
+    try {
+      await invoke(cmd);
+      this.debug.info('grammar', `LanguageTool embebido ${hecho}`);
+    } catch (e) {
+      this.debug.error('grammar', `falló ${cmd}`, String(e));
+      throw e;
+    } finally {
+      // Puede haber cambiado de versión o de puerto: la versión cacheada ya no vale.
+      this.version.set(null);
+      void this.ping();
     }
   }
 
