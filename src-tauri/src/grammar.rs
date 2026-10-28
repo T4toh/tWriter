@@ -9,7 +9,18 @@ use crate::secrets;
 use crate::settings;
 
 const LT_CONTAINER: &str = "twriter-languagetool";
-const LT_IMAGE: &str = "erikvl87/languagetool:latest";
+/// Tag fijo, nunca `latest`: el container solo se recrea cuando su imagen no
+/// es esta (ver `image_outdated`), así que subir de versión es cambiar esta
+/// constante y llega a cada PC con el updater de tWriter. Antes de subirla:
+/// que el tag tenga 7 días publicado y probar `docs/lt-patches/`.
+const LT_IMAGE: &str = "erikvl87/languagetool:6.8";
+
+/// ¿El container se creó con otra imagen? Docker devuelve la referencia tal
+/// cual se pasó (`erikvl87/languagetool:6.8`), Podman y Apple le anteponen el
+/// registry (`docker.io/...`), de ahí el `ends_with`.
+fn image_outdated(image_ref: &str) -> bool {
+    !image_ref.ends_with(LT_IMAGE)
+}
 
 /// Runtime de containers soportado. tWriter maneja LanguageTool con cualquiera
 /// de los tres comunes; no asume Docker. En Mac conviven Docker Desktop, colima
@@ -204,6 +215,41 @@ impl Engine {
         self.names(true).iter().any(|n| n == LT_CONTAINER)
     }
 
+    /// Imagen con la que se creó el container, o `None` si no se pudo leer.
+    /// `None` nunca dispara una recreación: ante la duda, no se toca.
+    fn container_image(&self) -> Option<String> {
+        let out = match self.rt {
+            Runtime::Docker | Runtime::Podman => Command::new(&self.bin)
+                .args(["inspect", "--format", "{{.Config.Image}}", LT_CONTAINER])
+                .output()
+                .ok()?,
+            Runtime::Apple => Command::new(&self.bin)
+                .args(["inspect", LT_CONTAINER])
+                .output()
+                .ok()?,
+        };
+        if !out.status.success() {
+            return None;
+        }
+        let image = match self.rt {
+            Runtime::Docker | Runtime::Podman => {
+                String::from_utf8_lossy(&out.stdout).trim().to_string()
+            }
+            Runtime::Apple => serde_json::from_slice::<Vec<AppleContainer>>(&out.stdout)
+                .ok()?
+                .into_iter()
+                .next()?
+                .configuration
+                .image?
+                .reference,
+        };
+        (!image.is_empty()).then_some(image)
+    }
+
+    fn outdated(&self) -> bool {
+        self.container_image().is_some_and(|i| image_outdated(&i))
+    }
+
     fn pull(&self) -> std::io::Result<std::process::Output> {
         match self.rt {
             Runtime::Docker | Runtime::Podman => {
@@ -216,15 +262,21 @@ impl Engine {
     }
 
     /// Args de `run` para crear el container. Apple `container` no soporta
-    /// `--restart`, así que solo lo agregamos para Docker/Podman.
+    /// `--restart`, así que solo lo agregamos para Docker/Podman. Apple, en
+    /// cambio, limita cada container a 1 GB si no se le pasa `-m`: con
+    /// `Java_Xmx=2g` la JVM se pasa y la matan; 3G deja aire fuera del heap.
+    /// El puerto se publica solo en loopback: LT lo usa tWriter, no la LAN.
     fn run_args(&self) -> Vec<&'static str> {
         let mut args: Vec<&'static str> = vec!["run", "-d", "--name", LT_CONTAINER];
-        if matches!(self.rt, Runtime::Docker | Runtime::Podman) {
-            args.extend_from_slice(&["--restart", "unless-stopped"]);
+        match self.rt {
+            Runtime::Docker | Runtime::Podman => {
+                args.extend_from_slice(&["--restart", "unless-stopped"]);
+            }
+            Runtime::Apple => args.extend_from_slice(&["-m", "3G"]),
         }
         args.extend_from_slice(&[
             "-p",
-            "8081:8010",
+            "127.0.0.1:8081:8010",
             "-e",
             "Java_Xms=512m",
             "-e",
@@ -246,6 +298,10 @@ impl Engine {
     fn stop_container(&self) -> std::io::Result<std::process::Output> {
         Command::new(&self.bin).args(["stop", LT_CONTAINER]).output()
     }
+
+    fn remove_container(&self) -> std::io::Result<std::process::Output> {
+        Command::new(&self.bin).args(["rm", LT_CONTAINER]).output()
+    }
 }
 
 /// Shape mínimo del `container ls --format json` de Apple: solo nos importa el
@@ -258,6 +314,12 @@ struct AppleContainer {
 #[derive(Deserialize)]
 struct AppleContainerConfig {
     id: String,
+    image: Option<AppleImage>,
+}
+
+#[derive(Deserialize)]
+struct AppleImage {
+    reference: String,
 }
 
 /// Primer runtime con daemon vivo. Prefiere aquel donde ya vive nuestro
@@ -1024,6 +1086,9 @@ pub struct LtDockerStatus {
     pub daemon_running: bool,
     pub container_running: bool,
     pub container_exists: bool,
+    /// El container existe pero con otra imagen que `LT_IMAGE`: hay versión
+    /// nueva de LT. `languagetool_docker_start` lo recrea.
+    pub container_outdated: bool,
     pub api_responding: bool,
     /// Remedio accionable cuando falta el runtime o el daemon no responde.
     pub remedy: Option<Remedy>,
@@ -1043,6 +1108,7 @@ pub async fn languagetool_docker_status(app: AppHandle) -> LtDockerStatus {
     if let Some(e) = detect_engine() {
         let container_running = e.running();
         let container_exists = e.exists();
+        let container_outdated = container_exists && e.outdated();
         if container_running || container_exists {
             settings::remember_lt_runtime(&app, e.rt.key());
         }
@@ -1052,6 +1118,7 @@ pub async fn languagetool_docker_status(app: AppHandle) -> LtDockerStatus {
             daemon_running: true,
             container_running,
             container_exists,
+            container_outdated,
             api_responding,
             remedy: None,
             install_options: Vec::new(),
@@ -1069,6 +1136,7 @@ pub async fn languagetool_docker_status(app: AppHandle) -> LtDockerStatus {
             daemon_running: false,
             container_running: false,
             container_exists: false,
+            container_outdated: false,
             api_responding,
             remedy: Some(daemon_remedy(rt)),
             install_options: Vec::new(),
@@ -1081,6 +1149,7 @@ pub async fn languagetool_docker_status(app: AppHandle) -> LtDockerStatus {
             daemon_running: false,
             container_running: false,
             container_exists: false,
+            container_outdated: false,
             api_responding,
             remedy: Some(ambiguous_remedy(&rts)),
             install_options: Vec::new(),
@@ -1092,6 +1161,7 @@ pub async fn languagetool_docker_status(app: AppHandle) -> LtDockerStatus {
             daemon_running: false,
             container_running: false,
             container_exists: false,
+            container_outdated: false,
             api_responding,
             remedy: Some(no_runtime_remedy()),
             install_options: install_options(Os::current()),
@@ -1379,6 +1449,25 @@ pub async fn languagetool_docker_start(
         );
     }
 
+    if engine.exists() && engine.outdated() {
+        emit_progress(
+            &app,
+            "pulling",
+            format!("Actualizando LanguageTool a {}…", LT_IMAGE),
+        );
+        // `stop` puede fallar si ya estaba apagado; lo que importa es el `rm`.
+        let _ = engine.stop_container();
+        let out = engine
+            .remove_container()
+            .map_err(|e| format!("{} rm: {}", engine.rt.cmd(), e))?;
+        if !out.status.success() {
+            return Err(format!(
+                "No se pudo borrar el container viejo: {}",
+                String::from_utf8_lossy(&out.stderr)
+            ));
+        }
+    }
+
     if engine.running() {
         emit_progress(&app, "ready", "El container ya estaba corriendo.");
         return Ok("Ya estaba corriendo.".into());
@@ -1399,7 +1488,10 @@ pub async fn languagetool_docker_start(
         emit_progress(
             &app,
             "pulling",
-            "Bajando imagen erikvl87/languagetool (~300MB, puede tardar 1–3 min según conexión)…",
+            format!(
+                "Bajando imagen {} (~300MB, puede tardar 1–3 min según conexión)…",
+                LT_IMAGE
+            ),
         );
         let engine_pull = engine.clone();
         let pull = tokio::task::spawn_blocking(move || engine_pull.pull())
@@ -1656,7 +1748,8 @@ mod tests {
             args.windows(2).any(|w| w == ["--restart", "unless-stopped"]),
             "Docker debe incluir --restart unless-stopped"
         );
-        assert!(args.windows(2).any(|w| w == ["-p", "8081:8010"]));
+        assert!(args.windows(2).any(|w| w == ["-p", "127.0.0.1:8081:8010"]));
+        assert!(!args.contains(&"-m"), "Docker no limita memoria por default");
         assert_eq!(*args.last().unwrap(), LT_IMAGE);
     }
 
@@ -1674,9 +1767,31 @@ mod tests {
             !args.iter().any(|a| *a == "--restart"),
             "Apple container NO debe llevar --restart"
         );
-        assert!(args.windows(2).any(|w| w == ["-p", "8081:8010"]));
+        assert!(args.windows(2).any(|w| w == ["-p", "127.0.0.1:8081:8010"]));
+        // Sin -m, Apple limita a 1 GB y Java_Xmx=2g termina en OOM.
+        assert!(args.windows(2).any(|w| w == ["-m", "3G"]));
         assert!(args.windows(2).any(|w| w == ["--name", LT_CONTAINER]));
         assert_eq!(*args.last().unwrap(), LT_IMAGE);
+    }
+
+    #[test]
+    fn image_outdated_compara_contra_el_tag_fijo() {
+        assert!(!LT_IMAGE.ends_with(":latest"), "el tag tiene que ser fijo");
+        // Docker devuelve la referencia tal cual; Podman y Apple con registry.
+        assert!(!image_outdated(LT_IMAGE));
+        assert!(!image_outdated(&format!("docker.io/{}", LT_IMAGE)));
+        // Los containers creados antes de fijar el tag.
+        assert!(image_outdated("docker.io/erikvl87/languagetool:latest"));
+        assert!(image_outdated("erikvl87/languagetool:6.7"));
+    }
+
+    #[test]
+    fn apple_inspect_trae_la_imagen() {
+        let json = r#"[{"configuration":{"id":"twriter-languagetool",
+            "image":{"reference":"docker.io/erikvl87/languagetool:latest"}}}]"#;
+        let v: Vec<AppleContainer> = serde_json::from_str(json).unwrap();
+        let reference = v[0].configuration.image.as_ref().unwrap().reference.as_str();
+        assert!(image_outdated(reference));
     }
 
     #[test]
@@ -2020,6 +2135,7 @@ mod tests {
             daemon_running: false,
             container_running: false,
             container_exists: false,
+            container_outdated: false,
             api_responding: false,
             remedy: Some(daemon_plan(Runtime::Apple, Os::MacOs, false).remedy),
             install_options: Vec::new(),
@@ -2051,6 +2167,7 @@ mod tests {
             daemon_running: false,
             container_running: false,
             container_exists: false,
+            container_outdated: false,
             api_responding: false,
             remedy: Some(ambiguous_remedy(&rts)),
             install_options: Vec::new(),
@@ -2073,6 +2190,7 @@ mod tests {
             daemon_running: false,
             container_running: false,
             container_exists: false,
+            container_outdated: false,
             api_responding: false,
             remedy: Some(no_runtime_remedy()),
             install_options: install_options(Os::MacOs),

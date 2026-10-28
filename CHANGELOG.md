@@ -10,6 +10,12 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+### Fixed
+
+- LanguageTool now updates when tWriter ships a newer version: Settings shows «Actualizar LanguageTool» and «Levantar» recreates the container with the new image. Before, each PC stayed forever on the version it first downloaded.
+- With Apple `container`, LanguageTool no longer gets killed for running out of memory (the container was capped at 1 GB while Java asked for 2 GB).
+- LanguageTool is only reachable from this computer; it used to be open to the local network.
+
 ## [0.27.0] - 2026-10-21
 
 ### Fixed

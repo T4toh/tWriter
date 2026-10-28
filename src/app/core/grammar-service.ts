@@ -57,6 +57,8 @@ export interface LtDockerStatus {
   daemon_running: boolean;
   container_running: boolean;
   container_exists: boolean;
+  /** El container se creó con otra imagen: hay versión nueva de LT. «Levantar» lo recrea. */
+  container_outdated: boolean;
   api_responding: boolean;
   /** Remedio accionable cuando falta el runtime o el daemon no responde. */
   remedy: Remedy | null;
