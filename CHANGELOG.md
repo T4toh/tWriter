@@ -10,9 +10,9 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- The editor footer shows the LanguageTool version in use (e.g. «LT 6.8»), next to the notifications bell.
+- The LanguageTool icon moved from the toolbar to the editor footer, next to the notifications bell, and shows the version in use. It pulses while checking, greys out when LanguageTool doesn't respond, and opens its settings. «Revisar» now always checks the chapter again before walking through the errors, which is what the old toolbar icon did.
 
 ### Fixed
 

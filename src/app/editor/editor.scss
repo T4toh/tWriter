@@ -400,12 +400,36 @@
 }
 
 // Pegado a la campana: el `margin-left: auto` que la empuja a la derecha pasa
-// al badge, si no el espacio libre queda entre los dos.
-.lt-version {
+// al estado de LT, si no el espacio libre queda entre los dos.
+.indicator.lt-status {
   margin-left: auto;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
   color: var(--fg-muted);
   white-space: nowrap;
+
+  img {
+    height: 13px;
+    width: auto;
+    display: block;
+  }
+
+  &.checking {
+    animation: lt-pulse 0.8s ease-in-out infinite;
+
+    img {
+      animation: lt-img-pulse 0.8s ease-in-out infinite;
+    }
+  }
+
+  /* LT no responde: queda visible pero apagado, y el click abre la
+     configuración — antes desaparecía sin decir nada. */
+  &.lt-down img {
+    filter: grayscale(1);
+    opacity: 0.45;
+  }
 
   + app-notificaciones-bell {
     margin-left: 8px;
@@ -461,37 +485,6 @@
     &:hover {
       filter: brightness(1.15);
     }
-  }
-}
-
-/* ─── Toolbar LanguageTool button ─── */
-.tb-btn.lt-btn {
-  width: auto;
-  padding: 0 10px;
-  margin: 0 1px;
-  position: relative;
-
-  img {
-    height: 16px;
-    width: auto;
-    display: block;
-  }
-
-  &.checking {
-    animation: lt-pulse 0.8s ease-in-out infinite;
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
-
-    img {
-      animation: lt-img-pulse 0.8s ease-in-out infinite;
-    }
-  }
-
-  /* LT no responde: el botón queda visible pero apagado, y clickearlo abre la
-     configuración — antes desaparecía sin decir nada. */
-  &.lt-down img {
-    filter: grayscale(1);
-    opacity: 0.45;
   }
 }
 

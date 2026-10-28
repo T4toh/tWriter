@@ -619,7 +619,7 @@ export class Editor implements AfterViewInit, OnDestroy {
 
       // Si el auto-check está prendido, lanzar el chequeo del nuevo capítulo
       // de inmediato (sin debounce) para que las marcas reaparezcan rápido y
-      // el spinner del botón LT haga el "loading" desde el cambio de archivo.
+      // el pulso del estado de LT en el pie haga el "loading" desde el cambio de archivo.
       if (
         editable &&
         this.grammar.autoEnabled() &&
@@ -1274,7 +1274,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!this.tiptap || !this.canCheckGrammar()) return;
     if (untracked(() => this.reviewing())) {
       // Durante «Revisar» un check automático espera; uno pedido a mano (el
-      // botón LT, el «Deshacer» de un toast) termina el recorrido.
+      // «Deshacer» de un toast, por ejemplo) termina el recorrido.
       if (!force) return;
       this.endReview();
       this.grammarPopover.set(null);
@@ -1556,7 +1556,8 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.closeReview();
       return;
     }
-    if (this.lastCheckedPlain === null) await this.checkGrammar(true);
+    // Siempre fresco: era lo que hacía el botón LT de la toolbar, que se fue.
+    await this.checkGrammar(true);
     // Sigue en null: LT falló y el error ya está en el footer.
     if (!this.tiptap || this.lastCheckedPlain === null) return;
     if (this.grammarMatches().length === 0) {
