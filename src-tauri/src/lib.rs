@@ -45,7 +45,7 @@ use book_config::{
 use saga_config::{
     find_saga_dir, get_saga_config, get_saga_dictionary, set_saga_config, set_saga_dictionary,
 };
-use create::{create_book, create_chapter, create_directory, insert_part_after};
+use create::{create_book, create_chapter, create_directory, create_saga, insert_part_after};
 use demo_template::generate_demo_template;
 use dialogs::{pick_file, pick_folder};
 use epub::{export_book, list_exports};
@@ -159,6 +159,7 @@ pub fn run() {
             create_chapter,
             create_directory,
             create_book,
+            create_saga,
             insert_part_after,
             read_note,
             write_note,

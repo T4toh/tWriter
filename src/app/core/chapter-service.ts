@@ -786,6 +786,22 @@ export class ChapterService {
     }
   }
 
+  /** Crea una saga en la raíz ("N - Nombre" + saga.json). Sin el saga.json
+   *  el árbol la veía como carpeta libre y ofrecía notas en vez de libros. */
+  async createSaga(root: string, name: string): Promise<string | null> {
+    try {
+      const result = await invoke<{ path: string }>('create_saga', { root, name });
+      this.debug.info('create', `Saga creada: ${result.path}`);
+      await this.project.loadTree();
+      void this.git.refreshStatus();
+      return result.path;
+    } catch (err) {
+      this.debug.error('create', String(err));
+      this.panes[0].error.set(String(err));
+      return null;
+    }
+  }
+
   /** Borra todos los .odt/.docx que ya tienen .html sibling. */
   async bulkCleanup(nodes: TreeNode[]): Promise<{ ok: number; failed: number }> {
     const total = nodes.length;

@@ -575,7 +575,7 @@ export class NodeActionsService {
     if (!name?.trim()) return;
     // Numerada: el prefijo "N - " es lo que ordena el filesystem, que se
     // maneja también a mano por git. `displayName` lo esconde en el árbol.
-    await this.chapter.createDirectory(root, name.trim(), true);
+    await this.chapter.createSaga(root, name.trim());
   }
 
   async moveUp(node: TreeNode): Promise<void> {
