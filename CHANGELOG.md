@@ -10,6 +10,10 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+### Fixed
+
+- Settings → Grammar no longer scrolls sideways when the "old LanguageTool container" notice shows its removal commands; long commands scroll inside their own chip.
+
 ## [0.28.0] - 2026-10-28
 
 ### Added
