@@ -10,6 +10,8 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+## [0.28.1] - 2026-10-28
+
 ### Fixed
 
 - Settings → Grammar no longer scrolls sideways when the "old LanguageTool container" notice shows its removal commands; long commands scroll inside their own chip.
@@ -598,7 +600,8 @@ _Sin cambios visibles registrados._
 
 _Sin cambios visibles registrados._
 
-[unreleased]: https://github.com/T4toh/tWriter/compare/v0.28.0...HEAD
+[unreleased]: https://github.com/T4toh/tWriter/compare/v0.28.1...HEAD
+[0.28.1]: https://github.com/T4toh/tWriter/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/T4toh/tWriter/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/T4toh/tWriter/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/T4toh/tWriter/compare/v0.25.0...v0.26.0
