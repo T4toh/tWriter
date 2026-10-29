@@ -48,6 +48,10 @@
   flex-direction: column;
   gap: 4px;
   flex: 1;
+  /* Sin esto el item de flex no baja del min-content de su contenido, y un
+     <code> con nowrap (los comandos copiables del panel de LT) ensancha el
+     modal entero y aparece scroll horizontal. */
+  min-width: 0;
 
   strong {
     font-size: 13px;

@@ -45,6 +45,9 @@ const COPIED_MS = 2000;
       user-select: all;
       overflow-x: auto;
       white-space: nowrap;
+      /* Item de flex: sin min-width 0 no se achica y el scroll de arriba
+         nunca entra en juego; el comando desborda al padre. */
+      min-width: 0;
     }
     .cc-btn {
       flex: none;
