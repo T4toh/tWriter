@@ -5,6 +5,7 @@ import { DebugService } from './debug-service';
 import { GitService } from './git-service';
 import { ProjectService } from './project-service';
 import { ToastService } from './toast-service';
+import { findNodeByPath } from './tree-utils';
 
 const AUTOSAVE_MS = 1500;
 const PANE_IDS: readonly PaneId[] = [0, 1] as const;
@@ -192,7 +193,9 @@ export class NoteService {
       this.debug.info('note', `Nota creada: ${result.path}`);
       await this.project.loadTree();
       void this.git.refreshStatus();
-      await this.open({ path: result.path, name });
+      // Una nota nueva en una carpeta de guion es una escena: va al editor de guion.
+      const guion = findNodeByPath(this.project.tree(), result.path)?.guion;
+      await this.open({ path: result.path, name, guion });
       return result.path;
     } catch (err) {
       this.debug.error('note', String(err));

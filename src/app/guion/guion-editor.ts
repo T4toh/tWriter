@@ -55,7 +55,7 @@ import {
   docDesdeLineas,
   lineasDesdeDoc,
 } from './guion-extensiones';
-import { partirLineas, unirLineas } from './lineas';
+import { partirLineas, partirPegado, unirLineas } from './lineas';
 import { textoParaCorregir } from './texto-para-corregir';
 
 /** Una palabra del documento con su rango, para consultarle el tesauro. */
@@ -221,21 +221,28 @@ export class GuionEditor implements AfterViewInit, OnDestroy {
       // Pegar: siempre texto plano, una `linea` por renglón, con las líneas
       // vacías intactas (el formato separa toques con renglones en blanco; el
       // parser de clipboard de ProseMirror las colapsaría).
-      handlePaste: (view, event) => {
+      handlePaste: (_view, event) => {
         const texto = event.clipboardData?.getData('text/plain');
         if (!texto) return false;
-        const { schema } = view.state;
-        const nodos = partirLineas(texto).map((l) =>
-          schema.nodes['linea'].create(null, l ? schema.text(l) : null),
-        );
-        view.dispatch(
-          view.state.tr.replaceSelection(new Slice(Fragment.from(nodos), 1, 1)).scrollIntoView(),
-        );
+        this.pegarTexto(texto);
         return true;
       },
       // Copiar: líneas con un solo `\n` entre medio, no el `\n\n` por defecto.
       clipboardTextSerializer: (slice) => slice.content.textBetween(0, slice.content.size, '\n'),
     };
+  }
+
+  /** Inserta texto plano como líneas: la primera y la última se funden con
+   *  la línea del cursor (slice abierto en las dos puntas), las del medio
+   *  son líneas enteras. Es lo que usan Ctrl+V y «Pegar» del menú. */
+  private pegarTexto(texto: string): void {
+    const editor = this.tiptap;
+    if (!editor) return;
+    const { schema, tr } = editor.state;
+    const nodos = partirPegado(texto).map((l) =>
+      schema.nodes['linea'].create(null, l ? schema.text(l) : null),
+    );
+    editor.view.dispatch(tr.replaceSelection(new Slice(Fragment.from(nodos), 1, 1)).scrollIntoView());
   }
 
   private createEditor(doc: ReturnType<typeof docDesdeLineas>, editable: boolean): void {
@@ -561,11 +568,11 @@ export class GuionEditor implements AfterViewInit, OnDestroy {
     await this.copySelection();
   }
   protected async paste(): Promise<void> {
-    const e = this.tiptap;
-    if (!e) return;
+    if (!this.tiptap) return;
     try {
       const texto = await navigator.clipboard.readText();
-      e.chain().focus().insertContent(docDesdeLineas(partirLineas(texto)).content ?? []).run();
+      this.tiptap.commands.focus();
+      this.pegarTexto(texto);
     } catch {
       // permisos / sin texto
     }

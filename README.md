@@ -214,7 +214,12 @@ de tWriter y sin que la app toque el archivo.
   carpeta local aunque sea repo (es el repo del juego; los commits los hacés
   vos). Una carpeta de guion adentro del repo de novelas se commitea como
   siempre. El índice de búsqueda `.twriter/` cae en la raíz: sumá esa línea
-  al `.gitignore` del repo del juego.
+  al `.gitignore` del repo del juego. **Creá el `.twriter-guion` antes de
+  elegir esa carpeta como raíz** (un `touch game/historia/.twriter-guion`
+  desde el repo del juego): si tWriter la abre sin la marca, la detecta como
+  repo git y en ese primer arranque hace lo de siempre —escribe `.gitignore`
+  y `.gitattributes` ahí, hace fetch y arranca el auto-commit— hasta que la
+  marques. Pasa una sola vez; después la marca viaja con git.
 
 ### Tree explorer
 

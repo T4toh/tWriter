@@ -53,7 +53,9 @@ export class DictionaryService {
     this.error.set(null);
     try {
       const cfg = await invoke<SagaConfig>('get_saga_config', { sagaPath: node.path });
-      this.idioma.set(idiomaFlexionDe(cfg.idioma));
+      // Sin saga.json el comando devuelve un config por defecto (sin idioma),
+      // no un error: el guion es en castellano.
+      this.idioma.set(idiomaFlexionDe(cfg.idioma) ?? (esGuion ? idiomaFlexionDe('es') : null));
     } catch {
       this.idioma.set(esGuion ? idiomaFlexionDe('es') : null);
     }

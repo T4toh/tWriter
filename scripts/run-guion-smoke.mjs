@@ -34,7 +34,7 @@ if (r.status !== 0) {
   process.exit(r.status ?? 1);
 }
 
-const { partirLineas, unirLineas } = await import(pathToFileURL(join(outDir, 'lineas.js')).href);
+const { partirLineas, unirLineas, partirPegado, cuantoDesindentar } = await import(pathToFileURL(join(outDir, 'lineas.js')).href);
 const { resaltar } = await import(pathToFileURL(join(outDir, 'resaltar.js')).href);
 const { textoParaCorregir } = await import(pathToFileURL(join(outDir, 'texto-para-corregir.js')).href);
 
@@ -119,9 +119,23 @@ console.log('lineas');
 eq('\\r\\n se normaliza', partirLineas('a\r\nb\r\n'), ['a', 'b']);
 eq('sin \\n final', partirLineas('a\nb'), ['a', 'b']);
 eq('saca UN solo \\n final', partirLineas('a\n\n\n'), ['a', '', '']);
-eq('unir sin \\n final', unirLineas(['a', '', 'b']), 'a\n\nb');
-eq('tabs se conservan', unirLineas(partirLineas('\t- éxito:\n  > x')), '\t- éxito:\n  > x');
-eq('round-trip de la fixture', unirLineas(partirLineas(FIXTURE)), FIXTURE.replace(/\n$/, ''));
+eq('unir pone el \\n final (write_note no agrega nada)', unirLineas(['a', '', 'b']), 'a\n\nb\n');
+eq('tabs se conservan', unirLineas(partirLineas('\t- éxito:\n  > x')), '\t- éxito:\n  > x\n');
+eq('round-trip de la fixture', unirLineas(partirLineas(FIXTURE)), FIXTURE);
+// Review: un archivo que termina en líneas en blanco no pierde una por guardado.
+for (const x of ['a\n', 'a\n\n', 'a\n\n\n', '\n', '\n\n']) {
+  eq(`round-trip exacto de ${JSON.stringify(x)}`, unirLineas(partirLineas(x)), x);
+}
+eq('sin \\n final gana uno (único cambio aceptado)', unirLineas(partirLineas('a')), 'a\n');
+// Pegado: el \n final del portapapeles es una línea más (pegar líneas enteras
+// al principio de otra no las pega a esa).
+eq('pegado con \\n final', partirPegado('A\nB\n'), ['A', 'B', '']);
+eq('pegado sin \\n final', partirPegado('A\r\nB'), ['A', 'B']);
+// Shift+Tab: hasta dos espacios o un tab.
+eq('desindentar 2 espacios', cuantoDesindentar('  x'), 2);
+eq('desindentar 1 espacio', cuantoDesindentar(' x'), 1);
+eq('desindentar tab', cuantoDesindentar('\tx'), 1);
+eq('desindentar nada', cuantoDesindentar('x'), 0);
 
 console.log('resaltar');
 eq('nombre + gesto + texto', clases('HERMANO (sonriendo): Al fin.'), ['nombre', 'gesto', 'texto']);

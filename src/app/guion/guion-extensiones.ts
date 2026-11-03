@@ -8,8 +8,9 @@
  */
 import { Extension, JSONContent, Node } from '@tiptap/core';
 import type { Node as PmNode } from '@tiptap/pm/model';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { EditorState, Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { cuantoDesindentar } from './lineas';
 import { resaltar } from './resaltar';
 
 const SANGRIA = /^[ \t]*/;
@@ -26,31 +27,59 @@ export const Linea = Node.create({
   },
 });
 
-/** Tab = dos espacios (la sangría del formato); Shift+Tab los saca; Enter
- *  copia la sangría de la línea de arriba, que es lo que más se escribe en
- *  los bloques anidados (opciones, éxito/falla, [si]). */
+/** Tab = dos espacios (la sangría del formato); Shift+Tab los saca; con
+ *  líneas seleccionadas, las dos teclas reindentan cada línea del bloque
+ *  (reindentar después de agregar un `[si:]` es de lo más común). Enter copia
+ *  la sangría que hay antes del cursor, que es lo que más se escribe en los
+ *  bloques anidados (opciones, éxito/falla, [si]); al principio de una línea
+ *  sangrada abre una línea vacía arriba sin duplicar la sangría. */
 export const GuionTeclas = Extension.create({
   name: 'guionTeclas',
   addKeyboardShortcuts() {
     return {
-      Tab: () => this.editor.commands.insertContent('  '),
+      Tab: () =>
+        this.editor.commands.command(({ state, tr, dispatch }) => {
+          if (state.selection.empty) {
+            if (dispatch) tr.insertText('  ');
+            return true;
+          }
+          if (dispatch) {
+            // De atrás para adelante, así las posiciones de arriba no se corren.
+            for (const pos of inicioDeLineas(state).reverse()) tr.insertText('  ', pos);
+          }
+          return true;
+        }),
       'Shift-Tab': () =>
         this.editor.commands.command(({ state, tr, dispatch }) => {
-          const $from = state.selection.$from;
-          const m = /^ {1,2}/.exec($from.parent.textContent);
-          if (!m) return false;
-          if (dispatch) tr.delete($from.start(), $from.start() + m[0].length);
+          if (dispatch) {
+            for (const pos of inicioDeLineas(state).reverse()) {
+              const n = cuantoDesindentar(state.doc.resolve(pos).parent.textContent);
+              if (n > 0) tr.delete(pos, pos + n);
+            }
+          }
+          // Siempre true: si no hay nada que sacar, que el foco no se vaya del editor.
           return true;
         }),
       Enter: () => {
-        const parent = this.editor.state.selection.$from.parent;
-        const sangria = SANGRIA.exec(parent.textContent)?.[0] ?? '';
+        const $from = this.editor.state.selection.$from;
+        const sangria = (SANGRIA.exec($from.parent.textContent)?.[0] ?? '').slice(0, $from.parentOffset);
         const chain = this.editor.chain().splitBlock();
         return (sangria ? chain.insertContent(sangria) : chain).run();
       },
     };
   },
 });
+
+/** Posición del primer carácter de cada `linea` que toca la selección. */
+function inicioDeLineas(state: EditorState): number[] {
+  const { from, to } = state.selection;
+  const out: number[] = [];
+  state.doc.nodesBetween(from, to, (node, pos) => {
+    if (node.type.name === 'linea') out.push(pos + 1);
+    return false;
+  });
+  return out;
+}
 
 const resaltadoKey = new PluginKey<DecorationSet>('guionResaltado');
 

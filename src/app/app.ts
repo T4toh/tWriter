@@ -768,7 +768,7 @@ export class App {
         this.toast.info('Ya está abierto en el pane izquierdo.');
         return;
       }
-      await this.note.openInPane({ path: node.path, name: node.name }, 1);
+      await this.note.openInPane({ path: node.path, name: node.name, guion: node.guion }, 1);
       this.paneSplit.enableSplit();
       return;
     }

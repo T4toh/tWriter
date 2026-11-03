@@ -30,7 +30,8 @@ export class SagaContextService {
   /** Carpeta de guion abierta en el pane principal (`GuionEditor` la setea).
    *  Sin capítulo activo, el diccionario sale de ahí: `diccionario.txt` al
    *  lado de `.twriter-guion`, mismos comandos que la saga. No hay `saga.json`,
-   *  así que `config` queda null y no aplican reglas desactivadas. */
+   *  así que `config` es el default (sin idioma ni reglas desactivadas) y la
+   *  flexión cae a español. */
   readonly guionDir = signal<string | null>(null);
   readonly config = signal<SagaConfig | null>(null);
   /** Palabras del diccionario de la saga activa. Fuente: `diccionario.txt`
@@ -53,8 +54,10 @@ export class SagaContextService {
   /** Idioma de la saga reducido a las dos familias de reglas de flexión.
    *  Tolera variantes tipo `es-AR`. Null si la saga no declara idioma: en ese
    *  caso no se pela nada y el filtro se comporta como antes. */
-  readonly idiomaFlexion = computed<IdiomaFlexion | null>(() =>
-    idiomaFlexionDe(this.config()?.idioma),
+  readonly idiomaFlexion = computed<IdiomaFlexion | null>(
+    () =>
+      idiomaFlexionDe(this.config()?.idioma) ??
+      (this.guionDir() && !this.chapter.active() ? idiomaFlexionDe('es') : null),
   );
   readonly varianteEs = computed<string | null>(() => {
     const v = this.config()?.variante_es;
