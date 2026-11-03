@@ -27,6 +27,11 @@ export class SagaContextService {
   private chapter = inject(ChapterService);
 
   readonly sagaPath = signal<string | null>(null);
+  /** Carpeta de guion abierta en el pane principal (`GuionEditor` la setea).
+   *  Sin capítulo activo, el diccionario sale de ahí: `diccionario.txt` al
+   *  lado de `.twriter-guion`, mismos comandos que la saga. No hay `saga.json`,
+   *  así que `config` queda null y no aplican reglas desactivadas. */
+  readonly guionDir = signal<string | null>(null);
   readonly config = signal<SagaConfig | null>(null);
   /** Palabras del diccionario de la saga activa. Fuente: `diccionario.txt`
    *  (comando `get_saga_dictionary`), ya no el campo legacy de saga.json. */
@@ -69,6 +74,14 @@ export class SagaContextService {
   constructor() {
     effect(() => {
       const node = this.chapter.active();
+      const guion = this.guionDir();
+      if (!node && guion) {
+        if (guion !== this.sagaPath()) {
+          this.sagaPath.set(guion);
+          void this.reload(guion);
+        }
+        return;
+      }
       if (!node) {
         this.sagaPath.set(null);
         this.config.set(null);

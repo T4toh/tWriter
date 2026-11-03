@@ -19,6 +19,18 @@
       Vista
       <svg lucideChevronDown [size]="10"></svg>
     </button>
+
+    <span class="spacer"></span>
+
+    <button
+      type="button"
+      class="tb-btn tb-text"
+      [disabled]="grammarChecking()"
+      (click)="revisarGramatica()"
+      title="Pasar LanguageTool por lo hablado ahora. Nombres, gestos e instrucciones no se mandan"
+    >
+      Revisar gramática
+    </button>
   </div>
 }
 
@@ -29,7 +41,12 @@
   [style.--editor-font-family]="fontStack()"
   [style.--editor-para-spacing.em]="paragraphSpacingEm()"
 >
-  <div class="editor-host" #host (contextmenu)="onContextMenu($event)"></div>
+  <div
+    class="editor-host"
+    #host
+    (contextmenu)="onContextMenu($event)"
+    (click)="onHostClick($event)"
+  ></div>
 
   @if (!active()) {
     <div class="overlay">
@@ -53,8 +70,68 @@
     @if (noteError(); as err) {
       <span class="indicator error">{{ err }}</span>
     }
+    @if (grammarError(); as err) {
+      <button
+        type="button"
+        class="indicator error indicator-btn"
+        title="Configurar LanguageTool"
+        (click)="openGrammarConfig()"
+      >{{ err }}</button>
+    }
+    <!-- Estado de LanguageTool: late mientras chequea, se apaga si no
+         responde, y siempre abre la configuración. -->
+    <button
+      type="button"
+      class="indicator indicator-btn lt-status"
+      [class.checking]="grammarChecking()"
+      [class.lt-down]="!grammar.available()"
+      [title]="grammar.available()
+        ? 'LanguageTool ' + (grammar.version() ?? '') + ' (modo ' + grammar.mode() + ') — abrir la configuración'
+        : 'LanguageTool no responde — abrir la configuración'"
+      (click)="openGrammarConfig()"
+    >
+      <img src="assets/LT.svg" alt="LanguageTool" />
+      @if (grammar.version(); as v) {
+        {{ v }}
+      }
+    </button>
   }
   @if (paneId() === 0) {
     <app-notificaciones-bell />
   }
 </footer>
+
+@if (showPrivacyBanner()) {
+  <div class="privacy-banner">
+    <span>
+      Modo público activo: lo hablado del guion se envía a
+      <a href="https://api.languagetool.org" target="_blank">api.languagetool.org</a>.
+      Para texto privado, configurá modo local.
+    </span>
+    <button type="button" class="banner-dismiss" (click)="dismissPrivacyBanner()">×</button>
+  </div>
+}
+
+@if (grammarPopover(); as gp) {
+  <app-grammar-popover
+    [match]="gp.match"
+    [anchor]="gp.anchor"
+    [dictSuggestions]="gp.dictSuggestions"
+    [canDeriveForms]="false"
+    (apply)="applyGrammarReplacement($event)"
+    (dismiss)="dismissGrammarMatch()"
+    (addToDict)="addCurrentToDictionary()"
+    (disableRule)="disableRuleNoAplica()"
+  />
+}
+
+@if (repPopover(); as pp) {
+  <app-repeticiones-popover
+    [repeticion]="null"
+    [palabra]="pp.palabra"
+    [anchor]="pp.anchor"
+    [resultado]="repResultado()"
+    (dismiss)="dismissTesauro()"
+    (reemplazar)="reemplazarSinonimo($event)"
+  />
+}

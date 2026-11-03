@@ -152,3 +152,95 @@
     color: var(--bg);
   }
 }
+
+// Estado de LanguageTool en el footer y el aviso de modo público: mismo
+// trazo que el editor de capítulos.
+.indicator.indicator-btn {
+  border: 0;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    filter: brightness(1.15);
+  }
+}
+
+.indicator.lt-status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  color: var(--fg-muted);
+  white-space: nowrap;
+
+  img {
+    height: 13px;
+    width: auto;
+    display: block;
+  }
+
+  &.checking {
+    animation: lt-pulse 0.8s ease-in-out infinite;
+
+    img {
+      animation: lt-img-pulse 0.8s ease-in-out infinite;
+    }
+  }
+
+  &.lt-down img {
+    filter: grayscale(1);
+    opacity: 0.45;
+  }
+}
+
+@keyframes lt-pulse {
+  0%, 100% {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+
+  50% {
+    background: color-mix(in srgb, var(--accent) 55%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 90%, transparent);
+  }
+}
+
+@keyframes lt-img-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.9); }
+}
+
+.privacy-banner {
+  position: fixed;
+  bottom: 3.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 150;
+  background: #c89020;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 20%);
+  max-width: 80vw;
+
+  a {
+    color: white;
+    text-decoration: underline;
+  }
+
+  .banner-dismiss {
+    background: transparent;
+    border: 0;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    line-height: 1;
+  }
+}
