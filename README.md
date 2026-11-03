@@ -19,6 +19,7 @@ Las novelas viven en un repo privado aparte (HTML + JSON). Esta app es solo el e
   - [Features](#features)
     - [Editor](#editor)
     - [Notas (Markdown)](#notas-markdown)
+    - [Guion (escenas de juego)](#guion-escenas-de-juego)
     - [Tree explorer](#tree-explorer)
     - [Búsqueda (Ctrl+F)](#búsqueda-ctrlf)
     - [Conversor a raya](#conversor-a-raya)
@@ -184,6 +185,36 @@ Después abre normal. Es solo la primera vez.
 
 - **Tabs "Este libro" / "Todas"** en el panel de notas (`tree/notas-del-libro.ts`, puro, 28 aserciones en su smoke runner). Las fichas están duplicadas por libro **a propósito** (son acumulativas, hay cuatro `Aedan.md`), así que el trabajo no es navegar sino acertar cuál. `Este libro` es una lista plana con las notas de `Notas/<saga>/<libro>/` + el `notas/` del libro en el árbol de novelas, y abajo las `.md` sueltas de la saga. El vínculo saga ↔ carpeta de notas se **adivina** (`calzaSaga`: pela el prefijo numérico y busca calce exacto o por prefijo) — cero configuración. El `+` con esa tab activa crea en la carpeta del libro, aunque todavía no exista.
 - **Creación con form + plantillas**: "Nueva nota…" abre un form de verdad (no un prompt de un input) con las plantillas de `shared/note-templates.ts` — data pura con su smoke runner, copiadas de las que el autor ya escribe a mano en `Notas/`.
+
+### Guion (escenas de juego)
+
+Para escribir las escenas de un juego como guion en texto plano (el formato de
+[rpg-copado](https://github.com/T4toh/rpg-copado): `NOMBRE (gesto): texto`,
+`> narración`, `[fondo: x]`, `- opción`, `- [Perspicacia CD 12] …`) sin salir
+de tWriter y sin que la app toque el archivo.
+
+- **Marcar la carpeta**: click derecho sobre una carpeta libre (o sobre el
+  espacio vacío del árbol, para la raíz) → «Marcar como guion». Deja un
+  `.twriter-guion` vacío adentro que viaja con git, así la marca aparece en
+  todas las PCs. «Quitar marca de guion» lo borra.
+- **Editor de texto plano**: todo `.md` de esa carpeta abre en un editor de
+  un nodo por línea, sin Markdown. Lo que se guarda es exactamente lo que se
+  abrió más lo que tocaste (`\r\n` sale como `\n`). Tab mete dos espacios,
+  Shift+Tab los saca y Enter copia la sangría de la línea de arriba. Pegar
+  respeta los renglones en blanco. Resalta nombres, gestos, instrucciones,
+  opciones, tiradas, narración y comentarios; no marca errores de formato
+  (eso es del validador del juego).
+- **Corrector solo sobre lo hablado**: LanguageTool recibe el texto después
+  del `NOMBRE:`, la narración y el texto de las opciones. Nombres, gestos,
+  `[instrucciones]`, títulos y comentarios no se mandan nunca, así `HERMANO`
+  no aparece como error. El diccionario es `diccionario.txt` en la carpeta
+  marcada («Editar diccionario…» en su menú); «+ diccionario» desde una marca
+  lo escribe ahí. Sinónimos bajo el cursor con el menú contextual.
+- **Git apagado si la raíz es un guion**: una raíz marcada se trata como
+  carpeta local aunque sea repo (es el repo del juego; los commits los hacés
+  vos). Una carpeta de guion adentro del repo de novelas se commitea como
+  siempre. El índice de búsqueda `.twriter/` cae en la raíz: sumá esa línea
+  al `.gitignore` del repo del juego.
 
 ### Tree explorer
 

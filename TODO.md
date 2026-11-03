@@ -509,33 +509,25 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
 
 ## Escenas de juego (rpg-copado)
 
-- **Escribir las escenas del juego desde tWriter** (idea del autor, 2026-11-03).
-  El juego (`~/Repos/Personal/rpg-copado`) lee cada escena de un `.md` con un
-  formato propio de guión. El ejemplo canónico, con la explicación del formato
-  en el comentario de arriba, es `game/historia/prologo/01-llegada.md`, y el
-  diseño completo está en `docs/superpowers/specs/2026-11-03-dialogos-design.md`
-  de ese repo. Resumen del formato:
-  - `## Capítulo · Lugar`
-  - `NOMBRE (gesto): texto`
-  - `> narración`
-  - un párrafo por toque
-  - `- opción` con sangría
-  - `- [Perspicacia CD 12] …` con `- éxito:` y `- falla:`
-  - `[fondo: x]`, `[entra: X]`, `[recordar: algo]`, `[si: algo]` y `[si no]`
-  - `<!-- notas -->`
+Lo hecho está en el README («Guion (escenas de juego)») y en
+`docs/superpowers/specs/2026-11-03-editor-de-guion-design.md`. Lo que quedó
+afuera de la primera versión, para cuando moleste:
 
-  Hoy tWriter trabaja con el subset HTML de las novelas, no con `.md`, así que
-  lo primero es decidir si las escenas son otro tipo de documento del árbol,
-  con su propio modo de editor, o un export desde un capítulo. Lo que sumaría
-  sobre un editor de texto común:
-  - resaltar los nombres, los gestos y las instrucciones;
-  - completar los personajes, que salen de `game/historia/personajes.md`, y
-    los gestos;
-  - marcar los errores del formato con el mismo criterio que el validador del
-    juego, idealmente llamándolo a él en vez de duplicar reglas.
-
-  El corrector y el tesauro ya sirven tal cual para el texto de los diálogos.
-  Ojo: la raya **no** se aplica acá, porque el que habla ya está en `NOMBRE:`.
+- **Completar personajes y gestos** desde `game/historia/personajes.md` y los
+  seis gestos de `docs/assets.md` del juego.
+- **Correr el validador del juego** (`dotnet run --project tools/Historia --
+  revisar`) al guardar y marcar la línea. `dotnet` no está en todas las PCs
+  del autor: si falta, decirlo y dar el comando (regla del remedio adentro de
+  la app).
+- **Raíces recientes** para saltar entre el repo de novelas y
+  `rpg-copado/game/historia` sin pasar por el picker.
+- **El recorrido paso a paso de «Revisar»** en el editor de guion. Hoy el
+  botón «Revisar gramática» fuerza el chequeo y las marcas se trabajan una
+  por una con el popover; el wizard con «siguiente» y salteados es solo del
+  editor de capítulos.
+- **Ctrl+F dentro del guion**: el índice lo toma como nota y el click en el
+  resultado abre el archivo, pero el editor de guion no pinta las
+  ocurrencias (`SearchHighlight` quedó solo en notas y capítulos).
 
 ## Plataformas
 

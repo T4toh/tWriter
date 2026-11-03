@@ -10,6 +10,10 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 ## [Unreleased]
 
+### Added
+
+- Script mode for game scenes: right-click a folder and choose "Marcar como guion" and every `.md` inside opens in a plain-text editor that highlights the scene format (character names, gestures, stage directions, choices and dice rolls), checks only the spoken text with LanguageTool, keeps its own dictionary in that folder and saves the file exactly as written. Using a script folder as the root turns off git auto-sync, since it is the game's repository.
+
 ## [0.28.1] - 2026-10-28
 
 ### Fixed
