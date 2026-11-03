@@ -54,6 +54,7 @@ use extras::{add_extra, has_extras, list_extras, remove_extra, rename_extra};
 use fonts::{add_font, consolidate_fonts, has_fonts, list_fonts, remove_font, rename_font};
 use fs::{
     get_tree, is_directory_excluded, read_chapter, read_meta, rename_node, set_directory_excluded,
+    set_directory_guion,
     write_chapter, write_meta,
 };
 use git::{
@@ -193,6 +194,7 @@ pub fn run() {
             languagetool_version,
             is_directory_excluded,
             set_directory_excluded,
+            set_directory_guion,
             scan_import_source,
             import_wizard_apply,
             split_chapter_preview,

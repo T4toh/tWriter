@@ -34,6 +34,13 @@ pub async fn detect_storage_backend(path: String) -> Result<StorageBackend, Stri
 }
 
 pub fn detect_backend(path: &Path) -> StorageBackend {
+    // Una raíz de guion es el repo del juego: git lo maneja el autor desde
+    // ahí, así que para tWriter es una carpeta local aunque sea repo.
+    if path.join(crate::fs::GUION_MARKER).is_file() {
+        let b = StorageBackend::Local;
+        tracing::info!(target: "storage", backend = ?b, path = %path.display(), "raíz de guion: git apagado");
+        return b;
+    }
     if is_git_repo(path) {
         let b = StorageBackend::Git;
         tracing::info!(target: "storage", backend = ?b, path = %path.display(), "backend detectado");
@@ -101,6 +108,15 @@ mod tests {
 
     fn p(s: &str) -> PathBuf {
         PathBuf::from(s)
+    }
+
+    #[test]
+    fn raiz_de_guion_es_local_aunque_sea_repo_git() {
+        let tmp = tempfile::tempdir().unwrap();
+        Repository::init(tmp.path()).unwrap();
+        assert_eq!(detect_backend(tmp.path()), StorageBackend::Git);
+        std::fs::write(tmp.path().join(crate::fs::GUION_MARKER), "").unwrap();
+        assert_eq!(detect_backend(tmp.path()), StorageBackend::Local);
     }
 
     #[test]

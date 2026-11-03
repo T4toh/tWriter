@@ -54,7 +54,11 @@ const CHAPTER_EXTS: &[&str] = &["html", "odt", "docx"];
 const NOTE_EXTS: &[&str] = &["md", "markdown"];
 const NOTES_DIR_NAME: &str = "notas";
 /// Archivos sueltos en root que NO aparecen en el tree (visible en GitHub, invisible en la app).
-const ROOT_SKIP_FILES: &[&str] = &["README.md", "README.markdown", ".twriter-ignore", ".gitignore"];
+/// Marca una carpeta de guion (escenas del juego): sus `.md` abren en el
+/// editor de guion y, si es la raíz, git queda apagado (`storage.rs`).
+pub const GUION_MARKER: &str = ".twriter-guion";
+const ROOT_SKIP_FILES: &[&str] =
+    &["README.md", "README.markdown", ".twriter-ignore", GUION_MARKER, ".gitignore"];
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -89,6 +93,11 @@ pub struct TreeNode {
     /// Excluido del export EPUB. Visible en tree pero no se incluye al exportar.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub excluded: Option<bool>,
+    /// Path de la carpeta de guion más cercana (`GUION_MARKER`). Lo llevan la
+    /// carpeta marcada y toda nota debajo; las carpetas del medio no. Lo pone
+    /// `marcar_guion` como post-pass, no cada walk.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub guion: Option<String>,
     pub children: Vec<TreeNode>,
 }
 
@@ -141,7 +150,7 @@ pub fn get_tree(root: String) -> Result<TreeNode, String> {
         let children = list_sagas_or_books(&root_path)?;
         let modified_ms = max_child_mtime(&children);
         let word_count = sum_child_words(&children);
-        Ok(TreeNode {
+        let mut root = TreeNode {
             name,
             path: root_path.to_string_lossy().into_owned(),
             kind: NodeKind::Saga,
@@ -150,8 +159,11 @@ pub fn get_tree(root: String) -> Result<TreeNode, String> {
             modified_ms,
             word_count,
             excluded: None,
+            guion: None,
             children,
-        })
+        };
+        marcar_guion(&mut root, None);
+        Ok(root)
     })();
 
     TREE_CTX.with(|c| c.borrow_mut().take());
@@ -415,6 +427,7 @@ fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
                 modified_ms: None,
                 word_count: None,
                 excluded: Some(true),
+                guion: None,
                 children: Vec::new(),
             });
             continue;
@@ -434,6 +447,7 @@ fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
                     modified_ms,
                     word_count,
                     excluded: None,
+                    guion: None,
                     children,
                 });
             }
@@ -450,6 +464,7 @@ fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
                     modified_ms,
                     word_count,
                     excluded: None,
+                    guion: None,
                     children,
                 });
             }
@@ -465,6 +480,7 @@ fn list_sagas_or_books(root: &Path) -> Result<Vec<TreeNode>, String> {
                     modified_ms,
                     word_count: None,
                     excluded: None,
+                    guion: None,
                     children,
                 });
             }
@@ -513,6 +529,7 @@ fn list_books(saga_dir: &Path) -> Result<Vec<TreeNode>, String> {
                 modified_ms: None,
                 word_count: None,
                 excluded: Some(true),
+                guion: None,
                 children: Vec::new(),
             });
             continue;
@@ -529,6 +546,7 @@ fn list_books(saga_dir: &Path) -> Result<Vec<TreeNode>, String> {
             modified_ms,
             word_count,
             excluded: None,
+            guion: None,
             children,
         });
     }
@@ -562,6 +580,7 @@ fn list_sections_or_chapters(book_dir: &Path) -> Result<Vec<TreeNode>, String> {
                     modified_ms: None,
                     word_count: None,
                     excluded: Some(true),
+                    guion: None,
                     children: Vec::new(),
                 });
                 continue;
@@ -578,6 +597,7 @@ fn list_sections_or_chapters(book_dir: &Path) -> Result<Vec<TreeNode>, String> {
                 modified_ms,
                 word_count,
                 excluded: None,
+                guion: None,
                 children,
             });
         } else if ft.is_file() {
@@ -622,6 +642,7 @@ fn notes_folder_node(path: &Path, name: String) -> Result<TreeNode, String> {
         modified_ms,
         word_count: None,
         excluded: None,
+        guion: None,
         children,
     })
 }
@@ -661,6 +682,7 @@ fn list_folder_contents(dir: &Path) -> Result<Vec<TreeNode>, String> {
                 modified_ms,
                 word_count: None,
                 excluded: None,
+                guion: None,
                 children,
             });
         } else if ft.is_file() {
@@ -723,6 +745,7 @@ fn note_node(path: &Path) -> Option<TreeNode> {
         modified_ms,
         word_count: None,
         excluded: None,
+        guion: None,
         children: Vec::new(),
     })
 }
@@ -759,6 +782,7 @@ fn chapter_node(path: &Path) -> Option<TreeNode> {
         modified_ms,
         word_count,
         excluded: None,
+        guion: None,
         children: Vec::new(),
     })
 }
@@ -901,6 +925,41 @@ pub fn set_directory_excluded(path: String, excluded: bool) -> Result<(), String
     Ok(())
 }
 
+/// Post-pass sobre el árbol ya armado: la carpeta con `GUION_MARKER` y toda
+/// nota debajo (a cualquier profundidad) llevan `guion = Some(path de esa
+/// carpeta)`. Las carpetas del medio no, así el badge sale una sola vez.
+fn marcar_guion(node: &mut TreeNode, heredado: Option<&str>) {
+    let propio = match node.kind {
+        NodeKind::Note | NodeKind::Chapter => None,
+        _ if Path::new(&node.path).join(GUION_MARKER).is_file() => Some(node.path.clone()),
+        _ => None,
+    };
+    let vigente: Option<String> = propio.clone().or_else(|| heredado.map(str::to_string));
+    if propio.is_some() || (node.kind == NodeKind::Note && vigente.is_some()) {
+        node.guion = vigente.clone();
+    }
+    for child in &mut node.children {
+        marcar_guion(child, vigente.as_deref());
+    }
+}
+
+#[tauri::command]
+pub fn set_directory_guion(path: String, guion: bool) -> Result<(), String> {
+    let dir = PathBuf::from(&path);
+    if !dir.is_dir() {
+        return Err(format!("no es directorio: {}", path));
+    }
+    let marker = dir.join(GUION_MARKER);
+    if guion {
+        if !marker.exists() {
+            fs::write(&marker, "").map_err(|e| e.to_string())?;
+        }
+    } else if marker.exists() {
+        fs::remove_file(&marker).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 pub(crate) fn read_sorted_entries(p: &Path) -> Result<Vec<fs::DirEntry>, String> {
     let mut entries: Vec<_> = fs::read_dir(p)
         .map_err(|e| e.to_string())?
@@ -1012,5 +1071,57 @@ mod tests {
             .filter(|n| n.ends_with(".tmp"))
             .collect();
         assert!(sobrantes.is_empty(), "quedaron tmps: {:?}", sobrantes);
+    }
+}
+
+#[cfg(test)]
+mod guion_tests {
+    use super::*;
+
+    fn arbol(con_marca: bool) -> (tempfile::TempDir, TreeNode) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        if con_marca {
+            fs::write(root.join(GUION_MARKER), "").unwrap();
+        }
+        fs::write(root.join("a.md"), "# a\n").unwrap();
+        fs::create_dir(root.join("sub")).unwrap();
+        fs::write(root.join("sub").join("b.md"), "# b\n").unwrap();
+        fs::write(root.join("sub").join("c.txt"), "").unwrap();
+        let tree = get_tree(root.to_string_lossy().into_owned()).unwrap();
+        (tmp, tree)
+    }
+
+    fn hijo<'a>(n: &'a TreeNode, name: &str) -> &'a TreeNode {
+        n.children.iter().find(|c| c.name == name).unwrap()
+    }
+
+    #[test]
+    fn marca_guion_baja_a_las_notas_y_no_a_las_carpetas_del_medio() {
+        let (tmp, tree) = arbol(true);
+        let root_str = tmp.path().to_string_lossy().into_owned();
+        assert_eq!(tree.guion.as_deref(), Some(root_str.as_str()));
+        assert_eq!(hijo(&tree, "a").guion.as_deref(), Some(root_str.as_str()));
+        let sub = hijo(&tree, "sub");
+        assert!(sub.guion.is_none(), "la carpeta del medio no lleva la marca");
+        assert_eq!(hijo(sub, "b").guion.as_deref(), Some(root_str.as_str()));
+    }
+
+    #[test]
+    fn sin_marca_no_hay_guion() {
+        let (_tmp, tree) = arbol(false);
+        assert!(tree.guion.is_none());
+        assert!(hijo(&tree, "a").guion.is_none());
+        assert!(hijo(hijo(&tree, "sub"), "b").guion.is_none());
+    }
+
+    #[test]
+    fn set_directory_guion_crea_y_borra_el_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().to_string_lossy().into_owned();
+        set_directory_guion(dir.clone(), true).unwrap();
+        assert!(tmp.path().join(GUION_MARKER).is_file());
+        set_directory_guion(dir, false).unwrap();
+        assert!(!tmp.path().join(GUION_MARKER).exists());
     }
 }

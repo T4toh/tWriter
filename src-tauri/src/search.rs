@@ -860,7 +860,8 @@ pub(crate) fn collect_indexable(root: &Path) -> Vec<(PathBuf, String)> {
     out
 }
 
-const ROOT_SKIP_FILES: &[&str] = &["README.md", "README.markdown", ".twriter-ignore", ".gitignore"];
+const ROOT_SKIP_FILES: &[&str] =
+    &["README.md", "README.markdown", ".twriter-ignore", crate::fs::GUION_MARKER, ".gitignore"];
 const SKIP_DIRS: &[&str] = &[
     "convertidos",
     "Revisiones",
