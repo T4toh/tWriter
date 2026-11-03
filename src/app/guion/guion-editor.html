@@ -1,0 +1,60 @@
+@if (active()) {
+  <div class="toolbar">
+    <button type="button" class="tb-btn" (click)="fontBump(-1)" title="Achicar fuente">
+      <span class="ico">A−</span>
+    </button>
+    <span class="font-size-label">{{ fontSize() }}</span>
+    <button type="button" class="tb-btn" (click)="fontBump(1)" title="Agrandar fuente">
+      <span class="ico">A+</span>
+    </button>
+
+    <span class="sep"></span>
+
+    <button
+      type="button"
+      class="tb-btn tb-text tb-menu"
+      (click)="openViewMenu($event)"
+      title="Espacio entre líneas y ancho del texto. Solo cambia la pantalla, no el archivo"
+    >
+      Vista
+      <svg lucideChevronDown [size]="10"></svg>
+    </button>
+  </div>
+}
+
+<div
+  class="editor-stack"
+  [attr.data-width]="width()"
+  [style.--editor-font-size.px]="fontSize()"
+  [style.--editor-font-family]="fontStack()"
+  [style.--editor-para-spacing.em]="paragraphSpacingEm()"
+>
+  <div class="editor-host" #host (contextmenu)="onContextMenu($event)"></div>
+
+  @if (!active()) {
+    <div class="overlay">
+      <p>Sin guion abierto.</p>
+    </div>
+  }
+</div>
+
+<footer class="status-bar">
+  @if (active(); as a) {
+    <span class="title">
+      <svg lucideFilePen [size]="14"></svg>
+      {{ a.name }}
+    </span>
+    <span class="badge">Guion</span>
+    @if (dirty()) {
+      <span class="indicator dirty">sin guardar</span>
+    } @else {
+      <span class="indicator saved">guardado</span>
+    }
+    @if (noteError(); as err) {
+      <span class="indicator error">{{ err }}</span>
+    }
+  }
+  @if (paneId() === 0) {
+    <app-notificaciones-bell />
+  }
+</footer>

@@ -30,6 +30,7 @@ import { UpdaterService } from './core/updater-service';
 import { Tree } from './tree/tree';
 import { Editor } from './editor/editor';
 import { NotesEditor } from './notes-editor/notes-editor';
+import { GuionEditor } from './guion/guion-editor';
 import { DebugPanel } from './debug/debug-panel';
 import { BookConfigModal } from './book-config/book-config-modal';
 import { RevisionLibroModal } from './revision-libro/revision-libro-modal';
@@ -90,7 +91,7 @@ import {
 @Component({
   selector: 'app-root',
   imports: [
-    Tree, Editor, NotesEditor, DebugPanel, BookConfigModal, RevisionLibroModal, SagaConfigModal, DictionaryModal, SplitChapterModal,
+    Tree, Editor, NotesEditor, GuionEditor, DebugPanel, BookConfigModal, RevisionLibroModal, SagaConfigModal, DictionaryModal, SplitChapterModal,
     NoteFormModal, ThemeEditorModal, ImageViewer, FontPreview, MarkdownReader, SearchPanel, RayaAuditPanel, RepeticionesAuditPanel, GrammarAuditPanel, ToastContainer,
     SettingsModal, ImportWizard, ImportJoplin, UpdateBanner, StorageHelpModal, RayaChuletaModal, AboutModal, ExportModal, AutorModal, Spinner, ModalHost, ContextMenuHost,
     LucideArrowDownToLine, LucideArrowUpDown, LucideChevronDown, LucideChevronRight,

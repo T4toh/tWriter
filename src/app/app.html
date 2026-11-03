@@ -258,16 +258,24 @@
     (drop)="onCenterDrop($event)"
   >
     <section class="pane pane-primary">
-      @if (note.panes[0].active()) {
-        <app-notes-editor [paneId]="0" />
+      @if (note.panes[0].active(); as t) {
+        @if (t.guion) {
+          <app-guion-editor [paneId]="0" />
+        } @else {
+          <app-notes-editor [paneId]="0" />
+        }
       } @else {
         <app-editor [paneId]="0" />
       }
     </section>
     @if (paneSplit.splitEnabled()) {
       <section class="pane pane-secondary">
-        @if (note.panes[1].active()) {
-          <app-notes-editor [paneId]="1" />
+        @if (note.panes[1].active(); as t) {
+          @if (t.guion) {
+            <app-guion-editor [paneId]="1" />
+          } @else {
+            <app-notes-editor [paneId]="1" />
+          }
         } @else if (chapter.panes[1].active()) {
           <app-editor [paneId]="1" />
         } @else {

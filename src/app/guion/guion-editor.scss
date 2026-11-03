@@ -1,0 +1,154 @@
+@use '../shared/editor-chrome';
+
+.tb-btn.tb-text {
+  width: auto;
+  padding: 0 0.5em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.editor-host {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  background: var(--bg-soft);
+  padding: 2.5rem 1.5rem;
+
+  ::ng-deep .ProseMirror {
+    outline: none;
+    width: 100%;
+    margin: 0 auto;
+    padding: 3rem 3.5rem;
+    min-height: calc(100% - 5rem);
+    box-sizing: border-box;
+    background: var(--bg);
+    color: var(--fg);
+    border-radius: 3px;
+    box-shadow:
+      0 0 0 1px var(--border),
+      0 4px 24px rgb(0 0 0 / 8%);
+    caret-color: var(--fg);
+    font-family: var(--editor-font-family, var(--font-body));
+    font-size: var(--editor-font-size, 17px);
+    line-height: 1.55;
+    // Texto plano: las sangrías con espacios o tabs se ven tal cual.
+    white-space: pre-wrap;
+    tab-size: 4;
+
+    .linea {
+      min-height: 1.55em;
+      text-align: left;
+    }
+
+    // Resaltado del formato (`resaltar.ts`). Todo por tokens del tema.
+    .g-nombre {
+      font-weight: 700;
+    }
+    .g-gesto {
+      color: var(--fg-muted);
+    }
+    .g-narracion {
+      color: var(--fg-muted);
+    }
+    .g-texto--narracion {
+      font-style: italic;
+    }
+    .g-instruccion,
+    .g-opcion,
+    .g-tirada,
+    .g-resultado {
+      color: var(--accent);
+    }
+    .g-tirada,
+    .g-resultado {
+      font-weight: 600;
+    }
+    .g-lugar {
+      font-weight: 700;
+    }
+    .g-titulo,
+    .g-comentario {
+      color: var(--fg-muted);
+      opacity: 0.7;
+    }
+  }
+}
+
+.editor-stack[data-width='narrow'] ::ng-deep .ProseMirror {
+  max-width: 42em;
+}
+.editor-stack[data-width='wide'] ::ng-deep .ProseMirror {
+  max-width: 64em;
+}
+.editor-stack[data-width='full'] ::ng-deep .ProseMirror {
+  max-width: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+// Marcas de LanguageTool: mismo trazo que el editor de capítulos.
+.editor-host ::ng-deep .grammar-error {
+  cursor: pointer;
+  text-decoration: none;
+  background: transparent;
+}
+.editor-host ::ng-deep .grammar-error--typo {
+  border-bottom: 2px solid #d23030;
+}
+.editor-host ::ng-deep .grammar-error--grammar {
+  border-bottom: 2px dashed #d23030;
+}
+.editor-host ::ng-deep .grammar-error--style {
+  border-bottom: 2px dotted #c89020;
+}
+.editor-host ::ng-deep .grammar-error--misc {
+  border-bottom: 2px dotted var(--fg-muted);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-soft);
+  color: var(--fg-muted);
+
+  > p {
+    font-style: italic;
+  }
+}
+
+.badge {
+  background: var(--border);
+  color: var(--fg);
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.indicator {
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  margin-left: auto;
+
+  &.dirty {
+    background: var(--border);
+  }
+
+  &.saved {
+    color: var(--fg-muted);
+  }
+
+  &.error {
+    background: var(--err);
+    color: var(--bg);
+  }
+}
