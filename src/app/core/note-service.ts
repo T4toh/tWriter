@@ -12,6 +12,9 @@ const PANE_IDS: readonly PaneId[] = [0, 1] as const;
 export interface NoteTarget {
   path: string;
   name: string;
+  /** Carpeta de guion que contiene la nota: abre en el editor de guion y el
+   *  diccionario sale de esa carpeta. Ausente = nota común. */
+  guion?: string;
 }
 
 interface NotePane {

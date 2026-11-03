@@ -322,6 +322,9 @@
       @if (node.excluded) {
         <span class="excluded-badge" title="Excluido del export EPUB">excluido</span>
       }
+      @if (node.guion === node.path) {
+        <span class="excluded-badge" title="Carpeta de guion: sus .md abren en el editor de guion">guion</span>
+      }
     </button>
     @if (isExpanded(node)) {
       @if (childKindFor(node.kind); as primaryKind) {

@@ -377,7 +377,7 @@ export class App {
     if (node.kind === 'chapter') {
       await this.chapter.openInPane(node, 0);
     } else {
-      await this.note.openInPane({ path: node.path, name: node.name }, 0);
+      await this.note.openInPane({ path: node.path, name: node.name, guion: node.guion }, 0);
     }
   }
 

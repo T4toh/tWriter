@@ -34,6 +34,7 @@ import { ProjectService } from '../core/project-service';
 import { DictionaryService } from '../core/dictionary-service';
 import { SagaConfigService } from '../core/saga-config-service';
 import { SettingsService } from '../core/settings-service';
+import { StorageService } from '../core/storage-service';
 import { SplitChapterService } from '../core/split-chapter-service';
 import { ThemesService } from '../core/themes-service';
 import { ToastService } from '../core/toast-service';
@@ -59,6 +60,7 @@ export class NodeActionsService {
   private exports = inject(ExportsService);
   private note = inject(NoteService);
   private settings = inject(SettingsService);
+  private storage = inject(StorageService);
   private bookCfg = inject(BookConfigService);
   private sagaCfg = inject(SagaConfigService);
   private dictSvc = inject(DictionaryService);
@@ -96,16 +98,21 @@ export class NodeActionsService {
   buildNodeMenu(node: TreeNode): CtxMenuEntry[] {
     if (node.kind === 'note') {
       return [
-        {
-          label: 'Abrir',
-          icon: LucideEye,
-          onClick: () => this.openMdInReader({ path: node.path, name: node.name }),
-        },
-        {
-          label: 'Editar nota',
-          icon: LucidePencil,
-          onClick: () => this.openNote(node),
-        },
+        // Un guion es texto plano: no hay reader, «Abrir» va al editor.
+        ...(node.guion
+          ? [{ label: 'Abrir', icon: LucidePencil, onClick: () => this.openNote(node) }]
+          : [
+              {
+                label: 'Abrir',
+                icon: LucideEye,
+                onClick: () => this.openMdInReader({ path: node.path, name: node.name }),
+              },
+              {
+                label: 'Editar nota',
+                icon: LucidePencil,
+                onClick: () => this.openNote(node),
+              },
+            ]),
         { label: 'Renombrar…', kbd: 'F2', onClick: () => this.renameNode(node) },
         { kind: 'separator' },
         {
@@ -165,6 +172,8 @@ export class NodeActionsService {
         },
         { kind: 'separator' },
         { label: 'Renombrar…', kbd: 'F2', onClick: () => this.renameNode(node) },
+        { kind: 'separator' },
+        ...this.guionEntries(node),
         { kind: 'separator' },
         {
           label: 'Borrar carpeta',
@@ -446,6 +455,7 @@ export class NodeActionsService {
   buildEmptyMenu(): CtxMenuEntry[] {
     const root = this.settings.root();
     if (!root) return [];
+    const tree = this.project.tree();
     // Una novela vive adentro de una saga: si el autor está parado en una (el
     // capítulo abierto o lo que navega), se ofrece crearla ahí. Antes la única
     // entrada era «Crear saga / novela», que siempre creaba una saga nueva. No
@@ -476,6 +486,29 @@ export class NodeActionsService {
         kbd: '.md',
         onClick: () => this.createNoteIn(root),
       },
+      ...(tree ? [{ kind: 'separator' } as CtxMenuEntry, ...this.guionEntries(tree)] : []),
+    ];
+  }
+
+  /** «Marcar como guion» / «Quitar marca» + «Editar diccionario…» para una
+   *  carpeta libre o la raíz (`tree`). La marca es `.twriter-guion`. */
+  private guionEntries(node: TreeNode): CtxMenuEntry[] {
+    if (node.guion !== node.path) {
+      return [
+        {
+          label: 'Marcar como guion',
+          kbd: '.twriter-guion',
+          onClick: () => this.setGuion(node.path, true),
+        },
+      ];
+    }
+    return [
+      {
+        label: 'Editar diccionario…',
+        icon: LucideBookOpen,
+        onClick: () => this.openDictionary(node),
+      },
+      { label: 'Quitar marca de guion', onClick: () => this.setGuion(node.path, false) },
     ];
   }
 
@@ -762,6 +795,18 @@ export class NodeActionsService {
     }
   }
 
+  /** Pone o saca `.twriter-guion`. Si es la raíz, el backend de storage
+   *  cambia (una raíz de guion es `Local`: git apagado), así que se re-detecta. */
+  async setGuion(path: string, guion: boolean): Promise<void> {
+    try {
+      await invoke('set_directory_guion', { path, guion });
+      await this.project.loadTree();
+      if (path === this.settings.root()) await this.storage.refresh();
+    } catch (e) {
+      this.toast.error(`No se pudo ${guion ? 'marcar' : 'desmarcar'} el guion: ${e}`);
+    }
+  }
+
   async includeFolder(node: TreeNode): Promise<void> {
     try {
       await invoke('set_directory_excluded', { path: node.path, excluded: false });
@@ -829,7 +874,7 @@ export class NodeActionsService {
 
   async openNote(node: TreeNode): Promise<void> {
     if (node.kind !== 'note') return;
-    await this.note.open({ path: node.path, name: node.name });
+    await this.note.open({ path: node.path, name: node.name, guion: node.guion });
   }
 
   /** Abre el .md como render read-only en el panel derecho. No toca el centro. */

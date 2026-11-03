@@ -461,6 +461,13 @@ export class SearchPanel implements AfterViewInit {
     if (hit.kind === 'note') {
       const name = hit.title || hit.path.split('/').pop() || hit.path;
       this.svc.requestHighlight(hit.path, undefined, hit.matchedTerms);
+      const guion = findNodeByPath(this.project.tree(), hit.path)?.guion;
+      if (guion) {
+        // Guion: siempre al editor central, sin reader.
+        if (this.note.panes[0].active()?.path === hit.path) return;
+        await this.openNoteInEditor(hit.path, name, guion);
+        return;
+      }
       if (event?.shiftKey) {
         // Shift+click: abrir en notes-editor central. Si ya está, no recargues.
         if (this.note.panes[0].active()?.path === hit.path) return;
@@ -486,15 +493,16 @@ export class SearchPanel implements AfterViewInit {
     if (hit.kind === 'note') {
       const name = hit.title || hit.path.split('/').pop() || hit.path;
       this.svc.requestHighlight(hit.path, undefined, hit.matchedTerms);
-      await this.openNoteInEditor(hit.path, name);
+      const guion = findNodeByPath(this.project.tree(), hit.path)?.guion;
+      await this.openNoteInEditor(hit.path, name, guion);
     }
   }
 
-  private async openNoteInEditor(path: string, name: string): Promise<void> {
+  private async openNoteInEditor(path: string, name: string, guion?: string): Promise<void> {
     const parent = path.replace(/\/[^/]+$/, '');
     this.nav.setBrowsing(parent);
     this.mdReader.close();
-    await this.note.open({ path, name });
+    await this.note.open({ path, name, guion });
   }
 
   protected highlightSnippet(hit: SearchHit, query: string): string {

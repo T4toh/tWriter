@@ -44,7 +44,10 @@ export class DictionaryService {
   readonly problematic = computed<ProblematicEntry[]>(() => detectProblematic(this.words()));
 
   async openFor(node: TreeNode): Promise<void> {
-    if (node.kind !== 'saga') return;
+    // Una carpeta de guion tiene su propio `diccionario.txt`, con los mismos
+    // comandos que la saga (andan sin `saga.json`). El guion es en castellano.
+    const esGuion = node.guion === node.path;
+    if (node.kind !== 'saga' && !esGuion) return;
     this.editing.set({ path: node.path, nombre: node.name });
     this.loading.set(true);
     this.error.set(null);
@@ -52,7 +55,7 @@ export class DictionaryService {
       const cfg = await invoke<SagaConfig>('get_saga_config', { sagaPath: node.path });
       this.idioma.set(idiomaFlexionDe(cfg.idioma));
     } catch {
-      this.idioma.set(null);
+      this.idioma.set(esGuion ? idiomaFlexionDe('es') : null);
     }
     try {
       const existing = await invoke<string[]>('get_saga_dictionary', { sagaPath: node.path });

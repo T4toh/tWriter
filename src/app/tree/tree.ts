@@ -841,6 +841,11 @@ export class Tree implements OnDestroy {
       this.note.close();
       await this.chapter.open(node);
     } else if (node.kind === 'note') {
+      if (node.guion) {
+        // Guion: siempre al editor central, sin reader (es texto plano).
+        await this.openNoteInEditor(node);
+        return;
+      }
       if (event?.shiftKey) {
         const parentPath = node.path.replace(/\/[^/]+$/, '');
         this.nav.setBrowsing(parentPath);
@@ -858,7 +863,7 @@ export class Tree implements OnDestroy {
     if (node.kind !== 'note') return;
     const parentPath = node.path.replace(/\/[^/]+$/, '');
     this.nav.setBrowsing(parentPath);
-    await this.note.open({ path: node.path, name: node.name });
+    await this.note.open({ path: node.path, name: node.name, guion: node.guion });
   }
 
   // ───── Context menus (delegan al NodeActionsService) ─────

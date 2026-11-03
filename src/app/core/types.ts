@@ -9,6 +9,9 @@ export interface TreeNode {
   modifiedMs?: number;
   wordCount?: number;
   excluded?: boolean;
+  /** Carpeta de guion (`.twriter-guion`) más cercana: la lleva la carpeta
+   *  marcada (su propio path) y cada `.md` debajo. Ver `fs.rs::marcar_guion`. */
+  guion?: string;
   children: TreeNode[];
 }
 
