@@ -111,6 +111,7 @@ node scripts/run-updater-json-smoke.mjs           # latest.json del updater: las
 node scripts/run-grammar-wizard-smoke.mjs         # «Revisar»: orden, salteados y vuelta al principio del recorrido de LT
 node scripts/run-lt-lock-smoke.mjs                # LT embebido: elección de versión >7 días y ruta del java por target
 node scripts/run-saga-del-contexto-smoke.mjs      # en qué saga está parado el autor (menú del espacio vacío del árbol)
+node scripts/run-guion-smoke.mjs                  # editor de guion: líneas, resaltado del formato de escenas y tramos para LT
 node scripts/barrer-raya-novelas.mjs ~/novelas    # validador sobre los .html y converter sobre los .docx del repo de novelas: FP reales
 ```
 
