@@ -24,6 +24,7 @@ const r = spawnSync(
     '--outDir', outDir,
     'src/app/guion/lineas.ts',
     'src/app/guion/resaltar.ts',
+    'src/app/guion/texto-para-corregir.ts',
   ],
   { cwd: repo, encoding: 'utf8' },
 );
@@ -35,6 +36,7 @@ if (r.status !== 0) {
 
 const { partirLineas, unirLineas } = await import(pathToFileURL(join(outDir, 'lineas.js')).href);
 const { resaltar } = await import(pathToFileURL(join(outDir, 'resaltar.js')).href);
+const { textoParaCorregir } = await import(pathToFileURL(join(outDir, 'texto-para-corregir.js')).href);
 
 let passed = 0;
 let failed = 0;
@@ -168,6 +170,26 @@ eq('comentario pegado a texto', clases('HERMANO: hola <!-- ojo -->'), ['nombre',
   for (const l of partirLineas(FIXTURE)) en = resaltar(l, en).enComentario;
   eq('la fixture deja el comentario cerrado', en, false);
 }
+
+console.log('textoParaCorregir');
+{
+  const r = textoParaCorregir([
+    'HERMANO (serio): ¿Qué pasa?',
+    '[fondo: x]',
+    '> Narra.',
+    '<!--',
+    'HERMANO: adentro',
+    '-->',
+    '- [Perspicacia CD 12] Mirarlo bien.',
+  ]);
+  eq('solo la prosa, separada por \\n\\n', r.plain, '¿Qué pasa?\n\nNarra.\n\nMirarlo bien.');
+  eq('una línea por tramo', r.tramos.map((t) => t.linea), [0, 2, 6]);
+  eq('offsets del primer tramo', r.tramos[0], { linea: 0, desde: 17, hasta: 27, plainStart: 0, plainEnd: 10 });
+  eq('el último tramo recorta bien', r.plain.slice(r.tramos[2].plainStart, r.tramos[2].plainEnd), 'Mirarlo bien.');
+}
+eq('sin prosa, plain vacío', textoParaCorregir(['', '[si no]']).plain, '');
+eq('entre tramos siempre \\n\\n, nunca espacio', textoParaCorregir(['A: uno', 'dos']).plain, 'uno\n\ndos');
+eq('la sangría no entra', textoParaCorregir(['  VIAJERO: hola']).tramos[0].desde, 11);
 
 rmSync(outDir, { recursive: true, force: true });
 console.log(`\n${passed} ok, ${failed} fallaron`);
