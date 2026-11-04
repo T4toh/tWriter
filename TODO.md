@@ -507,36 +507,6 @@ proponga cita su sección y trae sus ejemplos ✗/✓.
   salga raro ahí, el párrafo va al corpus. Falta lo mismo con los capítulos
   viejos de Meridian 2.0 cuando estén pulleados.
 
-## Escenas de juego (rpg-copado)
-
-- **Escribir las escenas del juego desde tWriter** (idea del autor, 2026-11-03).
-  El juego (`~/Repos/Personal/rpg-copado`) lee cada escena de un `.md` con un
-  formato propio de guión. El ejemplo canónico, con la explicación del formato
-  en el comentario de arriba, es `game/historia/prologo/01-llegada.md`, y el
-  diseño completo está en `docs/superpowers/specs/2026-11-03-dialogos-design.md`
-  de ese repo. Resumen del formato:
-  - `## Capítulo · Lugar`
-  - `NOMBRE (gesto): texto`
-  - `> narración`
-  - un párrafo por toque
-  - `- opción` con sangría
-  - `- [Perspicacia CD 12] …` con `- éxito:` y `- falla:`
-  - `[fondo: x]`, `[entra: X]`, `[recordar: algo]`, `[si: algo]` y `[si no]`
-  - `<!-- notas -->`
-
-  Hoy tWriter trabaja con el subset HTML de las novelas, no con `.md`, así que
-  lo primero es decidir si las escenas son otro tipo de documento del árbol,
-  con su propio modo de editor, o un export desde un capítulo. Lo que sumaría
-  sobre un editor de texto común:
-  - resaltar los nombres, los gestos y las instrucciones;
-  - completar los personajes, que salen de `game/historia/personajes.md`, y
-    los gestos;
-  - marcar los errores del formato con el mismo criterio que el validador del
-    juego, idealmente llamándolo a él en vez de duplicar reglas.
-
-  El corrector y el tesauro ya sirven tal cual para el texto de los diálogos.
-  Ojo: la raya **no** se aplica acá, porque el que habla ya está en `NOMBRE:`.
-
 ## Plataformas
 
 - Mobile (no urgente, capaz solo un exportador a EPUB para ver archivos desde gh). El tomador de notas para la Kindle quedó descartado el 2026-09-14 (ver `## Proofreading`): no ahorra tipeo contra Keep, y git en el teléfono ya lo resuelven GitJournal / Obsidian con plugin git / Working Copy sin código propio.
