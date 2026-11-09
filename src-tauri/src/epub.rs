@@ -1916,8 +1916,8 @@ pub fn texto_inciso_default(clave: &str, is_en: bool) -> &'static str {
         ("ficcion", true) => "This novel is entirely a work of fiction. The names, characters and incidents portrayed in it are the work of the author's imagination. Any resemblance to actual persons, living or dead, events or localities is entirely coincidental.",
         ("ia", false) => "Las imágenes de esta obra fueron generadas con inteligencia artificial. El texto es obra exclusiva del autor.",
         ("ia", true) => "The images in this work were generated with artificial intelligence. The text is the sole work of the author.",
-        ("contenido", false) => "Advertencia de contenido: este libro contiene lenguaje soez, violencia explícita y temas para adultos. Se recomienda discreción al lector.",
-        ("contenido", true) => "Content warning: this book contains strong language, graphic violence and mature themes. Reader discretion is advised.",
+        ("contenido", false) => "Advertencia de contenido: este libro contiene escenas de sexo explícito, violencia gráfica, consumo de drogas, lenguaje soez y otros temas para adultos. Está dirigido exclusivamente a lectores mayores de 18 años. Todos los personajes que aparecen en situaciones sexuales son mayores de 18 años. Se recomienda discreción.",
+        ("contenido", true) => "Content warning: this book contains explicit sexual content, graphic violence, drug use, strong language and other mature themes. It is intended for adult readers (18+) only. All characters depicted in sexual situations are 18 years of age or older. Reader discretion is advised.",
         _ => "",
     }
 }

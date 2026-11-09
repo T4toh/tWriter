@@ -233,8 +233,8 @@ pub struct BookConfig {
     /// el texto es del autor. Default: apagado.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nota_ia: Option<bool>,
-    /// Inciso de advertencia de contenido (lenguaje soez, violencia
-    /// explícita, temas para adultos). Default: apagado.
+    /// Inciso de advertencia de contenido (sexo explícito, violencia
+    /// gráfica, drogas, lenguaje soez, solo +18). Default: apagado.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aviso_contenido: Option<bool>,
     /// Redacción propia por inciso, con las claves "reserva", "ficcion",

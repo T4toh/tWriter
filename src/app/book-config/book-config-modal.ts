@@ -45,8 +45,8 @@ const TEXTOS_LEGALES_DEFAULT: Record<string, { es: string; en: string }> = {
     en: 'The images in this work were generated with artificial intelligence. The text is the sole work of the author.',
   },
   contenido: {
-    es: 'Advertencia de contenido: este libro contiene lenguaje soez, violencia explícita y temas para adultos. Se recomienda discreción al lector.',
-    en: 'Content warning: this book contains strong language, graphic violence and mature themes. Reader discretion is advised.',
+    es: 'Advertencia de contenido: este libro contiene escenas de sexo explícito, violencia gráfica, consumo de drogas, lenguaje soez y otros temas para adultos. Está dirigido exclusivamente a lectores mayores de 18 años. Todos los personajes que aparecen en situaciones sexuales son mayores de 18 años. Se recomienda discreción.',
+    en: 'Content warning: this book contains explicit sexual content, graphic violence, drug use, strong language and other mature themes. It is intended for adult readers (18+) only. All characters depicted in sexual situations are 18 years of age or older. Reader discretion is advised.',
   },
 };
 
