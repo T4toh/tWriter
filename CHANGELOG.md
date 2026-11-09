@@ -14,6 +14,10 @@ De 0.21.0 para atrás no hubo changelog: esas entradas son los títulos de los P
 
 - The content warning on the legal page now spells out explicit sexual content, graphic violence, drug use and strong language, and states the book is for readers 18 and over and that every character in a sexual situation is 18 or older. Books that kept the default text pick up the new wording on the next export; a custom text stays as written.
 
+### Security
+
+- Java runtime for LanguageTool updated to 21.0.13+9.
+
 ## [0.28.1] - 2026-10-28
 
 ### Fixed
